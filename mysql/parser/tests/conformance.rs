@@ -1,4 +1,5 @@
-use turso_mysql_parser::{parse, parse_and_translate, parse_one, MysqlParserError};
+use turso_mysql_parser::{parse, parse_and_translate, parse_one, translate, MysqlParserError};
+use turso_parser::ast;
 
 struct SqlCase {
     name: &'static str,
@@ -80,6 +81,68 @@ fn malformed_sql_returns_parse_errors() {
             "SQL: {sql}\nerror: {error}"
         );
     }
+}
+
+#[test]
+fn lowers_anonymous_parameters_in_projection_order() {
+    let statement =
+        parse_and_translate("SELECT ?, ? AS named").expect("anonymous parameters must lower");
+    let ast::Stmt::Select(select) = statement else {
+        panic!("statement must lower to SELECT");
+    };
+    let ast::OneSelect::Select { columns, .. } = select.body.select else {
+        panic!("query body must lower to SELECT");
+    };
+    assert_eq!(columns.len(), 2);
+
+    let ast::ResultColumn::Expr(first_expr, Some(ast::As::ImplicitColumnName(first_name))) =
+        &columns[0]
+    else {
+        panic!("first parameter must have an implicit metadata name");
+    };
+    let ast::Expr::Variable(first) = first_expr.as_ref() else {
+        panic!("first projection must be a variable");
+    };
+    assert_eq!(first.index.get(), 1);
+    assert_eq!(first.name, None);
+    assert_eq!(first_name.as_str(), "?");
+
+    let ast::ResultColumn::Expr(second_expr, Some(ast::As::As(second_name))) = &columns[1] else {
+        panic!("second parameter must preserve its explicit alias");
+    };
+    let ast::Expr::Variable(second) = second_expr.as_ref() else {
+        panic!("second projection must be a variable");
+    };
+    assert_eq!(second.index.get(), 2);
+    assert_eq!(second.name, None);
+    assert_eq!(second_name.as_str(), "named");
+}
+
+#[test]
+fn rejects_non_anonymous_and_expression_parameters() {
+    let numbered = parse_one("SELECT ?1").expect("sqlparser accepts numbered placeholders");
+    let error = translate(&numbered).expect_err("numbered placeholders must not lower");
+    assert!(matches!(error, MysqlParserError::Unsupported(_)));
+
+    for sql in ["SELECT :named", "SELECT @named", "SELECT $named"] {
+        match parse_one(sql) {
+            Ok(statement) => {
+                let error = translate(&statement).expect_err("named placeholders must not lower");
+                assert!(
+                    matches!(error, MysqlParserError::Unsupported(_)),
+                    "SQL: {sql}\nerror: {error}"
+                );
+            }
+            Err(error) => assert!(
+                matches!(error, MysqlParserError::Parse(_)),
+                "SQL: {sql}\nerror: {error}"
+            ),
+        }
+    }
+
+    let error = parse_and_translate("SELECT ? + 1")
+        .expect_err("expressions containing parameters must not lower");
+    assert!(matches!(error, MysqlParserError::Unsupported(_)));
 }
 
 #[test]

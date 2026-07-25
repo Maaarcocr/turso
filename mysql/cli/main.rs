@@ -13,6 +13,9 @@ fn main() -> anyhow::Result<()> {
 
     let connection = turso_mysql::open_memory()?;
     let mut statement = connection.prepare(&sql)?;
+    if statement.parameters_count() != 0 {
+        anyhow::bail!("tursomysql CLI does not support binding parameters");
+    }
     for row in statement.run_collect_rows()? {
         println!(
             "{}",

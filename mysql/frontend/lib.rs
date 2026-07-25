@@ -89,7 +89,9 @@ mod tests {
         let error = connection
             .prepare("SELECT greeting FROM messages")
             .expect_err("unsupported FROM must return an error");
-        assert!(error.to_string().contains("literal-only SELECT"));
+        assert!(error
+            .to_string()
+            .contains("literal and anonymous-parameter SELECT projections"));
         connection.close()?;
         Ok(())
     }
