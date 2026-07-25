@@ -89,3 +89,19 @@ The PostgreSQL frontend depends on Chumsky, distributed by the Chumsky authors:
 
 * License: licenses/chumsky-mit-license.md (MIT License)
 * Homepage: https://codeberg.org/zesterer/chumsky
+
+This project depends on sqlparser-rs, distributed by the Apache DataFusion project:
+
+* License: licenses/mysql/sqlparser-apache-license.md (Apache License v2.0)
+* Homepage: https://github.com/apache/datafusion-sqlparser-rs
+
+This project uses mtparser to mine external mysqltest corpora:
+
+* License: licenses/mysql/mtparser-apache-license.md (Apache License v2.0)
+* Homepage: https://github.com/shapled/mtparser
+
+This project includes MySQL specification cases derived from go-mysql-server enginetest fixtures, distributed by DoltHub, Inc.:
+
+* Copyright: DoltHub, Inc. and contributors
+* License: licenses/mysql/go-mysql-server-apache-license.md (Apache License v2.0)
+* Homepage: https://github.com/dolthub/go-mysql-server
