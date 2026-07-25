@@ -65,6 +65,10 @@ fn command_joins_separate_shell_arguments_into_sql() {
 
 #[test]
 fn command_reports_unsupported_syntax() {
+    assert_failure(
+        "SELECT ?",
+        "tursomysql CLI does not support binding parameters",
+    );
     assert_failure("SELECT name FROM users", "unsupported MySQL syntax");
     assert_failure("CREATE TABLE users(id INT)", "unsupported MySQL syntax");
     assert_failure("SELECT 1.5", "exact MySQL decimal or unsigned semantics");

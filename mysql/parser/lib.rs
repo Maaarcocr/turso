@@ -3,8 +3,30 @@ use sqlparser::ast::{
 };
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::{Parser, ParserError};
+use std::num::NonZeroU32;
 use thiserror::Error;
 use turso_parser::ast;
+
+#[derive(Default)]
+struct TranslationContext {
+    parameter_count: u32,
+}
+
+impl TranslationContext {
+    fn next_parameter(&mut self) -> Result<ast::Variable, MysqlParserError> {
+        self.parameter_count = self.parameter_count.checked_add(1).ok_or_else(|| {
+            MysqlParserError::Unsupported(
+                "too many anonymous parameters in SELECT projection".to_string(),
+            )
+        })?;
+        let index = NonZeroU32::new(self.parameter_count).ok_or_else(|| {
+            MysqlParserError::Unsupported(
+                "anonymous parameter indices must be greater than zero".to_string(),
+            )
+        })?;
+        Ok(ast::Variable::indexed(index))
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum MysqlParserError {
@@ -42,10 +64,14 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
             "only SELECT is available in the bootstrap frontend".to_string(),
         ));
     };
-    translate_query(query)
+    let mut context = TranslationContext::default();
+    translate_query(query, &mut context)
 }
 
-fn translate_query(query: &Query) -> Result<ast::Stmt, MysqlParserError> {
+fn translate_query(
+    query: &Query,
+    context: &mut TranslationContext,
+) -> Result<ast::Stmt, MysqlParserError> {
     let Query {
         with,
         body,
@@ -79,10 +105,13 @@ fn translate_query(query: &Query) -> Result<ast::Stmt, MysqlParserError> {
                 .to_string(),
         ));
     };
-    translate_select(select)
+    translate_select(select, context)
 }
 
-fn translate_select(select: &Select) -> Result<ast::Stmt, MysqlParserError> {
+fn translate_select(
+    select: &Select,
+    context: &mut TranslationContext,
+) -> Result<ast::Stmt, MysqlParserError> {
     let Select {
         select_token: _,
         optimizer_hints,
@@ -138,7 +167,7 @@ fn translate_select(select: &Select) -> Result<ast::Stmt, MysqlParserError> {
         || *flavor != SelectFlavor::Standard
     {
         return Err(MysqlParserError::Unsupported(
-            "only literal-only SELECT projections are available in the bootstrap frontend"
+            "only literal and anonymous-parameter SELECT projections are available in the bootstrap frontend"
                 .to_string(),
         ));
     }
@@ -150,7 +179,7 @@ fn translate_select(select: &Select) -> Result<ast::Stmt, MysqlParserError> {
 
     let columns = projection
         .iter()
-        .map(translate_projection)
+        .map(|item| translate_projection(item, context))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::Stmt::Select(ast::Select {
         with: None,
@@ -170,14 +199,21 @@ fn translate_select(select: &Select) -> Result<ast::Stmt, MysqlParserError> {
     }))
 }
 
-fn translate_projection(item: &SelectItem) -> Result<ast::ResultColumn, MysqlParserError> {
+fn translate_projection(
+    item: &SelectItem,
+    context: &mut TranslationContext,
+) -> Result<ast::ResultColumn, MysqlParserError> {
     match item {
-        SelectItem::UnnamedExpr(expr) => Ok(ast::ResultColumn::Expr(
-            Box::new(translate_expr(expr)?),
-            None,
-        )),
+        SelectItem::UnnamedExpr(expr) => {
+            let alias = is_anonymous_placeholder(expr)
+                .then(|| ast::As::ImplicitColumnName(ast::Name::exact("?".to_string())));
+            Ok(ast::ResultColumn::Expr(
+                Box::new(translate_expr(expr, context)?),
+                alias,
+            ))
+        }
         SelectItem::ExprWithAlias { expr, alias } => Ok(ast::ResultColumn::Expr(
-            Box::new(translate_expr(expr)?),
+            Box::new(translate_expr(expr, context)?),
             Some(ast::As::As(ast::Name::exact(alias.value.clone()))),
         )),
         _ => Err(MysqlParserError::Unsupported(
@@ -187,13 +223,19 @@ fn translate_projection(item: &SelectItem) -> Result<ast::ResultColumn, MysqlPar
     }
 }
 
-fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError> {
+fn translate_expr(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
     let Expr::Value(value) = expr else {
         return Err(MysqlParserError::Unsupported(format!(
             "expression `{expr}` is not available in the bootstrap frontend"
         )));
     };
     let literal = match &value.value {
+        Value::Placeholder(placeholder) if placeholder == "?" => {
+            return Ok(ast::Expr::Variable(context.next_parameter()?));
+        }
         Value::Number(number, _) => translate_numeric_literal(number)?,
         Value::SingleQuotedString(value) | Value::DoubleQuotedString(value) => {
             ast::Literal::String(quote_string(value))
@@ -204,10 +246,17 @@ fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError> {
         other => {
             return Err(MysqlParserError::Unsupported(format!(
                 "literal `{other}` is not available in the bootstrap frontend"
-            )))
+            )));
         }
     };
     Ok(ast::Expr::Literal(literal))
+}
+
+fn is_anonymous_placeholder(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Value(value) if matches!(&value.value, Value::Placeholder(placeholder) if placeholder == "?")
+    )
 }
 
 fn translate_numeric_literal(number: &str) -> Result<ast::Literal, MysqlParserError> {
@@ -254,7 +303,9 @@ mod tests {
     fn rejects_unsupported_from_clause() {
         let error = parse_and_translate("SELECT greeting FROM messages")
             .expect_err("FROM must not be silently discarded");
-        assert!(error.to_string().contains("literal-only SELECT"));
+        assert!(error
+            .to_string()
+            .contains("literal and anonymous-parameter SELECT projections"));
     }
 
     #[test]
