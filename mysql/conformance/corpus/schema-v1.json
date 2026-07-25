@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://turso.tech/mysql-spec/corpus/schema-v1.json",
+  "title": "Turso MySQL mined syntax case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "source",
+    "mode",
+    "sql",
+    "expectation",
+    "context",
+    "curriculum"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpus", "repository", "revision", "path", "line", "command", "license"],
+      "properties": {
+        "corpus": { "type": "string" },
+        "repository": { "type": "string" },
+        "revision": { "type": "string" },
+        "path": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "command": { "type": "string" },
+        "license": { "type": "string" }
+      }
+    },
+    "mode": { "enum": ["syntax"] },
+    "sql": { "type": "string", "minLength": 1 },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["syntax", "source_outcome", "mysql_errors"],
+      "properties": {
+        "syntax": { "enum": ["accept", "reject", "unknown"] },
+        "source_outcome": { "enum": ["success", "execution-error", "parse-error", "success-or-error", "unknown"] },
+        "mysql_errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connection", "conditional", "dynamic", "row_order"],
+      "properties": {
+        "connection": { "type": "string" },
+        "conditional": { "type": "boolean" },
+        "dynamic": { "type": "boolean" },
+        "row_order": { "enum": ["exact", "bag", "sorted"] }
+      }
+    },
+    "curriculum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "features", "complexity"],
+      "properties": {
+        "level": { "type": "string" },
+        "features": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "complexity": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,266 @@
+schema_version = 1
+target = "mysql-8.4.10"
+profile = "application-compatibility"
+
+[stages]
+order = ["parse", "lower", "prepare", "execute", "metadata", "wire"]
+
+[statuses]
+values = ["covered", "partial", "unsupported", "blocked", "out-of-scope"]
+
+[[feature]]
+id = "select-literals"
+priority = 1
+requires = []
+parse = "covered"
+lower = "partial"
+prepare = "partial"
+execute = "partial"
+metadata = "partial"
+wire = "blocked"
+notes = "NULL, booleans, utf8mb4 strings, and signed non-negative i64 integers execute; exact decimal, unsigned, binary, bit, and temporal literals remain unsupported"
+
+[[feature]]
+id = "identifiers-and-aliases"
+priority = 2
+requires = ["select-literals"]
+parse = "covered"
+lower = "partial"
+prepare = "partial"
+execute = "partial"
+metadata = "partial"
+wire = "blocked"
+notes = "Projection aliases and backtick aliases work; identifier expressions require table binding"
+
+[[feature]]
+id = "select-expressions"
+priority = 3
+requires = ["select-literals"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "create-table"
+priority = 4
+requires = ["identifiers-and-aliases"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "insert-values"
+priority = 5
+requires = ["create-table", "select-literals"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "table-scan"
+priority = 6
+requires = ["create-table", "insert-values"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "predicates"
+priority = 7
+requires = ["select-expressions", "table-scan"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "order-limit"
+priority = 8
+requires = ["table-scan"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "constraints"
+priority = 9
+requires = ["create-table", "insert-values"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+notes = "PRIMARY KEY, UNIQUE, NOT NULL, DEFAULT, CHECK, and FOREIGN KEY"
+
+[[feature]]
+id = "joins"
+priority = 10
+requires = ["predicates", "table-scan"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "aggregates-grouping"
+priority = 11
+requires = ["select-expressions", "table-scan"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "update-delete"
+priority = 12
+requires = ["predicates", "constraints"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "transactions"
+priority = 13
+requires = ["insert-values", "update-delete"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "auto-increment"
+priority = 14
+requires = ["constraints", "transactions"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "on-duplicate-key-update"
+priority = 15
+requires = ["constraints", "insert-values", "update-delete"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "prepared-parameters"
+priority = 16
+requires = ["select-expressions", "insert-values"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "decimal-and-unsigned"
+priority = 17
+requires = ["select-literals", "select-expressions"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "temporal-types"
+priority = 18
+requires = ["create-table", "select-expressions"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "json"
+priority = 19
+requires = ["create-table", "select-expressions"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "charset-collation"
+priority = 20
+requires = ["create-table", "predicates"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+
+[[feature]]
+id = "schema-introspection"
+priority = 21
+requires = ["create-table", "table-scan"]
+parse = "covered"
+lower = "unsupported"
+prepare = "blocked"
+execute = "blocked"
+metadata = "blocked"
+wire = "blocked"
+notes = "SHOW, DESCRIBE, information_schema, and MySQL-compatible diagnostics"
+
+[[feature]]
+id = "mysql-wire-protocol"
+priority = 22
+requires = ["prepared-parameters", "transactions", "schema-introspection"]
+parse = "covered"
+lower = "partial"
+prepare = "partial"
+execute = "partial"
+metadata = "partial"
+wire = "unsupported"
+
+[[feature]]
+id = "replication-binlog"
+priority = 99
+requires = []
+parse = "out-of-scope"
+lower = "out-of-scope"
+prepare = "out-of-scope"
+execute = "out-of-scope"
+metadata = "out-of-scope"
+wire = "out-of-scope"
