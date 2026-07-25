@@ -179,3 +179,336 @@ end of the file or wherever the cursor happened to be.
 ## CI Note
 
 Running in GitHub Action? Max-turns limit in `.github/workflows/claude.yml`. OK to push WIP and continue in another action. Stay focused, avoid rabbit holes.
+
+## MySQL 8.4 Frontend Project
+
+The repository contains an active MySQL-compatible frontend bootstrap under
+`mysql/`. Treat this section as the handoff and operating contract for that
+work.
+
+### Desired Outcome
+
+Build application-facing MySQL 8.4 compatibility on Turso without forking the
+storage engine or replacing embedded operation:
+
+1. Parse MySQL with an established parser.
+2. Strictly lower the MySQL AST into `turso_parser::ast`.
+3. Reuse Turso binding, planning, optimization, and VDBE execution.
+4. Add neutral core capabilities or generic VDBE instructions only when
+   correctness requires them.
+5. Make the embedded SQL path useful before adding a MySQL wire adapter.
+6. Use a large, source-attributed specification corpus as an implementation
+   curriculum, not merely a small collection of hand-written unit tests.
+7. Eventually support ordinary MySQL drivers and ORMs with correct values,
+   diagnostics, metadata, affected rows, session behavior, and protocol
+   transcripts.
+
+The target is application compatibility. InnoDB file compatibility,
+replication, binlogs, plugins, and MariaDB-specific compatibility are out of
+scope unless the project explicitly changes that decision.
+
+### Frozen Compatibility Target
+
+The oracle is MySQL 8.4.10 LTS. Exact values are in `mysql/TARGET.md` and
+`mysql/conformance/target.toml`:
+
+- Source tag: `mysql-8.4.10`
+- Source commit: `6adc159923b7b6abbe649949551ec25264c2daf9`
+- Docker image:
+  `mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6`
+- Default MySQL 8.4 `sql_mode`
+- Server charset: `utf8mb4`
+- Server collation: `utf8mb4_0900_ai_ci`
+- Time zone: UTC (`+00:00`)
+- `lower_case_table_names=0`
+
+Do not silently change the target profile or use MariaDB as the behavioral
+oracle.
+
+### Architecture Decisions
+
+- Parser: Apache-2.0 `sqlparser-rs` 0.62 with `MySqlDialect`.
+- Lowering target: shared `turso_parser::ast`, not a parallel planner or VDBE.
+- Catalog/schema: the bootstrap `MySqlDialect` delegates to the existing SQLite
+  schema and catalog implementation.
+- Execution: embedded `Database`/`Connection` first; wire protocol is a later
+  adapter over the same path.
+- Unsupported syntax policy: faithfully lower it, explicitly document it as a
+  compatibility no-op, or reject it. Never discard syntax silently.
+- Parser acceptance is not execution compatibility. Report parse, lower,
+  prepare, execute, values, diagnostics, affected rows, metadata, and wire
+  behavior separately.
+
+`ENGINE=InnoDB` may eventually be an explicitly documented compatibility
+no-op. Semantically relevant features such as `UNSIGNED`, charset, collation,
+generated columns, and partitioning must not be ignored.
+
+The parser selection was informed by a MySQL MTR bake-off over 1,457 files and
+104,903 SQL occurrences. `sqlparser-rs` accepted 88,402 of 100,673 literal
+statements (87.81%) with zero panics; the evaluated alternative accepted
+approximately 70.66%.
+
+### Implemented Bootstrap
+
+Workspace packages:
+
+- `mysql/parser` (`turso_mysql_parser`)
+- `mysql/frontend` (`turso_mysql`)
+- `mysql/cli` (`tursomysql`)
+- `mysql/conformance`
+
+Implemented APIs and behavior include:
+
+- `parse`, `parse_one`, `translate`, and `parse_and_translate`
+- Strict MySQL AST-to-Turso AST lowering
+- In-memory embedded execution through a `Dialect`
+- A CLI that executes supplied SQL or a default hello-world query
+- Projection metadata and aliases, including backtick aliases
+- Explicit errors for unsupported statement and query shapes
+- Connection usability after prepare errors
+
+The current execution slice is intentionally narrow: literal-only `SELECT`
+projections. It handles `NULL`, booleans, `utf8mb4` strings, aliases, and
+non-negative integer literals representable exactly as `i64`. Unary negative
+expressions, decimals, scientific notation, unsigned overflow, identifiers,
+functions, `FROM`, filtering, DDL, and DML are not yet lowered. Decimal and
+unsigned literals that need exact MySQL semantics are rejected rather than
+rounded or coerced through SQLite semantics.
+
+`SELECT 1 FOR UPDATE` is a known `sqlparser-rs` MySQL parser gap and has an
+explicit regression assertion. Keep known valid-MySQL parser gaps distinct
+from lowering rejections.
+
+### Immediate SQL Implementation Curriculum
+
+The first useful vertical slice remains:
+
+```sql
+CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));
+INSERT INTO users VALUES (1, 'Ada');
+SELECT name FROM users WHERE id = ?;
+```
+
+Recommended implementation order:
+
+1. Core identifiers, expressions, and parameters.
+2. `CREATE TABLE` with core integer and string types.
+3. `INSERT ... VALUES` and affected-row accounting.
+4. Table scans and `WHERE` predicates.
+5. Ordering and limits.
+6. Constraints and indexes.
+7. Updates and deletes.
+8. Transactions.
+9. Joins, subqueries, grouping, and functions.
+10. `AUTO_INCREMENT`, last-insert ID, and upsert semantics.
+11. Exact decimal/unsigned, temporal, string/collation, and JSON semantics.
+12. Introspection, warnings, diagnostics, and session state.
+13. MySQL wire protocol and driver/ORM suites.
+
+The rough feature DAG and stage statuses are in
+`mysql/conformance/curriculum.toml`. Update it when behavior actually becomes
+covered; parser acceptance alone does not make an execution feature covered.
+
+### Owned Test Gate
+
+Run the complete deterministic local gate with:
+
+```bash
+CARGO=/path/to/cargo ./mysql/test.sh
+```
+
+It performs:
+
+- Root and standalone-miner formatting checks
+- Python miner unit tests
+- Validation of the tracked mined corpus
+- Parser, frontend, and CLI Rust tests
+- Standalone MTR miner tests
+- Clippy over every MySQL target with warnings denied
+- A direct `tursomysql` smoke test
+
+The host used for this work has limited memory. Preserve these defaults for
+large Rust invocations:
+
+```bash
+export CARGO_BUILD_JOBS=1
+export CARGO_PROFILE_TEST_DEBUG=0
+export CARGO_PROFILE_DEV_DEBUG=0
+export CARGO_INCREMENTAL=0
+```
+
+Without dev/test debug suppression, compiling `turso_core` for Clippy or tests
+may be killed by the OOM killer. Two existing `turso_core` unused-import
+warnings are unrelated to the MySQL work.
+
+The optional differential tier runs owned value cases against the pinned
+MySQL container:
+
+```bash
+CARGO=/path/to/cargo ./mysql/conformance/differential.py
+```
+
+The current 13 differential cases pass against MySQL 8.4.10. They cover
+integers, booleans, `NULL`, strings and escaping, `utf8mb4`, mixed projections,
+aliases, and comments.
+
+### Quantity-First Specification Mining
+
+The mining system is under `mysql/conformance/corpus/` and
+`mysql/conformance/tools/`. It intentionally prioritizes many source-attributed
+requirements over a perfect hand-curated curriculum.
+
+Shared corpus properties:
+
+- JSONL schema: `mysql/conformance/corpus/schema-v1.json`
+- Pinned sources: `mysql/conformance/corpus/sources.lock.toml`
+- Stable source-derived case IDs
+- Original repository, revision, file, line, command role, and license
+- Syntax expectation and original source outcome
+- Connection/dynamic/order context
+- Rough generated level, feature tags, and complexity
+- Shards of 1,000 records
+- Validation that rejects malformed records and duplicate IDs
+
+Generated levels are an approximate ordering mechanism. Do not delay bulk
+imports to perfect them. Improve classification independently while keeping
+case IDs stable.
+
+#### Tracked go-mysql-server Corpus
+
+`mysql/conformance/corpus/go-mysql-server/` contains 5,000 checked-in cases
+mined from Apache-2.0 go-mysql-server enginetest fixtures at commit
+`478bed778dd282aa13aa48ebd75b0549ebe75698`:
+
+- 67 Go fixture files scanned
+- 13,130 static query assertions extracted
+- 5,004 setup statements extracted
+- 13,519 unique candidates after deduplication
+- 4,494 positive syntax expectations
+- 506 source error cases kept as `unknown` pending MySQL-oracle classification
+
+Regenerate the exact sample:
+
+```bash
+CARGO=/path/to/cargo ./mysql/conformance/mine-go-mysql-server.sh
+```
+
+Mine every currently extractable case:
+
+```bash
+GO_MYSQL_SERVER_LIMIT=0 \
+CARGO=/path/to/cargo \
+  ./mysql/conformance/mine-go-mysql-server.sh
+```
+
+The importer uses Go lexical structure but does not require a Go toolchain. Its
+output was verified to regenerate byte-for-byte from the pinned source.
+go-mysql-server source expectations are useful input but are not authoritative
+MySQL behavior; oracle-classify them before promoting error or value semantics.
+
+#### Local Official MySQL MTR Corpus
+
+`mysql/conformance/mine-mtr.sh` uses the standalone Apache-2.0 `mtparser` tool
+in `mysql/conformance/tools/mtr-miner/` to read a pinned external MySQL source
+checkout. The initial run found:
+
+- 1,457 mysqltest files
+- 104,903 SQL commands
+- 100,719 static SQL commands
+- 4,151 commands requiring mysqltest variable evaluation
+- 59,634 unique static cases after exact SQL/expectation deduplication
+
+The default balanced sample emits 5,000 cases: 4,923 positive syntax
+expectations and 77 negative syntax expectations.
+
+```bash
+CARGO=/path/to/cargo ./mysql/conformance/mine-mtr.sh
+```
+
+Mine all eligible static MTR cases:
+
+```bash
+MYSQL_MTR_LIMIT=0 \
+CARGO=/path/to/cargo \
+  ./mysql/conformance/mine-mtr.sh
+```
+
+Official MTR files are GPL-2.0-only. Generated MTR SQL is intentionally ignored
+under `mysql/conformance/corpus/local/` and must not be committed or
+redistributed until licensing is reviewed. Keep using a pinned external sparse
+checkout in the meantime.
+
+The static miner understands mysqltest statements, error directives,
+connection switches, sorted-result directives, conditional blocks, and literal
+versus interpolated SQL. Dynamic `$variable` statements are counted but omitted
+by default. Full dynamic MTR mining should instrument the upstream `mysqltest`
+runtime rather than reimplement its complete DSL.
+
+#### Parser Progress Reporter
+
+Run a corpus without making unfinished features fail the ordinary gate:
+
+```bash
+cargo run -p turso_mysql_parser --example corpus -- \
+  mysql/conformance/corpus/go-mysql-server
+```
+
+Useful options include `--through LEVEL`, `--frontier N`,
+`--json-report PATH`, and `--strict`. The default mode reports progress and the
+simplest implementation frontier; parser panics always fail. Use `--strict`
+only for a slice expected to be complete.
+
+Baselines from the initial 5,000-case samples:
+
+- go-mysql-server: 4,271/4,494 graded cases passing (95.04%), 506 unknown,
+  zero panics
+- MySQL MTR: 4,260/5,000 passing (85.20%), zero panics
+
+These percentages measure syntax only. Do not describe them as overall MySQL
+compatibility.
+
+### Next Mining Layer: Behavioral Oracle Specs
+
+Bulk syntax extraction is only the first layer. The next mining work should:
+
+1. Preserve go-mysql-server `ScriptTest` setup/assertion groupings instead of
+   only flattening SQL strings.
+2. Run each candidate in a fresh database against the pinned MySQL 8.4.10
+   container.
+3. Capture typed values without lossy string conversion, column names and type
+   metadata, affected rows, last insert ID, warnings, errno, SQLSTATE, message,
+   and transaction/session effects.
+4. Repeat candidates in independent databases and quarantine nondeterministic
+   results.
+5. Never promote an accidental missing-table or missing-setup failure as an
+   expected diagnostic.
+6. Keep every candidate in an explicit bucket: promoted, negative,
+   nondeterministic, missing setup, unsupported environment, source disagrees
+   with MySQL, dynamic pending, duplicate, or out of scope.
+7. Add sqllogictest and fixed-seed SQLancer importers after structured
+   go-mysql-server scripts.
+8. Add a protocol recorder for MySQL driver and ORM suites only when the wire
+   adapter becomes relevant.
+
+Expected outputs should be checked in after oracle capture and human review so
+ordinary curriculum runs remain deterministic and do not require a live MySQL
+server.
+
+### Correctness and Maintenance Rules
+
+- Never weaken a case merely because implementation work makes it start
+  succeeding; promote it from rejection/frontier coverage to positive
+  execution coverage.
+- Never silently skip mined candidates. Report extraction, promotion,
+  quarantine, duplicate, and out-of-scope counts.
+- Keep source revisions and licenses in each generated record.
+- Preserve checked-in go-mysql-server attribution and license files under
+  `licenses/mysql/` and `NOTICE.md`.
+- Keep MTR-generated SQL local until licensing review permits otherwise.
+- Add owned, focused regressions for bugs even when a mined case already
+  catches them; mined corpora provide breadth, while owned tests explain the
+  intended invariant.
+- Test persistence-sensitive DDL by close/reopen/reparse, not only through an
+  in-memory connection.
+- Do not begin wire-specific implementation merely to increase protocol test
+  counts before the embedded SQL vertical slice works.
