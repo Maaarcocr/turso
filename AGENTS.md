@@ -267,13 +267,16 @@ Implemented APIs and behavior include:
 - Explicit errors for unsupported statement and query shapes
 - Connection usability after prepare errors
 
-The current execution slice is intentionally narrow: literal-only `SELECT`
-projections. It handles `NULL`, booleans, `utf8mb4` strings, aliases, and
-non-negative integer literals representable exactly as `i64`. Unary negative
-expressions, decimals, scientific notation, unsigned overflow, identifiers,
-functions, `FROM`, filtering, DDL, and DML are not yet lowered. Decimal and
-unsigned literals that need exact MySQL semantics are rejected rather than
-rounded or coerced through SQLite semantics.
+The current execution slice is intentionally narrow: literal and anonymous
+`?` parameter `SELECT` projections. It handles `NULL`, booleans, `utf8mb4`
+strings, aliases, non-negative integer literals representable exactly as
+`i64`, and embedded binding of `NULL`, `i64`, and UTF-8 text. Parameters are
+indexed from 1 in encounter order; numbered and named placeholders, parameter
+expressions, CLI binding, missing-argument diagnostic parity, and wire behavior
+remain unsupported. Unary negative expressions, decimals, scientific notation,
+unsigned overflow, identifiers, functions, `FROM`, filtering, DDL, and DML are
+not yet lowered. Decimal and unsigned literals that need exact MySQL semantics
+are rejected rather than rounded or coerced through SQLite semantics.
 
 `SELECT 1 FOR UPDATE` is a known `sqlparser-rs` MySQL parser gap and has an
 explicit regression assertion. Keep known valid-MySQL parser gaps distinct
