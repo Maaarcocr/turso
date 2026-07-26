@@ -267,6 +267,70 @@ mod tests {
         }
     }
 
+    /// Accepts only explicitly marked external statements. Engine-owned helper
+    /// SQL must therefore bypass this parser and use canonical SQLite semantics.
+    #[derive(Default)]
+    struct MarkedRootDialect {
+        external_parse_calls: AtomicUsize,
+    }
+
+    impl Dialect for MarkedRootDialect {
+        fn name(&self) -> &'static str {
+            "marked-root"
+        }
+
+        fn parse(&self, sql: &str) -> crate::Result<(Option<turso_parser::ast::Cmd>, usize)> {
+            self.external_parse_calls.fetch_add(1, Ordering::SeqCst);
+            if sql.trim().is_empty() {
+                return sqlite::parse(sql);
+            }
+            let Some(sql) = sql.strip_prefix("root: ") else {
+                return Err(crate::LimboError::ParseError(
+                    "marked-root statements require the `root: ` prefix".to_string(),
+                ));
+            };
+            let (cmd, offset) = sqlite::parse(sql)?;
+            Ok((cmd, "root: ".len() + offset))
+        }
+
+        fn parse_table_sql(&self, sql: &str, root_page: i64) -> crate::Result<BTreeTable> {
+            BTreeTable::from_sql(sql, root_page)
+        }
+
+        fn parse_table_sql_ast(&self, sql: &str) -> crate::Result<turso_parser::ast::Stmt> {
+            sqlite::parse_table_sql_ast(sql)
+        }
+
+        fn table_sql_for_replay(&self, sql: &str) -> crate::Result<String> {
+            sqlite::table_sql_for_replay(sql)
+        }
+
+        fn format_table_sql(
+            &self,
+            input: &str,
+            tbl_name: &turso_parser::ast::QualifiedName,
+            body: &turso_parser::ast::CreateTableBody,
+        ) -> crate::Result<String> {
+            SqliteDialect.format_table_sql(input, tbl_name, body)
+        }
+
+        fn register_catalog(
+            &self,
+            schema: &mut crate::schema::Schema,
+            enable_custom_types: bool,
+        ) -> crate::Result<()> {
+            sqlite::register_builtin_catalog(schema, enable_custom_types)
+        }
+
+        fn resolve_function(
+            &self,
+            name: &str,
+            arg_count: usize,
+        ) -> crate::Result<Option<crate::function::Func>> {
+            sqlite::resolve_builtin_function(name, arg_count)
+        }
+    }
+
     /// Stores table definitions in syntax that SQLite cannot parse and always
     /// adds its marker, so replay tests detect repeated storage formatting.
     struct StrictTestDialect;
@@ -443,6 +507,70 @@ mod tests {
         // Both tables are usable under the dialect.
         conn.execute("INSERT INTO t VALUES (1)").unwrap();
         conn.execute("INSERT INTO u VALUES (2)").unwrap();
+        conn.close().unwrap();
+    }
+
+    #[test]
+    fn marked_root_dialect_keeps_engine_helpers_on_sqlite_parser() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let dialect = Arc::new(MarkedRootDialect::default());
+        let db = open_db(&io, "marked-root-helpers.db", dialect.clone()).unwrap();
+        let conn = db.connect().unwrap();
+
+        let error = conn
+            .prepare("SELECT 1")
+            .expect_err("unmarked external SQL must not fall back to SQLite");
+        assert!(error.to_string().contains("require the `root: ` prefix"));
+
+        conn.execute("root: CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+            .unwrap();
+        conn.execute("root: INSERT INTO t VALUES (1, 'before rebuild')")
+            .unwrap();
+        let rows = conn
+            .prepare("root: SELECT name FROM t WHERE id = 1")
+            .unwrap()
+            .run_collect_rows()
+            .unwrap();
+        assert_eq!(rows, vec![vec![crate::Value::build_text("before rebuild")]]);
+
+        conn.force_reparse_schema_without_publish().unwrap();
+        conn.execute("root: INSERT INTO t VALUES (2, 'after rebuild')")
+            .unwrap();
+        let rows = conn
+            .prepare("root: SELECT name FROM t ORDER BY id")
+            .unwrap()
+            .run_collect_rows()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                vec![crate::Value::build_text("before rebuild")],
+                vec![crate::Value::build_text("after rebuild")],
+            ]
+        );
+        assert!(dialect.external_parse_calls.load(Ordering::SeqCst) >= 6);
+        conn.close().unwrap();
+    }
+
+    #[test]
+    fn prepare_sqlite_reprepares_with_sqlite_semantics_under_external_dialect() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let dialect = Arc::new(MarkedRootDialect::default());
+        let db = open_db(&io, "sqlite-root-reprepare.db", dialect.clone()).unwrap();
+        let conn = db.connect().unwrap();
+
+        let mut stmt = conn.prepare_sqlite("SELECT 1").unwrap();
+        assert_eq!(dialect.external_parse_calls.load(Ordering::SeqCst), 0);
+        conn.set_full_column_names(true);
+        assert_eq!(
+            stmt.run_collect_rows().unwrap(),
+            vec![vec![crate::Value::from_i64(1)]]
+        );
+        assert_eq!(
+            stmt.stmt_status(crate::StatementStatusCounter::Reprepare),
+            1
+        );
+        assert_eq!(dialect.external_parse_calls.load(Ordering::SeqCst), 0);
         conn.close().unwrap();
     }
 

@@ -33,11 +33,10 @@ type StepResult = vdbe::StepResult;
 /// Classifies how a [`Statement`] participates in connection-level lifecycle
 /// and active-statement accounting.
 ///
-/// Use [`StatementOrigin::Root`] for ordinary top-level statements prepared on
-/// behalf of the user. Root statements are the only statements that count
-/// toward `Connection::n_active_root_statements` once execution begins, which
-/// is the SQLite-compatible notion of "another SQL statement in progress" used
-/// by operations like `VACUUM`.
+/// Use [`StatementOrigin::Root`] for ordinary top-level statements parsed with
+/// the database's external dialect. [`StatementOrigin::SqliteRoot`] has the
+/// same root lifecycle but parses engine-requested SQLite text, such as the SQL
+/// used by PostgreSQL COPY.
 ///
 /// Use [`StatementOrigin::InternalHelper`] when the engine prepares and runs a
 /// separate helper statement on the same connection, for example helper SQL in
@@ -52,6 +51,7 @@ type StepResult = vdbe::StepResult;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StatementOrigin {
     Root,
+    SqliteRoot,
     InternalHelper,
     Subprogram,
 }
@@ -67,6 +67,18 @@ pub enum StatementStatusCounter {
 }
 
 impl StatementOrigin {
+    pub(crate) const fn uses_sqlite_semantics(self) -> bool {
+        matches!(self, Self::SqliteRoot | Self::InternalHelper)
+    }
+
+    pub(crate) const fn is_active_root(self) -> bool {
+        matches!(self, Self::Root | Self::SqliteRoot)
+    }
+
+    pub(crate) const fn uses_prepare_context_reprepare(self) -> bool {
+        self.is_active_root()
+    }
+
     pub(crate) const fn needs_nested_guard(self) -> bool {
         matches!(self, Self::InternalHelper)
     }
@@ -505,7 +517,7 @@ impl Statement {
     }
 
     fn _step(&mut self, waker: Option<&Waker>) -> Result<StepResult> {
-        if !self.counted_as_active_root && matches!(self.origin, StatementOrigin::Root) {
+        if !self.counted_as_active_root && self.origin.is_active_root() {
             self.program
                 .connection
                 .n_active_root_statements
@@ -513,7 +525,7 @@ impl Statement {
             self.counted_as_active_root = true;
         }
         if matches!(self.state.execution_state, ProgramExecutionState::Init)
-            && self.origin != StatementOrigin::InternalHelper
+            && self.origin.uses_prepare_context_reprepare()
         {
             if self.program.connection.mvcc_enabled() {
                 // MVCC checkpoints can publish internal schema roots without changing
@@ -869,7 +881,7 @@ impl Statement {
         // same-version reprepare still refreshes it.
         conn.refresh_schema_from_shared_for_reprepare();
         let new_program = {
-            let (cmd, _) = conn.parse_sql(&self.program.sql)?;
+            let (cmd, _) = conn.parse_sql_with_origin(&self.program.sql, self.origin)?;
             let cmd = cmd.expect("Same SQL string should be able to be parsed");
 
             let syms = conn.syms.read();

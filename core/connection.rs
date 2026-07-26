@@ -921,7 +921,7 @@ impl Connection {
                 drop(syms);
                 let cmd = {
                     crate::stack::trace_stack!("schema_retry_parse");
-                    let (cmd, _) = self.parse_sql(input)?;
+                    let (cmd, _) = self.parse_sql_with_origin(input, origin)?;
                     let Some(cmd) = cmd else {
                         return Err(err);
                     };
@@ -954,7 +954,7 @@ impl Connection {
     }
 
     pub fn prepare_sqlite(self: &Arc<Connection>, sql: impl AsRef<str>) -> Result<Statement> {
-        self.prepare_with_origin(sql, StatementOrigin::Root)
+        self.prepare_with_origin(sql, StatementOrigin::SqliteRoot)
     }
 
     #[doc(hidden)]
@@ -992,7 +992,7 @@ impl Connection {
 
             let (cmd, byte_offset_end) = {
                 crate::stack::trace_stack!("parse");
-                self.parse_sql(sql)?
+                self.parse_sql_with_origin(sql, origin)?
             };
             let cmd = match cmd {
                 Some(cmd) => cmd,
@@ -1357,7 +1357,7 @@ impl Connection {
             Ok::<_, crate::alloc::TryReserveError>(())
         })??;
 
-        let stmt = self.prepare("SELECT * FROM sqlite_schema")?;
+        let stmt = self.prepare_internal("SELECT * FROM sqlite_schema")?;
 
         // MVCC bootstrap connection gets the "baseline" from the DB file and ignores anything in MV store
         let mv_tx = if self.is_mvcc_bootstrap_connection() {
@@ -1730,6 +1730,18 @@ impl Connection {
 
     pub(crate) fn parse_sql(&self, sql: &str) -> Result<(Option<Cmd>, usize)> {
         self.db.dialect().parse(sql)
+    }
+
+    pub(crate) fn parse_sql_with_origin(
+        &self,
+        sql: &str,
+        origin: StatementOrigin,
+    ) -> Result<(Option<Cmd>, usize)> {
+        if origin.uses_sqlite_semantics() {
+            crate::dialect::sqlite::parse(sql)
+        } else {
+            self.parse_sql(sql)
+        }
     }
 
     #[cfg(feature = "fs")]

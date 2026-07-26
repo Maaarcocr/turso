@@ -84,6 +84,277 @@ fn malformed_sql_returns_parse_errors() {
 }
 
 #[test]
+fn lowers_basic_create_table_to_shared_ast() {
+    let statement = parse_and_translate(
+        "CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100), bio VARCHAR(1000));",
+    )
+    .expect("basic CREATE TABLE must lower");
+    assert_eq!(
+        statement.to_string(),
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR (100), bio VARCHAR (1000))"
+    );
+
+    let ast::Stmt::CreateTable {
+        temporary,
+        if_not_exists,
+        tbl_name,
+        body,
+    } = statement
+    else {
+        panic!("statement must lower to CREATE TABLE");
+    };
+    assert!(!temporary);
+    assert!(!if_not_exists);
+    assert_eq!(tbl_name.db_name, None);
+    assert_eq!(tbl_name.name.as_str(), "users");
+    assert_eq!(tbl_name.alias, None);
+
+    let ast::CreateTableBody::ColumnsAndConstraints {
+        columns,
+        constraints,
+        options,
+    } = body
+    else {
+        panic!("CREATE TABLE must lower to columns and constraints");
+    };
+    assert_eq!(columns.len(), 3);
+    assert!(constraints.is_empty());
+    assert_eq!(options, ast::TableOptions::empty());
+    assert_eq!(columns[0].col_name.as_str(), "id");
+    assert_eq!(columns[0].col_type.as_ref().unwrap().name, "INTEGER");
+    assert!(matches!(
+        columns[0].constraints.as_slice(),
+        [ast::NamedColumnConstraint {
+            name: None,
+            constraint: ast::ColumnConstraint::PrimaryKey {
+                order: None,
+                conflict_clause: None,
+                auto_increment: false,
+            },
+        }]
+    ));
+    assert_eq!(columns[1].col_name.as_str(), "name");
+    assert_eq!(columns[1].col_type.as_ref().unwrap().name, "VARCHAR");
+    assert!(matches!(
+        columns[1].col_type.as_ref().unwrap().size,
+        Some(ast::TypeSize::MaxSize(_))
+    ));
+}
+
+#[test]
+fn lowers_create_table_if_not_exists_and_preserves_identifiers() {
+    let statement = parse_and_translate(
+        "CrEaTe TaBlE IF NOT EXISTS `select` (`primary` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
+    )
+    .expect("quoted CREATE TABLE must lower");
+    assert_eq!(
+        statement.to_string(),
+        "CREATE TABLE IF NOT EXISTS `select` (`primary` INTEGER PRIMARY KEY, `display``name` VARCHAR (100))"
+    );
+
+    let ast::Stmt::CreateTable {
+        if_not_exists,
+        tbl_name,
+        body,
+        ..
+    } = statement
+    else {
+        panic!("statement must lower to CREATE TABLE");
+    };
+    assert!(if_not_exists);
+    assert_eq!(tbl_name.name.as_str(), "select");
+    assert!(tbl_name.name.quoted_with('`'));
+    let ast::CreateTableBody::ColumnsAndConstraints { columns, .. } = body else {
+        panic!("CREATE TABLE must lower to columns and constraints");
+    };
+    assert_eq!(columns[0].col_name.as_str(), "primary");
+    assert!(columns[0].col_name.quoted_with('`'));
+    assert_eq!(columns[1].col_name.as_str(), "display`name");
+    assert!(columns[1].col_name.quoted_with('`'));
+}
+
+#[test]
+fn rejects_create_table_shapes_outside_the_basic_subset() {
+    let cases = [
+        SqlCase {
+            name: "temporary",
+            sql: "CREATE TEMPORARY TABLE users(id INTEGER)",
+        },
+        SqlCase {
+            name: "qualified name",
+            sql: "CREATE TABLE app.users(id INTEGER)",
+        },
+        SqlCase {
+            name: "like",
+            sql: "CREATE TABLE users LIKE source_users",
+        },
+        SqlCase {
+            name: "ctas",
+            sql: "CREATE TABLE users AS SELECT 1",
+        },
+        SqlCase {
+            name: "ctas without as",
+            sql: "CREATE TABLE users SELECT 1",
+        },
+        SqlCase {
+            name: "external",
+            sql: "CREATE EXTERNAL TABLE users(id INTEGER)",
+        },
+        SqlCase {
+            name: "transient",
+            sql: "CREATE TRANSIENT TABLE users(id INTEGER)",
+        },
+        SqlCase {
+            name: "global",
+            sql: "CREATE GLOBAL TEMPORARY TABLE users(id INTEGER)",
+        },
+        SqlCase {
+            name: "empty columns",
+            sql: "CREATE TABLE users()",
+        },
+        SqlCase {
+            name: "int alias",
+            sql: "CREATE TABLE users(id INT)",
+        },
+        SqlCase {
+            name: "bigint",
+            sql: "CREATE TABLE users(id BIGINT)",
+        },
+        SqlCase {
+            name: "text",
+            sql: "CREATE TABLE users(name TEXT)",
+        },
+        SqlCase {
+            name: "integer precision",
+            sql: "CREATE TABLE users(id INTEGER(11))",
+        },
+        SqlCase {
+            name: "unsigned",
+            sql: "CREATE TABLE users(id INTEGER UNSIGNED)",
+        },
+        SqlCase {
+            name: "zerofill",
+            sql: "CREATE TABLE users(id INTEGER ZEROFILL)",
+        },
+        SqlCase {
+            name: "auto increment",
+            sql: "CREATE TABLE users(id INTEGER AUTO_INCREMENT)",
+        },
+        SqlCase {
+            name: "varchar missing length",
+            sql: "CREATE TABLE users(name VARCHAR)",
+        },
+        SqlCase {
+            name: "varchar zero length",
+            sql: "CREATE TABLE users(name VARCHAR(0))",
+        },
+        SqlCase {
+            name: "varchar dynamic length",
+            sql: "CREATE TABLE users(name VARCHAR(?))",
+        },
+        SqlCase {
+            name: "varchar fractional length",
+            sql: "CREATE TABLE users(name VARCHAR(1.5))",
+        },
+        SqlCase {
+            name: "varchar unsafe length",
+            sql: "CREATE TABLE users(name VARCHAR(16384))",
+        },
+        SqlCase {
+            name: "null",
+            sql: "CREATE TABLE users(id INTEGER NULL)",
+        },
+        SqlCase {
+            name: "not null",
+            sql: "CREATE TABLE users(id INTEGER NOT NULL)",
+        },
+        SqlCase {
+            name: "default",
+            sql: "CREATE TABLE users(id INTEGER DEFAULT 1)",
+        },
+        SqlCase {
+            name: "unique",
+            sql: "CREATE TABLE users(id INTEGER UNIQUE)",
+        },
+        SqlCase {
+            name: "check",
+            sql: "CREATE TABLE users(id INTEGER CHECK (id > 0))",
+        },
+        SqlCase {
+            name: "references",
+            sql: "CREATE TABLE users(id INTEGER REFERENCES parents(id))",
+        },
+        SqlCase {
+            name: "collate",
+            sql: "CREATE TABLE users(name VARCHAR(100) COLLATE utf8mb4_bin)",
+        },
+        SqlCase {
+            name: "generated",
+            sql: "CREATE TABLE users(id INTEGER, next_id INTEGER AS (id + 1))",
+        },
+        SqlCase {
+            name: "named constraint",
+            sql: "CREATE TABLE users(id INTEGER CONSTRAINT users_pk PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "primary key on varchar",
+            sql: "CREATE TABLE users(name VARCHAR(100) PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "two primary keys",
+            sql: "CREATE TABLE users(id INTEGER PRIMARY KEY, other INTEGER PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "table primary key",
+            sql: "CREATE TABLE users(id INTEGER, PRIMARY KEY (id))",
+        },
+        SqlCase {
+            name: "table index",
+            sql: "CREATE TABLE users(id INTEGER, INDEX users_id (id))",
+        },
+        SqlCase {
+            name: "table key",
+            sql: "CREATE TABLE users(id INTEGER, KEY users_id (id))",
+        },
+        SqlCase {
+            name: "engine",
+            sql: "CREATE TABLE users(id INTEGER) ENGINE=InnoDB",
+        },
+        SqlCase {
+            name: "charset",
+            sql: "CREATE TABLE users(id INTEGER) DEFAULT CHARSET=utf8mb4",
+        },
+        SqlCase {
+            name: "table collation",
+            sql: "CREATE TABLE users(id INTEGER) COLLATE=utf8mb4_0900_ai_ci",
+        },
+        SqlCase {
+            name: "partitioning",
+            sql: "CREATE TABLE users(id INTEGER) PARTITION BY HASH(id) PARTITIONS 2",
+        },
+        SqlCase {
+            name: "table comment",
+            sql: "CREATE TABLE users(id INTEGER) COMMENT='users'",
+        },
+    ];
+
+    for case in cases {
+        let error = match parse_and_translate(case.sql) {
+            Ok(_) => panic!("{} unexpectedly lowered\nSQL: {}", case.name, case.sql),
+            Err(error) => error,
+        };
+        assert!(
+            matches!(
+                error,
+                MysqlParserError::Parse(_) | MysqlParserError::Unsupported(_)
+            ),
+            "SQL: {}\nerror: {error}",
+            case.sql
+        );
+    }
+}
+
+#[test]
 fn lowers_anonymous_parameters_in_projection_order() {
     let statement =
         parse_and_translate("SELECT ?, ? AS named").expect("anonymous parameters must lower");
