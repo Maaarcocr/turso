@@ -186,6 +186,71 @@ The repository contains an active MySQL-compatible frontend bootstrap under
 `mysql/`. Treat this section as the handoff and operating contract for that
 work.
 
+### Managed Agent Workflow
+
+The primary coding assistant acts as the integration manager for this project.
+It owns scope, sequencing, acceptance criteria, the primary worktree, and final
+integration. Implementation agents do not integrate their own work.
+
+Use the following process:
+
+1. The manager selects a coherent vertical slice and records explicit supported
+   and rejected SQL shapes plus executable acceptance tests.
+2. A read-only scout may inspect parser/core paths and recommend the smallest
+   reusable implementation. Scouting is optional when the path is already
+   clear; it must not replace implementation work.
+3. One implementation worker operates in an isolated `pi/*` branch and
+   worktree. The worker commits only its slice and never edits the primary
+   integration worktree.
+4. Core, planner, IR, VDBE, storage, or dialect-boundary changes require an
+   architecture check or independent review. Prefer a neutral engine invariant
+   over a MySQL-specific exception.
+5. The manager inspects the complete diff, verifies test evidence, and
+   cherry-picks accepted commits. An agent saying that work is done is not
+   acceptance.
+6. Run focused tests while developing, then the complete `mysql/test.sh` gate
+   after integration. Record any deliberately skipped or interrupted gate
+   explicitly; never describe a checkpoint as complete.
+7. Use an independent reviewer every few accepted slices and immediately for
+   shared-core changes. Only the manager applies review fixes or delegates them
+   back to the owning worker.
+
+This host is resource constrained, so only one mutating or compiling worker may
+run at a time. Keep Cargo at one build job with debug information and
+incremental compilation disabled as documented below. Prefer substantial
+embedded SQL slices over microfeatures, and batch prose/curriculum polish at
+milestones unless stale documentation would mislead the next implementer.
+Manager state and prompts may also be tracked outside the repository under
+`/home/deploy/turso-agent-manager/`; `AGENTS.md` remains the durable repository
+handoff.
+
+### Current Managed-Cycle Status
+
+- Cycle 1, anonymous projection parameters, is complete and integrated in
+  `d91d55e8b`.
+- Cycle 2, basic executable `CREATE TABLE`, is checkpointed in `ed07d1d50` but
+  is **not yet accepted as complete**.
+
+The cycle-2 checkpoint lowers and executes a strict unqualified table subset
+with exact `INTEGER`, sized `VARCHAR(n)`, an optional unnamed inline
+`INTEGER PRIMARY KEY`, and `IF NOT EXISTS`. It also introduces a neutral
+statement-origin rule so engine-owned helper SQL is parsed with SQLite
+semantics while external root SQL remains frontend-dialect-specific. Parser,
+embedded execution/reopen, and CLI tests have passed locally.
+
+Before beginning cycle 3, finish cycle 2 by:
+
+1. Running the new shared-core dialect regression tests serially.
+2. Running `CARGO=/home/deploy/.cargo/bin/cargo ./mysql/test.sh` to completion.
+3. Independently reviewing the shared-core origin/reprepare change and strict
+   `CREATE TABLE` field validation.
+4. Applying any findings and rerunning the post-integration gate.
+
+A prior core test build was killed under memory pressure when builds overlapped;
+that is incomplete validation, not evidence of a test or code failure. Do not
+remove the pending status until the serial core tests, full gate, and review all
+finish.
+
 ### Desired Outcome
 
 Build application-facing MySQL 8.4 compatibility on Turso without forking the
@@ -267,16 +332,21 @@ Implemented APIs and behavior include:
 - Explicit errors for unsupported statement and query shapes
 - Connection usability after prepare errors
 
-The current execution slice is intentionally narrow: literal and anonymous
-`?` parameter `SELECT` projections. It handles `NULL`, booleans, `utf8mb4`
-strings, aliases, non-negative integer literals representable exactly as
-`i64`, and embedded binding of `NULL`, `i64`, and UTF-8 text. Parameters are
+The accepted execution slice remains intentionally narrow: literal and
+anonymous `?` parameter `SELECT` projections. It handles `NULL`, booleans,
+`utf8mb4` strings, aliases, non-negative integer literals representable exactly
+as `i64`, and embedded binding of `NULL`, `i64`, and UTF-8 text. Parameters are
 indexed from 1 in encounter order; numbered and named placeholders, parameter
 expressions, CLI binding, missing-argument diagnostic parity, and wire behavior
-remain unsupported. Unary negative expressions, decimals, scientific notation,
-unsigned overflow, identifiers, functions, `FROM`, filtering, DDL, and DML are
-not yet lowered. Decimal and unsigned literals that need exact MySQL semantics
-are rejected rather than rounded or coerced through SQLite semantics.
+remain unsupported.
+
+The pending cycle-2 checkpoint additionally lowers the strict basic
+`CREATE TABLE` subset described above. Until its remaining gate and review are
+complete, treat that implementation as checkpointed rather than accepted.
+Unary negative expressions, decimals, scientific notation, unsigned overflow,
+identifiers in queries, functions, `FROM`, filtering, all other DDL, and DML
+are not yet lowered. Decimal and unsigned literals that need exact MySQL
+semantics are rejected rather than rounded or coerced through SQLite semantics.
 
 `SELECT 1 FOR UPDATE` is a known `sqlparser-rs` MySQL parser gap and has an
 explicit regression assertion. Keep known valid-MySQL parser gaps distinct
