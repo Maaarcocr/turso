@@ -64,6 +64,18 @@ fn command_joins_separate_shell_arguments_into_sql() {
 }
 
 #[test]
+fn command_executes_basic_create_table() {
+    assert_success(
+        &["CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100))"],
+        "",
+    );
+    assert_failure(
+        "CREATE TABLE users(id INTEGER) ENGINE=InnoDB",
+        "unsupported MySQL syntax",
+    );
+}
+
+#[test]
 fn command_reports_unsupported_syntax() {
     assert_failure(
         "SELECT ?",
