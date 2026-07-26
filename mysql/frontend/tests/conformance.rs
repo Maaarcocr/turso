@@ -1,5 +1,6 @@
-use turso_core::{Numeric, Value};
-use turso_mysql::open_memory;
+use std::sync::Arc;
+use turso_core::{Database, MemoryIO, Numeric, OpenOptions, Value, IO};
+use turso_mysql::{open_memory, MySqlDialect};
 
 #[derive(Debug, Clone, Copy)]
 enum ExpectedValue {
@@ -160,6 +161,63 @@ fn executes_owned_literal_conformance_cases() -> turso_core::Result<()> {
 }
 
 #[test]
+fn executes_basic_create_table_and_if_not_exists() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    let mut statement = connection
+        .prepare("CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));")
+        .expect("basic CREATE TABLE must prepare");
+    assert_eq!(statement.num_columns(), 0);
+    assert!(statement
+        .run_collect_rows()
+        .expect("basic CREATE TABLE must execute")
+        .is_empty());
+
+    let duplicate = connection
+        .execute("CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100))")
+        .expect_err("duplicate CREATE TABLE without IF NOT EXISTS must fail");
+    assert!(duplicate.to_string().contains("table users already exists"));
+    connection
+        .execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name VARCHAR(100))")?;
+    connection.close()?;
+    Ok(())
+}
+
+#[test]
+fn persisted_create_table_reloads_through_mysql_dialect() -> turso_core::Result<()> {
+    let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+    let path = "mysql-create-table-persistence.db";
+
+    {
+        let database = Database::open(io.clone(), path, OpenOptions::new(Arc::new(MySqlDialect)))?;
+        let connection = database.connect()?;
+        connection.execute(
+            "CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
+        )?;
+        connection.close()?;
+        drop(connection);
+        drop(database);
+    }
+
+    {
+        let database = Database::open(io, path, OpenOptions::new(Arc::new(MySqlDialect)))?;
+        let connection = database.connect()?;
+        let duplicate = connection
+            .execute(
+                "CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
+            )
+            .expect_err("reopened schema must contain the persisted table");
+        assert!(duplicate
+            .to_string()
+            .contains("table select already exists"));
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
+        )?;
+        connection.close()?;
+    }
+    Ok(())
+}
+
+#[test]
 fn reports_projection_metadata() -> turso_core::Result<()> {
     let connection = open_memory()?;
     let statement =
@@ -254,6 +312,7 @@ fn rejects_unsupported_features_instead_of_discarding_them() -> turso_core::Resu
         "WITH cte AS (SELECT 1) SELECT 1",
         "VALUES (1)",
         "CREATE TABLE users(id INT)",
+        "CREATE TABLE users(id INTEGER) ENGINE=InnoDB",
         "ALTER TABLE users ADD COLUMN name TEXT",
         "DROP TABLE users",
         "TRUNCATE TABLE users",
