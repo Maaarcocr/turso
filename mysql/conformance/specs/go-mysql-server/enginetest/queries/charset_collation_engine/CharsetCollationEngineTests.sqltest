@@ -1,0 +1,1279 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/charset_collation_engine.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE test (v1 VARCHAR(255) COLLATE utf16_unicode_ci);
+}
+
+setup s2 {
+    CREATE TABLE test1 (v1 VARCHAR(255) COLLATE utf8mb4_0900_bin);
+}
+
+setup s3 {
+    CREATE TABLE test2 (v1 VARCHAR(255) COLLATE utf16_unicode_ci);
+}
+
+setup s4 {
+    INSERT INTO test1 VALUES ('HEY2'), ('hey1');
+}
+
+setup s5 {
+    INSERT INTO test2 VALUES ('HEY2'), ('hey1');
+}
+
+setup s6 {
+    CREATE TABLE test3 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) CHARACTER SET utf8mb4);
+}
+
+setup s7 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf16_unicode_ci, INDEX(v1));
+    INSERT INTO test1 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+}
+
+setup s8 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf8mb4_0900_bin, INDEX(v1));
+    INSERT INTO test2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+}
+
+setup s9 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255)) COLLATE utf16_unicode_ci;
+    INSERT INTO test1 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+}
+
+setup s10 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255)) COLLATE utf8mb4_unicode_ci;
+    CREATE TABLE test3 LIKE test2;
+}
+
+setup s11 {
+    INSERT INTO test2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+    CREATE TABLE test4 AS SELECT * FROM test2;
+}
+
+setup s12 {
+    ALTER TABLE test2 MODIFY COLUMN v1 VARCHAR(100);
+}
+
+setup s13 {
+    INSERT INTO test3 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+}
+
+setup s14 {
+    ALTER TABLE test2 CHANGE COLUMN v1 v1 VARCHAR(220);
+}
+
+setup s15 {
+    ALTER TABLE test2 COLLATE utf8mb4_bin;
+}
+
+setup s16 {
+    ALTER TABLE test2 ADD COLUMN v2 VARCHAR(255);
+}
+
+setup s17 {
+    REPLACE INTO test2 VALUES (1, 'abc', 'abc'), (2, 'ABC', 'ABC'), (3, 'aBc', 'aBc'), (4, 'AbC', 'AbC');
+}
+
+setup s18 {
+    SET NAMES utf8mb3;
+}
+
+setup s19 {
+    CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 VARCHAR(100) COLLATE utf8mb4_0900_bin);
+    INSERT INTO test VALUES (1, 'a'), (2, 'b');
+}
+
+setup s20 {
+    set @@session.character_set_connection = 'latin1';
+}
+
+setup s21 {
+    set @@session.collation_connection = 'utf8mb4_0900_bin';
+}
+
+setup s22 {
+    set @@session.character_set_server = 'latin1';
+}
+
+setup s23 {
+    set @@session.collation_server = 'utf8mb4_0900_bin';
+}
+
+setup s24 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 ENUM('abc','def','ghi') COLLATE utf16_unicode_ci);
+}
+
+setup s25 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 ENUM('abc','def','ghi') COLLATE utf8mb4_0900_bin);
+}
+
+setup s26 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 SET('a','b','c') COLLATE utf16_unicode_ci);
+}
+
+setup s27 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 SET('a','b','c') COLLATE utf8mb4_0900_bin);
+}
+
+setup s28 {
+    SET NAMES utf8mb4;
+}
+
+setup s29 {
+    CREATE TABLE test(v1 VARCHAR(100) COLLATE utf8mb4_0900_bin, v2 VARCHAR(100) COLLATE utf8mb4_0900_ai_ci);
+    INSERT INTO test VALUES ('abc', 'abc'), ('ABC', 'ABC');
+}
+
+setup s30 {
+    SET collation_connection = 'utf8mb4_0900_bin';
+}
+
+setup s31 {
+    SET collation_connection = 'utf8mb4_0900_bin';
+}
+
+setup s32 {
+    CREATE TABLE m (id INT PRIMARY KEY, txt LONGTEXT);
+    INSERT INTO m VALUES (1, '## 中 body'), (2, 'plain'), (3, '## ascii body'), (4, '##nospaces'), (5, '## 中')
+;
+}
+
+setup s33 {
+    CREATE TABLE z (id INT PRIMARY KEY, txt VARCHAR(100) COLLATE utf8mb4_0900_ai_ci);
+    INSERT INTO z VALUES (1, '## z'), (2, '## y'), (3, '## za'), (4, '## x')
+;
+}
+
+setup s34 {
+    CREATE TABLE n (id INT PRIMARY KEY, txt VARCHAR(100));
+    INSERT INTO n VALUES (1, '## 中'), (2, 'plain'), (3, '## a')
+;
+}
+
+setup s35 {
+    CREATE TABLE e (id INT PRIMARY KEY, txt LONGTEXT);
+    INSERT INTO e VALUES (1, '## 😀 x'), (2, '## ascii')
+;
+}
+
+setup s36 {
+    CREATE TABLE a (id INT PRIMARY KEY, txt VARCHAR(50));
+    CREATE TABLE b (id INT PRIMARY KEY);
+    INSERT INTO a VALUES (1, '## 中 x'), (2, '## y')
+;
+    INSERT INTO b VALUES (1), (2);
+}
+
+setup s37 {
+    CREATE TABLE bnd (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_0900_bin);
+    INSERT INTO bnd VALUES (1, 'a􏿿'), (2, 'a􏿿x'), (3, 'b'), (4, 'a퟿'), (5, 'a퟿x'), (6, 'a'), (7, 'a߿'), (8, 'a߿x'), (9, 'aࠀ');
+}
+
+setup s38 {
+    CREATE TABLE idx (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_0900_bin, KEY(txt));
+    INSERT INTO idx VALUES (1, 'apple'), (2, 'apricot'), (3, 'banana'), (4, 'ap中');
+}
+
+setup s39 {
+    CREATE TABLE cp (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_0900_bin, KEY(txt));
+    INSERT INTO cp VALUES (1, 'apple'), (2, 'banana');
+}
+
+setup s40 {
+    CREATE TABLE pad (id INT PRIMARY KEY, txt VARCHAR(50) COLLATE utf8mb4_bin, KEY(txt));
+    INSERT INTO pad VALUES (1, 'apple'), (2, 'banana');
+}
+
+test l30 {
+    CREATE TABLE test1 (v1 VARCHAR(255) COLLATE utf16_unicode_ci, v2 VARCHAR(255) COLLATE UTF16_UNICODE_CI);
+}
+expect unordered {
+}
+
+test l34 {
+    CREATE TABLE test2 (v1 VARCHAR(255) CHARACTER SET utf16, v2 VARCHAR(255) CHARACTER SET UTF16);
+}
+expect unordered {
+}
+
+@setup s1
+test l46 {
+    INSERT INTO test VALUES ('hey');
+}
+expect unordered {
+}
+
+@setup s2
+test l71 {
+    INSERT INTO test1 VALUES ('HEY2'), ('hey1');
+}
+expect unordered {
+}
+
+@setup s3
+test l75 {
+    INSERT INTO test2 VALUES ('HEY2'), ('hey1');
+}
+expect unordered {
+}
+
+@setup s2
+@setup s4
+test l79 {
+    SELECT * FROM test1 ORDER BY 1;
+}
+expect {
+    HEY2
+    hey1
+}
+
+@setup s3
+@setup s5
+test l83 {
+    SELECT * FROM test2 ORDER BY 1;
+}
+expect {
+    hey1
+    HEY2
+}
+
+test l105 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) CHARACTER SET utf16le);
+}
+expect unordered {
+}
+
+test l109 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf16le_general_ci);
+}
+expect unordered {
+}
+
+test l113 {
+    CREATE TABLE test3 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) CHARACTER SET utf8mb4);
+}
+expect unordered {
+}
+
+@setup s6
+test l117 {
+    ALTER TABLE test3 MODIFY COLUMN v1 VARCHAR(255) COLLATE utf8mb4_sr_latn_0900_as_cs;
+}
+expect unordered {
+}
+
+@setup s7
+test l132 {
+    SELECT v1, pk FROM test1 ORDER BY pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s7
+test l138 {
+    SELECT v1, pk FROM test1 ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s8
+test l144 {
+    SELECT v1, pk FROM test2 ORDER BY pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s8
+test l150 {
+    SELECT v1, pk FROM test2 ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+    AbC|4
+    aBc|3
+    abc|1
+}
+
+@setup s7
+test l167 {
+    SELECT v1, pk FROM test1 WHERE v1 > 'AbC' ORDER BY v1, pk;
+}
+expect {
+}
+
+@setup s7
+test l171 {
+    SELECT v1, pk FROM test1 WHERE v1 >= 'AbC' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s7
+test l177 {
+    SELECT v1, pk FROM test1 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s7
+test l183 {
+    SELECT v1, pk FROM test1 WHERE v1 = 'ABC' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s7
+test l189 {
+    SELECT v1, pk FROM test1 WHERE v1 BETWEEN 'ABC' AND 'AbC' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s7
+test l195 {
+    SELECT v1, pk FROM test1 WHERE v1 IN ('abc') ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s8
+test l201 {
+    SELECT v1, pk FROM test2 WHERE v1 > 'AbC' ORDER BY v1, pk;
+}
+expect {
+    aBc|3
+    abc|1
+}
+
+@setup s8
+test l207 {
+    SELECT v1, pk FROM test2 WHERE v1 >= 'AbC' ORDER BY v1, pk;
+}
+expect {
+    AbC|4
+    aBc|3
+    abc|1
+}
+
+@setup s8
+test l213 {
+    SELECT v1, pk FROM test2 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+    AbC|4
+    aBc|3
+}
+
+@setup s8
+test l219 {
+    SELECT v1, pk FROM test2 WHERE v1 = 'ABC' ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+}
+
+@setup s8
+test l225 {
+    SELECT v1, pk FROM test2 WHERE v1 BETWEEN 'ABC' AND 'AbC' ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+}
+
+@setup s8
+test l231 {
+    SELECT v1, pk FROM test2 WHERE v1 IN ('abc') ORDER BY v1, pk;
+}
+expect {
+    abc|1
+}
+
+@setup s9
+test l251 {
+    SELECT v1, pk FROM test1 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s10
+@setup s11
+test l257 {
+    SELECT v1, pk FROM test2 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s10
+@setup s11
+test l263 {
+    ALTER TABLE test2 MODIFY COLUMN v1 VARCHAR(100);
+}
+expect unordered {
+}
+
+@setup s10
+@setup s11
+@setup s12
+test l269 {
+    SELECT v1, pk FROM test2 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s10
+@setup s13
+test l275 {
+    SELECT v1, pk FROM test3 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s10
+@setup s11
+test l281 {
+    SELECT v1, pk FROM test4 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s10
+@setup s13
+test l311 {
+    ALTER TABLE test3 ADD COLUMN v2 VARCHAR(255);
+}
+expect unordered {
+}
+
+@setup s10
+@setup s11
+@setup s12
+test l323 {
+    ALTER TABLE test2 CHANGE COLUMN v1 v1 VARCHAR(220);
+}
+expect unordered {
+}
+
+# mysql-error: 1253 42000 COLLATION 'utf8mb4_bin' is not valid for CHARACTER SET 'latin1'
+@setup s10
+@setup s11
+@setup s12
+@setup s14
+test l335 {
+    ALTER TABLE test2 CHARACTER SET latin1 COLLATE utf8mb4_bin;
+}
+expect error {
+}
+
+@setup s10
+@setup s11
+@setup s12
+@setup s14
+test l339 {
+    ALTER TABLE test2 COLLATE utf8mb4_bin;
+}
+expect unordered {
+}
+
+@setup s10
+@setup s11
+@setup s12
+@setup s14
+@setup s15
+test l345 {
+    ALTER TABLE test2 ADD COLUMN v2 VARCHAR(255);
+}
+expect unordered {
+}
+
+@setup s10
+@setup s11
+@setup s12
+@setup s14
+@setup s15
+@setup s16
+test l351 {
+    REPLACE INTO test2 VALUES (1, 'abc', 'abc'), (2, 'ABC', 'ABC'), (3, 'aBc', 'aBc'), (4, 'AbC', 'AbC');
+}
+expect unordered {
+}
+
+@setup s10
+@setup s11
+@setup s12
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l357 {
+    SELECT v1, pk FROM test2 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s10
+@setup s11
+@setup s12
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l363 {
+    SELECT v2, pk FROM test2 WHERE v2 <= 'aBc' ORDER BY v2, pk;
+}
+expect {
+    ABC|2
+    AbC|4
+    aBc|3
+}
+
+@setup s18
+@setup s19
+test l385 {
+    SELECT * FROM test ORDER BY v1 COLLATE utf8mb4_bin ASC;
+}
+expect {
+    1|a
+    2|b
+}
+
+# mysql-error: 1253 42000 COLLATION 'utf8mb3_bin' is not valid for CHARACTER SET 'utf8mb4'
+@setup s18
+@setup s19
+test l389 {
+    SELECT * FROM test ORDER BY v1 COLLATE utf8mb3_bin ASC;
+}
+expect error {
+}
+
+@setup s18
+test l393 {
+    SELECT 'a' COLLATE utf8mb3_bin;
+}
+expect unordered {
+    a
+}
+
+# mysql-error: 1253 42000 COLLATION 'utf8mb4_bin' is not valid for CHARACTER SET 'utf8mb3'
+@setup s18
+test l397 {
+    SELECT 'a' COLLATE utf8mb4_bin;
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'am_i_wrong'
+test l406 {
+    SET character_set_client = 'am_i_wrong';
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'to_believe'
+test l410 {
+    SET character_set_connection = 'to_believe';
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'in_crusty_cheese'
+test l414 {
+    SET character_set_results = 'in_crusty_cheese';
+}
+expect error {
+}
+
+# mysql-error: 1273 HY000 Unknown collation: 'is_it_wrong'
+test l418 {
+    SET collation_connection = 'is_it_wrong';
+}
+expect error {
+}
+
+# mysql-error: 1273 HY000 Unknown collation: 'to_believe'
+test l422 {
+    SET collation_database = 'to_believe';
+}
+expect error {
+}
+
+# mysql-error: 1273 HY000 Unknown collation: 'in_deez'
+test l426 {
+    SET collation_server = 'in_deez';
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'things'
+test l430 {
+    SET NAMES things;
+}
+expect error {
+}
+
+test l439 {
+    select @@session.character_set_connection, @@session.collation_connection;
+}
+expect unordered {
+    utf8mb4|utf8mb4_0900_ai_ci
+}
+
+test l445 {
+    set @@session.character_set_connection = 'latin1';
+}
+expect unordered {
+}
+
+@setup s20
+test l449 {
+    select @@session.character_set_connection, @@session.collation_connection;
+}
+expect unordered {
+    latin1|latin1_swedish_ci
+}
+
+@setup s20
+test l455 {
+    set @@session.collation_connection = 'utf8mb4_0900_bin';
+}
+expect unordered {
+}
+
+@setup s20
+@setup s21
+test l459 {
+    select @@session.character_set_connection, @@session.collation_connection;
+}
+expect unordered {
+    utf8mb4|utf8mb4_0900_bin
+}
+
+@setup s20
+@setup s21
+test l466 {
+    select @@global.character_set_connection, @@global.collation_connection;
+}
+expect unordered {
+    utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s20
+@setup s21
+test l493 {
+    select @@session.character_set_server, @@session.collation_server;
+}
+expect unordered {
+    utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s20
+@setup s21
+test l499 {
+    set @@session.character_set_server = 'latin1';
+}
+expect unordered {
+}
+
+@setup s20
+@setup s21
+@setup s22
+test l503 {
+    select @@session.character_set_server, @@session.collation_server;
+}
+expect unordered {
+    latin1|latin1_swedish_ci
+}
+
+@setup s20
+@setup s21
+@setup s22
+test l509 {
+    set @@session.collation_server = 'utf8mb4_0900_bin';
+}
+expect unordered {
+}
+
+@setup s20
+@setup s21
+@setup s22
+@setup s23
+test l513 {
+    select @@session.character_set_server, @@session.collation_server;
+}
+expect unordered {
+    utf8mb4|utf8mb4_0900_bin
+}
+
+@setup s20
+@setup s21
+@setup s22
+@setup s23
+test l520 {
+    select @@global.character_set_server, @@global.collation_server;
+}
+expect unordered {
+    utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s24
+test l555 {
+    INSERT INTO test1 VALUES (1, 'ABC');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'v1' at row 1
+@setup s25
+test l561 {
+    INSERT INTO test2 VALUES (1, 'ABC');
+}
+expect error {
+}
+
+@setup s26
+test l602 {
+    INSERT INTO test1 VALUES (1, 'A');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'v1' at row 1
+@setup s27
+test l608 {
+    INSERT INTO test2 VALUES (1, 'A');
+}
+expect error {
+}
+
+@setup s28
+@setup s29
+test l646 {
+    SELECT COUNT(*) FROM test WHERE v1 LIKE 'ABC';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s29
+test l652 {
+    SELECT COUNT(*) FROM test WHERE v2 LIKE 'ABC';
+}
+expect unordered {
+    2
+}
+
+@setup s28
+@setup s29
+test l658 {
+    SELECT COUNT(*) FROM test WHERE v1 LIKE 'A%';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s29
+test l664 {
+    SELECT COUNT(*) FROM test WHERE v2 LIKE 'A%';
+}
+expect unordered {
+    2
+}
+
+@setup s28
+@setup s29
+test l670 {
+    SELECT COUNT(*) FROM test WHERE v1 LIKE '%C';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s29
+test l676 {
+    SELECT COUNT(*) FROM test WHERE v2 LIKE '%C';
+}
+expect unordered {
+    2
+}
+
+@setup s28
+test l682 {
+    SET collation_connection = 'utf8mb4_0900_bin';
+}
+expect unordered {
+}
+
+@setup s28
+@setup s29
+@setup s30
+test l686 {
+    SELECT COUNT(*) FROM test WHERE v1 LIKE 'ABC';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s29
+@setup s30
+test l692 {
+    SELECT COUNT(*) FROM test WHERE v2 LIKE 'ABC';
+}
+expect unordered {
+    2
+}
+
+@setup s28
+@setup s29
+@setup s30
+test l698 {
+    SELECT COUNT(*) FROM test WHERE v1 LIKE 'ABC' COLLATE utf8mb4_0900_ai_ci;
+}
+expect unordered {
+    2
+}
+
+@setup s28
+test l712 {
+    SELECT 'abc' LIKE 'ABC';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+test l718 {
+    SELECT 'abc' COLLATE utf8mb4_0900_bin LIKE 'ABC';
+}
+expect unordered {
+    0
+}
+
+@setup s28
+test l724 {
+    SELECT 'abc' LIKE 'ABC' COLLATE utf8mb4_0900_bin;
+}
+expect unordered {
+    0
+}
+
+@setup s28
+test l730 {
+    SELECT 'abc' COLLATE utf8mb4_0900_ai_ci LIKE 'ABC';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+test l736 {
+    SELECT 'abc' LIKE 'ABC' COLLATE utf8mb4_0900_ai_ci;
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s31
+test l746 {
+    SELECT 'abc' LIKE 'ABC';
+}
+expect unordered {
+    0
+}
+
+@setup s28
+@setup s31
+test l752 {
+    SELECT 'abc' COLLATE utf8mb4_0900_ai_ci LIKE 'ABC';
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s31
+test l758 {
+    SELECT 'abc' LIKE 'ABC' COLLATE utf8mb4_0900_ai_ci;
+}
+expect unordered {
+    1
+}
+
+@setup s28
+@setup s31
+test l764 {
+    SELECT 'abc' COLLATE utf8mb4_0900_bin LIKE 'ABC';
+}
+expect unordered {
+    0
+}
+
+@setup s28
+@setup s31
+test l770 {
+    SELECT 'abc' LIKE 'ABC' COLLATE utf8mb4_0900_bin;
+}
+expect unordered {
+    0
+}
+
+@setup s28
+@setup s31
+test l776 {
+    SELECT _utf8mb4'abc' LIKE 'ABC';
+}
+expect unordered {
+    0
+}
+
+@setup s28
+@setup s31
+test l782 {
+    SELECT 'abc' LIKE _utf8mb4'ABC';
+}
+expect unordered {
+    0
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,EXPLICIT) and (latin1_general_cs,EXPLICIT) for operation 'strcmp'
+test l812 {
+    SELECT STRCMP(_utf8mb4'A' COLLATE utf8mb4_0900_ai_ci, _latin1'b' COLLATE latin1_general_cs);
+}
+expect error {
+}
+
+test l829 {
+    SELECT LENGTH(_utf8mb4'abc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    3
+}
+
+test l852 {
+    SELECT CHAR_LENGTH(_utf8mb4'abc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    3
+}
+
+test l865 {
+    SELECT CHAR_LENGTH(_utf8mb4'�' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    1
+}
+
+test l882 {
+    SELECT UPPER(_utf8mb4'aBc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    ABC
+}
+
+test l905 {
+    SELECT LOWER(_utf8mb4'AbC' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+test l940 {
+    SELECT RPAD(_utf8mb4'abc' COLLATE utf8mb4_0900_bin, 6, _utf8mb4'z' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abczzz
+}
+
+test l987 {
+    SELECT LPAD(_utf8mb4'abc' COLLATE utf8mb4_0900_bin, 6, _utf8mb4'z' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    zzzabc
+}
+
+test l1022 {
+    SELECT HEX(_utf8mb4'abc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    616263
+}
+
+test l1045 {
+    SELECT UNHEX(_utf8mb4'616263' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+test l1062 {
+    SELECT SUBSTRING(_utf8mb4'abcd' COLLATE utf8mb4_0900_bin, 2, 2);
+}
+expect unordered {
+    bc
+}
+
+test l1085 {
+    SELECT TO_BASE64(_utf8mb4'abc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    YWJj
+}
+
+test l1108 {
+    SELECT FROM_BASE64(_utf8mb4'YWJj' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+test l1125 {
+    SELECT TRIM(_utf8mb4' abc ' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+test l1148 {
+    SELECT RTRIM(_utf8mb4' abc ' COLLATE utf8mb4_0900_bin);
+}
+expect raw {
+ abc
+}
+
+test l1171 {
+    SELECT LTRIM(_utf8mb4' abc ' COLLATE utf8mb4_0900_bin);
+}
+expect raw {
+abc 
+}
+
+test l1194 {
+    SELECT BINARY(_utf8mb4'abc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+test l1217 {
+    SELECT CAST(_utf8mb4'abc' COLLATE utf8mb4_0900_bin AS BINARY);
+}
+expect unordered {
+    abc
+}
+
+@setup s32
+test l1251 {
+    SELECT id FROM m WHERE txt LIKE '## %' ORDER BY id
+;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s32
+test l1255 {
+    SELECT COUNT(*) FROM m WHERE txt LIKE '## %'
+;
+}
+expect unordered {
+    3
+}
+
+@setup s32
+test l1259 {
+    SELECT SUM(txt LIKE '## %') FROM m
+;
+}
+expect unordered {
+    3
+}
+
+@setup s32
+test l1263 {
+    SELECT id FROM m WHERE txt LIKE '##%' ORDER BY id
+;
+}
+expect {
+    1
+    3
+    4
+    5
+}
+
+@setup s33
+test l1285 {
+    SELECT id FROM z WHERE txt LIKE '## %' ORDER BY id
+;
+}
+expect {
+    1
+    2
+    3
+    4
+}
+
+@setup s33
+test l1291 {
+    SELECT SUM(txt LIKE '## %') FROM z
+;
+}
+expect unordered {
+    4
+}
+
+@setup s34
+test l1295 {
+    SELECT id FROM n WHERE txt NOT LIKE '## %' ORDER BY id
+;
+}
+expect {
+    2
+}
+
+@setup s35
+test l1300 {
+    SELECT id FROM e WHERE txt LIKE '## %' ORDER BY id
+;
+}
+expect {
+    1
+    2
+}
+
+@setup s36
+test l1304 {
+    SELECT a.id FROM a JOIN b ON a.id = b.id AND a.txt LIKE '## %' ORDER BY a.id
+;
+}
+expect {
+    1
+    2
+}
+
+@setup s37
+test l1318 {
+    SELECT id FROM bnd WHERE txt LIKE 'a􏿿%' ORDER BY id;
+}
+expect {
+    1
+    2
+}
+
+@setup s37
+test l1324 {
+    SELECT id FROM bnd WHERE txt LIKE 'a퟿%' ORDER BY id;
+}
+expect {
+    4
+    5
+}
+
+@setup s37
+test l1330 {
+    SELECT id FROM bnd WHERE txt LIKE 'a߿%' ORDER BY id;
+}
+expect {
+    7
+    8
+}
+
+@setup s38
+test l1346 {
+    SELECT id FROM idx WHERE txt LIKE 'ap%' ORDER BY id;
+}
+expect {
+    1
+    2
+    4
+}
+
+@setup s38
+test l1351 {
+    SELECT id FROM idx WHERE txt LIKE 'apple';
+}
+expect unordered {
+    1
+}
+
+@setup s39
+test l1368 {
+    SELECT id FROM cp WHERE txt LIKE 'ap%';
+}
+expect unordered {
+    1
+}
+
+@setup s40
+test l1383 {
+    SELECT id FROM pad WHERE txt LIKE 'ap%';
+}
+expect unordered {
+    1
+}

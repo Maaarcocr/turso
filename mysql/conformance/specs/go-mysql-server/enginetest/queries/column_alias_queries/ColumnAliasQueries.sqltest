@@ -1,0 +1,287 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/column_alias_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    create table uv (u int primary key, v int);
+    insert into uv values (0,3),(3,0),(2,1),(1,2);
+}
+
+setup s3 {
+    create table wz (w int, z int);
+    insert into wz values (0, 0), (1, 0), (1, 2);
+}
+
+setup s4 {
+    create table xy (x int primary key, y int);
+}
+
+setup s5 {
+    create table uv (u int primary key, v int);
+    insert into xy values (0,0),(1,1),(2,2),(3,3);
+    insert into uv values (0,3),(3,0),(2,1),(1,2);
+}
+
+setup s6 {
+    insert into xy values (0,0),(1,1),(2,2),(3,3);
+}
+
+@setup s1
+test l39 {
+    SELECT i AS cOl FROM mytable;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s1
+test l49 {
+    SELECT i AS cOl, s as COL FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+test l80 {
+    select 1 as a order by a desc;
+}
+expect {
+    1
+}
+
+@setup s2
+test l86 {
+    select v as u from uv order by u;
+}
+expect {
+    0
+    1
+    2
+    3
+}
+
+# mysql-error: 1052 23000 Column 'u' in order clause is ambiguous
+@setup s2
+test l91 {
+    select u as u, v as u from uv order by u;
+}
+expect error {
+}
+
+@setup s3
+test l97 {
+    select w, min(z) as w, max(z) as w from wz group by w;
+}
+expect unordered {
+    0|0|0
+    1|0|2
+}
+
+@setup s3
+test l102 {
+    select w, w from wz group by w;
+}
+expect unordered {
+    0|0
+    1|1
+}
+
+@setup s1
+test l107 {
+    SELECT s as COL1, SUM(i) COL2 FROM mytable group by col1 order by col2;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s2
+test l126 {
+    select t1.u as a from uv as t1 having a > 0 order by a;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s2
+test l131 {
+    select t1.u as a from uv as t1 having a = t1.u order by a;
+}
+expect {
+    0
+    1
+    2
+    3
+}
+
+@setup s1
+test l136 {
+    SELECT s as coL1, SUM(i) coL2 FROM mytable group by 1 order by 2;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s1
+test l155 {
+    SELECT s as Date, SUM(i) TimeStamp FROM mytable group by 1 order by 2;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s1
+test l173 {
+    select t1.i as a from mytable as t1 having a = t1.i;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+test l188 {
+    select "foo" as dummy, (select dummy);
+}
+expect unordered {
+    foo|foo
+}
+
+@setup s4
+@setup s5
+test l193 {
+    select x as v, (select u from uv where v = y) as u from xy;
+}
+expect unordered {
+    0|3
+    1|2
+    2|1
+    3|0
+}
+
+test l206 {
+    SELECT 1 as a, (select a) as a;
+}
+expect unordered {
+    1|1
+}
+
+test l210 {
+    SELECT 1 as a, (select a) as b;
+}
+expect unordered {
+    1|1
+}
+
+test l214 {
+    SELECT 1 as a, (select a union select a) as b;
+}
+expect unordered {
+    1|1
+}
+
+test l218 {
+    SELECT 1 as a, (select a) as b from dual;
+}
+expect unordered {
+    1|1
+}
+
+@setup s4
+@setup s6
+test l222 {
+    SELECT 1 as a, (select a) as b from xy;
+}
+expect unordered {
+    1|1
+    1|1
+    1|1
+    1|1
+}
+
+@setup s4
+@setup s6
+test l226 {
+    select x, (select 1) as y from xy;
+}
+expect unordered {
+    0|1
+    1|1
+    2|1
+    3|1
+}
+
+@setup s4
+@setup s6
+test l230 {
+    SELECT 1 as a, (select a) from xy;
+}
+expect unordered {
+    1|1
+    1|1
+    1|1
+    1|1
+}
+
+@setup s1
+test l235 {
+    SELECT *, (select i union select i) as a from mytable;
+}
+expect unordered {
+    1|first row|1
+    2|second row|2
+    3|third row|3
+}
+
+test l242 {
+    select 1 as b, (select b group by b order by b) order by 1;
+}
+expect {
+    1|1
+}
+
+# mysql-error: 1247 42S22 Reference 'b' not supported (forward reference in item list)
+test l246 {
+    select 1 as a, (select b), 0 as b;
+}
+expect error {
+}
+
+@setup s4
+@setup s6
+test l261 {
+    select x, (select 1) as y, (select (select y as q)) as z from (select * from xy) as xy;
+}
+expect unordered {
+    0|1|0
+    1|1|1
+    2|1|2
+    3|1|3
+}

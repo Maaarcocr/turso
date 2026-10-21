@@ -1,0 +1,333 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/index_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table users (id varchar(26) primary key, namespace varchar(50), name varchar(50));
+}
+
+setup s2 {
+    create unique index namespace__name on users (namespace, name);
+}
+
+setup s3 {
+    insert into users values ('user1', 'namespace1', 'name1');
+}
+
+setup s4 {
+    CREATE TABLE auniquetable (pk int primary key, uk int unique key, i int);
+    INSERT INTO auniquetable VALUES(0,0,0);
+    INSERT INTO auniquetable (pk,uk) VALUES(1,0) on duplicate key update i = 99;
+}
+
+setup s5 {
+    CREATE TABLE `t0` (`id` char(32) NOT NULL PRIMARY KEY, `col1` varchar(255) NOT NULL, `col2` varchar(255) NOT NULL);
+}
+
+setup s6 {
+    ALTER TABLE t0 ADD CONSTRAINT unique_1 UNIQUE(col1, col2);
+}
+
+setup s7 {
+    CREATE TABLE `t2` (`id` char(32) NOT NULL PRIMARY KEY, `col1` varchar(255) NOT NULL, `col2` varchar(255) NOT NULL, UNIQUE KEY unique_1(col1, col2), UNIQUE KEY unique_2(col1, col2));
+}
+
+setup s8 {
+    CREATE TABLE `t3` (`id` char(32) NOT NULL PRIMARY KEY, `col1` varchar(255) NOT NULL, `col2` varchar(255) NOT NULL);
+}
+
+setup s9 {
+    ALTER TABLE t3 ADD CONSTRAINT UNIQUE(col1, col2);
+}
+
+setup s10 {
+    create table t (i int, j int, index(i));
+    insert into t values (0, 100), (0, 200), (1, 100), (1, 200), (2, 100), (2, 200);
+}
+
+setup s11 {
+    create table t (i int, j int, k int, index(i, j));
+    insert into t values (0, 0, 123), (0, 1, 456), (1, 0, 123), (1, 1, 456), (2, 0, 123), (2, 1, 456);
+}
+
+setup s12 {
+    create table json_tbl (pk int primary key, i int, j json);
+}
+
+setup s13 {
+    create table idx_tbl (pk int primary key, j int, index(j));
+}
+
+setup s14 {
+    create table t (i int, j int);
+    create index idx on t (i);
+}
+
+setup s15 {
+    create table pk_tbl (i int primary key);
+}
+
+setup s16 {
+    create table unq_tbl (i int unique key);
+}
+
+@setup s1
+test l4230 {
+    create unique index namespace__name on users (namespace, name);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l4242 {
+    insert into users values ('user1', 'namespace1', 'name1');
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'namespace1-name1' for key 'users.namespace__name'
+@setup s1
+@setup s2
+@setup s3
+test l4248 {
+    insert into users values ('user2', 'namespace1', 'name1');
+}
+expect error {
+}
+
+@setup s4
+test l4262 {
+    SELECT pk, uk, i from auniquetable;
+}
+expect unordered {
+    0|0|99
+}
+
+@setup s5
+test l4281 {
+    ALTER TABLE t0 ADD CONSTRAINT unique_1 UNIQUE(col1, col2);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l4285 {
+    ALTER TABLE t0 ADD CONSTRAINT unique_2 UNIQUE(col1, col2);
+}
+expect unordered {
+}
+
+test l4307 {
+    CREATE TABLE `t2` (`id` char(32) NOT NULL PRIMARY KEY, `col1` varchar(255) NOT NULL, `col2` varchar(255) NOT NULL, UNIQUE KEY unique_1(col1, col2), UNIQUE KEY unique_2(col1, col2));
+}
+expect unordered {
+}
+
+@setup s7
+test l4328 {
+    ALTER TABLE t2 ADD CONSTRAINT unique_3 UNIQUE(col1, col2);
+}
+expect unordered {
+}
+
+@setup s8
+test l4340 {
+    ALTER TABLE t3 ADD CONSTRAINT UNIQUE(col1, col2);
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+test l4344 {
+    ALTER TABLE t3 ADD CONSTRAINT UNIQUE(col1, col2);
+}
+expect unordered {
+}
+
+@setup s10
+test l4374 {
+    select i, j from t where i = 0 order by i, j;
+}
+expect {
+    0|100
+    0|200
+}
+
+@setup s10
+test l4381 {
+    select i, j from t where i = 1 order by i, j;
+}
+expect {
+    1|100
+    1|200
+}
+
+@setup s10
+test l4388 {
+    select i, j from t where i > 0 order by i, j;
+}
+expect {
+    1|100
+    1|200
+    2|100
+    2|200
+}
+
+@setup s10
+test l4397 {
+    select i, j from t where i > 0 and i < 2 order by i, j;
+}
+expect {
+    1|100
+    1|200
+}
+
+@setup s11
+test l4413 {
+    select i, j, k from t where i = 0 order by i, j, k;
+}
+expect {
+    0|0|123
+    0|1|456
+}
+
+@setup s11
+test l4420 {
+    select i, j, k from t where i = 0 and j = 0 order by i, j, k;
+}
+expect {
+    0|0|123
+}
+
+@setup s11
+test l4426 {
+    select i, j, k from t where i = 1 and (j = 0 or j = 1) order by i, j, k;
+}
+expect {
+    1|0|123
+    1|1|456
+}
+
+@setup s11
+test l4433 {
+    select i, j, k from t where i > 0 and j > 0 order by i, j, k;
+}
+expect {
+    1|1|456
+    2|1|456
+}
+
+@setup s11
+test l4440 {
+    select i, j, k from t where i > 0 and i < 2 order by i, j, k;
+}
+expect {
+    1|0|123
+    1|1|456
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+@setup s12
+test l4456 {
+    create index idx on json_tbl(j);
+}
+expect error {
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+@setup s12
+test l4460 {
+    create index idx on json_tbl(i, j);
+}
+expect error {
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+@setup s12
+test l4464 {
+    create index idx on json_tbl(j, i);
+}
+expect error {
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+@setup s13
+test l4468 {
+    alter table idx_tbl modify column j json;
+}
+expect error {
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+test l4472 {
+    create table t1 (i int primary key, j json, index(j));
+}
+expect error {
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+test l4476 {
+    create table t2 (i int, j json, index(i, j));
+}
+expect error {
+}
+
+# mysql-error: 3152 42000 JSON column 'j' supports indexing only via generated columns on a specified JSON path.
+test l4480 {
+    create table t3 (i int, j json, index(j, i));
+}
+expect error {
+}
+
+test l4485 {
+    show tables;
+}
+expect {
+}
+
+# mysql-error: 1061 42000 Duplicate key name 'idx'
+@setup s14
+test l4501 {
+    create index idx on t(j);
+}
+expect error {
+}
+
+# mysql-error: 1061 42000 Duplicate key name 'idx'
+@setup s14
+test l4521 {
+    alter table t add index idx (j);
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'notanidx'; check that column/key exists
+@setup s14
+test l4541 {
+    alter table t drop index notanidx;
+}
+expect error {
+}
+
+@setup s15
+test l4560 {
+    select count(*) from pk_tbl where (i = 0 and i = 1);
+}
+expect unordered {
+    0
+}
+
+@setup s16
+test l4566 {
+    select count(*) from unq_tbl where (i = 0 and i = 1);
+}
+expect unordered {
+    0
+}

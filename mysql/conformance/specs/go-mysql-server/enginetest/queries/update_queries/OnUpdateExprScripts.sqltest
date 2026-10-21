@@ -1,0 +1,418 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/update_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t (i int, ts timestamp);
+}
+
+setup s2 {
+    create table t (i int, ts timestamp default current_timestamp on update current_timestamp);
+    insert into t(i) values (1), (2), (3);
+}
+
+setup s3 {
+    update t set i = 10 where i = 1;
+}
+
+setup s4 {
+    update t set i = 100;
+}
+
+setup s5 {
+    update t set ts = timestamp('2020-10-2');
+}
+
+setup s6 {
+    insert into t(i) values (1), (2), (3);
+}
+
+setup s7 {
+    update t set i = 10 where i = 1;
+}
+
+setup s8 {
+    update t set i = 100;
+}
+
+setup s9 {
+    update t set ts = timestamp('2020-10-2');
+}
+
+setup s10 {
+    create table parent (i int primary key);
+    insert into parent values (1);
+}
+
+setup s11 {
+    alter table t modify column ts timestamp on update now();
+}
+
+setup s12 {
+    alter table t modify column ts timestamp on update now(0);
+}
+
+setup s13 {
+    alter table t modify column ts timestamp on update localtime;
+}
+
+setup s14 {
+    alter table t modify column ts timestamp on update localtime();
+}
+
+setup s15 {
+    alter table t modify column ts timestamp on update localtime(0);
+}
+
+setup s16 {
+    alter table t modify column ts timestamp on update localtimestamp;
+}
+
+setup s17 {
+    alter table t modify column ts timestamp on update localtimestamp();
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'j' column
+test l1048 {
+    create table tt (i int, j int on update current_timestamp);
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'd' column
+test l1052 {
+    create table tt (i int, d date on update current_timestamp);
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1056 {
+    create table tt (i int, ts timestamp on update now(1));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1060 {
+    create table tt (i int, ts timestamp(6) on update now(3));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1064 {
+    create table tt (i int, ts timestamp(3) on update now(6));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1068 {
+    create table tt (i int, ts timestamp on update current_timestamp(1));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1072 {
+    create table tt (i int, ts timestamp on update current_timestamp(100));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1076 {
+    create table tt (i int, ts timestamp on update localtime(1));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 'ts' column
+test l1080 {
+    create table tt (i int, ts timestamp on update localtimestamp(1));
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 't' column
+@setup s1
+test l1088 {
+    alter table t modify column t int on update current_timestamp;
+}
+expect error {
+}
+
+# mysql-error: 1294 HY000 Invalid ON UPDATE clause for 't' column
+@setup s1
+test l1092 {
+    alter table t modify column t date on update current_timestamp;
+}
+expect error {
+}
+
+@setup s2
+test l1347 {
+    update t set i = 10 where i = 1;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+test l1361 {
+    update t set i = 100;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+test l1376 {
+    update t set ts = timestamp('2020-10-2');
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+test l1382 {
+    select * from t;
+}
+expect unordered {
+    100|2020-10-02 00:00:00
+    100|2020-10-02 00:00:00
+    100|2020-10-02 00:00:00
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'ts'
+@setup s1
+@setup s6
+test l1408 {
+    alter table t modify column ts timestamp default 0 on update current_timestamp;
+}
+expect error {
+}
+
+@setup s1
+@setup s6
+test l1423 {
+    select * from t order by i;
+}
+expect {
+    1|NULL
+    2|NULL
+    3|NULL
+}
+
+@setup s1
+@setup s6
+test l1431 {
+    update t set i = 10 where i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s6
+@setup s7
+test l1437 {
+    select * from t order by i;
+}
+expect {
+    2|NULL
+    3|NULL
+    10|NULL
+}
+
+@setup s1
+@setup s6
+@setup s7
+test l1445 {
+    update t set i = 100;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s6
+@setup s7
+@setup s8
+test l1451 {
+    select * from t order by i;
+}
+expect {
+    100|NULL
+    100|NULL
+    100|NULL
+}
+
+@setup s1
+@setup s6
+@setup s7
+@setup s8
+test l1459 {
+    update t set ts = timestamp('2020-10-2');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+test l1465 {
+    select * from t;
+}
+expect unordered {
+    100|2020-10-02 00:00:00
+    100|2020-10-02 00:00:00
+    100|2020-10-02 00:00:00
+}
+
+@setup s10
+test l1634 {
+    update parent set i = 10;
+}
+expect unordered {
+}
+
+test l1679 {
+    create table t1 (i int, ts timestamp on update now());
+}
+expect unordered {
+}
+
+test l1694 {
+    create table t2 (i int, ts timestamp on update now(0));
+}
+expect unordered {
+}
+
+test l1709 {
+    create table t3 (i int, ts timestamp on update localtime);
+}
+expect unordered {
+}
+
+test l1724 {
+    create table t4 (i int, ts timestamp on update localtime());
+}
+expect unordered {
+}
+
+test l1739 {
+    create table t5 (i int, ts timestamp on update localtime(0));
+}
+expect unordered {
+}
+
+test l1754 {
+    create table t6 (i int, ts timestamp on update localtimestamp);
+}
+expect unordered {
+}
+
+test l1769 {
+    create table t7 (i int, ts timestamp on update localtimestamp());
+}
+expect unordered {
+}
+
+test l1784 {
+    create table t8 (i int, ts timestamp on update localtimestamp(0));
+}
+expect unordered {
+}
+
+@setup s1
+test l1799 {
+    alter table t modify column ts timestamp on update now();
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+test l1814 {
+    alter table t modify column ts timestamp on update now(0);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+test l1829 {
+    alter table t modify column ts timestamp on update localtime;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+test l1844 {
+    alter table t modify column ts timestamp on update localtime();
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+test l1859 {
+    alter table t modify column ts timestamp on update localtime(0);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+test l1874 {
+    alter table t modify column ts timestamp on update localtimestamp;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+test l1889 {
+    alter table t modify column ts timestamp on update localtimestamp();
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l1904 {
+    alter table t modify column ts timestamp on update localtimestamp(0);
+}
+expect unordered {
+}

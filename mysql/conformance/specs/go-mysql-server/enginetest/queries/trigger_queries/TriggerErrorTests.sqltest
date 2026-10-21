@@ -1,0 +1,155 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/trigger_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table x (a int primary key, b int);
+    create table y (c int primary key not null);
+    create trigger trigger_has_error before insert on x for each row insert into y values (null);
+}
+
+setup s2 {
+    create table a (x int primary key);
+}
+
+setup s3 {
+    create trigger a1 before insert on a for each row insert into a values (new.x * 2);
+}
+
+setup s4 {
+    create trigger a1 before delete on a for each row delete from a;
+}
+
+setup s5 {
+    create trigger a1 before update on a for each row update a set x = 1;
+}
+
+setup s6 {
+    create table b (y int primary key);
+}
+
+setup s7 {
+    create trigger a1 before insert on a for each row insert into b values (new.x * 2);
+    create trigger b1 before insert on b for each row insert into a values (new.y * 7);
+}
+
+setup s8 {
+    create table c (z int primary key);
+    create trigger a1 before insert on a for each row insert into b values (new.x * 2);
+    create trigger b1 before insert on b for each row insert into c values (new.y * 5);
+    create trigger c1 before insert on c for each row insert into a values (new.z * 7);
+}
+
+setup s9 {
+    create table x (a int primary key, b int, c int);
+}
+
+setup s10 {
+    create view v as select * from x;
+}
+
+# mysql-error: 1048 23000 Column 'c' cannot be null
+@setup s1
+test l4864 {
+    insert into x values (1,2);
+}
+expect error {
+}
+
+# mysql-error: 1442 HY000 Can't update table 'a' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
+@setup s2
+@setup s3
+test l4873 {
+    insert into a values (1), (2), (3);
+}
+expect error {
+}
+
+@setup s2
+@setup s4
+test l4882 {
+    delete from a;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s5
+test l4891 {
+    update a set x = 2;
+}
+expect unordered {
+}
+
+# mysql-error: 1442 HY000 Can't update table 'a' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
+@setup s2
+@setup s6
+@setup s7
+test l4902 {
+    insert into a values (1), (2), (3);
+}
+expect error {
+}
+
+# mysql-error: 1442 HY000 Can't update table 'a' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
+@setup s2
+@setup s6
+@setup s8
+test l4915 {
+    insert into a values (1), (2), (3);
+}
+expect error {
+}
+
+# mysql-error: 1363 HY000 There is no OLD row in on INSERT trigger
+@setup s9
+test l4923 {
+    create trigger old_on_insert before insert on x for each row set new.c = old.a + 1;
+}
+expect error {
+}
+
+# mysql-error: 1363 HY000 There is no NEW row in on DELETE trigger
+@setup s9
+test l4931 {
+    create trigger new_on_delete before delete on x for each row set new.c = old.a + 1;
+}
+expect error {
+}
+
+# mysql-error: 1362 HY000 Updating of OLD row is not allowed in trigger
+@setup s9
+test l4939 {
+    create trigger update_old before update on x for each row set old.c = new.a + 1;
+}
+expect error {
+}
+
+# mysql-error: 1362 HY000 Updating of NEW row is not allowed in after trigger
+@setup s9
+test l4955 {
+    create trigger update_new after insert on x for each row set new.c = new.a + 1;
+}
+expect error {
+}
+
+# mysql-error: 1362 HY000 Updating of NEW row is not allowed in after trigger
+@setup s9
+test l4963 {
+    create trigger update_new after update on x for each row set new.c = new.a + 1;
+}
+expect error {
+}
+
+# mysql-error: 1193 HY000 Unknown system variable 'b'
+@setup s9
+@setup s10
+test l4996 {
+    create trigger trig before insert on v for each row set b = 1;
+}
+expect error {
+}

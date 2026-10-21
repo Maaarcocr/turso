@@ -1,0 +1,511 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/procedure_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE PROCEDURE testabc(x DOUBLE, y DOUBLE) SELECT x*y;
+}
+
+setup s2 {
+    CALL testabc(2, 3);
+}
+
+setup s3 {
+    CREATE TABLE items (
+	id INT PRIMARY KEY AUTO_INCREMENT,
+	item TEXT NOT NULL
+);
+    CREATE PROCEDURE add_item (IN txt TEXT) MODIFIES SQL DATA
+INSERT INTO items (item) VALUES (txt);
+}
+
+setup s4 {
+    CALL add_item('A test item');
+}
+
+setup s5 {
+    create table t (i int primary key);
+    insert into t values (0), (1), (2), (3);
+    CREATE PROCEDURE limited(the_limit int, the_offset bigint) SELECT * FROM t LIMIT the_limit OFFSET the_offset;
+    CREATE PROCEDURE limited_uns(the_limit int unsigned, the_offset bigint unsigned) SELECT * FROM t LIMIT the_limit OFFSET the_offset;
+}
+
+setup s6 {
+    call limited(1,0);
+}
+
+setup s7 {
+    call limited(2,0);
+}
+
+setup s8 {
+    call limited(2,2);
+}
+
+setup s9 {
+    CREATE TABLE t1(pk BIGINT PRIMARY KEY);
+}
+
+setup s10 {
+    CREATE PROCEDURE test_proc(x DOUBLE, y DOUBLE) SELECT x*y;
+}
+
+setup s11 {
+    CREATE TABLE t (pk INT PRIMARY KEY, other INT);
+    INSERT INTO t VALUES (1, 1), (2, 2), (3, 3);
+    CREATE PROCEDURE fragile() select other from t;
+    CREATE PROCEDURE stable() select pk from t;
+}
+
+setup s12 {
+    CALL stable();
+}
+
+setup s13 {
+    CALL fragile();
+}
+
+setup s14 {
+    alter table t drop other;
+}
+
+setup s15 {
+    CALL stable();
+}
+
+setup s16 {
+    ALTER TABLE t ADD COLUMN other INT;
+}
+
+setup s17 {
+    CALL stable();
+}
+
+setup s18 {
+    CALL fragile();
+}
+
+setup s19 {
+    INSERT INTO t VALUES (4, 4), (5, 5), (6, 6);
+}
+
+setup s20 {
+    CALL stable();
+}
+
+setup s21 {
+    create procedure sub_intersect() select(select 1 intersect select 2);
+}
+
+setup s22 {
+    create procedure sub_except() select(select 1 except select 2);
+}
+
+setup s23 {
+    CREATE PROCEDURE test() 
+	WITH RECURSIVE 
+		data (str) AS (SELECT "test"), 
+		positions (pos, chr) AS (
+			SELECT 
+				1, 
+				LEFT(data.str,1) 
+			FROM 
+				data 
+			UNION ALL 
+			SELECT 
+				pos + 1, 
+				MID(data.str,pos+1,1) 
+			FROM 
+				positions 
+			CROSS JOIN 
+				data 
+			WHERE 
+				pos < LENGTH(data.str)
+		) 
+	SELECT 
+		pos, chr 
+	FROM 
+		positions;
+}
+
+@setup s1
+test l77 {
+    CALL testabc(2, 3);
+}
+expect unordered {
+    6
+}
+
+@setup s1
+@setup s2
+test l83 {
+    CALL testabc(9, 9.5);
+}
+expect unordered {
+    85.5
+}
+
+@setup s3
+test l686 {
+    CALL add_item('A test item');
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l692 {
+    SELECT * FROM items;
+}
+expect unordered {
+    1|A test item
+}
+
+test l818 {
+    SELECT @res1;
+}
+expect unordered {
+    NULL
+}
+
+test l822 {
+    SELECT @res2;
+}
+expect unordered {
+    NULL
+}
+
+test l836 {
+    SELECT @res1, @res2;
+}
+expect unordered {
+    NULL|NULL
+}
+
+test l840 {
+    SELECT @res3, @res4;
+}
+expect unordered {
+    NULL|NULL
+}
+
+test l857 {
+    SELECT @shelf1, @shelf2, @shelf3;
+}
+expect unordered {
+    NULL|NULL|NULL
+}
+
+test l874 {
+    SELECT @result1;
+}
+expect unordered {
+    NULL
+}
+
+test l878 {
+    SELECT @result2;
+}
+expect unordered {
+    NULL
+}
+
+test l896 {
+    SELECT @s1, @s2;
+}
+expect unordered {
+    NULL|NULL
+}
+
+test l919 {
+    SELECT @total;
+}
+expect unordered {
+    NULL
+}
+
+test l950 {
+    SELECT @x;
+}
+expect unordered {
+    NULL
+}
+
+test l987 {
+    SET @x = 2;
+}
+expect unordered {
+}
+
+@setup s5
+test l1171 {
+    call limited(1,0);
+}
+expect unordered {
+    0
+}
+
+@setup s5
+@setup s6
+test l1175 {
+    call limited(2,0);
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s5
+@setup s6
+@setup s7
+test l1179 {
+    call limited(2,2);
+}
+expect unordered {
+    2
+    3
+}
+
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+test l1183 {
+    call limited_uns(2,2);
+}
+expect unordered {
+    2
+    3
+}
+
+test l1610 {
+    SELECT @uservar4;
+}
+expect unordered {
+    NULL
+}
+
+# mysql-error: 1330 42000 Duplicate parameter: abc
+test l1789 {
+    CREATE PROCEDURE p1(abc DATETIME, abc DOUBLE) SELECT abc;
+}
+expect error {
+}
+
+# mysql-error: 1330 42000 Duplicate parameter: ABC
+test l1794 {
+    CREATE PROCEDURE p1(abc DATETIME, ABC DOUBLE) SELECT abc;
+}
+expect error {
+}
+
+# mysql-error: 1314 0A000 USE is not allowed in stored procedures
+test l1804 {
+    CREATE PROCEDURE p1() USE mydb;
+}
+expect error {
+}
+
+# mysql-error: 1314 0A000 LOCK is not allowed in stored procedures
+@setup s9
+test l1814 {
+    CREATE PROCEDURE p1(x BIGINT) LOCK TABLES t1 READ;
+}
+expect error {
+}
+
+# mysql-error: 1314 0A000 UNLOCK is not allowed in stored procedures
+@setup s9
+test l1818 {
+    CREATE PROCEDURE p1(x BIGINT) UNLOCK TABLES;
+}
+expect error {
+}
+
+# mysql-error: 1304 42000 PROCEDURE test_proc already exists
+@setup s10
+test l1898 {
+    CREATE PROCEDURE test_proc(z VARCHAR(20)) SELECT z;
+}
+expect error {
+}
+
+@setup s11
+test l1911 {
+    CALL stable();
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s11
+@setup s12
+test l1915 {
+    CALL fragile();
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s11
+@setup s12
+@setup s13
+test l1927 {
+    alter table t drop other;
+}
+expect unordered {
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+test l1931 {
+    CALL stable();
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+test l1947 {
+    ALTER TABLE t ADD COLUMN other INT;
+}
+expect unordered {
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+test l1951 {
+    CALL stable();
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l1955 {
+    CALL fragile();
+}
+expect unordered {
+    NULL
+    NULL
+    NULL
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+@setup s18
+test l1959 {
+    INSERT INTO t VALUES (4, 4), (5, 5), (6, 6);
+}
+expect unordered {
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+@setup s18
+@setup s19
+test l1963 {
+    CALL stable();
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    5
+    6
+}
+
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+@setup s18
+@setup s19
+@setup s20
+test l1967 {
+    CALL fragile();
+}
+expect unordered {
+    4
+    5
+    6
+    NULL
+    NULL
+    NULL
+}
+
+test l2276 {
+    select @v;
+}
+expect unordered {
+    NULL
+}
+
+@setup s21
+test l2388 {
+    call sub_intersect();
+}
+expect unordered {
+    NULL
+}
+
+@setup s22
+test l2394 {
+    call sub_except();
+}
+expect unordered {
+    1
+}
+
+@setup s23
+test l2400 {
+    call test();
+}
+expect unordered {
+    1|t
+    2|e
+    3|s
+    4|t
+}

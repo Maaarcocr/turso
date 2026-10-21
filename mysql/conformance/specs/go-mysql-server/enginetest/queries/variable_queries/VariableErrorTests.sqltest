@@ -1,0 +1,41 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/variable_queries.go
+# license: Apache-2.0
+@database :memory:
+
+# mysql-error: 1193 HY000 Unknown system variable 'unknown'
+test l646 {
+    select @@GLOBAL.unknown;
+}
+expect error {
+}
+
+# mysql-error: 1193 HY000 Unknown system variable 'does_not_exist'
+test l650 {
+    set @@does_not_exist = 100;
+}
+expect error {
+}
+
+test l658 {
+    set @@sql_mode = true;
+}
+expect unordered {
+}
+
+# mysql-error: 1231 42000 Variable 'sql_mode' can't be set to the value of 'NOT_AN_OPTION'
+test l662 {
+    set @@sql_mode = "NOT_AN_OPTION";
+}
+expect error {
+}
+
+# mysql-error: 1229 HY000 Variable 'default_password_lifetime' is a GLOBAL variable and should be set with SET GLOBAL
+test l674 {
+    set session default_password_lifetime = 5;
+}
+expect error {
+}

@@ -1,0 +1,2312 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE table ab (a int primary key, b int);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s2 {
+    CREATE table uv (u int primary key, v int);
+}
+
+setup s3 {
+    CREATE table ab (a int primary key, b int);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s4 {
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+}
+
+setup s5 {
+    CREATE table xy (x int primary key, y int, unique index y_idx(y));
+}
+
+setup s6 {
+    CREATE table uv (u int primary key, v int);
+}
+
+setup s7 {
+    CREATE table ab (a int primary key, b int);
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s8 {
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+}
+
+setup s9 {
+    CREATE table ab (a int primary key, b int);
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s10 {
+    create table one_pk (pk smallint primary key, c1 smallint, c2 smallint, c3 smallint, c4 smallint, c5 smallint);
+    insert into one_pk values
+    (0,0,1,2,3,4),
+    (1,10,11,12,13,14),
+    (2,20,21,22,23,24),
+    (3,30,31,32,33,34);
+}
+
+setup s11 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+    CREATE TABLE `fk_tbl` (   `pk` bigint NOT NULL,   `a` bigint,   `b` varchar(20),   PRIMARY KEY (`pk`) );
+}
+
+setup s12 {
+    CREATE TABLE `keyless` (   `c0` bigint,   `c1` bigint );
+    insert into keyless values
+    (0,0),
+    (1,1),
+    (1,1),
+    (2,2);
+}
+
+setup s13 {
+    create table othertable (s2 varchar(20) not null, i2 bigint primary key);
+    insert into othertable values
+    ('first', 3),
+    ('second', 2),
+    ('third', 1);
+    create index othertable_s2 on othertable (s2);
+    create index othertable_s2_i2 on othertable (s2,i2);
+}
+
+setup s14 {
+    create table two_pk (
+    pk1 tinyint,
+    pk2 tinyint,
+    c1 tinyint NOT NULL,
+    c2 tinyint NOT NULL,
+    c3 tinyint NOT NULL,
+    c4 tinyint NOT NULL,
+    c5 tinyint NOT NULL,
+    primary key (pk1, pk2)
+);
+    insert into two_pk values
+    (0,0,0,1,2,3,4),
+    (0,1,10,11,12,13,14),
+    (1,0,20,21,22,23,24),
+    (1,1,30,31,32,33,34);
+}
+
+setup s15 {
+    CREATE table xy_hasnull_idx (x int primary key, y int, index y_idx(y));
+    insert into xy_hasnull_idx values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,NULL);
+}
+
+setup s16 {
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+}
+
+setup s17 {
+    CREATE table xy (x int primary key, y int, unique index y_idx(y));
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+}
+
+setup s18 {
+    CREATE TABLE `typestable` (   `id` bigint NOT NULL,   `i8` tinyint,   `i16` smallint,   `i32` int,   `i64` bigint,   `u8` tinyint unsigned,   `u16` smallint unsigned,   `u32` int unsigned,   `u64` bigint unsigned,   `f32` float,   `f64` double,   `ti` timestamp,   `da` date,   `te` varchar(20),   `bo` tinyint,   `js` json,   `bl` blob,   `e1` enum('', 'v1', 'v2'),   `s1` set('', 'v1', 'v2'),   PRIMARY KEY (`id`) );
+}
+
+setup s19 {
+    create table bigtable (t varchar(1) primary key, n bigint);
+    insert into bigtable values
+	('a', 1),
+	('s', 2),
+	('f', 3),
+	('g', 1),
+	('h', 2),
+	('j', 3),
+	('k', 1),
+	('l', 2),
+	('ñ', 4),
+	('z', 5),
+	('x', 6),
+	('c', 7),
+	('v', 8),
+	('b', 9);
+    CREATE table xy (x int primary key, y int, unique index y_idx(y));
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+}
+
+setup s20 {
+    create table one_pk_two_idx (
+    pk bigint primary key,
+    v1 bigint,
+    v2 bigint
+);
+    insert into one_pk_two_idx values
+    (0,0,0),
+    (1,1,1),
+    (2,2,2),
+    (3,3,3),
+    (4,4,4),
+    (5,5,5),
+    (6,6,6),
+    (7,7,7);
+    create index one_pk_two_idx_1 on one_pk_two_idx (v1);
+    create index one_pk_two_idx_2 on one_pk_two_idx (v1, v2);
+}
+
+setup s21 {
+    create table two_pk (
+    pk1 tinyint,
+    pk2 tinyint,
+    c1 tinyint NOT NULL,
+    c2 tinyint NOT NULL,
+    c3 tinyint NOT NULL,
+    c4 tinyint NOT NULL,
+    c5 tinyint NOT NULL,
+    primary key (pk1, pk2)
+);
+    insert into two_pk values
+    (0,0,0,1,2,3,4),
+    (0,1,10,11,12,13,14),
+    (1,0,20,21,22,23,24),
+    (1,1,30,31,32,33,34);
+}
+
+@setup s1
+test l7548 {
+    select a from ab where false;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+test l7552 {
+    select a, u from (ab cross join uv) where false;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s4
+test l7556 {
+    select a1.u
+from (select * from uv) a1
+where a1.u = 1 AND false;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s4
+test l7562 {
+    /*h1*/select a1.u
+from (select * from uv where false) a1
+where a1.u = 1;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+@setup s7
+test l7569 {
+    select a, b from ab where
+exists (select * from xy where false)
+or exists (select * from uv where false);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+@setup s7
+test l7575 {
+    select a,b from ab where
+exists (select * from xy where
+    exists (select * from uv where false));
+}
+expect unordered {
+}
+
+@setup s5
+@setup s8
+test l7581 {
+    select *
+	from (select * from xy where x = 1 and x in
+	   (select * from (select 1 where false) a1)
+	) a2;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s9
+test l7589 {
+    select a1.a from (select * from ab) a1 where exists (select * from xy where 1 = 0);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s9
+test l7593 {
+    select a1.a from (select * from ab group by a, b) a1 where exists (select x from xy where 1 = 0);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s9
+test l7597 {
+    select a1.s from (select sum(a) over() as s from ab) a1 where exists (select * from xy where 1 = 0);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s9
+test l7601 {
+    with cte1 as (select * from ab)
+select *
+from xy
+where exists (select * from cte1 where 1 = 0);
+}
+expect unordered {
+}
+
+@setup s1
+test l7608 {
+    with recursive my_cte as
+(
+  select 1 as f, 1 as next_f
+  union all
+  select next_f, f+next_f from my_cte where f < 50
+)
+select * from my_cte
+where exists (select * from ab where 1 = 0);
+}
+expect unordered {
+}
+
+@setup s1
+test l7621 {
+    SELECT count(*)
+FROM
+JSON_TABLE(
+	'[\{"a":1.5, "b":2.25\},\{"a":3.125, "b":4.0625\}]',
+	'$[*]' COLUMNS(x float path '$.a', y float path '$.b')
+) as t1
+where exists (select * from ab where 1 = 0);
+}
+expect unordered {
+    0
+}
+
+@setup s5
+@setup s9
+test l7632 {
+    select x from xy as t1 group by t1.x having exists (select * from ab where 1 = 0);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s8
+test l7636 {
+    select * from xy where x in (select 1 having false);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s8
+test l7640 {
+    select * from (select * from xy where false) s where s.x = 2;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s9
+test l7644 {
+    select * from xy where exists (select a, true, a*7 from ab where false);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s9
+test l7648 {
+    select * from xy
+where not exists (
+  select * from ab
+  where false and exists (
+    select 1 where false
+  )
+);
+}
+expect unordered {
+    0|2
+    1|0
+    2|1
+    3|3
+}
+
+test l7664 {
+    WITH RECURSIVE my_cte AS
+(
+  SELECT 1 as f, 1 as next_f
+  UNION ALL
+  SELECT next_f, f+next_f FROM my_cte WHERE f < 1000
+)
+SELECT * FROM my_cte;
+}
+expect unordered {
+    13|21
+    144|233
+    1597|2584
+    1|1
+    1|2
+    21|34
+    233|377
+    2|3
+    34|55
+    377|610
+    3|5
+    55|89
+    5|8
+    610|987
+    89|144
+    8|13
+    987|1597
+}
+
+@setup s10
+test l7703 {
+    select count((select * from (select pk from one_pk limit 1) as sq)) from one_pk;
+}
+expect unordered {
+    4
+}
+
+@setup s11
+test l7709 {
+    select i from mytable where find_in_set(s, 'first row,second row,third row') = 2;
+}
+expect unordered {
+    2
+}
+
+@setup s12
+test l7716 {
+    SELECT COUNT(*)
+	FROM keyless
+	WHERE keyless.c0 IN (
+	
+		WITH RECURSIVE cte(depth, i, j) AS (
+		    SELECT 0, T1.c0, T1.c1
+		    FROM keyless T1
+		    WHERE T1.c0 = 0
+	
+		    UNION ALL
+	
+		    SELECT cte.depth + 1, cte.i, T2.c1 + 1
+		    FROM cte, keyless T2
+		    WHERE cte.depth = T2.c0
+		)
+	
+		SELECT U0.c0
+		FROM keyless U0, cte
+		WHERE cte.j = keyless.c0
+	
+	)
+    ORDER BY c0;
+}
+expect {
+    4
+}
+
+@setup s12
+test l7748 {
+    SELECT COUNT(*)
+	FROM keyless
+	WHERE keyless.c0 IN (
+	
+		WITH RECURSIVE cte(depth, i, j) AS (
+		    SELECT 0, T1.c0, T1.c1
+		    FROM keyless T1
+		    WHERE T1.c0 = 0
+	
+		    UNION ALL
+	
+		    SELECT cte.depth + 1, cte.i, T2.c1 + 1
+		    FROM cte, keyless T2
+		    WHERE cte.depth = T2.c0
+		)
+	
+		SELECT U0.c0
+		FROM cte, keyless U0 
+		WHERE cte.j = keyless.c0
+		
+	)
+    ORDER BY c0;
+}
+expect {
+    4
+}
+
+test l7778 {
+    SELECT SUM(0) * -1;
+}
+expect unordered {
+    0
+}
+
+test l7783 {
+    WITH RECURSIVE
+rt (foo) AS (
+ SELECT 1 as foo
+ UNION ALL
+ SELECT foo + 1 as foo FROM rt WHERE foo < 5
+),
+ladder (depth, foo) AS (
+ SELECT 1 as depth, NULL as foo from rt
+ UNION ALL
+ SELECT ladder.depth + 1 as depth, rt.foo
+ FROM ladder JOIN rt WHERE ladder.foo = rt.foo
+)
+SELECT * FROM ladder;
+}
+expect unordered {
+    1|NULL
+    1|NULL
+    1|NULL
+    1|NULL
+    1|NULL
+}
+
+@setup s11
+@setup s13
+test l7807 {
+    select t2.* from mytable t1 natural join mytable t2 join othertable t3 on t2.i = t3.i2;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s11
+@setup s13
+test l7816 {
+    select t1.*, t2.*, i from mytable t1 natural join mytable t2 join othertable t3 on t2.i = t3.i2;
+}
+expect unordered {
+    1|first row|1|first row|1
+    2|second row|2|second row|2
+    3|third row|3|third row|3
+}
+
+test l7825 {
+    with a(j) as (select 1) ( with c(k) as (select 3) select k from c union select 6) union select k from c;
+}
+expect unordered {
+    3
+    6
+}
+
+@setup s10
+@setup s14
+test l7829 {
+    SELECT pk,
+						(SELECT sum(c1) FROM two_pk WHERE c1 IN (SELECT c4 FROM two_pk WHERE c3 > opk.c5)) AS sum,
+						(SELECT avg(c1) FROM two_pk WHERE pk2 IN (SELECT pk2 FROM two_pk WHERE c1 < opk.c2)) AS avg
+					FROM one_pk opk ORDER BY pk;
+}
+expect {
+    0|NULL|10.0000
+    1|NULL|15.0000
+    2|NULL|15.0000
+    3|NULL|15.0000
+}
+
+test l7841 {
+    SELECT column_0, sum(column_1) FROM
+			(values row(1,1), row(1,3), row(2,2), row(2,5), row(3,9)) a
+			group by 1 having avg(column_1) > 2 order by 1;
+}
+expect {
+    2|7
+    3|9
+}
+
+test l7850 {
+    WITH t AS (SELECT 1) SELECT * FROM t UNION (WITH t AS (SELECT 2) SELECT * FROM t);
+}
+expect unordered {
+    1
+    2
+}
+
+test l7857 {
+    SELECT json_array() FROM dual;
+}
+expect unordered {
+    []
+}
+
+test l7863 {
+    SELECT json_object() FROM dual;
+}
+expect unordered {
+    \{\}
+}
+
+test l7869 {
+    SELECT json_depth('\{"a": 1, "b": \{"aa": 1, "bb": \{"aaa": 1, "bbb": \{"aaaa": 1\}\}\}\}') FROM dual;
+}
+expect unordered {
+    5
+}
+
+@setup s11
+test l7876 {
+    SELECT i, I, s, S FROM mytable;
+}
+expect unordered {
+    1|1|first row|first row
+    2|2|second row|second row
+    3|3|third row|third row
+}
+
+@setup s11
+test l7902 {
+    SELECT `i`, `I`, `s`, `S` FROM mytable;
+}
+expect unordered {
+    1|1|first row|first row
+    2|2|second row|second row
+    3|3|third row|third row
+}
+
+@setup s11
+test l7928 {
+    SELECT `mytable`.`i`, `mytable`.`I`, `mytable`.`s`, `mytable`.`S` FROM mytable;
+}
+expect unordered {
+    1|1|first row|first row
+    2|2|second row|second row
+    3|3|third row|third row
+}
+
+test l7955 {
+    SELECT json_unquote(json_extract('\{"hi":"there"\}', '$.nope'));
+}
+expect unordered {
+    NULL
+}
+
+test l7959 {
+    SELECT 1 FROM DUAL WHERE (1, null) != (0, null);
+}
+expect unordered {
+    1
+}
+
+test l7965 {
+    SELECT 1 FROM DUAL WHERE ('0', 0) = (0, '0');
+}
+expect unordered {
+    1
+}
+
+test l7971 {
+    SELECT c AS i_do_not_conflict, COUNT(*), MIN((SELECT COUNT(*) FROM (SELECT 1 AS d) b WHERE b.d = a.c)) FROM (SELECT 1 AS c) a GROUP BY i_do_not_conflict;
+}
+expect unordered {
+    1|1|1
+}
+
+test l7977 {
+    SELECT c AS c, COUNT(*), MIN((SELECT COUNT(*) FROM (SELECT 1 AS d) b WHERE b.d = a.c)) FROM (SELECT 1 AS c) a GROUP BY a.c;
+}
+expect unordered {
+    1|1|1
+}
+
+@setup s11
+test l7984 {
+    SELECT * FROM
+(SELECT * FROM mytable) t
+UNION ALL
+(SELECT * FROM mytable)
+ORDER BY 1;
+}
+expect {
+    1|first row
+    1|first row
+    2|second row
+    2|second row
+    3|third row
+    3|third row
+}
+
+@setup s5
+@setup s8
+test l8001 {
+    select x from xy where x > 0 and x <= 2 order by x;
+}
+expect {
+    1
+    2
+}
+
+@setup s5
+@setup s8
+test l8008 {
+    select * from xy where y < 1 or y > 2 order by y;
+}
+expect {
+    1|0
+    3|3
+}
+
+@setup s5
+@setup s8
+test l8015 {
+    select * from xy where y < 1 or y > 2 order by y desc;
+}
+expect {
+    3|3
+    1|0
+}
+
+@setup s5
+@setup s8
+test l8022 {
+    select * from xy where x in (3, 0, 1) order by x;
+}
+expect {
+    0|2
+    1|0
+    3|3
+}
+
+@setup s5
+@setup s8
+test l8030 {
+    select * from xy where x in (3, 0, 1) order by x desc;
+}
+expect {
+    3|3
+    1|0
+    0|2
+}
+
+@setup s5
+@setup s8
+test l8038 {
+    select * from xy where y in (3, 0, 1) order by y;
+}
+expect {
+    1|0
+    2|1
+    3|3
+}
+
+@setup s5
+@setup s8
+test l8046 {
+    select * from xy where y in (3, 0, 1) order by y desc;
+}
+expect {
+    3|3
+    2|1
+    1|0
+}
+
+@setup s15
+test l8054 {
+    select * from xy_hasnull_idx order by y;
+}
+expect {
+    3|NULL
+    1|0
+    2|1
+    0|2
+}
+
+@setup s15
+test l8063 {
+    select * from xy_hasnull_idx order by y desc;
+}
+expect {
+    0|2
+    2|1
+    1|0
+    3|NULL
+}
+
+@setup s15
+test l8072 {
+    select * from xy_hasnull_idx where y < 1 or y > 1 order by y desc;
+}
+expect {
+    0|2
+    1|0
+}
+
+@setup s15
+test l8079 {
+    select * from xy_hasnull_idx where y < 1 or y > 1 or y is null order by y desc;
+}
+expect {
+    0|2
+    1|0
+    3|NULL
+}
+
+@setup s15
+test l8087 {
+    select * from xy_hasnull_idx where y in (0, 2) or y is null order by y;
+}
+expect {
+    3|NULL
+    1|0
+    0|2
+}
+
+@setup s15
+test l8095 {
+    select x as xx, y as yy from xy_hasnull_idx order by yy desc;
+}
+expect {
+    0|2
+    2|1
+    1|0
+    3|NULL
+}
+
+@setup s15
+test l8104 {
+    select x as xx, y as yy from xy_hasnull_idx order by YY desc;
+}
+expect {
+    0|2
+    2|1
+    1|0
+    3|NULL
+}
+
+@setup s15
+test l8113 {
+    select * from xy_hasnull_idx order by Y desc;
+}
+expect {
+    0|2
+    2|1
+    1|0
+    3|NULL
+}
+
+@setup s5
+@setup s8
+test l8123 {
+    select max(x) from xy;
+}
+expect unordered {
+    3
+}
+
+@setup s5
+@setup s8
+test l8129 {
+    select min(x) from xy;
+}
+expect unordered {
+    0
+}
+
+@setup s5
+@setup s8
+test l8135 {
+    select max(y) from xy;
+}
+expect unordered {
+    3
+}
+
+@setup s5
+@setup s8
+test l8141 {
+    select max(x)+100 from xy;
+}
+expect unordered {
+    103
+}
+
+@setup s5
+@setup s8
+test l8147 {
+    select max(x) as xx from xy;
+}
+expect unordered {
+    3
+}
+
+@setup s5
+@setup s8
+test l8153 {
+    select 1, 2.0, '3', max(x) from xy;
+}
+expect unordered {
+    1|2.0|3|3
+}
+
+@setup s5
+@setup s8
+test l8159 {
+    select min(x) from xy where x > 0;
+}
+expect unordered {
+    1
+}
+
+@setup s5
+@setup s8
+test l8165 {
+    select max(x) from xy where x < 3;
+}
+expect unordered {
+    2
+}
+
+@setup s5
+@setup s8
+test l8171 {
+    select min(x) from xy where y > 0;
+}
+expect unordered {
+    0
+}
+
+@setup s5
+@setup s8
+test l8177 {
+    select max(x) from xy where y < 3;
+}
+expect unordered {
+    2
+}
+
+@setup s5
+@setup s8
+test l8183 {
+    select * from (select max(x) from xy) sq;
+}
+expect unordered {
+    3
+}
+
+@setup s5
+@setup s8
+test l8189 {
+    with cte(i) as (select max(x) from xy) select i + 100 from cte;
+}
+expect unordered {
+    103
+}
+
+@setup s5
+@setup s8
+test l8195 {
+    with cte(i) as (select x from xy) select max(i) from cte;
+}
+expect unordered {
+    3
+}
+
+@setup s5
+@setup s8
+test l8201 {
+    select max(x) from xy group by y;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+}
+
+@setup s5
+@setup s6
+@setup s16
+test l8210 {
+    select max(x) from xy join uv where x = u;
+}
+expect unordered {
+    3
+}
+
+@setup s5
+@setup s6
+@setup s16
+test l8216 {
+    SELECT * FROM xy JOIN LATERAL (SELECT * FROM uv WHERE xy.x+1 = uv.u) uv2;
+}
+expect unordered {
+    0|2|1|1
+    1|0|2|2
+    2|1|3|2
+}
+
+@setup s11
+@setup s17
+test l8222 {
+    select * from mytable,
+	lateral (
+	with recursive cte(a) as (
+		select y from xy
+		union
+		select x from cte
+		join
+		xy
+		on x = a
+		)
+	select * from cte
+) sqa 
+where i = a
+order by i;
+}
+expect {
+    1|first row|1
+    2|second row|2
+    3|third row|3
+}
+
+@setup s11
+@setup s17
+test l8244 {
+    select * from mytable,
+	lateral (
+	with recursive cte(a) as (
+		select y from xy
+		union
+		select x from cte
+		join
+		(
+			select * 
+			from xy
+			where x = 1
+		 ) sqa1
+		on x = a
+		limit 3
+		)
+	select * from cte
+) sqa2
+where i = a
+order by i;
+}
+expect {
+    1|first row|1
+    2|second row|2
+}
+
+@setup s2
+@setup s3
+test l8270 {
+    select a, b
+from ab as ab2
+where exists (
+    select *
+    from ab
+	where ab.b = (
+        select max(v)
+        from uv
+        where uv.v = ab2.a and uv.v = ab.a
+    )
+);
+}
+expect unordered {
+    2|2
+}
+
+@setup s5
+@setup s6
+@setup s16
+test l8287 {
+    select x, y
+from xy as xy2
+where exists (
+    select *
+    from xy
+        where xy.y = (
+        select max(v)
+        from uv
+        where uv.v = xy2.x and uv.v = xy.x
+    )
+)
+order by x, y;
+}
+expect {
+}
+
+test l8303 {
+    select 1 where cos(2);
+}
+expect unordered {
+    1
+}
+
+test l8309 {
+    select 1 where sin(2);
+}
+expect unordered {
+    1
+}
+
+test l8315 {
+    select 1 where sin(0);
+}
+expect unordered {
+}
+
+test l8319 {
+    select acos(-2);
+}
+expect unordered {
+    NULL
+}
+
+test l8325 {
+    select asin(-2);
+}
+expect unordered {
+    NULL
+}
+
+test l8331 {
+    select 1 % acos(-2);
+}
+expect unordered {
+    NULL
+}
+
+test l8337 {
+    select dayname(123), dayname('abc');
+}
+expect unordered {
+    Sunday|NULL
+}
+
+@setup s18
+test l8343 {
+    select
+   dayname(id),
+   dayname(i8),
+   dayname(i16),
+   dayname(i32),
+   dayname(i64),
+   dayname(u8),
+   dayname(u16),
+   dayname(u32),
+   dayname(u64),
+   dayname(f32),
+   dayname(f64),
+   dayname(ti),
+   dayname(da),
+   dayname(te),
+   dayname(bo),
+   dayname(js),
+   dayname(bl),
+   dayname(e1),
+   dayname(s1)
+from typestable;
+}
+expect unordered {
+}
+
+@setup s11
+test l8390 {
+    select * from mytable order by dayname(i);
+}
+expect {
+    1|first row
+    2|second row
+    3|third row
+}
+
+test l8398 {
+    select sqrt(-1) + 1;
+}
+expect unordered {
+    NULL
+}
+
+test l8419 {
+    select round(5e29, -30);
+}
+expect unordered {
+    0
+}
+
+test l8425 {
+    select 1 where (round('')) union all select 1 where (not (round(''))) union all select 1 where ((round('')) is null);
+}
+expect unordered {
+    1
+}
+
+test l8431 {
+    select 1 in (null, 0.8);
+}
+expect unordered {
+    NULL
+}
+
+test l8437 {
+    select -1 in (null, sin(5));
+}
+expect unordered {
+    NULL
+}
+
+test l8443 {
+    select 1 where (1 in (null, 0.8));
+}
+expect unordered {
+}
+
+test l8447 {
+    select -1 where (1 in (null, sin(5)));
+}
+expect unordered {
+}
+
+@setup s11
+test l8451 {
+    select * from mytable where (i in (null, 0.8, 1.5, 2.999));
+}
+expect unordered {
+}
+
+@setup s11
+test l8455 {
+    select * from mytable where (i BETWEEN (CASE 1 WHEN 2 THEN 1.0 ELSE (1||2) END) AND i);
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s11
+test l8463 {
+    select * from mytable where (i BETWEEN ('' BETWEEN '' AND ('' OR '#')) AND i)
+;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s19
+test l8471 {
+    select * from (select 'k' as k) sq join bigtable on t = k join xy where x between n and n;
+}
+expect unordered {
+    k|k|1|1|0
+}
+
+@setup s5
+@setup s6
+@setup s16
+test l8477 {
+    select * from xy inner join uv on (xy.x in (false in ('asdf')));
+}
+expect unordered {
+    1|0|0|1
+    1|0|1|1
+    1|0|2|2
+    1|0|3|2
+}
+
+@setup s11
+test l8486 {
+    select * from mytable where i > '-0.5';
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+test l8494 {
+    select case when 1 then 59 + 81 / 1 end;
+}
+expect unordered {
+    140.0000
+}
+
+test l8500 {
+    select case 1 when 2 then null else (6 * 2) / 1 end;
+}
+expect unordered {
+    12.0000
+}
+
+test l8506 {
+    select case 1 when 1 then (6 * 2) / 1 when 2 then null else null end;
+}
+expect unordered {
+    12.0000
+}
+
+@setup s20
+test l8512 {
+    select * from one_pk_two_idx where v1 < 4 and v2 < 2 or v2 > 3 order by v1;
+}
+expect {
+    0|0|0
+    1|1|1
+    4|4|4
+    5|5|5
+    6|6|6
+    7|7|7
+}
+
+@setup s11
+test l8523 {
+    select length(space(i)) from mytable;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s11
+test l8547 {
+    select i + pi() from mytable;
+}
+expect unordered {
+    4.141593
+    5.141593
+    6.141593
+}
+
+@setup s11
+test l8555 {
+    select i * pi() from mytable;
+}
+expect unordered {
+    3.141593
+    6.283185
+    9.424778
+}
+
+@setup s11
+test l8563 {
+    select i / pi() from mytable;
+}
+expect unordered {
+    0.3183098862
+    0.6366197724
+    0.9549296586
+}
+
+@setup s11
+test l8571 {
+    select exp(i) from mytable;
+}
+expect unordered {
+    2.718281828459045
+    20.085536923187668
+    7.38905609893065
+}
+
+@setup s11
+test l8579 {
+    select bit_count(i), bit_count(-20 * i) from mytable;
+}
+expect unordered {
+    1|60
+    1|61
+    2|59
+}
+
+test l8587 {
+    select bit_count(binary 123456878901234567890);
+}
+expect unordered {
+    73
+}
+
+@setup s11
+test l8593 {
+    select atan(i), atan2(i, i + 2) from mytable;
+}
+expect unordered {
+    0.7853981633974483|0.3217505543966422
+    1.1071487177940904|0.4636476090008061
+    1.2490457723982544|0.5404195002705842
+}
+
+@setup s11
+test l8601 {
+    select elt(i, 'a', 'b') from mytable;
+}
+expect unordered {
+    NULL
+    a
+    b
+}
+
+@setup s11
+test l8609 {
+    select field(i, '1', '2', '3') from mytable;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s11
+test l8617 {
+    select ord(s), ord(concat('asdf', s)) from mytable;
+}
+expect unordered {
+    102|97
+    115|97
+    116|97
+}
+
+test l8633 {
+    select char(97, 98, 99 using utf8mb4);
+}
+expect unordered {
+    abc
+}
+
+@setup s11
+test l8639 {
+    select count(distinct cast(i as decimal)) from mytable;
+}
+expect unordered {
+    3
+}
+
+test l8645 {
+    select count(distinct null);
+}
+expect unordered {
+    0
+}
+
+test l8651 {
+    select 1/2.0 + 1;
+}
+expect unordered {
+    1.5000
+}
+
+test l8657 {
+    select 1 where if('', 1, char(''));
+}
+expect unordered {
+}
+
+test l8661 {
+    select 1 where if('', char(''), 1);
+}
+expect unordered {
+    1
+}
+
+test l8667 {
+    select 1 where if(char(''), 0, 1);
+}
+expect unordered {
+    1
+}
+
+test l8673 {
+    select 1 where if(char('123'), 0, 1);
+}
+expect unordered {
+    1
+}
+
+test l8679 {
+    select 1 where 0 = if('', 1, char(''));
+}
+expect unordered {
+    1
+}
+
+test l8691 {
+    select if(char(''), 'true', 'false');
+}
+expect unordered {
+    false
+}
+
+test l8697 {
+    select if(char('0'), 'true', 'false');
+}
+expect unordered {
+    false
+}
+
+test l8703 {
+    select if(char('1'), 'true', 'false');
+}
+expect unordered {
+    false
+}
+
+test l8709 {
+    select if(cast(1 as binary), 'true', 'false');
+}
+expect unordered {
+    true
+}
+
+test l8715 {
+    select if(cast(0 as binary), 'true', 'false');
+}
+expect unordered {
+    false
+}
+
+test l8721 {
+    select cast(true as json) = true;
+}
+expect unordered {
+    1
+}
+
+test l8727 {
+    select cast(false as json) = false;
+}
+expect unordered {
+    1
+}
+
+test l8733 {
+    select cast(true as json) = 'true';
+}
+expect unordered {
+    0
+}
+
+test l8739 {
+    select cast(false as json) = 'false';
+}
+expect unordered {
+    0
+}
+
+test l8745 {
+    select cast(cast(true as json) as char) = 'true';
+}
+expect unordered {
+    1
+}
+
+test l8751 {
+    select cast(cast(false as json) as char) = 'false';
+}
+expect unordered {
+    1
+}
+
+test l8757 {
+    select cast(true as json) = 1;
+}
+expect unordered {
+    0
+}
+
+test l8763 {
+    select cast(true as json) = 0;
+}
+expect unordered {
+    0
+}
+
+test l8769 {
+    select cast(false as json) = 1;
+}
+expect unordered {
+    0
+}
+
+test l8775 {
+    select cast(false as json) = 0;
+}
+expect unordered {
+    0
+}
+
+test l8781 {
+    select cast(cast(true as json) as signed) = 1;
+}
+expect unordered {
+    1
+}
+
+test l8787 {
+    select cast(cast(true as json) as signed) = 0;
+}
+expect unordered {
+    0
+}
+
+test l8793 {
+    select cast(cast(false as json) as signed) = 1;
+}
+expect unordered {
+    0
+}
+
+test l8799 {
+    select cast(cast(false as json) as signed) = 0;
+}
+expect unordered {
+    1
+}
+
+test l8806 {
+    select cast('true' as json) = 'true';
+}
+expect unordered {
+    0
+}
+
+test l8812 {
+    select cast('true' as json) = true;
+}
+expect unordered {
+    1
+}
+
+test l8818 {
+    select cast('false' as json) = false;
+}
+expect unordered {
+    1
+}
+
+test l8824 {
+    select cast('false' as json) = 'false';
+}
+expect unordered {
+    0
+}
+
+test l8830 {
+    SELECT json_type('\{"a": [10, true, "abc"]\}');
+}
+expect unordered {
+    OBJECT
+}
+
+test l8836 {
+    SELECT json_type(json_extract('\{"a": [10, true, "abc"]\}', '$.a'));
+}
+expect unordered {
+    ARRAY
+}
+
+test l8842 {
+    SELECT json_type(json_extract('\{"a": [10, true, "abc"]\}', '$.a[0]'));
+}
+expect unordered {
+    INTEGER
+}
+
+test l8848 {
+    SELECT json_type(json_extract('\{"a": [10, true, "abc"]\}', '$.a[1]'));
+}
+expect unordered {
+    BOOLEAN
+}
+
+test l8854 {
+    SELECT json_type(json_extract('\{"a": [10, true, "abc"]\}', '$.a[2]'));
+}
+expect unordered {
+    STRING
+}
+
+test l8860 {
+    SELECT json_type(json_extract('\{"a": 123.456\}', '$.a'));
+}
+expect unordered {
+    DOUBLE
+}
+
+test l8866 {
+    SELECT json_type(json_extract('\{"a": null\}', '$.a'));
+}
+expect unordered {
+    NULL
+}
+
+test l8872 {
+    SELECT json_type(json_extract('\{"a": 123\}', null));
+}
+expect unordered {
+    NULL
+}
+
+test l8878 {
+    SELECT json_type(json_extract('\{"a": 123\}', '$.a', null));
+}
+expect unordered {
+    NULL
+}
+
+test l8884 {
+    SELECT json_type(cast(cast('2001-01-01 12:34:56.123456' as datetime) as json));
+}
+expect unordered {
+    DATETIME
+}
+
+test l8890 {
+    SELECT json_type(cast(cast('2001-01-01 12:34:56.123456' as date) as json));
+}
+expect unordered {
+    DATE
+}
+
+test l8896 {
+    select json_type(cast(cast(1 as unsigned) as json));
+}
+expect unordered {
+    UNSIGNED INTEGER
+}
+
+test l8902 {
+    select json_type('4294967295');
+}
+expect unordered {
+    INTEGER
+}
+
+test l8908 {
+    select json_type('4294967296');
+}
+expect unordered {
+    UNSIGNED INTEGER
+}
+
+test l8914 {
+    SELECT json_type(cast(1.0 as json));
+}
+expect unordered {
+    DECIMAL
+}
+
+test l8920 {
+    select json_type(cast(cast(2001 as year) as json));
+}
+expect unordered {
+    UNSIGNED INTEGER
+}
+
+@setup s11
+test l8926 {
+    select length(random_bytes(i)) from mytable;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+test l8935 {
+    select to_days('2024-04-15');
+}
+expect unordered {
+    739356
+}
+
+test l8941 {
+    select from_days(739356);
+}
+expect unordered {
+    2024-04-15
+}
+
+test l8947 {
+    select last_day('2000-02-21');
+}
+expect unordered {
+    2000-02-29
+}
+
+test l8953 {
+    select last_day('1999-11-05');
+}
+expect unordered {
+    1999-11-30
+}
+
+test l8960 {
+    select cast(' 	 123 	 ' as signed);
+}
+expect unordered {
+    123
+}
+
+test l8966 {
+    select cast('
+123
+' as signed);
+}
+expect unordered {
+    0
+}
+
+test l8972 {
+    select cast('\0123\0' as signed);
+}
+expect unordered {
+    0
+}
+
+test l8978 {
+    select cast(' 	 
+\0123 	 ' as signed);
+}
+expect unordered {
+    0
+}
+
+test l8984 {
+    select cast(' 	 123 	 ' as unsigned);
+}
+expect unordered {
+    123
+}
+
+test l8990 {
+    select cast('
+123
+' as unsigned);
+}
+expect unordered {
+    0
+}
+
+test l8996 {
+    select cast('\0123\0' as unsigned);
+}
+expect unordered {
+    0
+}
+
+test l9002 {
+    select cast(' 	 
+\0123 	 ' as unsigned);
+}
+expect unordered {
+    0
+}
+
+test l9014 {
+    select cast('\0123\0' as decimal(10,3));
+}
+expect unordered {
+    0.000
+}
+
+test l9020 {
+    select cast(' 	 
+\0123 	 ' as decimal(10,3));
+}
+expect unordered {
+    0.000
+}
+
+test l9032 {
+    select cast('\0123\0' as double);
+}
+expect unordered {
+    0
+}
+
+test l9038 {
+    select cast(' 	 
+\0123 	 ' as double);
+}
+expect unordered {
+    0
+}
+
+test l9050 {
+    select cast('\0123\0' as float);
+}
+expect unordered {
+    0
+}
+
+test l9056 {
+    select cast(' 	 
+\0123 	 ' as float);
+}
+expect unordered {
+    0
+}
+
+test l9063 {
+    select 'abc' like NULL;
+}
+expect unordered {
+    NULL
+}
+
+test l9077 {
+    select get_format(date, 'usa');
+}
+expect unordered {
+    %m.%d.%Y
+}
+
+test l9083 {
+    select date_format('2003-10-03', get_format(date, 'eur'));
+}
+expect unordered {
+    03.10.2003
+}
+
+test l9090 {
+    select charset(null);
+}
+expect unordered {
+    binary
+}
+
+test l9096 {
+    select charset(123);
+}
+expect unordered {
+    binary
+}
+
+test l9102 {
+    select charset('abc');
+}
+expect unordered {
+    utf8mb4
+}
+
+test l9108 {
+    select charset(convert('abc' using latin1));
+}
+expect unordered {
+    latin1
+}
+
+@setup s21
+test l9114 {
+    select distinct pk1 from two_pk order by pk1;
+}
+expect {
+    0
+    1
+}
+
+@setup s21
+test l9121 {
+    select distinct pk2 from two_pk order by pk2;
+}
+expect {
+    0
+    1
+}
+
+# mysql-error: 3065 HY000 Expression #1 of ORDER BY clause is not in SELECT list, references column 'test.two_pk.pk2' which is not in SELECT list; this is incompatible with DISTINCT
+@setup s21
+test l9128 {
+    select distinct pk1 from two_pk order by pk2;
+}
+expect error {
+}
+
+# mysql-error: 3065 HY000 Expression #1 of ORDER BY clause is not in SELECT list, references column 'test.two_pk.pk1' which is not in SELECT list; this is incompatible with DISTINCT
+@setup s21
+test l9135 {
+    select distinct pk2 from two_pk order by pk1;
+}
+expect error {
+}
+
+@setup s21
+test l9142 {
+    select distinct pk1, pk2 from two_pk order by pk1;
+}
+expect {
+    0|0
+    0|1
+    1|0
+    1|1
+}
+
+@setup s21
+test l9151 {
+    select distinct pk1, pk2 from two_pk order by pk2;
+}
+expect {
+    0|0
+    1|0
+    0|1
+    1|1
+}
+
+@setup s21
+test l9160 {
+    select distinct pk1, pk2 from two_pk order by pk1, pk2;
+}
+expect {
+    0|0
+    0|1
+    1|0
+    1|1
+}
+
+@setup s21
+test l9169 {
+    select distinct pk1, pk2 from two_pk order by pk2, pk1;
+}
+expect {
+    0|0
+    1|0
+    0|1
+    1|1
+}
+
+@setup s21
+test l9178 {
+    select distinct pk2, pk1 from two_pk order by pk1, pk2;
+}
+expect {
+    0|0
+    1|0
+    0|1
+    1|1
+}
+
+@setup s21
+test l9187 {
+    select distinct pk2, pk1 from two_pk order by pk2, pk1;
+}
+expect {
+    0|0
+    0|1
+    1|0
+    1|1
+}
+
+@setup s21
+test l9196 {
+    select distinct pk1 + 1 from two_pk order by pk1 + 1;
+}
+expect {
+    1
+    2
+}
+
+@setup s21
+test l9203 {
+    select distinct pk2 + 1 from two_pk order by pk2 + 1;
+}
+expect {
+    1
+    2
+}
+
+test l9210 {
+    select '';
+}
+expect raw {
+
+}
+
+test l9216 {
+    select '' from dual;
+}
+expect raw {
+
+}
+
+test l9222 {
+    select @@sql_mode = 1;
+}
+expect unordered {
+    0
+}
+
+@setup s11
+test l9263 {
+    select quote(i), quote(s) from mytable;
+}
+expect unordered {
+    '1'|'first row'
+    '2'|'second row'
+    '3'|'third row'
+}
+
+@setup s11
+test l9271 {
+    select i, s from mytable where quote(i) = quote(2);
+}
+expect unordered {
+    2|second row
+}
+
+@setup s21
+test l9277 {
+    select * from two_pk group by pk1, pk2;
+}
+expect unordered {
+    0|0|0|1|2|3|4
+    0|1|10|11|12|13|14
+    1|0|20|21|22|23|24
+    1|1|30|31|32|33|34
+}
+
+@setup s21
+test l9286 {
+    select pk1+1 from two_pk group by pk1 + 1, mod(pk2, 2);
+}
+expect unordered {
+    1
+    1
+    2
+    2
+}
+
+@setup s21
+test l9292 {
+    select mod(pk2, 2) from two_pk group by pk1 + 1, mod(pk2, 2);
+}
+expect unordered {
+    0
+    0
+    1
+    1
+}
+
+@setup s5
+@setup s8
+test l9301 {
+    select y as z from xy group by (y) having AVG(z) > 0;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s5
+@setup s8
+test l9305 {
+    select y as z from xy group by (z) having AVG(z) > 0;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s5
+@setup s8
+test l9309 {
+    select y + 1 as z from xy group by (z) having AVG(z) > 1;
+}
+expect unordered {
+    2
+    3
+    4
+}
+
+@setup s10
+test l9313 {
+    select c1, c2 from one_pk where pk = 0 group by c1;
+}
+expect unordered {
+    0|1
+}
+
+@setup s10
+test l9317 {
+    select c1, c2 from one_pk where c2 = 1 group by c1;
+}
+expect unordered {
+    0|1
+}
+
+@setup s10
+test l9323 {
+    select any_value(pk), (select max(pk) from one_pk where pk < opk.pk) as x from one_pk opk;
+}
+expect unordered {
+    0|NULL
+    1|0
+    2|1
+    3|2
+}
+
+@setup s10
+test l9327 {
+    SELECT any_value(pk), (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) AS x FROM one_pk opk WHERE (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) > 0;
+}
+expect unordered {
+    2|1
+    3|2
+}
+
+@setup s10
+test l9331 {
+    select any_value(pk), (select max(pk) from one_pk where pk < (opk.c1 - 10)) as x from one_pk opk;
+}
+expect unordered {
+    0|NULL
+    1|NULL
+    2|3
+    3|3
+}
+
+@setup s10
+test l9335 {
+    select pk, (select max(pk) from one_pk where pk < opk.pk) as x from one_pk opk;
+}
+expect unordered {
+    0|NULL
+    1|0
+    2|1
+    3|2
+}
+
+@setup s11
+test l9340 {
+    select max(i) as max_i from mytable having max(i) < 3;
+}
+expect unordered {
+}
+
+test l9346 {
+    select '123433221e12343121231212' / 12;
+}
+expect unordered {
+    1.4980776123852632e307
+}
+
+test l9353 {
+    select '123433221e12343121231212' / 1;
+}
+expect unordered {
+    1.7976931348623157e308
+}
+
+test l9359 {
+    select '612312e12353423132434' > 0;
+}
+expect unordered {
+    1
+}
+
+test l9365 {
+    select '-612312e12353423132434' > 0;
+}
+expect unordered {
+    0
+}
+
+test l9378 {
+    select cast('61232343e124312434' as double);
+}
+expect unordered {
+    1.7976931348623157e308
+}

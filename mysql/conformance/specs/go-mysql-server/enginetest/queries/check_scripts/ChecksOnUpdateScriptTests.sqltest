@@ -1,0 +1,198 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/check_scripts.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (a INTEGER PRIMARY KEY, b INTEGER);
+    ALTER TABLE t1 ADD CONSTRAINT chk1 CHECK (b > 10) NOT ENFORCED;
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (b > 0);
+    ALTER TABLE t1 ADD CONSTRAINT chk3 CHECK ((a + b) / 2 >= 1) ENFORCED;
+    INSERT INTO t1 VALUES (1,1);
+}
+
+setup s2 {
+    CREATE TABLE sales (year_built int primary key, CONSTRAINT `valid_year_built` CHECK (year_built <= 2022));
+    INSERT INTO sales VALUES (1981);
+}
+
+setup s3 {
+    UPDATE sales JOIN (SELECT year_built FROM sales) AS t ON sales.year_built = t.year_built SET sales.year_built = 1901;
+}
+
+setup s4 {
+    CREATE TABLE locations (state char(2) primary key, CONSTRAINT `state` CHECK (state != 'GA'));
+    INSERT INTO locations VALUES ('WA');
+}
+
+setup s5 {
+    UPDATE sales JOIN locations SET sales.year_built = 2000, locations.state = 'CA';
+}
+
+@setup s1
+test l514 {
+    SELECT * FROM t1;
+}
+expect unordered {
+    1|1
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk2' is violated.
+@setup s1
+test l518 {
+    UPDATE t1 set b = 0;
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk3' is violated.
+@setup s1
+test l522 {
+    UPDATE t1 set a = 0, b = 1;
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk2' is violated.
+@setup s1
+test l526 {
+    UPDATE t1 set b = 0 WHERE b = 1;
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk3' is violated.
+@setup s1
+test l530 {
+    UPDATE t1 set a = 0, b = 1 WHERE b = 1;
+}
+expect error {
+}
+
+@setup s2
+test l543 {
+    UPDATE sales JOIN (SELECT year_built FROM sales) AS t ON sales.year_built = t.year_built SET sales.year_built = 1901;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+test l557 {
+    select * from sales;
+}
+expect unordered {
+    1901
+}
+
+@setup s2
+@setup s3
+test l575 {
+    select * from sales;
+}
+expect unordered {
+    1901
+}
+
+# mysql-error: 1288 HY000 The target table sales of the UPDATE is not updatable
+@setup s2
+@setup s3
+test l579 {
+    UPDATE sales as s1 JOIN (SELECT year_built FROM sales) AS t SET t.year_built = 1903;
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'valid_year_built' is violated.
+@setup s2
+@setup s3
+test l583 {
+    UPDATE sales JOIN (SELECT year_built FROM sales) AS t SET sales.year_built = 2030;
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'valid_year_built' is violated.
+@setup s2
+@setup s3
+test l587 {
+    UPDATE sales as s1 JOIN (SELECT year_built FROM sales) AS t SET s1.year_built = 2030;
+}
+expect error {
+}
+
+# mysql-error: 1288 HY000 The target table sales of the UPDATE is not updatable
+@setup s2
+@setup s3
+test l591 {
+    UPDATE sales as s1 JOIN (SELECT year_built FROM sales) AS t SET t.year_built = 2030;
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'state' is violated.
+@setup s2
+@setup s4
+test l606 {
+    UPDATE sales JOIN locations SET sales.year_built = 2000, locations.state = 'GA';
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'valid_year_built' is violated.
+@setup s2
+@setup s4
+test l610 {
+    UPDATE sales JOIN locations SET sales.year_built = 2025, locations.state = 'CA';
+}
+expect error {
+}
+
+@setup s2
+@setup s4
+test l614 {
+    select * from sales;
+}
+expect unordered {
+    1981
+}
+
+@setup s2
+@setup s4
+test l618 {
+    select * from locations;
+}
+expect unordered {
+    WA
+}
+
+@setup s2
+@setup s4
+test l622 {
+    UPDATE sales JOIN locations SET sales.year_built = 2000, locations.state = 'CA';
+}
+expect unordered {
+}
+
+@setup s2
+@setup s4
+@setup s5
+test l636 {
+    select * from sales;
+}
+expect unordered {
+    2000
+}
+
+@setup s2
+@setup s4
+@setup s5
+test l640 {
+    select * from locations;
+}
+expect unordered {
+    CA
+}

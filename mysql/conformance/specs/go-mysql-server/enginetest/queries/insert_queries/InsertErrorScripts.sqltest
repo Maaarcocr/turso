@@ -1,0 +1,64 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/insert_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table bad (s varchar(9));
+}
+
+setup s2 {
+    create table t (d datetime);
+}
+
+setup s3 {
+    create table t (d date);
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+test l2701 {
+    create table bad (pk int primary key, c0 int auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+test l2706 {
+    create table bad (pk1 int auto_increment, pk2 int auto_increment, primary key (pk1,pk2));
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'pk1'
+test l2711 {
+    create table bad (pk1 int auto_increment default 10, c0 int);
+}
+expect error {
+}
+
+# mysql-error: 1406 22001 Data too long for column 's' at row 1
+@setup s1
+test l2719 {
+    insert into bad values ('1234567890');
+}
+expect error {
+}
+
+# mysql-error: 1292 22007 Incorrect datetime value: '2020-01-01 a' for column 'd' at row 1
+@setup s2
+test l2735 {
+    insert into t values ('2020-01-01 a');
+}
+expect error {
+}
+
+# mysql-error: 1292 22007 Incorrect date value: '2020-01-01 a' for column 'd' at row 1
+@setup s3
+test l2743 {
+    insert into t values ('2020-01-01 a');
+}
+expect error {
+}

@@ -1,0 +1,133 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/vector_function_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table vectors (id int primary key, v json);
+    insert into vectors values (1, '[3.0,4.0]'), (2, '[0.0,0.0]'), (3, '[1.0,-1.0]'), (4, '[-2.0,0.0]');
+}
+
+# mysql-error: 1305 42000 FUNCTION test.STRING_TO_VECTOR does not exist
+test l113 {
+    SELECT STRING_TO_VECTOR("[1.0, 2.0]");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.TO_VECTOR does not exist
+test l117 {
+    SELECT TO_VECTOR("[1.0, 2.0]");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_FromText does not exist
+test l121 {
+    SELECT VEC_FromText("[1.0, 2.0]");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.STRING_TO_VECTOR does not exist
+test l126 {
+    SELECT STRING_TO_VECTOR("[0.0]");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.STRING_TO_VECTOR does not exist
+test l131 {
+    SELECT STRING_TO_VECTOR("[123456.78e2, -8765432.0]");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VECTOR_TO_STRING does not exist
+test l135 {
+    SELECT VECTOR_TO_STRING(STRING_TO_VECTOR("[1.0, 2.0]"));
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VECTOR_TO_STRING does not exist
+test l139 {
+    select VECTOR_TO_STRING(0x0000803F);
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.FROM_VECTOR does not exist
+test l144 {
+    SELECT FROM_VECTOR(TO_VECTOR("[1.0, 2.0]"));
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_ToText does not exist
+test l148 {
+    SELECT VEC_ToText(VEC_FromText("[1.0, 2.0]"));
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+test l161 {
+    select VEC_DISTANCE('[10.0]', '[20.0]');
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE_L2_SQUARED does not exist
+test l165 {
+    select VEC_DISTANCE_L2_SQUARED('[1.0, 2.0]', '[5.0, 5.0]');
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE_EUCLIDEAN does not exist
+test l169 {
+    select VEC_DISTANCE_EUCLIDEAN('[1.0, 2.0]', '[5.0, 5.0]');
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.DISTANCE does not exist
+test l173 {
+    SELECT DISTANCE(STRING_TO_VECTOR("[0.0, 0.0]"), STRING_TO_VECTOR("[3.0, 4.0]"), "EUCLIDEAN");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE_COSINE does not exist
+test l177 {
+    select VEC_DISTANCE_COSINE(STRING_TO_VECTOR('[0.0, 3.0]'), '[5.0, 5.0]');
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.DISTANCE does not exist
+test l181 {
+    SELECT DISTANCE("[1.0, 1.0]", STRING_TO_VECTOR("[-1.0, 1.0]"), "COSINE");
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+@setup s1
+test l185 {
+    select * from vectors order by VEC_DISTANCE('[0.0,0.0]', v);
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE_L2_SQUARED does not exist
+@setup s1
+test l194 {
+    select * from vectors order by VEC_DISTANCE_L2_SQUARED('[-2.0,0.0]', v);
+}
+expect error {
+}

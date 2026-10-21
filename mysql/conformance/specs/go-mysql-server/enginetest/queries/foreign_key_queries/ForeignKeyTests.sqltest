@@ -1,0 +1,3332 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/foreign_key_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE parent_pk (id INT PRIMARY KEY);
+    CREATE TABLE child_pk (id INT PRIMARY KEY, pid INT REFERENCES parent_pk(id));
+}
+
+setup s2 {
+    CREATE TABLE parent_uq (id INT PRIMARY KEY, u INT UNIQUE);
+    CREATE TABLE child_uq (id INT PRIMARY KEY, u INT REFERENCES parent_uq(u));
+}
+
+setup s3 {
+    CREATE TABLE parent (id INT PRIMARY KEY, v1 INT, v2 INT);
+    create index v1 on parent (v1);
+    create index v2 on parent (v2);
+}
+
+setup s4 {
+    CREATE TABLE child (id INT PRIMARY KEY, v1 INT, v2 INT);
+}
+
+setup s5 {
+    create table prefixParent(v varchar(100), index(v(1)));
+}
+
+setup s6 {
+    CREATE TABLE sibling (pk INT PRIMARY KEY, v1 TIME);
+}
+
+setup s7 {
+    CREATE TABLE parent1 (pk BIGINT PRIMARY KEY, v1 CHAR(20), INDEX (v1));
+}
+
+setup s8 {
+    CREATE TABLE parent2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX (v1));
+}
+
+setup s9 {
+    CREATE TABLE parent3 (pk BIGINT PRIMARY KEY, v1 BINARY(20), INDEX (v1));
+}
+
+setup s10 {
+    CREATE TABLE parent4 (pk BIGINT PRIMARY KEY, v1 VARBINARY(20), INDEX (v1));
+}
+
+setup s11 {
+    CREATE TABLE parent1 (id INT PRIMARY KEY, v1 TINYTEXT, v2 TEXT, v3 MEDIUMTEXT, v4 LONGTEXT);
+}
+
+setup s12 {
+    CREATE TABLE parent2 (id INT PRIMARY KEY, v1 TINYBLOB, v2 BLOB, v3 MEDIUMBLOB, v4 LONGBLOB);
+}
+
+setup s13 {
+    CREATE TABLE child (id INT PRIMARY KEY, v1 INT, v2 INT);
+}
+
+setup s14 {
+    ALTER TABLE child MODIFY v1 int NOT NULL;
+}
+
+setup s15 {
+    INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);
+    INSERT INTO child VALUES (1, 1, 1), (2, 3, 2);
+}
+
+setup s16 {
+    CREATE TABLE a_test (id INT PRIMARY KEY);
+    CREATE TABLE b_test(
+					a_id INT,
+					FOREIGN KEY (a_id) REFERENCES a_test (id)
+				);
+}
+
+setup s17 {
+    CREATE TABLE parent1 (pk BIGINT PRIMARY KEY);
+    CREATE TABLE child1 (pk BIGINT PRIMARY KEY, CONSTRAINT `fk` FOREIGN KEY (pk) REFERENCES parent1(pk));
+}
+
+setup s18 {
+    create table t ( i int primary key, j int, index(j), foreign key (j) references t(i));
+}
+
+setup s19 {
+    create table grandparent1 (pk int primary key);
+    create table parent1 (pk int primary key, c1 int references grandparent1(pk));
+    create table parent2 (pk int primary key);
+    create table child1 (pk int primary key, c1 int, c2 int, foreign key (c1) references parent1(pk), foreign key (c2) references parent2(pk));
+    create table selfref (pk int primary key, c1 int, foreign key (c1) references selfref(pk));
+}
+
+setup s20 {
+    ALTER TABLE child ADD INDEX v1 (v1);
+}
+
+setup s21 {
+    ALTER TABLE child DROP INDEX v1;
+}
+
+setup s22 {
+    ALTER TABLE parent DROP INDEX v1;
+}
+
+setup s23 {
+    INSERT INTO parent2 VALUES (1, 'aa'), (2, 'bb');
+}
+
+setup s24 {
+    ALTER TABLE parent1 MODIFY v1 CHAR(10);
+}
+
+setup s25 {
+    ALTER TABLE parent2 MODIFY v1 VARCHAR(10);
+}
+
+setup s26 {
+    ALTER TABLE parent3 MODIFY v1 BINARY(10);
+}
+
+setup s27 {
+    ALTER TABLE parent4 MODIFY v1 VARBINARY(10);
+}
+
+setup s28 {
+    CREATE TABLE parent1 (pk INT PRIMARY KEY, v1 INT UNSIGNED, v2 INT UNSIGNED, INDEX (v1));
+    INSERT INTO parent1 VALUES (1, 2, 3), (4, 5, 6);
+}
+
+setup s29 {
+    ALTER TABLE parent1 MODIFY v1 BIGINT;
+}
+
+setup s30 {
+    ALTER TABLE parent DROP COLUMN v1;
+}
+
+setup s31 {
+    ALTER TABLE child DROP COLUMN v1;
+}
+
+setup s32 {
+    CREATE TABLE one (pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT, INDEX v1 (v1));
+}
+
+setup s33 {
+    INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+}
+
+setup s34 {
+    UPDATE one SET v1 = v1 + v2;
+    DELETE one FROM one WHERE pk = 3;
+}
+
+setup s35 {
+    INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+    UPDATE one SET v1 = v1 * v2;
+    INSERT INTO one VALUES (4, 4, 4);
+    UPDATE one SET v2 = v1 * v2;
+}
+
+setup s36 {
+    INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+}
+
+setup s37 {
+    UPDATE one SET v1 = v1 + v2;
+}
+
+setup s38 {
+    UPDATE one SET v1 = v1;
+}
+
+setup s39 {
+    CREATE TABLE one (pk int PRIMARY KEY);
+}
+
+setup s40 {
+    CREATE TABLE two (pk int PRIMARY KEY);
+    CREATE TABLE three (pk int PRIMARY KEY, fk3 int, CONSTRAINT fk_3 FOREIGN KEY (fk3) REFERENCES one(pk) ON DELETE CASCADE);
+    CREATE TABLE four (pk int PRIMARY KEY, fk4 int, CONSTRAINT fk_4 FOREIGN KEY (fk4) REFERENCES two(pk) ON DELETE CASCADE);
+}
+
+setup s41 {
+    CREATE TABLE three (pk int PRIMARY KEY, fk3 int, CONSTRAINT fk_3 FOREIGN KEY (fk3) REFERENCES one(pk) ON DELETE CASCADE);
+}
+
+setup s42 {
+    CREATE TABLE two (pk int PRIMARY KEY);
+    CREATE TABLE four (pk int PRIMARY KEY, fk4 int, CONSTRAINT fk_4 FOREIGN KEY (fk4) REFERENCES two(pk) ON DELETE CASCADE);
+}
+
+setup s43 {
+    INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+}
+
+setup s44 {
+    UPDATE one SET v1 = v1 + v2;
+}
+
+setup s45 {
+    UPDATE one SET v1 = v1;
+}
+
+setup s46 {
+    CREATE INDEX v1v2 ON parent(v1, v2);
+}
+
+setup s47 {
+    INSERT INTO parent VALUES (1, 1, 1), (2, 2, 1), (3, 3, NULL);
+    UPDATE parent SET v1 = 1 WHERE id = 1;
+    UPDATE parent SET v1 = 4 WHERE id = 3;
+    DELETE FROM parent WHERE id = 3;
+}
+
+setup s48 {
+    DELETE FROM parent WHERE v1 = 1;
+}
+
+setup s49 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s50 {
+    INSERT INTO parent VALUES (1, 1, 1), (2, 2, 1), (3, 3, NULL);
+    UPDATE parent SET v1 = 1 WHERE id = 1;
+    UPDATE parent SET v1 = 4 WHERE id = 3;
+    DELETE FROM parent WHERE id = 3;
+}
+
+setup s51 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s52 {
+    REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);
+}
+
+setup s53 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s54 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+
+setup s55 {
+    REPLACE INTO parent VALUES (1, 1, 2), (2, 2, 1);
+}
+
+setup s56 {
+    UPDATE parent SET v2 = 2 WHERE id = 1;
+}
+
+setup s57 {
+    UPDATE parent SET v2 = 1 WHERE id = 2;
+}
+
+setup s58 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s59 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+
+setup s60 {
+    DELETE FROM parent WHERE v1 = 1;
+}
+
+setup s61 {
+    INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);
+    UPDATE parent SET v1 = 1 WHERE id = 1;
+    UPDATE parent SET v1 = 4 WHERE id = 3;
+    DELETE FROM parent WHERE id = 3;
+}
+
+setup s62 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s63 {
+    REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);
+}
+
+setup s64 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s65 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+
+setup s66 {
+    REPLACE INTO parent VALUES (1,1,2), (2,2,1);
+}
+
+setup s67 {
+    UPDATE parent SET v2 = 2 WHERE id = 1;
+}
+
+setup s68 {
+    UPDATE parent SET v2 = 1 WHERE id = 2;
+}
+
+setup s69 {
+    UPDATE parent SET v1 = 2;
+}
+
+setup s70 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+
+setup s71 {
+    DELETE FROM parent WHERE v1 = 1;
+}
+
+setup s72 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE, v2 BIGINT UNIQUE, v3 BIGINT UNIQUE, v4 BIGINT UNIQUE,v5 BIGINT UNIQUE, v6 BIGINT UNIQUE, v7 BIGINT UNIQUE,CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES test (pk),CONSTRAINT fk2 FOREIGN KEY (v2) REFERENCES test (pk),CONSTRAINT fk3 FOREIGN KEY (v3) REFERENCES test (pk),CONSTRAINT fk4 FOREIGN KEY (v4) REFERENCES test (pk),CONSTRAINT fk5 FOREIGN KEY (v5) REFERENCES test (pk),CONSTRAINT fk6 FOREIGN KEY (v6) REFERENCES test (pk),CONSTRAINT fk7 FOREIGN KEY (v7) REFERENCES test (pk));
+}
+
+setup s73 {
+    CREATE TABLE under_limit(pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX idx_v1(v1));
+    INSERT INTO under_limit VALUES (1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(7,8),(8,9),(9,10),(10,11),(11,12),(12,13),(13,14),(14,1);
+    ALTER TABLE under_limit ADD CONSTRAINT fk_under FOREIGN KEY (v1) REFERENCES under_limit(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+}
+
+setup s74 {
+    CREATE TABLE over_limit(pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX idx_v1(v1));
+    INSERT INTO over_limit VALUES (1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(7,8),(8,9),(9,10),(10,11),(11,12),(12,13),(13,14),(14,15),(15,1);
+    ALTER TABLE over_limit ADD CONSTRAINT fk_over FOREIGN KEY (v1) REFERENCES over_limit(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+}
+
+setup s75 {
+    DELETE FROM over_limit WHERE pk = 0;
+}
+
+setup s76 {
+    UPDATE over_limit SET pk = 1 WHERE pk = 1;
+}
+
+setup s77 {
+    CREATE TABLE under_cycle1(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);
+    CREATE TABLE under_cycle2(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);
+}
+
+setup s78 {
+    INSERT INTO under_cycle1 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7);
+    INSERT INTO under_cycle2 VALUES (1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(7,1);
+    ALTER TABLE under_cycle1 ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES under_cycle2(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+    ALTER TABLE under_cycle2 ADD CONSTRAINT fk2 FOREIGN KEY (v1) REFERENCES under_cycle1(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+}
+
+setup s79 {
+    CREATE TABLE over_cycle1(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);
+    CREATE TABLE over_cycle2(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);
+}
+
+setup s80 {
+    INSERT INTO over_cycle1 VALUES (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8);
+    INSERT INTO over_cycle2 VALUES (1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(7,8),(8,1);
+    ALTER TABLE over_cycle1 ADD CONSTRAINT fk3 FOREIGN KEY (v1) REFERENCES over_cycle2(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+    ALTER TABLE over_cycle2 ADD CONSTRAINT fk4 FOREIGN KEY (v1) REFERENCES over_cycle1(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+}
+
+setup s81 {
+    CREATE TABLE under_cycle3(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);
+    INSERT INTO under_cycle1 VALUES (1,1),(2,2),(3,3),(4,4);
+    INSERT INTO under_cycle2 VALUES (1,1),(2,2),(3,3),(4,4);
+    INSERT INTO under_cycle3 VALUES (1,2),(2,3),(3,4),(4,1);
+    ALTER TABLE under_cycle1 ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES under_cycle2(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+    ALTER TABLE under_cycle2 ADD CONSTRAINT fk2 FOREIGN KEY (v1) REFERENCES under_cycle3(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+    ALTER TABLE under_cycle3 ADD CONSTRAINT fk3 FOREIGN KEY (v1) REFERENCES under_cycle1(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+}
+
+setup s82 {
+    CREATE TABLE over_cycle3(pk BIGINT PRIMARY KEY, v1 BIGINT UNIQUE);
+    INSERT INTO over_cycle1 VALUES (1,1),(2,2),(3,3),(4,4),(5,5);
+    INSERT INTO over_cycle2 VALUES (1,1),(2,2),(3,3),(4,4),(5,5);
+    INSERT INTO over_cycle3 VALUES (1,2),(2,3),(3,4),(4,5),(5,1);
+    ALTER TABLE over_cycle1 ADD CONSTRAINT fk4 FOREIGN KEY (v1) REFERENCES over_cycle2(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+    ALTER TABLE over_cycle2 ADD CONSTRAINT fk5 FOREIGN KEY (v1) REFERENCES over_cycle3(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+    ALTER TABLE over_cycle3 ADD CONSTRAINT fk6 FOREIGN KEY (v1) REFERENCES over_cycle1(pk) ON UPDATE CASCADE ON DELETE CASCADE;
+}
+
+setup s83 {
+    CREATE TABLE t1(pk BIGINT PRIMARY KEY);
+    CREATE TABLE t2(pk BIGINT PRIMARY KEY, CONSTRAINT fk1 FOREIGN KEY (pk) REFERENCES t1(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+}
+
+setup s84 {
+    INSERT INTO t1 VALUES (1);
+}
+
+setup s85 {
+    CREATE TABLE t3(pk BIGINT PRIMARY KEY, CONSTRAINT fk2 FOREIGN KEY (pk) REFERENCES t2(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t4(pk BIGINT PRIMARY KEY, CONSTRAINT fk3 FOREIGN KEY (pk) REFERENCES t3(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t5(pk BIGINT PRIMARY KEY, CONSTRAINT fk4 FOREIGN KEY (pk) REFERENCES t4(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t6(pk BIGINT PRIMARY KEY, CONSTRAINT fk5 FOREIGN KEY (pk) REFERENCES t5(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t7(pk BIGINT PRIMARY KEY, CONSTRAINT fk6 FOREIGN KEY (pk) REFERENCES t6(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t8(pk BIGINT PRIMARY KEY, CONSTRAINT fk7 FOREIGN KEY (pk) REFERENCES t7(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t9(pk BIGINT PRIMARY KEY, CONSTRAINT fk8 FOREIGN KEY (pk) REFERENCES t8(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t10(pk BIGINT PRIMARY KEY, CONSTRAINT fk9 FOREIGN KEY (pk) REFERENCES t9(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t11(pk BIGINT PRIMARY KEY, CONSTRAINT fk10 FOREIGN KEY (pk) REFERENCES t10(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t12(pk BIGINT PRIMARY KEY, CONSTRAINT fk11 FOREIGN KEY (pk) REFERENCES t11(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t13(pk BIGINT PRIMARY KEY, CONSTRAINT fk12 FOREIGN KEY (pk) REFERENCES t12(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t14(pk BIGINT PRIMARY KEY, CONSTRAINT fk13 FOREIGN KEY (pk) REFERENCES t13(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t15(pk BIGINT PRIMARY KEY, CONSTRAINT fk14 FOREIGN KEY (pk) REFERENCES t14(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+    CREATE TABLE t16(pk BIGINT PRIMARY KEY, CONSTRAINT fk15 FOREIGN KEY (pk) REFERENCES t15(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+}
+
+setup s86 {
+    DELETE FROM t1;
+}
+
+setup s87 {
+    UPDATE t1 SET pk = 2;
+}
+
+setup s88 {
+    CREATE TABLE colors (id INT NOT NULL, color VARCHAR(32) NOT NULL, PRIMARY KEY (id), INDEX color_index(color));
+    INSERT INTO colors (id, color) VALUES (1, 'red'), (2, 'green'), (3, 'blue'), (4, 'purple');
+}
+
+setup s89 {
+    DELETE FROM colors where color='green';
+}
+
+setup s90 {
+    set foreign_key_checks=0;
+    create table delayed_parent(pk int primary key);
+    create table delayed_child(pk int primary key, foreign key(pk) references delayed_parent(pk));
+    insert into delayed_child values (1), (20);
+    set foreign_key_checks=1;
+}
+
+setup s91 {
+    update delayed_child set pk=3 where pk=3;
+}
+
+setup s92 {
+    update delayed_child set pk=20 where pk=20;
+}
+
+setup s93 {
+    delete from delayed_child where false;
+}
+
+setup s94 {
+    delete from delayed_child where pk = 20;
+}
+
+setup s95 {
+    SET FOREIGN_KEY_CHECKS=0;
+}
+
+setup s96 {
+    CREATE TABLE delayed_parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+    SET FOREIGN_KEY_CHECKS=1;
+}
+
+setup s97 {
+    CREATE TABLE delayed_child (pk INT PRIMARY KEY, v1 INT, CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1));
+    INSERT INTO delayed_child VALUES (1, 2);
+    SET FOREIGN_KEY_CHECKS=1;
+}
+
+setup s98 {
+    CREATE TABLE valid_delayed_child (i INT, CONSTRAINT valid_fk FOREIGN KEY (i) REFERENCES delayed_parent(i));
+}
+
+setup s99 {
+    SET FOREIGN_KEY_CHECKS=1;
+}
+
+setup s100 {
+    CREATE TABLE delayed_parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+}
+
+setup s101 {
+    TRUNCATE parent;
+}
+
+setup s102 {
+    SET FOREIGN_KEY_CHECKS=1;
+}
+
+setup s103 {
+    CREATE TABLE parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+}
+
+setup s104 {
+    INSERT INTO child VALUES (4, 5, 6);
+}
+
+setup s105 {
+    INSERT INTO parent VALUES (1, 5);
+}
+
+setup s106 {
+    CREATE TABLE parent (a INT, b INT, c INT, PRIMARY KEY (b, a));
+    CREATE TABLE child (a INT PRIMARY KEY, b INT);
+}
+
+setup s107 {
+    CREATE TABLE parent(fk1 int, fk2 int, primary key(fk1, fk2));
+}
+
+setup s108 {
+    CREATE TABLE parent(pk DOUBLE PRIMARY KEY, v1 BIGINT, v2 BIGINT, INDEX(v1, v2, pk));
+}
+
+setup s109 {
+    INSERT INTO parent VALUES (1, 1, 1), (2, 1, 2);
+    CREATE TABLE child(pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT);
+    INSERT INTO child VALUES (1, 2, 1);
+}
+
+setup s110 {
+    create table t1 (i int primary key, J int, constraint fk1 foreign key (J) references t1(i));
+}
+
+setup s111 {
+    insert into t1 values (1, 1);
+}
+
+setup s112 {
+    create table t2 (I int primary key, j int, constraint fk2 foreign key (j) references t2(I));
+}
+
+setup s113 {
+    insert into t2 values (1, 1);
+}
+
+setup s114 {
+    create table t3 (i int primary key, j int, constraint fk3 foreign key (J) references t3(I));
+}
+
+setup s115 {
+    insert into t3 values (1, 1);
+}
+
+setup s116 {
+    CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT, INDEX (v1), INDEX (v2), INDEX (v1, v2));
+    INSERT INTO parent VALUES (1,1,1), (2,2,2), (3,3,3);
+}
+
+setup s117 {
+    DELETE FROM parent WHERE pk = 1;
+}
+
+setup s118 {
+    INSERT INTO parent values (1,1,1),(2,2,2),(3,3,3);
+}
+
+setup s119 {
+    CREATE table parent1 (pk BIGINT PRIMARY KEY, v1 BIGINT);
+    CREATE table child1 (pk BIGINT PRIMARY KEY, v1 BIGINT, FOREIGN KEY (v1) REFERENCES parent1(pk) ON UPDATE CASCADE ON DELETE CASCADE);
+}
+
+setup s120 {
+    INSERT INTO parent1 VALUES (1, 1);
+}
+
+setup s121 {
+    CREATE table parent1 (pk1 BIGINT, pk2 BIGINT, v1 BIGINT, PRIMARY KEY(pk1, pk2));
+    CREATE table child1 (pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT, FOREIGN KEY (v1, v2) REFERENCES parent1(pk1, pk2) ON UPDATE CASCADE ON DELETE CASCADE);
+}
+
+setup s122 {
+    INSERT INTO parent1 VALUES (1, 2, 3), (4, 5, 6);
+}
+
+setup s123 {
+    CREATE TABLE one (v0 BIGINT, v1 BIGINT, INDEX one_v0 (v0), INDEX one_v1 (v1));
+    INSERT INTO one VALUES (1, 2);
+    UPDATE one SET v1 = v0 + v1;
+    DELETE FROM one WHERE v0 = 1;
+}
+
+setup s124 {
+    CREATE TABLE one (v0 BIGINT, v1 BIGINT, v2 BIGINT, INDEX idx (v0));
+    ALTER TABLE one ADD INDEX v1 (v1);
+    INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+    UPDATE one SET v1 = v1 + v2;
+    DELETE FROM one WHERE v0 = 3;
+}
+
+setup s125 {
+    create table a (x int, y int, primary key (x,y), INDEX `a_y_idx` (y));
+}
+
+setup s126 {
+    INSERT into a (x, y) VALUES (1, 3);
+}
+
+setup s127 {
+    create table a (x int, y int, primary key (y,x));
+}
+
+setup s128 {
+    INSERT into a (x, y) VALUES (1, 3);
+}
+
+setup s129 {
+    INSERT into a VALUES (1, 3);
+}
+
+setup s130 {
+    UPDATE a SET y = 4 where y = 3;
+}
+
+setup s131 {
+    INSERT into a VALUES (1, 3);
+}
+
+setup s132 {
+    UPDATE a SET y = 4 where y = 3;
+}
+
+setup s133 {
+    DELETE from a where x = 1 AND y = 3;
+}
+
+setup s134 {
+    DELETE from a where x = 1 AND y = 3;
+}
+
+setup s135 {
+    CREATE TABLE t1 (pk char(32) COLLATE utf8mb4_0900_ai_ci PRIMARY KEY);
+}
+
+setup s136 {
+    create table parent1 (fk1 int, pk1 int, pk2 int, pk3 int, primary key(pk1, pk2, pk3), index (fk1, pk2));
+    insert into parent1 values (0, 1, 2, 3);
+    create table child1 (fk1 int, pk1 int, pk2 int, pk3 int, primary key (pk1, pk2, pk3));
+}
+
+setup s137 {
+    insert into child1 values (0, 1, 2, 3);
+}
+
+setup s138 {
+    insert into child1 values (0, 99, 2, 99);
+}
+
+setup s139 {
+    create table child2 (fk1 int, pk1 int, pk2 int, pk3 int, primary key (pk1, pk2, pk3));
+}
+
+setup s140 {
+    insert into child2 values (0, 1, 2, 3);
+}
+
+setup s141 {
+    insert into child2 values (0, 1, 2, 99);
+}
+
+setup s142 {
+    create table child3 (fk1 int, pk1 int, pk2 int, pk3 int, primary key (pk1, pk2, pk3));
+}
+
+setup s143 {
+    insert into child3 values (0, 1, 2, 3);
+}
+
+setup s144 {
+    create table child4 (fk1 int, pk1 int, pk2 int, pk3 int, primary key (pk1, pk2, pk3));
+    create index idx4 on child4 (fk1, pk2);
+}
+
+setup s145 {
+    create table theparent (i int primary key);
+    create table child1 (j int primary key);
+}
+
+setup s146 {
+    alter table child1 add foreign key (j) references theparent (i);
+}
+
+setup s147 {
+    alter table child1 add foreign key (j) references theparent (i);
+}
+
+setup s148 {
+    create table child2 (j int primary key);
+}
+
+setup s149 {
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+}
+
+setup s150 {
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+}
+
+setup s151 {
+    alter table child2 add foreign key (j) references theparent (i);
+}
+
+setup s152 {
+    create table child3 (j int primary key);
+}
+
+setup s153 {
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+    alter table child2 add foreign key (j) references theparent (i);
+}
+
+setup s154 {
+    alter table child3 add constraint `child3_ibfk_100` foreign key (j) references theparent (i);
+}
+
+setup s155 {
+    create table child4 (j int primary key);
+}
+
+setup s156 {
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+    alter table child2 add foreign key (j) references theparent (i);
+    alter table child3 add constraint `child3_ibfk_100` foreign key (j) references theparent (i);
+    alter table child3 add foreign key (j) references theparent (i);
+}
+
+setup s157 {
+    alter table child4 add constraint `CHILD4_IBFK_1` foreign key (j) references theparent (i);
+}
+
+setup s158 {
+    create table child5 (j int primary key);
+}
+
+setup s159 {
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+    alter table child2 add foreign key (j) references theparent (i);
+    alter table child3 add constraint `child3_ibfk_100` foreign key (j) references theparent (i);
+    alter table child3 add foreign key (j) references theparent (i);
+    alter table child4 add constraint `CHILD4_IBFK_1` foreign key (j) references theparent (i);
+}
+
+setup s160 {
+    alter table child5 add constraint `child5_ibfk_-2` foreign key (j) references theparent (i);
+}
+
+setup s161 {
+    alter table child5 add foreign key (j) references theparent (i);
+}
+
+setup s162 {
+    alter table child5 add foreign key (j) references theparent (i);
+}
+
+setup s163 {
+    create table child6 (j int primary key);
+}
+
+setup s164 {
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+    alter table child2 add foreign key (j) references theparent (i);
+    alter table child3 add constraint `child3_ibfk_100` foreign key (j) references theparent (i);
+    alter table child3 add foreign key (j) references theparent (i);
+    alter table child4 add constraint `CHILD4_IBFK_1` foreign key (j) references theparent (i);
+    alter table child5 add constraint `child5_ibfk_-2` foreign key (j) references theparent (i);
+    alter table child5 add foreign key (j) references theparent (i);
+    alter table child5 add foreign key (j) references theparent (i);
+}
+
+setup s165 {
+    alter table child6 add constraint `` foreign key (j) references theparent (i);
+}
+
+setup s166 {
+    alter table child6 add foreign key (j) references theparent (i);
+}
+
+setup s167 {
+    create table child7 (j int primary key);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child1 add foreign key (j) references theparent (i);
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+    alter table child2 add foreign key (j) references theparent (i);
+    alter table child3 add constraint `child3_ibfk_100` foreign key (j) references theparent (i);
+    alter table child3 add foreign key (j) references theparent (i);
+    alter table child4 add constraint `CHILD4_IBFK_1` foreign key (j) references theparent (i);
+    alter table child5 add constraint `child5_ibfk_-2` foreign key (j) references theparent (i);
+    alter table child5 add foreign key (j) references theparent (i);
+    alter table child5 add foreign key (j) references theparent (i);
+    alter table child6 add constraint `` foreign key (j) references theparent (i);
+    alter table child6 add foreign key (j) references theparent (i);
+    alter table child1 add constraint `child7_ibfk_1` foreign key (j) references theparent (i);
+}
+
+setup s168 {
+    CREATE TABLE child1 (
+				id int NOT NULL,
+				v1 int DEFAULT NULL,
+				v2 int DEFAULT NULL,
+				PRIMARY KEY (id),
+				KEY fk_name (v1),
+				KEY (id, v1)
+			);
+    CREATE TABLE parent2 (
+				v1 int NOT NULL,
+				v2 int NOT NULL,
+				v3 int NOT NULL,
+				v4 int NOT NULL,
+				v5 int NOT NULL,
+				PRIMARY KEY (v1),
+				KEY fk1 (v4),
+				KEY v2 (v5)
+			);
+}
+
+setup s169 {
+    create table parent1 (i int primary key);
+}
+
+setup s170 {
+    create table child1 (i int primary key, j int, k int, index(j), index(k), foreign key (j) references parent1 (i),foreign key (k) references parent1 (i));
+    set foreign_key_checks = 0;
+    insert into child1 values (101, 2, 2);
+    set foreign_key_checks = 1;
+}
+
+setup s171 {
+    create table child1 (j int, k int, foreign key (j) references parent1(i) on delete cascade on update cascade, foreign key (k) references parent1 (i) on delete cascade on update cascade);
+}
+
+setup s172 {
+    insert into parent1 values (1), (2), (3);
+}
+
+setup s173 {
+    update parent1 set i = 20 where i = 2;
+}
+
+setup s174 {
+    delete from parent1 where i = 1;
+}
+
+setup s175 {
+    CREATE TABLE vc_parent (id int PRIMARY KEY);
+}
+
+setup s176 {
+    CREATE TABLE vc_child (id int PRIMARY KEY, parentId int, vcol int AS (parentId) VIRTUAL, UNIQUE KEY uk (vcol), FOREIGN KEY (parentId) REFERENCES vc_parent(id) ON UPDATE CASCADE);
+}
+
+setup s177 {
+    CREATE TABLE vc_child (id int PRIMARY KEY, parentId int, v1 int AS (parentId) VIRTUAL, v2 int AS (v1 + 100) VIRTUAL, UNIQUE KEY uk (v2), FOREIGN KEY (parentId) REFERENCES vc_parent(id) ON UPDATE CASCADE);
+}
+
+setup s178 {
+    CREATE TABLE vc_child (id int PRIMARY KEY, parentId int, vcol int AS (parentId) VIRTUAL, UNIQUE KEY uk (vcol), FOREIGN KEY (parentId) REFERENCES vc_parent(id) ON DELETE SET NULL);
+}
+
+setup s179 {
+    CREATE TABLE vc_child (id int PRIMARY KEY, parentId int, vcol int AS (parentId) VIRTUAL, UNIQUE KEY uk (vcol), FOREIGN KEY (parentId) REFERENCES vc_parent(id) ON UPDATE SET NULL);
+}
+
+setup s180 {
+    CREATE TABLE vc_t (id int PRIMARY KEY, parentId int, parentKey int AS (parentId) VIRTUAL, UNIQUE KEY uk (parentKey), FOREIGN KEY (parentId) REFERENCES vc_t(id) ON DELETE SET NULL);
+    INSERT INTO vc_t (id, parentId) VALUES (1, NULL), (2, 1), (3, 2);
+    DELETE FROM vc_t WHERE id = 2;
+}
+
+setup s181 {
+    CREATE TABLE vc_t2 (id int PRIMARY KEY, parentId int, parentKey int AS (parentId) VIRTUAL, UNIQUE KEY uk (parentKey), FOREIGN KEY (parentId) REFERENCES vc_t2(id) ON DELETE CASCADE);
+    INSERT INTO vc_t2 (id, parentId) VALUES (1, NULL), (2, 1);
+}
+
+setup s182 {
+    DELETE FROM vc_t2 WHERE id = 1;
+}
+
+setup s183 {
+    INSERT INTO vc_t2 (id, parentId) VALUES (3, NULL), (4, 3);
+}
+
+setup s184 {
+    CREATE TABLE vc_parent2 (id int PRIMARY KEY);
+    CREATE TABLE vc_child2 (id int PRIMARY KEY, parentId int, doubled int AS (parentId * 2) VIRTUAL, note varchar(10), KEY idx_doubled (doubled), FOREIGN KEY (parentId) REFERENCES vc_parent2(id) ON DELETE CASCADE);
+}
+
+setup s185 {
+    INSERT INTO vc_parent2 VALUES (1), (2);
+}
+
+@setup s1
+test l72 {
+    INSERT INTO child_pk VALUES (1, 999);
+}
+expect unordered {
+}
+
+@setup s2
+test l76 {
+    INSERT INTO child_uq VALUES (1, 999);
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk1' in the referenced table 'parent'
+@setup s3
+@setup s4
+test l85 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2);
+}
+expect error {
+}
+
+@setup s3
+@setup s4
+test l89 {
+    ALTER TABLE child ADD CONSTRAINT fk_id FOREIGN KEY (v1) REFERENCES parent(id);
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'prefixChild_ibfk_1' in the referenced table 'prefixParent'
+@setup s5
+test l101 {
+    create table prefixChild(v varchar(100), foreign key (v) references prefixParent(v));
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_name' in the referenced table 'parent'
+@setup s3
+test l110 {
+    CREATE TABLE child2 (id INT PRIMARY KEY, v1 INT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1), CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1));
+}
+expect error {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'v1' and referenced column 'v1' in foreign key constraint 'fk1' are incompatible.
+@setup s3
+@setup s6
+test l122 {
+    ALTER TABLE sibling ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child1' in the referenced table 'parent1'
+@setup s7
+test l137 {
+    CREATE TABLE child1 (pk BIGINT PRIMARY KEY, v1 CHAR(30), CONSTRAINT fk_child1 FOREIGN KEY (v1) REFERENCES parent1 (v1));
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child2' in the referenced table 'parent2'
+@setup s8
+test l141 {
+    CREATE TABLE child2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(30), CONSTRAINT fk_child2 FOREIGN KEY (v1) REFERENCES parent2 (v1));
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child3' in the referenced table 'parent3'
+@setup s9
+test l145 {
+    CREATE TABLE child3 (pk BIGINT PRIMARY KEY, v1 BINARY(30), CONSTRAINT fk_child3 FOREIGN KEY (v1) REFERENCES parent3 (v1));
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child4' in the referenced table 'parent4'
+@setup s10
+test l148 {
+    CREATE TABLE child4 (pk BIGINT PRIMARY KEY, v1 VARBINARY(30), CONSTRAINT fk_child4 FOREIGN KEY (v1) REFERENCES parent4 (v1));
+}
+expect error {
+}
+
+# mysql-error: 1239 42000 Incorrect foreign key definition for 'fk1': Key reference and table reference don't match
+@setup s3
+@setup s4
+test l157 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1, v2);
+}
+expect error {
+}
+
+# mysql-error: 1239 42000 Incorrect foreign key definition for 'fk1': Key reference and table reference don't match
+@setup s3
+@setup s4
+test l161 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1, v2) REFERENCES parent(v1);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk1' in the referenced table 'parent'
+@setup s3
+@setup s4
+test l171 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET DEFAULT;
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk1' in the referenced table 'parent'
+@setup s3
+@setup s4
+test l175 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON UPDATE SET DEFAULT;
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk1' in the referenced table 'parent'
+@setup s3
+@setup s4
+test l179 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON UPDATE SET DEFAULT ON DELETE SET DEFAULT;
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v1' used in key specification without a key length
+@setup s11
+test l192 {
+    CREATE TABLE child11 (id INT PRIMARY KEY, parent_v1 TINYTEXT, FOREIGN KEY (parent_v1) REFERENCES parent1(v1));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v2' used in key specification without a key length
+@setup s11
+test l196 {
+    CREATE TABLE child12 (id INT PRIMARY KEY, parent_v2 TEXT, FOREIGN KEY (parent_v2) REFERENCES parent1(v2));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v3' used in key specification without a key length
+@setup s11
+test l200 {
+    CREATE TABLE child13 (id INT PRIMARY KEY, parent_v3 MEDIUMTEXT, FOREIGN KEY (parent_v3) REFERENCES parent1(v3));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v4' used in key specification without a key length
+@setup s11
+test l204 {
+    CREATE TABLE child14 (id INT PRIMARY KEY, parent_v4 LONGTEXT, FOREIGN KEY (parent_v4) REFERENCES parent1(v4));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v1' used in key specification without a key length
+@setup s12
+test l208 {
+    CREATE TABLE child21 (id INT PRIMARY KEY, parent_v1 TINYBLOB, FOREIGN KEY (parent_v1) REFERENCES parent2(v1));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v2' used in key specification without a key length
+@setup s12
+test l212 {
+    CREATE TABLE child22 (id INT PRIMARY KEY, parent_v2 BLOB, FOREIGN KEY (parent_v2) REFERENCES parent2(v2));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v3' used in key specification without a key length
+@setup s12
+test l216 {
+    CREATE TABLE child23 (id INT PRIMARY KEY, parent_v3 MEDIUMBLOB, FOREIGN KEY (parent_v3) REFERENCES parent2(v3));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'parent_v4' used in key specification without a key length
+@setup s12
+test l220 {
+    CREATE TABLE child24 (id INT PRIMARY KEY, parent_v4 LONGBLOB, FOREIGN KEY (parent_v4) REFERENCES parent2(v4));
+}
+expect error {
+}
+
+# mysql-error: 1824 HY000 Failed to open the referenced table 'father'
+@setup s13
+test l229 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES father(v1);
+}
+expect error {
+}
+
+# mysql-error: 1072 42000 Key column 'random' doesn't exist in table
+@setup s3
+@setup s4
+test l238 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (random) REFERENCES parent(v1);
+}
+expect error {
+}
+
+# mysql-error: 3734 HY000 Failed to add the foreign key constraint. Missing column 'random' for constraint 'fk1' in the referenced table 'parent'
+@setup s3
+@setup s4
+test l242 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(random);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_name' in the referenced table 'parent'
+@setup s3
+@setup s4
+test l254 {
+    ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'fk_name'; check that column/key exists
+@setup s3
+@setup s4
+test l270 {
+    ALTER TABLE child DROP FOREIGN KEY fk_name;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'fk_name'; check that column/key exists
+@setup s3
+@setup s4
+test l278 {
+    ALTER TABLE child DROP FOREIGN KEY fk_name;
+}
+expect error {
+}
+
+# mysql-error: 1830 HY000 Column 'v1' cannot be NOT NULL: needed in a foreign key constraint 'fk1' SET NULL
+@setup s3
+@setup s4
+@setup s14
+test l290 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL;
+}
+expect error {
+}
+
+# mysql-error: 1830 HY000 Column 'v1' cannot be NOT NULL: needed in a foreign key constraint 'fk1' SET NULL
+@setup s3
+@setup s4
+@setup s14
+test l294 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON UPDATE SET NULL;
+}
+expect error {
+}
+
+# mysql-error: 1830 HY000 Column 'v1' cannot be NOT NULL: needed in a foreign key constraint 'fk1' SET NULL
+@setup s3
+@setup s4
+@setup s14
+test l298 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL ON UPDATE SET NULL;
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_name' in the referenced table 'parent'
+@setup s3
+@setup s4
+@setup s15
+test l311 {
+    ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
+}
+expect error {
+}
+
+@setup s3
+@setup s4
+test l328 {
+    RENAME TABLE child TO new_child;
+}
+expect unordered {
+}
+
+@setup s16
+test l349 {
+    RENAME TABLE b_test TO c_test;
+}
+expect unordered {
+}
+
+@setup s17
+test l373 {
+    RENAME TABLE child1 TO new_child1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l389 {
+    DROP TABLE parent;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l393 {
+    DROP TABLE child;
+}
+expect unordered {
+}
+
+@setup s18
+test l409 {
+    DROP TABLE t;
+}
+expect unordered {
+}
+
+@setup s19
+test l425 {
+    DROP TABLE grandparent1, parent1, parent2, selfref, child1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+@setup s20
+test l438 {
+    ALTER TABLE child DROP INDEX v1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+@setup s20
+test l442 {
+    ALTER TABLE parent DROP INDEX v1;
+}
+expect unordered {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'fk_name'; check that column/key exists
+@setup s3
+@setup s4
+@setup s20
+@setup s21
+test l446 {
+    ALTER TABLE child DROP FOREIGN KEY fk_name;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'v1'; check that column/key exists
+@setup s3
+@setup s4
+@setup s20
+@setup s21
+test l450 {
+    ALTER TABLE child DROP INDEX v1;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'v1'; check that column/key exists
+@setup s3
+@setup s4
+@setup s20
+@setup s22
+test l454 {
+    ALTER TABLE parent DROP INDEX v1;
+}
+expect error {
+}
+
+@setup s3
+@setup s4
+test l480 {
+    ALTER TABLE parent MODIFY v1 MEDIUMINT;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l484 {
+    ALTER TABLE child MODIFY v1 MEDIUMINT;
+}
+expect unordered {
+}
+
+@setup s7
+test l505 {
+    ALTER TABLE parent1 MODIFY v1 CHAR(10);
+}
+expect unordered {
+}
+
+@setup s8
+@setup s23
+test l513 {
+    ALTER TABLE parent2 MODIFY v1 VARCHAR(10);
+}
+expect unordered {
+}
+
+@setup s9
+test l521 {
+    ALTER TABLE parent3 MODIFY v1 BINARY(10);
+}
+expect unordered {
+}
+
+@setup s10
+test l529 {
+    ALTER TABLE parent4 MODIFY v1 VARBINARY(10);
+}
+expect unordered {
+}
+
+@setup s7
+@setup s24
+test l537 {
+    ALTER TABLE parent1 MODIFY v1 CHAR(30);
+}
+expect unordered {
+}
+
+@setup s8
+@setup s23
+@setup s25
+test l545 {
+    ALTER TABLE parent2 MODIFY v1 VARCHAR(30);
+}
+expect unordered {
+}
+
+@setup s9
+@setup s26
+test l553 {
+    ALTER TABLE parent3 MODIFY v1 BINARY(30);
+}
+expect unordered {
+}
+
+@setup s10
+@setup s27
+test l561 {
+    ALTER TABLE parent4 MODIFY v1 VARBINARY(30);
+}
+expect unordered {
+}
+
+@setup s28
+test l588 {
+    ALTER TABLE parent1 MODIFY v1 BIGINT;
+}
+expect unordered {
+}
+
+@setup s28
+@setup s29
+test l596 {
+    ALTER TABLE parent1 MODIFY v2 BIGINT;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l612 {
+    ALTER TABLE parent DROP COLUMN v1;
+}
+expect unordered {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'v1'; check that column/key exists
+@setup s3
+@setup s4
+@setup s30
+test l620 {
+    ALTER TABLE parent DROP COLUMN v1;
+}
+expect error {
+}
+
+@setup s3
+@setup s4
+test l632 {
+    ALTER TABLE child DROP COLUMN v1;
+}
+expect unordered {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'fk_name'; check that column/key exists
+@setup s3
+@setup s4
+@setup s31
+test l636 {
+    ALTER TABLE child DROP FOREIGN KEY fk_name;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'v1'; check that column/key exists
+@setup s3
+@setup s4
+@setup s31
+test l640 {
+    ALTER TABLE child DROP COLUMN v1;
+}
+expect error {
+}
+
+@setup s3
+@setup s4
+test l652 {
+    ALTER TABLE child CHANGE COLUMN v1 v1 INT NOT NULL;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l664 {
+    ALTER TABLE child CHANGE COLUMN v1 v1 INT NOT NULL;
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+test l684 {
+    SELECT * FROM one;
+}
+expect unordered {
+    1|5|4
+    2|7|5
+    4|9|5
+}
+
+@setup s32
+@setup s35
+test l711 {
+    SELECT * FROM one;
+}
+expect unordered {
+    1|1|1
+    2|4|8
+    3|9|27
+    4|4|16
+}
+
+@setup s32
+@setup s36
+test l738 {
+    UPDATE one SET v1 = v1 + v2;
+}
+expect unordered {
+}
+
+@setup s32
+@setup s36
+@setup s37
+test l742 {
+    UPDATE one SET v1 = v1;
+}
+expect unordered {
+}
+
+@setup s32
+@setup s36
+@setup s37
+@setup s38
+test l746 {
+    DELETE FROM one;
+}
+expect unordered {
+}
+
+@setup s39
+@setup s40
+test l774 {
+    SELECT * from three union all select * from four;
+}
+expect unordered {
+}
+
+@setup s39
+@setup s41
+test l794 {
+    SELECT * from three;
+}
+expect unordered {
+}
+
+@setup s42
+test l798 {
+    select * from four;
+}
+expect unordered {
+}
+
+@setup s32
+@setup s43
+test l813 {
+    UPDATE one SET v1 = v1 + v2;
+}
+expect unordered {
+}
+
+@setup s32
+@setup s43
+@setup s44
+test l817 {
+    UPDATE one SET v1 = v1;
+}
+expect unordered {
+}
+
+@setup s32
+@setup s43
+@setup s44
+@setup s45
+test l821 {
+    DELETE FROM one;
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_name1' in the referenced table 'parent'
+@setup s3
+@setup s46
+test l860 {
+    ALTER TABLE parent ADD CONSTRAINT fk_name1 FOREIGN KEY (v1) REFERENCES parent(v1);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_name2' in the referenced table 'parent'
+@setup s3
+@setup s46
+test l864 {
+    ALTER TABLE parent ADD CONSTRAINT fk_name2 FOREIGN KEY (v1, v2) REFERENCES parent(v1, v2);
+}
+expect error {
+}
+
+@setup s3
+@setup s47
+test l880 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|1|1
+    2|2|1
+}
+
+@setup s3
+@setup s47
+test l884 {
+    DELETE FROM parent WHERE v1 = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s47
+@setup s48
+test l888 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s47
+@setup s48
+@setup s49
+test l892 {
+    REPLACE INTO parent VALUES (1, 1, 1);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+test l908 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+test l912 {
+    REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+test l916 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|1|1
+    2|2|2
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+test l920 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+test l924 {
+    SELECT * FROM parent order by v1;
+}
+expect {
+    1|2|1
+    2|2|2
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+test l928 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+test l932 {
+    SELECT * FROM parent order by v1;
+}
+expect {
+    1|2|1
+    2|2|2
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+test l936 {
+    REPLACE INTO parent VALUES (1, 1, 2), (2, 2, 1);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+test l940 {
+    SELECT * FROM parent order by v1;
+}
+expect {
+    1|1|2
+    2|2|1
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+test l944 {
+    UPDATE parent SET v2 = 2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+test l948 {
+    UPDATE parent SET v2 = 1 WHERE id = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+@setup s57
+test l952 {
+    SELECT * FROM parent order by v1;
+}
+expect {
+    1|1|2
+    2|2|1
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+@setup s57
+test l956 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+@setup s57
+@setup s58
+test l960 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+@setup s57
+@setup s58
+@setup s59
+test l964 {
+    DELETE FROM parent WHERE v1 = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+@setup s57
+@setup s58
+@setup s59
+@setup s60
+test l968 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|2|2
+    2|2|1
+}
+
+@setup s3
+@setup s61
+test l984 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+test l988 {
+    REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+test l992 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|1|1
+    2|2|2
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+test l996 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+test l1000 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+test l1004 {
+    REPLACE INTO parent VALUES (1,1,2), (2,2,1);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+test l1008 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|1|2
+    2|2|1
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+test l1012 {
+    UPDATE parent SET v2 = 2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+test l1016 {
+    UPDATE parent SET v2 = 1 WHERE id = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+test l1020 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|1|2
+    2|2|1
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+test l1024 {
+    UPDATE parent SET v1 = 2;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+@setup s69
+test l1028 {
+    UPDATE parent SET v1 = 2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+@setup s69
+@setup s70
+test l1032 {
+    DELETE FROM parent WHERE v1 = 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+@setup s69
+@setup s70
+@setup s71
+test l1036 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|2|2
+    2|2|1
+}
+
+@setup s72
+test l1058 {
+    UPDATE test SET v1 = NULL, v2 = NULL WHERE test.pk = 0;
+}
+expect unordered {
+}
+
+@setup s73
+test l1083 {
+    DELETE FROM under_limit WHERE pk = 1;
+}
+expect unordered {
+}
+
+# mysql-error: 3008 HY000 Foreign key cascade delete/update exceeds max depth of 15.
+@setup s74
+test l1087 {
+    DELETE FROM over_limit WHERE pk = 1;
+}
+expect error {
+}
+
+@setup s74
+test l1091 {
+    DELETE FROM over_limit WHERE pk = 0;
+}
+expect unordered {
+}
+
+@setup s74
+@setup s75
+test l1095 {
+    UPDATE over_limit SET pk = 1 WHERE pk = 1;
+}
+expect unordered {
+}
+
+# mysql-error: 1451 23000 Cannot delete or update a parent row: a foreign key constraint fails (`test`.`over_limit`, CONSTRAINT `fk_over` FOREIGN KEY (`v1`) REFERENCES `over_limit` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE)
+@setup s74
+@setup s75
+@setup s76
+test l1107 {
+    UPDATE over_limit SET pk = 2 WHERE pk = 1;
+}
+expect error {
+}
+
+@setup s77
+@setup s78
+test l1130 {
+    DELETE FROM under_cycle1 WHERE pk = 1;
+}
+expect unordered {
+}
+
+# mysql-error: 3008 HY000 Foreign key cascade delete/update exceeds max depth of 15.
+@setup s79
+@setup s80
+test l1134 {
+    DELETE FROM over_cycle1 WHERE pk = 1;
+}
+expect error {
+}
+
+@setup s77
+@setup s81
+test l1163 {
+    DELETE FROM under_cycle1 WHERE pk = 1;
+}
+expect unordered {
+}
+
+# mysql-error: 3008 HY000 Foreign key cascade delete/update exceeds max depth of 15.
+@setup s79
+@setup s82
+test l1167 {
+    DELETE FROM over_cycle1 WHERE pk = 1;
+}
+expect error {
+}
+
+@setup s83
+@setup s84
+test l1210 {
+    DELETE FROM t1;
+}
+expect unordered {
+}
+
+@setup s83
+@setup s85
+test l1214 {
+    DELETE FROM t16;
+}
+expect unordered {
+}
+
+@setup s83
+@setup s84
+@setup s86
+test l1218 {
+    DELETE FROM t1;
+}
+expect unordered {
+}
+
+@setup s83
+@setup s84
+test l1261 {
+    UPDATE t1 SET pk = 2;
+}
+expect unordered {
+}
+
+@setup s83
+@setup s84
+@setup s87
+test l1269 {
+    UPDATE t1 SET pk = 2;
+}
+expect unordered {
+}
+
+@setup s88
+test l1292 {
+    DELETE FROM colors where color='green';
+}
+expect unordered {
+}
+
+@setup s88
+@setup s89
+test l1296 {
+    SELECT * FROM colors;
+}
+expect unordered {
+    1|red
+    3|blue
+    4|purple
+}
+
+@setup s90
+test l1341 {
+    update delayed_child set pk=3 where pk=3;
+}
+expect unordered {
+}
+
+@setup s90
+@setup s91
+test l1348 {
+    update delayed_child set pk=20 where pk=20;
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`delayed_child`, CONSTRAINT `delayed_child_ibfk_1` FOREIGN KEY (`pk`) REFERENCES `delayed_parent` (`pk`))
+@setup s90
+@setup s91
+@setup s92
+test l1355 {
+    update delayed_child set pk=10 where pk=1;
+}
+expect error {
+}
+
+@setup s90
+test l1375 {
+    delete from delayed_child where false;
+}
+expect unordered {
+}
+
+@setup s90
+@setup s93
+test l1381 {
+    delete from delayed_child where pk = 20;
+}
+expect unordered {
+}
+
+@setup s90
+@setup s93
+@setup s94
+test l1387 {
+    delete from delayed_child where pk = 1;
+}
+expect unordered {
+}
+
+@setup s95
+@setup s96
+test l1409 {
+    SELECT * FROM delayed_parent;
+}
+expect unordered {
+}
+
+@setup s95
+@setup s97
+test l1413 {
+    SELECT * FROM delayed_child;
+}
+expect unordered {
+    1|2
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`delayed_child`, CONSTRAINT `fk_delayed` FOREIGN KEY (`v1`) REFERENCES `delayed_parent` (`v1`))
+@setup s95
+@setup s97
+test l1417 {
+    INSERT INTO delayed_child VALUES (2, 3);
+}
+expect error {
+}
+
+@setup s95
+@setup s96
+test l1421 {
+    INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`delayed_child`, CONSTRAINT `fk_delayed` FOREIGN KEY (`v1`) REFERENCES `delayed_parent` (`v1`))
+@setup s95
+@setup s97
+test l1425 {
+    INSERT INTO delayed_child VALUES (2, 3);
+}
+expect error {
+}
+
+@setup s95
+@setup s97
+test l1429 {
+    SELECT * FROM delayed_child;
+}
+expect unordered {
+    1|2
+}
+
+# mysql-error: 1072 42000 Key column 'badcolumn' doesn't exist in table
+@setup s95
+test l1442 {
+    CREATE TABLE delayed_child1(i int, CONSTRAINT fk_delayed1 FOREIGN KEY (badcolumn) REFERENCES delayed_parent(i));
+}
+expect error {
+}
+
+# mysql-error: 1239 42000 Incorrect foreign key definition for 'fk_delayed2': Key reference and table reference don't match
+@setup s95
+test l1446 {
+    CREATE TABLE delayed_child2(i int, CONSTRAINT fk_delayed2 FOREIGN KEY (i) REFERENCES delayed_parent(c1, c2, c3));
+}
+expect error {
+}
+
+# mysql-error: 1061 42000 Duplicate key name 'fk_i'
+@setup s95
+test l1450 {
+    CREATE TABLE delayed_child3(i int, j int, CONSTRAINT fk_i FOREIGN KEY (i) REFERENCES delayed_parent(i), CONSTRAINT fk_i FOREIGN KEY (j) REFERENCES delayed_parent(j));
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'i'
+@setup s95
+test l1454 {
+    CREATE TABLE delayed_child4(i int, CONSTRAINT fk_delayed4 FOREIGN KEY (i,i,i) REFERENCES delayed_parent(c1, c2, c3));
+}
+expect error {
+}
+
+# mysql-error: 1553 HY000 Cannot drop index 'valid_fk': needed in a foreign key constraint
+@setup s95
+@setup s98
+test l1458 {
+    ALTER TABLE valid_delayed_child drop index valid_fk;
+}
+expect error {
+}
+
+@setup s99
+test l1485 {
+    CREATE TABLE delayed_parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+}
+expect unordered {
+}
+
+@setup s99
+@setup s100
+test l1489 {
+    INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l1509 {
+    TRUNCATE parent;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+@setup s101
+test l1513 {
+    DROP TABLE parent;
+}
+expect unordered {
+}
+
+test l1517 {
+    SET FOREIGN_KEY_CHECKS=0;
+}
+expect unordered {
+}
+
+@setup s95
+test l1529 {
+    SET FOREIGN_KEY_CHECKS=1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+@setup s102
+test l1533 {
+    INSERT INTO child VALUES (4, 5, 6);
+}
+expect unordered {
+}
+
+@setup s99
+test l1537 {
+    CREATE TABLE parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+}
+expect unordered {
+}
+
+@setup s99
+@setup s103
+test l1541 {
+    INSERT INTO parent VALUES (1, 5);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '4' for key 'child.PRIMARY'
+@setup s3
+@setup s4
+@setup s102
+@setup s104
+test l1545 {
+    INSERT INTO child VALUES (4, 5, 6);
+}
+expect error {
+}
+
+@setup s99
+@setup s103
+@setup s105
+test l1549 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    1|5
+}
+
+@setup s3
+@setup s4
+@setup s102
+@setup s104
+test l1553 {
+    SELECT * FROM child;
+}
+expect unordered {
+    4|5|6
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk1' in the referenced table 'parent'
+@setup s106
+test l1603 {
+    ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (b) REFERENCES parent (b);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk2' in the referenced table 'parent'
+@setup s106
+test l1607 {
+    ALTER TABLE child ADD CONSTRAINT fk2 FOREIGN KEY (a) REFERENCES parent (b);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk3' in the referenced table 'parent'
+@setup s106
+test l1611 {
+    ALTER TABLE child ADD CONSTRAINT fk3 FOREIGN KEY (a, b) REFERENCES parent (a, b);
+}
+expect error {
+}
+
+@setup s106
+test l1615 {
+    ALTER TABLE child ADD CONSTRAINT fk4 FOREIGN KEY (b, a) REFERENCES parent (b, a);
+}
+expect unordered {
+}
+
+@setup s107
+test l1629 {
+    CREATE TABLE child(id int unique, fk1 int, fk2 int, primary key(fk2, fk1, id), constraint `fk` foreign key(fk1, fk2) references parent (fk1, fk2));
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child' in the referenced table 'parent'
+@setup s108
+test l1657 {
+    CREATE TABLE child(pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT, CONSTRAINT fk_child FOREIGN KEY (v2, v1) REFERENCES parent(v2, v1));
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child' in the referenced table 'parent'
+@setup s108
+@setup s109
+test l1674 {
+    ALTER TABLE child ADD CONSTRAINT fk_child FOREIGN KEY (v2, v1) REFERENCES parent(v2, v1);
+}
+expect error {
+}
+
+@setup s110
+test l1734 {
+    insert into t1 values (1, 1);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`t1`, CONSTRAINT `fk1` FOREIGN KEY (`J`) REFERENCES `t1` (`i`))
+@setup s110
+@setup s111
+test l1740 {
+    insert into t1 values (2, 3);
+}
+expect error {
+}
+
+@setup s112
+test l1757 {
+    insert into t2 values (1, 1);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk2` FOREIGN KEY (`j`) REFERENCES `t2` (`I`))
+@setup s112
+@setup s113
+test l1763 {
+    insert into t2 values (2, 3);
+}
+expect error {
+}
+
+@setup s114
+test l1778 {
+    insert into t3 values (1, 1);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`t3`, CONSTRAINT `fk3` FOREIGN KEY (`j`) REFERENCES `t3` (`i`))
+@setup s114
+@setup s115
+test l1784 {
+    insert into t3 values (2, 3);
+}
+expect error {
+}
+
+@setup s116
+test l1803 {
+    DELETE FROM parent WHERE pk = 1;
+}
+expect unordered {
+}
+
+@setup s116
+@setup s117
+test l1826 {
+    SELECT * FROM parent;
+}
+expect unordered {
+    2|2|2
+    3|3|3
+}
+
+@setup s3
+@setup s4
+@setup s118
+test l1852 {
+    INSERT INTO parent VALUES (1,200,1) ON DUPLICATE KEY UPDATE v1 = values(v1);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+test l1856 {
+    INSERT INTO one VALUES (1, 2, 4) on duplicate key update v1 = VALUES(v1);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`v1`) REFERENCES `parent1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE)
+@setup s119
+test l1874 {
+    INSERT INTO child1 VALUES (1, 1);
+}
+expect error {
+}
+
+@setup s119
+test l1878 {
+    SELECT * FROM child1;
+}
+expect unordered {
+}
+
+@setup s119
+@setup s120
+test l1882 {
+    UPDATE parent1 SET pk = 2;
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`v1`, `v2`) REFERENCES `parent1` (`pk1`, `pk2`) ON DELETE CASCADE ON UPDATE CASCADE)
+@setup s121
+test l1900 {
+    INSERT INTO child1 VALUES (1, 1, 2), (2, 4, 5);
+}
+expect error {
+}
+
+@setup s121
+test l1904 {
+    SELECT * FROM child1;
+}
+expect unordered {
+}
+
+@setup s121
+@setup s122
+test l1908 {
+    UPDATE parent1 SET pk2 = pk1 + pk2;
+}
+expect unordered {
+}
+
+@setup s123
+test l1929 {
+    SELECT * FROM one;
+}
+expect unordered {
+}
+
+@setup s124
+test l1955 {
+    SELECT * FROM one;
+}
+expect unordered {
+    1|5|4
+    2|7|5
+    4|9|5
+}
+
+@setup s125
+test l1976 {
+    INSERT into a (x, y) VALUES (1, 3);
+}
+expect unordered {
+}
+
+@setup s125
+@setup s126
+test l1984 {
+    SELECT x, y from a;
+}
+expect unordered {
+    1|3
+}
+
+@setup s127
+test l2005 {
+    INSERT into a (x, y) VALUES (1, 3);
+}
+expect unordered {
+}
+
+@setup s127
+@setup s128
+test l2013 {
+    SELECT x, y from a;
+}
+expect unordered {
+    1|3
+}
+
+@setup s125
+@setup s129
+test l2036 {
+    UPDATE a SET y = 4 where y = 3;
+}
+expect unordered {
+}
+
+@setup s125
+@setup s129
+@setup s130
+test l2040 {
+    SELECT x, y from a;
+}
+expect unordered {
+    1|4
+}
+
+@setup s127
+@setup s131
+test l2059 {
+    UPDATE a SET y = 4 where y = 3;
+}
+expect unordered {
+}
+
+@setup s127
+@setup s131
+@setup s132
+test l2063 {
+    SELECT x, y from a;
+}
+expect unordered {
+    1|4
+}
+
+@setup s125
+@setup s129
+test l2082 {
+    DELETE from a where x = 1 AND y = 3;
+}
+expect unordered {
+}
+
+@setup s125
+@setup s129
+@setup s133
+test l2086 {
+    SELECT * from a;
+}
+expect unordered {
+}
+
+@setup s127
+@setup s131
+test l2105 {
+    DELETE from a where x = 1 AND y = 3;
+}
+expect unordered {
+}
+
+@setup s127
+@setup s131
+@setup s134
+test l2109 {
+    SELECT * from a;
+}
+expect unordered {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'pk' and referenced column 'pk' in foreign key constraint 'fk_1' are incompatible.
+@setup s135
+test l2125 {
+    CREATE TABLE t2 (pk char(32) COLLATE utf8mb4_0900_bin PRIMARY KEY, CONSTRAINT fk_1 FOREIGN KEY (pk) REFERENCES t1 (pk));
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'child1_ibfk_1' in the referenced table 'parent1'
+@setup s136
+test l2143 {
+    alter table child1 add foreign key (fk1, pk1) references parent1 (fk1, pk1);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'child1_ibfk_1' in the referenced table 'parent1'
+@setup s136
+test l2147 {
+    alter table child1 add foreign key (fk1, pk1, pk2) references parent1 (fk1, pk1, pk2);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'child1_ibfk_1' in the referenced table 'parent1'
+@setup s136
+test l2151 {
+    alter table child1 add foreign key (fk1, pk2, pk3, pk1) references parent1 (fk1, pk2, pk3, pk1);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk1' in the referenced table 'parent1'
+@setup s136
+test l2155 {
+    alter table child1 add constraint fk1 foreign key (fk1, pk2) references parent1 (fk1, pk2);
+}
+expect error {
+}
+
+@setup s136
+test l2175 {
+    insert into child1 values (0, 1, 2, 3);
+}
+expect unordered {
+}
+
+@setup s136
+@setup s137
+test l2181 {
+    insert into child1 values (0, 99, 2, 99);
+}
+expect unordered {
+}
+
+@setup s136
+@setup s137
+@setup s138
+test l2187 {
+    insert into child1 values (0, 99, 99, 99);
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk2' in the referenced table 'parent1'
+@setup s136
+@setup s139
+test l2191 {
+    alter table child2 add constraint fk2 foreign key (fk1, pk2, pk1) references parent1 (fk1, pk2, pk1);
+}
+expect error {
+}
+
+@setup s136
+@setup s139
+test l2211 {
+    insert into child2 values (0, 1, 2, 3);
+}
+expect unordered {
+}
+
+@setup s136
+@setup s139
+@setup s140
+test l2217 {
+    insert into child2 values (0, 1, 2, 99);
+}
+expect unordered {
+}
+
+@setup s136
+@setup s139
+@setup s140
+@setup s141
+test l2223 {
+    insert into child2 values (0, 99, 2, 99);
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk3' in the referenced table 'parent1'
+@setup s136
+@setup s139
+@setup s142
+test l2227 {
+    alter table child3 add constraint fk3 foreign key (fk1, pk2, pk1, pk3) references parent1 (fk1, pk2, pk1, pk3);
+}
+expect error {
+}
+
+@setup s136
+@setup s139
+@setup s142
+test l2233 {
+    insert into child3 values (0, 1, 2, 3);
+}
+expect unordered {
+}
+
+@setup s136
+@setup s139
+@setup s142
+@setup s143
+test l2253 {
+    insert into child3 values (0, 1, 2, 99);
+}
+expect unordered {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk4' in the referenced table 'parent1'
+@setup s136
+@setup s139
+@setup s142
+@setup s144
+test l2257 {
+    alter table child4 add constraint fk4 foreign key (fk1, pk2, pk1, pk3) references parent1 (fk1, pk2, pk1, pk3);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk5' in the referenced table 'parent1'
+@setup s136
+@setup s139
+@setup s142
+@setup s144
+test l2278 {
+    alter table child4 add constraint fk5 foreign key (fk1) references parent1 (fk1);
+}
+expect error {
+}
+
+@setup s145
+test l2384 {
+    alter table child1 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s146
+test l2390 {
+    alter table child1 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s146
+@setup s147
+test l2396 {
+    alter table child1 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s149
+test l2415 {
+    alter table child2 add constraint `child2_ibfk_1` foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s149
+@setup s150
+test l2422 {
+    alter table child2 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+# mysql-error: 1826 HY000 Duplicate foreign key constraint name 'child2_ibfk_2'
+@setup s145
+@setup s148
+@setup s149
+@setup s150
+@setup s151
+test l2440 {
+    alter table child2 add constraint `child2_ibfk_2` foreign key (j) references theparent (i);
+}
+expect error {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s153
+test l2446 {
+    alter table child3 add constraint `child3_ibfk_100` foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s153
+@setup s154
+test l2452 {
+    alter table child3 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s156
+test l2471 {
+    alter table child4 add constraint `CHILD4_IBFK_1` foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+# mysql-error: 1826 HY000 Duplicate foreign key constraint name 'child4_ibfk_1'
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s156
+@setup s157
+test l2478 {
+    alter table child4 add foreign key (j) references theparent (i);
+}
+expect error {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s159
+test l2493 {
+    alter table child5 add constraint `child5_ibfk_-2` foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s159
+@setup s160
+test l2500 {
+    alter table child5 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s159
+@setup s160
+@setup s161
+test l2507 {
+    alter table child5 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+# mysql-error: 1826 HY000 Duplicate foreign key constraint name 'child5_ibfk_0'
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s159
+@setup s160
+@setup s161
+@setup s162
+test l2514 {
+    alter table child5 add foreign key (j) references theparent (i);
+}
+expect error {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s163
+@setup s164
+test l2533 {
+    alter table child6 add constraint `` foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s163
+@setup s164
+@setup s165
+test l2539 {
+    alter table child6 add foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s163
+@setup s164
+@setup s165
+@setup s166
+test l2558 {
+    alter table child1 add constraint `child7_ibfk_1` foreign key (j) references theparent (i);
+}
+expect unordered {
+}
+
+# mysql-error: 1826 HY000 Duplicate foreign key constraint name 'child7_ibfk_1'
+@setup s145
+@setup s148
+@setup s152
+@setup s155
+@setup s158
+@setup s163
+@setup s167
+test l2565 {
+    alter table child7 add foreign key (j) references theparent (i);
+}
+expect error {
+}
+
+# mysql-error: 1061 42000 Duplicate key name 'fk1'
+@setup s168
+test l2611 {
+    ALTER TABLE parent2 ADD CONSTRAINT `fk1` FOREIGN KEY (v2) REFERENCES child1(v1);
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'parent2_ibfk_1' in the referenced table 'child1'
+@setup s168
+test l2617 {
+    ALTER TABLE parent2 ADD FOREIGN KEY (v2) REFERENCES child1(v1);
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`j`) REFERENCES `parent1` (`i`))
+@setup s169
+@setup s170
+test l2652 {
+    update child1 set j = 1 where i = 101;
+}
+expect error {
+}
+
+@setup s169
+@setup s170
+test l2658 {
+    select * from child1;
+}
+expect unordered {
+    101|2|2
+}
+
+@setup s169
+@setup s171
+@setup s172
+test l2676 {
+    select * from parent1;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s169
+@setup s171
+test l2684 {
+    select * from child1 order by j, k;
+}
+expect {
+}
+
+@setup s169
+@setup s171
+@setup s172
+test l2692 {
+    update parent1 set i = 20 where i = 2;
+}
+expect unordered {
+}
+
+@setup s169
+@setup s171
+@setup s172
+@setup s173
+test l2698 {
+    select * from parent1 order by i;
+}
+expect {
+    1
+    3
+    20
+}
+
+@setup s169
+@setup s171
+@setup s172
+@setup s173
+test l2714 {
+    delete from parent1 where i = 1;
+}
+expect unordered {
+}
+
+@setup s169
+@setup s171
+@setup s172
+@setup s173
+@setup s174
+test l2720 {
+    select * from parent1;
+}
+expect unordered {
+    20
+    3
+}
+
+@setup s175
+@setup s176
+test l2746 {
+    SELECT id, parentId, vcol FROM vc_child ORDER BY id;
+}
+expect {
+}
+
+@setup s175
+@setup s176
+test l2750 {
+    SELECT id FROM vc_child WHERE vcol = 99;
+}
+expect unordered {
+}
+
+@setup s175
+@setup s176
+test l2756 {
+    SELECT id FROM vc_child WHERE vcol = 2;
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`vc_child`, CONSTRAINT `vc_child_ibfk_1` FOREIGN KEY (`parentId`) REFERENCES `vc_parent` (`id`) ON UPDATE CASCADE)
+@setup s175
+@setup s176
+test l2762 {
+    INSERT INTO vc_child (id, parentId) VALUES (40, 99);
+}
+expect error {
+}
+
+@setup s175
+@setup s177
+test l2779 {
+    SELECT id, parentId, v1, v2 FROM vc_child ORDER BY id;
+}
+expect {
+}
+
+@setup s175
+@setup s177
+test l2783 {
+    SELECT id FROM vc_child WHERE v2 = 199;
+}
+expect unordered {
+}
+
+@setup s175
+@setup s178
+test l2802 {
+    SELECT id, parentId, vcol FROM vc_child ORDER BY id;
+}
+expect {
+}
+
+@setup s175
+@setup s178
+test l2806 {
+    SELECT id FROM vc_child WHERE vcol = 2;
+}
+expect unordered {
+}
+
+@setup s175
+@setup s179
+test l2825 {
+    SELECT id, parentId, vcol FROM vc_child ORDER BY id;
+}
+expect {
+}
+
+@setup s175
+@setup s179
+test l2829 {
+    SELECT id FROM vc_child WHERE vcol = 2;
+}
+expect unordered {
+}
+
+@setup s180
+test l2846 {
+    SELECT id, parentId, parentKey FROM vc_t ORDER BY id;
+}
+expect {
+    1|NULL|NULL
+    3|NULL|NULL
+}
+
+@setup s180
+test l2850 {
+    SELECT id FROM vc_t WHERE parentKey = 2;
+}
+expect unordered {
+}
+
+@setup s181
+test l2866 {
+    DELETE FROM vc_t2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s181
+@setup s182
+test l2870 {
+    SELECT id, parentId, parentKey FROM vc_t2 ORDER BY id;
+}
+expect {
+}
+
+@setup s181
+@setup s182
+test l2874 {
+    SELECT parentKey FROM vc_t2 WHERE parentKey = 1;
+}
+expect unordered {
+}
+
+@setup s181
+@setup s182
+test l2880 {
+    INSERT INTO vc_t2 (id, parentId) VALUES (3, NULL), (4, 3);
+}
+expect unordered {
+}
+
+@setup s181
+@setup s182
+@setup s183
+test l2884 {
+    SELECT id, parentId, parentKey FROM vc_t2 ORDER BY id;
+}
+expect {
+    3|NULL|NULL
+    4|3|3
+}
+
+@setup s184
+@setup s185
+test l2906 {
+    DELETE FROM vc_parent2 WHERE id = 1;
+}
+expect unordered {
+}
+
+@setup s184
+test l2910 {
+    SELECT id, parentId, doubled, note FROM vc_child2 ORDER BY id;
+}
+expect {
+}
+
+@setup s184
+test l2914 {
+    SELECT id FROM vc_child2 WHERE doubled = 4;
+}
+expect unordered {
+}
+
+@setup s184
+test l2920 {
+    SELECT id FROM vc_child2 WHERE doubled = 2;
+}
+expect unordered {
+}

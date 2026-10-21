@@ -1,0 +1,870 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/collation_coercion.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    SET CHARACTER SET "utf8mb4";
+    SET collation_connection = "utf8mb4_0900_bin";
+    SET character_set_results = "binary";
+    CREATE TABLE temp_tbl (v1 VARCHAR(200) COLLATE utf8mb4_0900_bin,
+    v2 VARCHAR(200) COLLATE utf8mb4_0900_as_cs DEFAULT 'z',
+    v3 VARCHAR(200) COLLATE utf8mb4_0900_ai_ci,
+    v4 VARCHAR(200) COLLATE utf8mb3_bin,
+    v5 VARCHAR(200) COLLATE utf8mb3_general_ci,
+    v6 VARCHAR(200) COLLATE latin1_bin,
+    v7 VARCHAR(200) COLLATE latin1_general_ci,
+    v8 VARBINARY(200));
+    INSERT INTO temp_tbl VALUES ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h');
+}
+
+@setup s1
+test l47 {
+    SELECT COERCIBILITY('26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    4
+}
+
+@setup s1
+test l47-2 {
+    SELECT COLLATION('26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_bin
+}
+
+@setup s1
+test l52 {
+    SELECT COERCIBILITY('str' COLLATE utf8mb4_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l52-2 {
+    SELECT COLLATION('str' COLLATE utf8mb4_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_bin
+}
+
+@setup s1
+test l57 {
+    SELECT COERCIBILITY(1001) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l57-2 {
+    SELECT COLLATION(1001) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l62 {
+    SELECT COERCIBILITY(2002.5) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l62-2 {
+    SELECT COLLATION(2002.5) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l67 {
+    SELECT COERCIBILITY(CONVERT('2020-02-20 20:20:20', DATETIME)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l67-2 {
+    SELECT COLLATION(CONVERT('2020-02-20 20:20:20', DATETIME)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l72 {
+    SELECT COERCIBILITY(CONVERT('2020-02-20', DATE)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l72-2 {
+    SELECT COLLATION(CONVERT('2020-02-20', DATE)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l77 {
+    SELECT COERCIBILITY(CONVERT('23:24:25', TIME)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l77-2 {
+    SELECT COLLATION(CONVERT('23:24:25', TIME)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l82 {
+    SELECT COERCIBILITY(CONVERT('34', BINARY)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l82-2 {
+    SELECT COLLATION(CONVERT('34', BINARY)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l87 {
+    SELECT COERCIBILITY(CONVERT('34', SIGNED)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l87-2 {
+    SELECT COLLATION(CONVERT('34', SIGNED)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l92 {
+    SELECT COERCIBILITY(CONVERT('34', UNSIGNED)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l92-2 {
+    SELECT COLLATION(CONVERT('34', UNSIGNED)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l97 {
+    SELECT COERCIBILITY(CONVERT('[1]', JSON)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l97-2 {
+    SELECT COLLATION(CONVERT('[1]', JSON)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_bin
+}
+
+@setup s1
+test l112 {
+    SELECT COERCIBILITY(FALSE) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l112-2 {
+    SELECT COLLATION(FALSE) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l117 {
+    SELECT COERCIBILITY(TRUE) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l117-2 {
+    SELECT COLLATION(TRUE) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l127 {
+    SELECT COERCIBILITY(NULL) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    6
+}
+
+@setup s1
+test l127-2 {
+    SELECT COLLATION(NULL) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l137 {
+    SELECT COERCIBILITY(v1) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l137-2 {
+    SELECT COLLATION(v1) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_bin
+}
+
+@setup s1
+test l142 {
+    SELECT COERCIBILITY(v1 COLLATE utf8mb4_0900_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l142-2 {
+    SELECT COLLATION(v1 COLLATE utf8mb4_0900_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_bin
+}
+
+@setup s1
+test l147 {
+    SELECT COERCIBILITY(v2) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l147-2 {
+    SELECT COLLATION(v2) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_as_cs
+}
+
+@setup s1
+test l152 {
+    SELECT COERCIBILITY(v2 COLLATE utf8mb4_0900_as_cs) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l152-2 {
+    SELECT COLLATION(v2 COLLATE utf8mb4_0900_as_cs) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_as_cs
+}
+
+@setup s1
+test l157 {
+    SELECT COERCIBILITY(v3) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l157-2 {
+    SELECT COLLATION(v3) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_ai_ci
+}
+
+@setup s1
+test l162 {
+    SELECT COERCIBILITY(v3 COLLATE utf8mb4_0900_ai_ci) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l162-2 {
+    SELECT COLLATION(v3 COLLATE utf8mb4_0900_ai_ci) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_ai_ci
+}
+
+@setup s1
+test l167 {
+    SELECT COERCIBILITY(v4) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l167-2 {
+    SELECT COLLATION(v4) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb3_bin
+}
+
+@setup s1
+test l172 {
+    SELECT COERCIBILITY(v4 COLLATE utf8mb3_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l172-2 {
+    SELECT COLLATION(v4 COLLATE utf8mb3_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb3_bin
+}
+
+@setup s1
+test l177 {
+    SELECT COERCIBILITY(v5) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l177-2 {
+    SELECT COLLATION(v5) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb3_general_ci
+}
+
+@setup s1
+test l182 {
+    SELECT COERCIBILITY(v5 COLLATE utf8mb3_general_ci) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l182-2 {
+    SELECT COLLATION(v5 COLLATE utf8mb3_general_ci) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb3_general_ci
+}
+
+@setup s1
+test l187 {
+    SELECT COERCIBILITY(v6) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l187-2 {
+    SELECT COLLATION(v6) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    latin1_bin
+}
+
+@setup s1
+test l192 {
+    SELECT COERCIBILITY(v6 COLLATE latin1_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l192-2 {
+    SELECT COLLATION(v6 COLLATE latin1_bin) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    latin1_bin
+}
+
+@setup s1
+test l197 {
+    SELECT COERCIBILITY(v7) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l197-2 {
+    SELECT COLLATION(v7) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    latin1_general_ci
+}
+
+@setup s1
+test l202 {
+    SELECT COERCIBILITY(v7 COLLATE latin1_general_ci) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l202-2 {
+    SELECT COLLATION(v7 COLLATE latin1_general_ci) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    latin1_general_ci
+}
+
+@setup s1
+test l207 {
+    SELECT COERCIBILITY(v8) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l207-2 {
+    SELECT COLLATION(v8) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l212 {
+    SELECT COERCIBILITY(v8 COLLATE 'binary') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l212-2 {
+    SELECT COLLATION(v8 COLLATE 'binary') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l217 {
+    SELECT COERCIBILITY(!('26:27:28')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l217-2 {
+    SELECT COLLATION(!('26:27:28')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l222 {
+    SELECT COERCIBILITY(!('str' COLLATE utf8mb4_bin)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l222-2 {
+    SELECT COLLATION(!('str' COLLATE utf8mb4_bin)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l227 {
+    SELECT COERCIBILITY(-(CONVERT('2020-02-20', DATE))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l227-2 {
+    SELECT COLLATION(-(CONVERT('2020-02-20', DATE))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l232 {
+    SELECT COERCIBILITY(-(CONVERT('34', BINARY))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l232-2 {
+    SELECT COLLATION(-(CONVERT('34', BINARY))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l237 {
+    SELECT COERCIBILITY(-(v6)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l237-2 {
+    SELECT COLLATION(-(v6)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l242 {
+    SELECT COERCIBILITY(NOT('\{"a": 1, "b": \{"c": 30\}\}')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l242-2 {
+    SELECT COLLATION(NOT('\{"a": 1, "b": \{"c": 30\}\}')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l247 {
+    SELECT COERCIBILITY(CURRENT_TIME() != '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l247-2 {
+    SELECT COLLATION(CURRENT_TIME() != '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l252 {
+    SELECT COERCIBILITY(v4 != '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l252-2 {
+    SELECT COLLATION(v4 != '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l257 {
+    SELECT COERCIBILITY(FALSE * '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l257-2 {
+    SELECT COLLATION(FALSE * '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l267 {
+    SELECT COERCIBILITY(v5 + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l267-2 {
+    SELECT COLLATION(v5 + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l272 {
+    SELECT COERCIBILITY(v5 COLLATE utf8mb3_general_ci + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l272-2 {
+    SELECT COLLATION(v5 COLLATE utf8mb3_general_ci + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l277 {
+    SELECT COERCIBILITY(v6 + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l277-2 {
+    SELECT COLLATION(v6 + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l282 {
+    SELECT COERCIBILITY(v6 COLLATE latin1_bin + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l282-2 {
+    SELECT COLLATION(v6 COLLATE latin1_bin + '26:27:28') FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l287 {
+    SELECT COERCIBILITY('str' - CURRENT_TIME()) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l287-2 {
+    SELECT COLLATION('str' - CURRENT_TIME()) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l292 {
+    SELECT COERCIBILITY(v2 / 1001) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l292-2 {
+    SELECT COLLATION(v2 / 1001) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l297 {
+    SELECT COERCIBILITY(v2 COLLATE utf8mb4_0900_as_cs / 1001) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l297-2 {
+    SELECT COLLATION(v2 COLLATE utf8mb4_0900_as_cs / 1001) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l302 {
+    SELECT COERCIBILITY(1001 < CONVERT('34', CHAR)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l302-2 {
+    SELECT COLLATION(1001 < CONVERT('34', CHAR)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l307 {
+    SELECT COERCIBILITY(2002.5 < CONVERT('34', CHAR)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l307-2 {
+    SELECT COLLATION(2002.5 < CONVERT('34', CHAR)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    binary
+}
+
+@setup s1
+test l327 {
+    SELECT COERCIBILITY(NULLIF('str' COLLATE utf8mb4_bin, '26:27:28')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l327-2 {
+    SELECT COLLATION(NULLIF('str' COLLATE utf8mb4_bin, '26:27:28')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_bin
+}
+
+@setup s1
+test l332 {
+    SELECT COERCIBILITY(NULLIF('\{"a": 1, "b": \{"c": 30\}\}', '26:27:28')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    4
+}
+
+@setup s1
+test l332-2 {
+    SELECT COLLATION(NULLIF('\{"a": 1, "b": \{"c": 30\}\}', '26:27:28')) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_bin
+}
+
+@setup s1
+test l337 {
+    SELECT COERCIBILITY(REPEAT(v1, 1001)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l337-2 {
+    SELECT COLLATION(REPEAT(v1, 1001)) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    utf8mb4_0900_bin
+}
+
+@setup s1
+test l342 {
+    SELECT COERCIBILITY(SUBSTR(v6, CONVERT('2020-02-20 20:20:20', DATETIME))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l342-2 {
+    SELECT COLLATION(SUBSTR(v6, CONVERT('2020-02-20 20:20:20', DATETIME))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    latin1_bin
+}
+
+@setup s1
+test l347 {
+    SELECT COERCIBILITY(SUBSTR(v6 COLLATE latin1_bin, CONVERT('2020-02-20 20:20:20', DATETIME))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l347-2 {
+    SELECT COLLATION(SUBSTR(v6 COLLATE latin1_bin, CONVERT('2020-02-20 20:20:20', DATETIME))) FROM temp_tbl LIMIT 1;
+}
+expect unordered {
+    latin1_bin
+}

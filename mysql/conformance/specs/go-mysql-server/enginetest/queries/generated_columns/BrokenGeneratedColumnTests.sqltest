@@ -1,0 +1,19 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/generated_columns.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1 (a int primary key, b int, c int generated always as (a + b) virtual);
+    create trigger t1insert before update on t1 for each row set new.c = 2;
+}
+
+@setup s1
+test l1848 {
+    insert into t1 (a, b) values (1, 2), (3, 4);
+}
+expect unordered {
+}

@@ -1,0 +1,82 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/procedure_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE PROCEDURE p1() SELECT 5;
+}
+
+setup s2 {
+    CREATE PROCEDURE p2() SELECT 6;
+}
+
+setup s3 {
+    CALL p1;
+}
+
+setup s4 {
+    CALL p2;
+}
+
+@setup s1
+test l2739 {
+    CALL p1;
+}
+expect unordered {
+    5
+}
+
+@setup s2
+test l2747 {
+    CALL p2;
+}
+expect unordered {
+    6
+}
+
+@setup s1
+@setup s3
+test l2755 {
+    DROP PROCEDURE p1;
+}
+expect unordered {
+}
+
+# mysql-error: 1305 42000 PROCEDURE test.p1 does not exist
+test l2759 {
+    CALL p1;
+}
+expect error {
+}
+
+@setup s2
+@setup s4
+test l2763 {
+    DROP PROCEDURE IF EXISTS p2;
+}
+expect unordered {
+}
+
+# mysql-error: 1305 42000 PROCEDURE test.p2 does not exist
+test l2767 {
+    CALL p2;
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 PROCEDURE test.p3 does not exist
+test l2771 {
+    DROP PROCEDURE p3;
+}
+expect error {
+}
+
+test l2775 {
+    DROP PROCEDURE IF EXISTS p4;
+}
+expect unordered {
+}
