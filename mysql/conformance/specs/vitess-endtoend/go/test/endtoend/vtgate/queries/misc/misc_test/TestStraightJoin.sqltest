@@ -1,0 +1,62 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine=InnoDB;
+}
+
+setup s2 {
+    create table tbl
+(
+    id         bigint,
+    unq_col    bigint,
+    nonunq_col bigint not null,
+    primary key (id),
+    unique (unq_col)
+) Engine = InnoDB;
+    insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10);
+    insert into t1(id1, id2) values (10, 11), (20, 13);
+}
+
+@setup s1
+test l789 {
+    insert into t1(id1, id2) values (10, 11), (20, 13);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l791 {
+    select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col;
+}
+expect unordered {
+    0|10|11
+    10|10|11
+    30|20|13
+    40|10|11
+    4|20|13
+}
+
+@setup s1
+@setup s2
+test l801 {
+    select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col;
+}
+expect unordered {
+    0|10|11
+    10|10|11
+    30|20|13
+    40|10|11
+    4|20|13
+}

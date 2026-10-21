@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-16576 {
+    SELECT MAKEDATE(time'00:00:59.2132234', 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-16578 {
+    SELECT MAKEDATE(time'00:00:59.2132234', 0xFF666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-16579 {
+    SELECT MAKEDATE(time'00:00:59.2132234', 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-16584 {
+    SELECT MAKEDATE(time'00:00:59.2132234', 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-16588 {
+    SELECT MAKEDATE(time'00:00:59.2132234', time '10:04:58');
+}
+expect {
+    2334-01-17
+}
+
+test t-16589 {
+    SELECT MAKEDATE(time'00:00:59.2132234', time '31:34:58');
+}
+expect {
+    2917-03-21
+}
+
+test t-16598 {
+    SELECT MAKEDATE(time'00:00:59.2132234', date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-16602 {
+    SELECT MAKEDATE(time'00:00:59.2132234', timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-16609 {
+    SELECT MAKEDATE(time'00:00:59.2132234', '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-16610 {
+    SELECT MAKEDATE(time'00:00:59.2132234', '20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-16614 {
+    SELECT MAKEDATE(time'00:00:59.2132234', '103458.123456');
+}
+expect {
+    2342-04-05
+}
+
+test t-16623 {
+    SELECT MAKEDATE(time'00:00:59.2132234', time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-16631 {
+    SELECT MAKEDATE(time'00:00:59.2132234', '5 10:34:58');
+}
+expect {
+    2059-01-05
+}
+
+test t-16642 {
+    SELECT MAKEDATE(time'00:00:59.2132234', cast(true as json));
+}
+expect {
+    2059-01-01
+}
+
+test t-16656 {
+    SELECT MAKEDATE(time'00:00:59.2132234', cast('2' as json));
+}
+expect {
+    2059-01-02
+}
+
+test t-16662 {
+    SELECT MAKEDATE(time'00:00:59.2132234', cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-16665 {
+    SELECT MAKEDATE(time'00:00:59.2132234', cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-16678 {
+    SELECT MAKEDATE(time'00:00:59.2132234', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-16699 {
+    SELECT MAKEDATE(time '-101:34:58', -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-16704 {
+    SELECT MAKEDATE(time '-101:34:58', -1.5);
+}
+expect {
+    NULL
+}
+
+test t-16713 {
+    SELECT MAKEDATE(time '-101:34:58', '');
+}
+expect {
+    NULL
+}
+
+test t-16714 {
+    SELECT MAKEDATE(time '-101:34:58', _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-16715 {
+    SELECT MAKEDATE(time '-101:34:58', 0x0);
+}
+expect {
+    NULL
+}
+
+test t-16721 {
+    SELECT MAKEDATE(time '-101:34:58', 0b1001);
+}
+expect {
+    NULL
+}
+
+test t-16722 {
+    SELECT MAKEDATE(time '-101:34:58', b'1001');
+}
+expect {
+    NULL
+}
+
+test t-16724 {
+    SELECT MAKEDATE(time '-101:34:58', x'09');
+}
+expect {
+    NULL
+}
+
+test t-16726 {
+    SELECT MAKEDATE(time '-101:34:58', true);
+}
+expect {
+    NULL
+}
+
+test t-16732 {
+    SELECT MAKEDATE(time '-101:34:58', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-16733 {
+    SELECT MAKEDATE(time '-101:34:58', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-16739 {
+    SELECT MAKEDATE(time '-101:34:58', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-16747 {
+    SELECT MAKEDATE(time '-101:34:58', -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-16749 {
+    SELECT MAKEDATE(time '-101:34:58', JSON_ARRAY());
+}
+expect {
+    NULL
+}
+
+test t-16782 {
+    SELECT MAKEDATE(time '-101:34:58', '103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-16791 {
+    SELECT MAKEDATE(time '-101:34:58', '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-16792 {
+    SELECT MAKEDATE(time '-101:34:58', '101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-16798 {
+    SELECT MAKEDATE(time '-101:34:58', '1969-02-18');
+}
+expect {
+    NULL
+}
+
+test t-16801 {
+    SELECT MAKEDATE(time '-101:34:58', '3001-02-18 23:59:59');
+}
+expect {
+    NULL
+}
+
+test t-16805 {
+    SELECT MAKEDATE(time '-101:34:58', cast(false as json));
+}
+expect {
+    NULL
+}
+
+test t-16806 {
+    SELECT MAKEDATE(time '-101:34:58', cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-16807 {
+    SELECT MAKEDATE(time '-101:34:58', cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-16832 {
+    SELECT MAKEDATE(time '-101:34:58', cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-16855 {
+    SELECT MAKEDATE(time '-5 10:34:58', ' 255 foo');
+}
+expect {
+    NULL
+}
+
+test t-16861 {
+    SELECT MAKEDATE(time '-5 10:34:58', -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-16866 {
+    SELECT MAKEDATE(time '-5 10:34:58', -1.5);
+}
+expect {
+    NULL
+}
+
+test t-16870 {
+    SELECT MAKEDATE(time '-5 10:34:58', -1.7);
+}
+expect {
+    NULL
+}
+
+test t-16873 {
+    SELECT MAKEDATE(time '-5 10:34:58', 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-16874 {
+    SELECT MAKEDATE(time '-5 10:34:58', _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-16878 {
+    SELECT MAKEDATE(time '-5 10:34:58', 0x1);
+}
+expect {
+    NULL
+}
+
+test t-16882 {
+    SELECT MAKEDATE(time '-5 10:34:58', X'ff');
+}
+expect {
+    NULL
+}
+
+test t-16895 {
+    SELECT MAKEDATE(time '-5 10:34:58', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-16907 {
+    SELECT MAKEDATE(time '-5 10:34:58', 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-16913 {
+    SELECT MAKEDATE(time '-5 10:34:58', time '31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-16920 {
+    SELECT MAKEDATE(time '-5 10:34:58', time '130:34:58.6');
+}
+expect {
+    NULL
+}
+
+test t-16946 {
+    SELECT MAKEDATE(time '-5 10:34:58', time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-16959 {
+    SELECT MAKEDATE(time '-5 10:34:58', '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-16965 {
+    SELECT MAKEDATE(time '-5 10:34:58', cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-16980 {
+    SELECT MAKEDATE(time '-5 10:34:58', cast('2' as json));
+}
+expect {
+    NULL
+}
+
+test t-16991 {
+    SELECT MAKEDATE(time '-5 10:34:58', cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-17000 {
+    SELECT MAKEDATE(time '-5 10:34:58', cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-17004 {
+    SELECT MAKEDATE(time '-5 10:34:58', cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-17013 {
+    SELECT MAKEDATE('10:04:58', ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-17015 {
+    SELECT MAKEDATE('10:04:58', ' 255 ');
+}
+expect {
+    2010-09-12
+}
+
+test t-17016 {
+    SELECT MAKEDATE('10:04:58', '\t1foo\t');
+}
+expect {
+    2010-01-01
+}
+
+test t-17023 {
+    SELECT MAKEDATE('10:04:58', -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-17027 {
+    SELECT MAKEDATE('10:04:58', 1.5);
+}
+expect {
+    2010-01-02
+}
+
+test t-17033 {
+    SELECT MAKEDATE('10:04:58', '1.5');
+}
+expect {
+    2010-01-01
+}
+
+test t-17059 {
+    SELECT MAKEDATE('10:04:58', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-17065 {
+    SELECT MAKEDATE('10:04:58', 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-17085 {
+    SELECT MAKEDATE('10:04:58', timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-17087 {
+    SELECT MAKEDATE('10:04:58', timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-17097 {
+    SELECT MAKEDATE('10:04:58', '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-17098 {
+    SELECT MAKEDATE('10:04:58', '20000101');
+}
+expect {
+    NULL
+}
+
+test t-17116 {
+    SELECT MAKEDATE('10:04:58', '101:34:58');
+}
+expect {
+    2010-04-11
+}
+
+test t-17137 {
+    SELECT MAKEDATE('10:04:58', cast(1.1 as json));
+}
+expect {
+    2010-01-01
+}
+
+test t-17146 {
+    SELECT MAKEDATE('10:04:58', cast('18446744073709551615' as json));
+}
+expect {
+    NULL
+}
+
+test t-17153 {
+    SELECT MAKEDATE('10:04:58', cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-17166 {
+    SELECT MAKEDATE('10:04:58', cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-17171 {
+    SELECT MAKEDATE('10:04:58', cast(time '5 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-17181 {
+    SELECT MAKEDATE('101:34:58', 1.0e0);
+}
+expect {
+    0101-01-01
+}
+
+test t-17198 {
+    SELECT MAKEDATE('101:34:58', _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-17225 {
+    SELECT MAKEDATE('101:34:58', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-17227 {
+    SELECT MAKEDATE('101:34:58', 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-17229 {
+    SELECT MAKEDATE('101:34:58', 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-17260 {
+    SELECT MAKEDATE('101:34:58', '20000101');
+}
+expect {
+    NULL
+}
+
+test t-17264 {
+    SELECT MAKEDATE('101:34:58', '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-17265 {
+    SELECT MAKEDATE('101:34:58', '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-17268 {
+    SELECT MAKEDATE('101:34:58', '103458.123456foo');
+}
+expect {
+    0384-04-04
+}
+
+test t-17269 {
+    SELECT MAKEDATE('101:34:58', time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-17283 {
+    SELECT MAKEDATE('101:34:58', '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-17293 {
+    SELECT MAKEDATE('101:34:58', cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-17307 {
+    SELECT MAKEDATE('101:34:58', cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-17326 {
+    SELECT MAKEDATE('101:34:58', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-17350 {
+    SELECT MAKEDATE('5 10:34:58', 0.000);
+}
+expect {
+    NULL
+}
+
+test t-17361 {
+    SELECT MAKEDATE('5 10:34:58', '');
+}
+expect {
+    NULL
+}
+
+test t-17363 {
+    SELECT MAKEDATE('5 10:34:58', 0x0);
+}
+expect {
+    NULL
+}
+
+test t-17366 {
+    SELECT MAKEDATE('5 10:34:58', X'00');
+}
+expect {
+    NULL
+}
+
+test t-17368 {
+    SELECT MAKEDATE('5 10:34:58', X'ff');
+}
+expect {
+    2005-09-12
+}
+
+test t-17370 {
+    SELECT MAKEDATE('5 10:34:58', b'1001');
+}
+expect {
+    2005-01-09
+}
+
+test t-17380 {
+    SELECT MAKEDATE('5 10:34:58', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-17385 {
+    SELECT MAKEDATE('5 10:34:58', NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-17388 {
+    SELECT MAKEDATE('5 10:34:58', 0xFF666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-17400 {
+    SELECT MAKEDATE('5 10:34:58', time '32:34:58');
+}
+expect {
+    2890-08-06
+}
+
+test t-17402 {
+    SELECT MAKEDATE('5 10:34:58', time '5 10:34:58');
+}
+expect {
+    5573-09-30
+}
+
+test t-17409 {
+    SELECT MAKEDATE('5 10:34:58', timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-17412 {
+    SELECT MAKEDATE('5 10:34:58', timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-17419 {
+    SELECT MAKEDATE('5 10:34:58', '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-17420 {
+    SELECT MAKEDATE('5 10:34:58', '20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-17425 {
+    SELECT MAKEDATE('5 10:34:58', '20000101103458foo');
+}
+expect {
+    NULL
+}
+
+test t-17428 {
+    SELECT MAKEDATE('5 10:34:58', '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-17432 {
+    SELECT MAKEDATE('5 10:34:58', time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-17447 {
+    SELECT MAKEDATE('5 10:34:58', '1970-01-01 00:00:01');
+}
+expect {
+    2010-05-24
+}
+
+test t-17449 {
+    SELECT MAKEDATE('5 10:34:58', '3001-02-18 23:59:59');
+}
+expect {
+    2013-03-20
+}
+
+test t-17454 {
+    SELECT MAKEDATE('5 10:34:58', cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-17462 {
+    SELECT MAKEDATE('5 10:34:58', cast(-1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-17470 {
+    SELECT MAKEDATE('5 10:34:58', cast('18446744073709551615' as json));
+}
+expect {
+    NULL
+}
+
+test t-17478 {
+    SELECT MAKEDATE('5 10:34:58', cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-17480 {
+    SELECT MAKEDATE('5 10:34:58', cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-17494 {
+    SELECT MAKEDATE('5 10:34:58', cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-17502 {
+    SELECT MAKEDATE('2000-01-01', '\t1foo\t');
+}
+expect {
+    2000-01-01
+}
+
+test t-17511 {
+    SELECT MAKEDATE('2000-01-01', 0.0);
+}
+expect {
+    NULL
+}
+
+test t-17522 {
+    SELECT MAKEDATE('2000-01-01', _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-17527 {
+    SELECT MAKEDATE('2000-01-01', 0xff);
+}
+expect {
+    2000-09-11
+}
+
+test t-17534 {
+    SELECT MAKEDATE('2000-01-01', x'09');
+}
+expect {
+    2000-01-09
+}
+
+test t-17536 {
+    SELECT MAKEDATE('2000-01-01', true);
+}
+expect {
+    2000-01-01
+}
+
+test t-17537 {
+    SELECT MAKEDATE('2000-01-01', false);
+}
+expect {
+    NULL
+}
+
+test t-17541 {
+    SELECT MAKEDATE('2000-01-01', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-17546 {
+    SELECT MAKEDATE('2000-01-01', NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-17554 {
+    SELECT MAKEDATE('2000-01-01', -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-17562 {
+    SELECT MAKEDATE('2000-01-01', time '32:34:58');
+}
+expect {
+    2885-08-05
+}
+
+test t-17581 {
+    SELECT MAKEDATE('2000-01-01', '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-17587 {
+    SELECT MAKEDATE('2000-01-01', '20000101103458foo');
+}
+expect {
+    NULL
+}
+
+test t-17593 {
+    SELECT MAKEDATE('2000-01-01', time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-17597 {
+    SELECT MAKEDATE('2000-01-01', time'00:00:59.01011');
+}
+expect {
+    2000-02-28
+}
+
+test t-17603 {
+    SELECT MAKEDATE('2000-01-01', '5 10:34:58');
+}
+expect {
+    2000-01-05
+}
+
+test t-17609 {
+    SELECT MAKEDATE('2000-01-01', '1970-01-01 00:00:01');
+}
+expect {
+    2005-05-23
+}
+
+test t-17610 {
+    SELECT MAKEDATE('2000-01-01', '3001-02-19 00:00:00');
+}
+expect {
+    2008-03-19
+}
+
+test t-17611 {
+    SELECT MAKEDATE('2000-01-01', '3001-02-18 23:59:59');
+}
+expect {
+    2008-03-19
+}
+
+test t-17644 {
+    SELECT MAKEDATE('2000-01-01', cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-17646 {
+    SELECT MAKEDATE('2000-01-01', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-17673 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', 0.0);
+}
+expect {
+    NULL
+}
+
+test t-17675 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', 1.5);
+}
+expect {
+    2000-01-02
+}
+
+test t-17677 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', 1.1);
+}
+expect {
+    2000-01-01
+}
+
+test t-17680 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', -1.7);
+}
+expect {
+    NULL
+}
+
+test t-17681 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', '1.5');
+}
+expect {
+    2000-01-01
+}
+
+test t-17701 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', 1 * NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-17719 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-17732 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-17737 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-17745 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-17752 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-17769 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-17770 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', '1969-02-18');
+}
+expect {
+    2005-05-22
+}
+
+test t-17778 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-17784 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast(2 as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-17788 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-17791 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast('1.1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-17798 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-17799 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-17803 {
+    SELECT MAKEDATE('2000-01-01 12:34:58', cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-17825 {
+    SELECT MAKEDATE('0000-02-29', ' 255 ');
+}
+expect {
+    2000-09-11
+}
+
+test t-17833 {
+    SELECT MAKEDATE('0000-02-29', -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-17869 {
+    SELECT MAKEDATE('0000-02-29', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-17875 {
+    SELECT MAKEDATE('0000-02-29', 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-17880 {
+    SELECT MAKEDATE('0000-02-29', 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-17881 {
+    SELECT MAKEDATE('0000-02-29', -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-17888 {
+    SELECT MAKEDATE('0000-02-29', time '5 10:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-17892 {
+    SELECT MAKEDATE('0000-02-29', time '130:34:58.6');
+}
+expect {
+    5568-09-30
+}
+
+test t-17897 {
+    SELECT MAKEDATE('0000-02-29', timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-17898 {
+    SELECT MAKEDATE('0000-02-29', timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-17913 {
+    SELECT MAKEDATE('0000-02-29', '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-17933 {
+    SELECT MAKEDATE('0000-02-29', '1970-01-01 00:00:01');
+}
+expect {
+    2005-05-23
+}
+
+test t-17940 {
+    SELECT MAKEDATE('0000-02-29', cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-17957 {
+    SELECT MAKEDATE('0000-02-29', cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-17959 {
+    SELECT MAKEDATE('0000-02-29', cast('invalid' as json));
+}
+expect error {
+}
+
+test t-17970 {
+    SELECT MAKEDATE('0000-02-29', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-17978 {
+    SELECT MAKEDATE('0000-02-29', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-17979 {
+    SELECT MAKEDATE('0000-02-29', cast(time '12:34:56' as json));
+}
+expect {
+    NULL
+}
+
+test t-17991 {
+    SELECT MAKEDATE('0000-01-03', 1.0e0);
+}
+expect {
+    2000-01-01
+}
+
+test t-17992 {
+    SELECT MAKEDATE('0000-01-03', 1.5e0);
+}
+expect {
+    2000-01-02
+}
+
+test t-17993 {
+    SELECT MAKEDATE('0000-01-03', -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-18012 {
+    SELECT MAKEDATE('0000-01-03', 0x1);
+}
+expect {
+    2000-01-01
+}
+
+test t-18015 {
+    SELECT MAKEDATE('0000-01-03', X'01');
+}
+expect {
+    2000-01-01
+}
+
+test t-18018 {
+    SELECT MAKEDATE('0000-01-03', b'1001');
+}
+expect {
+    2000-01-09
+}
+
+test t-18022 {
+    SELECT MAKEDATE('0000-01-03', true);
+}
+expect {
+    2000-01-01
+}
+
+test t-18056 {
+    SELECT MAKEDATE('0000-01-03', date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-18061 {
+    SELECT MAKEDATE('0000-01-03', 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-18077 {
+    SELECT MAKEDATE('0000-01-03', '103458foo');
+}
+expect {
+    2283-04-04
+}
+
+test t-18087 {
+    SELECT MAKEDATE('0000-01-03', '10:04:58');
+}
+expect {
+    2000-01-10
+}
+
+test t-18114 {
+    SELECT MAKEDATE('0000-01-03', cast('2' as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-18115 {
+    SELECT MAKEDATE('0000-01-03', cast('1.1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-18116 {
+    SELECT MAKEDATE('0000-01-03', cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-18120 {
+    SELECT MAKEDATE('0000-01-03', cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-18129 {
+    SELECT MAKEDATE('0000-01-03', cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-18130 {
+    SELECT MAKEDATE('0000-01-03', cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-18138 {
+    SELECT MAKEDATE('0000-01-03', cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-18143 {
+    SELECT MAKEDATE('0000-01-03', cast(time '5 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-18151 {
+    SELECT MAKEDATE('1969-02-18', ' 255 foo');
+}
+expect {
+    1969-09-12
+}
+
+test t-18154 {
+    SELECT MAKEDATE('1969-02-18', 1.5e0);
+}
+expect {
+    1969-01-02
+}
+
+test t-18175 {
+    SELECT MAKEDATE('1969-02-18', 0xff);
+}
+expect {
+    1969-09-12
+}
+
+test t-18190 {
+    SELECT MAKEDATE('1969-02-18', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-18191 {
+    SELECT MAKEDATE('1969-02-18', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-18201 {
+    SELECT MAKEDATE('1969-02-18', 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-18205 {
+    SELECT MAKEDATE('1969-02-18', -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-18216 {
+    SELECT MAKEDATE('1969-02-18', time '130:34:58.6');
+}
+expect {
+    5537-10-01
+}
+
+test t-18217 {
+    SELECT MAKEDATE('1969-02-18', time '5 10:34:58.9');
+}
+expect {
+    5537-10-01
+}
+
+test t-18228 {
+    SELECT MAKEDATE('1969-02-18', 103458.123456);
+}
+expect {
+    2252-04-04
+}
+
+test t-18237 {
+    SELECT MAKEDATE('1969-02-18', '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-18239 {
+    SELECT MAKEDATE('1969-02-18', '103458foo');
+}
+expect {
+    2252-04-04
+}
+
+test t-18241 {
+    SELECT MAKEDATE('1969-02-18', time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-18248 {
+    SELECT MAKEDATE('1969-02-18', time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-18249 {
+    SELECT MAKEDATE('1969-02-18', '10:04:58');
+}
+expect {
+    1969-01-10
+}
+
+test t-18253 {
+    SELECT MAKEDATE('1969-02-18', '2000-01-01 12:34:58');
+}
+expect {
+    1974-06-23
+}
+
+test t-18255 {
+    SELECT MAKEDATE('1969-02-18', '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-18265 {
+    SELECT MAKEDATE('1969-02-18', cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-18271 {
+    SELECT MAKEDATE('1969-02-18', cast(1.1 as json));
+}
+expect {
+    1969-01-01
+}
+
+test t-18278 {
+    SELECT MAKEDATE('1969-02-18', cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-18284 {
+    SELECT MAKEDATE('1969-02-18', cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-18301 {
+    SELECT MAKEDATE('1969-02-18', cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-18303 {
+    SELECT MAKEDATE('1969-02-18', cast(time '12:34:56' as json));
+}
+expect {
+    NULL
+}
+
+test t-18314 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-18318 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', 1.1e0);
+}
+expect {
+    1970-01-01
+}
+
+test t-18328 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', -1.7);
+}
+expect {
+    NULL
+}
+
+test t-18331 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-18348 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-18359 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-18366 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-18368 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', JSON_OBJECT());
+}
+expect {
+    NULL
+}
+
+test t-18388 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', 20000101);
+}
+expect {
+    NULL
+}
+
+test t-18406 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', time'00:00:01.0000');
+}
+expect {
+    1970-01-01
+}
+
+test t-18409 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-18414 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', '2000-01-01');
+}
+expect {
+    1975-06-23
+}
+
+test t-18420 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', '3001-02-19 00:00:00');
+}
+expect {
+    1978-03-20
+}
+
+test t-18423 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast(1 as json));
+}
+expect {
+    1970-01-01
+}
+
+test t-18429 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast('true' as json));
+}
+expect {
+    1970-01-01
+}
+
+test t-18430 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-18438 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast('2' as json));
+}
+expect {
+    1970-01-02
+}
+
+test t-18440 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-18462 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-18466 {
+    SELECT MAKEDATE('1970-01-01 00:00:01', cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-18478 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 1.5e0);
+}
+expect {
+    3001-01-02
+}
+
+test t-18480 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 1.1e0);
+}
+expect {
+    3001-01-01
+}
+
+test t-18485 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 1.5);
+}
+expect {
+    3001-01-02
+}
+
+test t-18489 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', -1.1);
+}
+expect {
+    NULL
+}
+
+test t-18490 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', -1.7);
+}
+expect {
+    NULL
+}
+
+test t-18493 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-18494 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-18514 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-18525 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-18528 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-18554 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', '20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-18556 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', '20000101');
+}
+expect {
+    NULL
+}
+
+test t-18562 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-18573 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', '10:04:58');
+}
+expect {
+    3001-01-10
+}
+
+test t-18575 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', '5 10:34:58');
+}
+expect {
+    3001-01-05
+}
+
+test t-18591 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', cast('true' as json));
+}
+expect {
+    3001-01-01
+}
+
+test t-18592 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-18608 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-18619 {
+    SELECT MAKEDATE('3001-02-19 00:00:00', cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-18642 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', 1.1e0);
+}
+expect {
+    3001-01-01
+}
+
+test t-18646 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', 0.000);
+}
+expect {
+    NULL
+}
+
+test t-18657 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', '');
+}
+expect {
+    NULL
+}
+
+test t-18659 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', 0x0);
+}
+expect {
+    NULL
+}
+
+test t-18660 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', 0x1);
+}
+expect {
+    3001-01-01
+}
+
+test t-18689 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-18718 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', '20000101');
+}
+expect {
+    NULL
+}
+
+test t-18720 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', '103458.123456');
+}
+expect {
+    3284-04-03
+}
+
+test t-18725 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', '103458foo');
+}
+expect {
+    3284-04-03
+}
+
+test t-18732 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', time'00:00:59.2132234');
+}
+expect {
+    3001-02-28
+}
+
+test t-18739 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', '2000-01-01 12:34:58');
+}
+expect {
+    3006-06-23
+}
+
+test t-18746 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-18753 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', cast('true' as json));
+}
+expect {
+    3001-01-01
+}
+
+test t-18776 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-18777 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-18780 {
+    SELECT MAKEDATE('3001-02-18 23:59:59', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-18795 {
+    SELECT MAKEDATE(cast(0 as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-18803 {
+    SELECT MAKEDATE(cast(0 as json), -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-18805 {
+    SELECT MAKEDATE(cast(0 as json), -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-18808 {
+    SELECT MAKEDATE(cast(0 as json), 0.000);
+}
+expect {
+    NULL
+}
+
+test t-18812 {
+    SELECT MAKEDATE(cast(0 as json), 1.7);
+}
+expect {
+    2000-01-02
+}
+
+test t-18829 {
+    SELECT MAKEDATE(cast(0 as json), 0x9);
+}
+expect {
+    2000-01-09
+}
+
+test t-18832 {
+    SELECT MAKEDATE(cast(0 as json), true);
+}
+expect {
+    2000-01-01
+}
+
+test t-18859 {
+    SELECT MAKEDATE(cast(0 as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-18862 {
+    SELECT MAKEDATE(cast(0 as json), time '31:34:58.4');
+}
+expect {
+    2858-03-20
+}
+
+test t-18864 {
+    SELECT MAKEDATE(cast(0 as json), time '130:34:58.6');
+}
+expect {
+    5568-09-30
+}
+
+test t-18877 {
+    SELECT MAKEDATE(cast(0 as json), '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-18882 {
+    SELECT MAKEDATE(cast(0 as json), '103458.123456');
+}
+expect {
+    2283-04-04
+}
+
+test t-18886 {
+    SELECT MAKEDATE(cast(0 as json), '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-18887 {
+    SELECT MAKEDATE(cast(0 as json), '103458foo');
+}
+expect {
+    2283-04-04
+}
+
+test t-18894 {
+    SELECT MAKEDATE(cast(0 as json), time'00:00:59.2132234');
+}
+expect {
+    2000-02-28
+}
+
+test t-18907 {
+    SELECT MAKEDATE(cast(0 as json), '3001-02-18 23:59:59');
+}
+expect {
+    2008-03-19
+}
+
+test t-18909 {
+    SELECT MAKEDATE(cast(0 as json), cast(1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-18916 {
+    SELECT MAKEDATE(cast(0 as json), cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-18920 {
+    SELECT MAKEDATE(cast(0 as json), cast(-1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-18924 {
+    SELECT MAKEDATE(cast(0 as json), cast('2' as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-18929 {
+    SELECT MAKEDATE(cast(0 as json), cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-18934 {
+    SELECT MAKEDATE(cast(0 as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-18940 {
+    SELECT MAKEDATE(cast(0 as json), cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-18950 {
+    SELECT MAKEDATE(cast(0 as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-18951 {
+    SELECT MAKEDATE(cast(0 as json), cast(time '12:34:56' as json));
+}
+expect {
+    NULL
+}
+
+test t-18971 {
+    SELECT MAKEDATE(cast(1 as json), 1.5);
+}
+expect {
+    2001-01-02
+}
+
+test t-18975 {
+    SELECT MAKEDATE(cast(1 as json), -1.1);
+}
+expect {
+    NULL
+}
+
+test t-18988 {
+    SELECT MAKEDATE(cast(1 as json), X'ff');
+}
+expect {
+    2001-09-12
+}
+
+test t-18992 {
+    SELECT MAKEDATE(cast(1 as json), x'09');
+}
+expect {
+    2001-01-09
+}
+
+test t-18997 {
+    SELECT MAKEDATE(cast(1 as json), 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-18999 {
+    SELECT MAKEDATE(cast(1 as json), NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-19001 {
+    SELECT MAKEDATE(cast(1 as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-19036 {
+    SELECT MAKEDATE(cast(1 as json), 20000101);
+}
+expect {
+    NULL
+}
+
+test t-19044 {
+    SELECT MAKEDATE(cast(1 as json), '103458.123456');
+}
+expect {
+    2284-04-04
+}
+
+test t-19052 {
+    SELECT MAKEDATE(cast(1 as json), time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-19057 {
+    SELECT MAKEDATE(cast(1 as json), time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-19071 {
+    SELECT MAKEDATE(cast(1 as json), cast(1 as json));
+}
+expect {
+    2001-01-01
+}
+
+test t-19084 {
+    SELECT MAKEDATE(cast(1 as json), cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-19127 {
+    SELECT MAKEDATE(cast(true as json), -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-19143 {
+    SELECT MAKEDATE(cast(true as json), '');
+}
+expect {
+    NULL
+}
+
+test t-19165 {
+    SELECT MAKEDATE(cast(true as json), 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-19183 {
+    SELECT MAKEDATE(cast(true as json), time '130:34:58');
+}
+expect {
+    5569-09-30
+}
+
+test t-19191 {
+    SELECT MAKEDATE(cast(true as json), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-19192 {
+    SELECT MAKEDATE(cast(true as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-19201 {
+    SELECT MAKEDATE(cast(true as json), '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-19209 {
+    SELECT MAKEDATE(cast(true as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-19230 {
+    SELECT MAKEDATE(cast(true as json), '3001-02-19 00:00:00');
+}
+expect {
+    2009-03-20
+}
+
+test t-19232 {
+    SELECT MAKEDATE(cast(true as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-19233 {
+    SELECT MAKEDATE(cast(true as json), cast(1 as json));
+}
+expect {
+    2001-01-01
+}
+
+test t-19237 {
+    SELECT MAKEDATE(cast(true as json), cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-19243 {
+    SELECT MAKEDATE(cast(true as json), cast(1.1 as json));
+}
+expect {
+    2001-01-01
+}
+
+test t-19251 {
+    SELECT MAKEDATE(cast(true as json), cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-19261 {
+    SELECT MAKEDATE(cast(true as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-19266 {
+    SELECT MAKEDATE(cast(true as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19268 {
+    SELECT MAKEDATE(cast(true as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19276 {
+    SELECT MAKEDATE(cast(true as json), cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-19278 {
+    SELECT MAKEDATE(cast(false as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-19288 {
+    SELECT MAKEDATE(cast(false as json), 1.5e0);
+}
+expect {
+    2000-01-02
+}
+
+test t-19289 {
+    SELECT MAKEDATE(cast(false as json), -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-19296 {
+    SELECT MAKEDATE(cast(false as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-19302 {
+    SELECT MAKEDATE(cast(false as json), '-1.5');
+}
+expect {
+    NULL
+}
+
+test t-19309 {
+    SELECT MAKEDATE(cast(false as json), 0xff);
+}
+expect {
+    2000-09-11
+}
+
+test t-19314 {
+    SELECT MAKEDATE(cast(false as json), b'1001');
+}
+expect {
+    2000-01-09
+}
+
+test t-19315 {
+    SELECT MAKEDATE(cast(false as json), 0x9);
+}
+expect {
+    2000-01-09
+}
+
+test t-19317 {
+    SELECT MAKEDATE(cast(false as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-19331 {
+    SELECT MAKEDATE(cast(false as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-19333 {
+    SELECT MAKEDATE(cast(false as json), 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-19335 {
+    SELECT MAKEDATE(cast(false as json), 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-19343 {
+    SELECT MAKEDATE(cast(false as json), time '31:34:58');
+}
+expect {
+    2858-03-20
+}
+
+test t-19346 {
+    SELECT MAKEDATE(cast(false as json), time '5 10:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-19351 {
+    SELECT MAKEDATE(cast(false as json), time '5 10:34:58.9');
+}
+expect {
+    5568-09-30
+}
+
+test t-19368 {
+    SELECT MAKEDATE(cast(false as json), '103458.123456');
+}
+expect {
+    2283-04-04
+}
+
+test t-19369 {
+    SELECT MAKEDATE(cast(false as json), '20000101103458foo');
+}
+expect {
+    NULL
+}
+
+test t-19372 {
+    SELECT MAKEDATE(cast(false as json), '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-19379 {
+    SELECT MAKEDATE(cast(false as json), time'00:00:59.01011');
+}
+expect {
+    2000-02-28
+}
+
+test t-19386 {
+    SELECT MAKEDATE(cast(false as json), '2000-01-01');
+}
+expect {
+    2005-06-22
+}
+
+test t-19389 {
+    SELECT MAKEDATE(cast(false as json), '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-19393 {
+    SELECT MAKEDATE(cast(false as json), '3001-02-18 23:59:59');
+}
+expect {
+    2008-03-19
+}
+
+test t-19396 {
+    SELECT MAKEDATE(cast(false as json), cast(true as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-19397 {
+    SELECT MAKEDATE(cast(false as json), cast(false as json));
+}
+expect {
+    NULL
+}
+
+test t-19399 {
+    SELECT MAKEDATE(cast(false as json), cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-19401 {
+    SELECT MAKEDATE(cast(false as json), cast('true' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-19412 {
+    SELECT MAKEDATE(cast(false as json), cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-19418 {
+    SELECT MAKEDATE(cast(false as json), cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-19423 {
+    SELECT MAKEDATE(cast(false as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-19427 {
+    SELECT MAKEDATE(cast(false as json), cast('["ab", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-19432 {
+    SELECT MAKEDATE(cast(false as json), cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-19453 {
+    SELECT MAKEDATE(cast('\{\}' as json), -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-19465 {
+    SELECT MAKEDATE(cast('\{\}' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-19467 {
+    SELECT MAKEDATE(cast('\{\}' as json), '');
+}
+expect {
+    NULL
+}
+
+test t-19498 {
+    SELECT MAKEDATE(cast('\{\}' as json), -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-19499 {
+    SELECT MAKEDATE(cast('\{\}' as json), 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-19501 {
+    SELECT MAKEDATE(cast('\{\}' as json), -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-19508 {
+    SELECT MAKEDATE(cast('\{\}' as json), time '5 10:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-19509 {
+    SELECT MAKEDATE(cast('\{\}' as json), time '10:04:58.1');
+}
+expect {
+    2275-01-16
+}
+
+test t-19523 {
+    SELECT MAKEDATE(cast('\{\}' as json), 103458);
+}
+expect {
+    2283-04-04
+}
+
+test t-19539 {
+    SELECT MAKEDATE(cast('\{\}' as json), time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-19575 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-19586 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-19588 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-19589 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast('["ab", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-19591 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19593 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19600 {
+    SELECT MAKEDATE(cast('\{\}' as json), cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-19605 {
+    SELECT MAKEDATE(cast('[]' as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-19627 {
+    SELECT MAKEDATE(cast('[]' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-19636 {
+    SELECT MAKEDATE(cast('[]' as json), X'ff');
+}
+expect {
+    2000-09-11
+}
+
+test t-19637 {
+    SELECT MAKEDATE(cast('[]' as json), 0b1001);
+}
+expect {
+    2000-01-09
+}
+
+test t-19648 {
+    SELECT MAKEDATE(cast('[]' as json), 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-19655 {
+    SELECT MAKEDATE(cast('[]' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-19658 {
+    SELECT MAKEDATE(cast('[]' as json), 0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-19669 {
+    SELECT MAKEDATE(cast('[]' as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-19696 {
+    SELECT MAKEDATE(cast('[]' as json), '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-19701 {
+    SELECT MAKEDATE(cast('[]' as json), time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-19704 {
+    SELECT MAKEDATE(cast('[]' as json), time'00:00:59.2132234');
+}
+expect {
+    2000-02-28
+}
+
+test t-19719 {
+    SELECT MAKEDATE(cast('[]' as json), cast(1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-19722 {
+    SELECT MAKEDATE(cast('[]' as json), cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19729 {
+    SELECT MAKEDATE(cast('[]' as json), cast(1.1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-19752 {
+    SELECT MAKEDATE(cast('[]' as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19755 {
+    SELECT MAKEDATE(cast('[]' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19764 {
+    SELECT MAKEDATE(cast('null' as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-19766 {
+    SELECT MAKEDATE(cast('null' as json), 255);
+}
+expect {
+    2000-09-11
+}
+
+test t-19779 {
+    SELECT MAKEDATE(cast('null' as json), 0.0);
+}
+expect {
+    NULL
+}
+
+test t-19781 {
+    SELECT MAKEDATE(cast('null' as json), 1.5);
+}
+expect {
+    2000-01-02
+}
+
+test t-19784 {
+    SELECT MAKEDATE(cast('null' as json), 1.7);
+}
+expect {
+    2000-01-02
+}
+
+test t-19802 {
+    SELECT MAKEDATE(cast('null' as json), x'09');
+}
+expect {
+    2000-01-09
+}
+
+test t-19803 {
+    SELECT MAKEDATE(cast('null' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-19806 {
+    SELECT MAKEDATE(cast('null' as json), NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-19820 {
+    SELECT MAKEDATE(cast('null' as json), 0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-19822 {
+    SELECT MAKEDATE(cast('null' as json), -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-19829 {
+    SELECT MAKEDATE(cast('null' as json), time '31:34:58');
+}
+expect {
+    2858-03-20
+}
+
+test t-19833 {
+    SELECT MAKEDATE(cast('null' as json), time '10:04:58.1');
+}
+expect {
+    2275-01-16
+}
+
+test t-19840 {
+    SELECT MAKEDATE(cast('null' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-19854 {
+    SELECT MAKEDATE(cast('null' as json), '103458.123456');
+}
+expect {
+    2283-04-04
+}
+
+test t-19856 {
+    SELECT MAKEDATE(cast('null' as json), '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-19859 {
+    SELECT MAKEDATE(cast('null' as json), '103458foo');
+}
+expect {
+    2283-04-04
+}
+
+test t-19861 {
+    SELECT MAKEDATE(cast('null' as json), time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-19870 {
+    SELECT MAKEDATE(cast('null' as json), '101:34:58');
+}
+expect {
+    2000-04-10
+}
+
+test t-19875 {
+    SELECT MAKEDATE(cast('null' as json), '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-19877 {
+    SELECT MAKEDATE(cast('null' as json), '1970-01-01 00:00:01');
+}
+expect {
+    2005-05-23
+}
+
+test t-19879 {
+    SELECT MAKEDATE(cast('null' as json), '3001-02-18 23:59:59');
+}
+expect {
+    2008-03-19
+}
+
+test t-19881 {
+    SELECT MAKEDATE(cast('null' as json), cast(1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-19898 {
+    SELECT MAKEDATE(cast('null' as json), cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-19909 {
+    SELECT MAKEDATE(cast('null' as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-19912 {
+    SELECT MAKEDATE(cast('null' as json), cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-19916 {
+    SELECT MAKEDATE(cast('null' as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-19920 {
+    SELECT MAKEDATE(cast('null' as json), cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-19931 {
+    SELECT MAKEDATE(cast('true' as json), ' 255 ');
+}
+expect {
+    2001-09-12
+}
+
+test t-19948 {
+    SELECT MAKEDATE(cast('true' as json), -1.7);
+}
+expect {
+    NULL
+}
+
+test t-19951 {
+    SELECT MAKEDATE(cast('true' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-19953 {
+    SELECT MAKEDATE(cast('true' as json), '');
+}
+expect {
+    NULL
+}
+
+test t-19954 {
+    SELECT MAKEDATE(cast('true' as json), _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-19955 {
+    SELECT MAKEDATE(cast('true' as json), 0x0);
+}
+expect {
+    NULL
+}
+
+test t-19967 {
+    SELECT MAKEDATE(cast('true' as json), false);
+}
+expect {
+    NULL
+}
+
+test t-19976 {
+    SELECT MAKEDATE(cast('true' as json), NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-19980 {
+    SELECT MAKEDATE(cast('true' as json), 0xFF666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-19982 {
+    SELECT MAKEDATE(cast('true' as json), 0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-19991 {
+    SELECT MAKEDATE(cast('true' as json), time '31:34:58');
+}
+expect {
+    2859-03-21
+}
+
+test t-20006 {
+    SELECT MAKEDATE(cast('true' as json), 20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-20008 {
+    SELECT MAKEDATE(cast('true' as json), 20000101);
+}
+expect {
+    NULL
+}
+
+test t-20017 {
+    SELECT MAKEDATE(cast('true' as json), '20000101103458foo');
+}
+expect {
+    NULL
+}
+
+test t-20019 {
+    SELECT MAKEDATE(cast('true' as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-20027 {
+    SELECT MAKEDATE(cast('true' as json), time'00:00:59.01011');
+}
+expect {
+    2001-02-28
+}
+
+test t-20029 {
+    SELECT MAKEDATE(cast('true' as json), time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-20032 {
+    SELECT MAKEDATE(cast('true' as json), '101:34:58');
+}
+expect {
+    2001-04-11
+}
+
+test t-20039 {
+    SELECT MAKEDATE(cast('true' as json), '1970-01-01 00:00:01');
+}
+expect {
+    2006-05-24
+}
+
+test t-20040 {
+    SELECT MAKEDATE(cast('true' as json), '3001-02-19 00:00:00');
+}
+expect {
+    2009-03-20
+}
+
+test t-20047 {
+    SELECT MAKEDATE(cast('true' as json), cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-20069 {
+    SELECT MAKEDATE(cast('true' as json), cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-20070 {
+    SELECT MAKEDATE(cast('true' as json), cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-20076 {
+    SELECT MAKEDATE(cast('true' as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-20080 {
+    SELECT MAKEDATE(cast('true' as json), cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-20082 {
+    SELECT MAKEDATE(cast('true' as json), cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-20084 {
+    SELECT MAKEDATE(cast('true' as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-20086 {
+    SELECT MAKEDATE(cast('true' as json), cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-20095 {
+    SELECT MAKEDATE(cast('false' as json), ' 255 foo');
+}
+expect {
+    2000-09-11
+}
+
+test t-20100 {
+    SELECT MAKEDATE(cast('false' as json), 1.1e0);
+}
+expect {
+    2000-01-01
+}
+
+test t-20119 {
+    SELECT MAKEDATE(cast('false' as json), 0xff);
+}
+expect {
+    2000-09-11
+}
+
+test t-20132 {
+    SELECT MAKEDATE(cast('false' as json), NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-20135 {
+    SELECT MAKEDATE(cast('false' as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-20136 {
+    SELECT MAKEDATE(cast('false' as json), NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-20145 {
+    SELECT MAKEDATE(cast('false' as json), 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-20152 {
+    SELECT MAKEDATE(cast('false' as json), time '10:04:58');
+}
+expect {
+    2275-01-16
+}
+
+test t-20158 {
+    SELECT MAKEDATE(cast('false' as json), time '31:34:58.4');
+}
+expect {
+    2858-03-20
+}
+
+test t-20163 {
+    SELECT MAKEDATE(cast('false' as json), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-20167 {
+    SELECT MAKEDATE(cast('false' as json), 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-20170 {
+    SELECT MAKEDATE(cast('false' as json), 20000101);
+}
+expect {
+    NULL
+}
+
+test t-20178 {
+    SELECT MAKEDATE(cast('false' as json), '103458.123456');
+}
+expect {
+    2283-04-04
+}
+
+test t-20197 {
+    SELECT MAKEDATE(cast('false' as json), '2000-01-01 12:34:58');
+}
+expect {
+    2005-06-22
+}
+
+test t-20219 {
+    SELECT MAKEDATE(cast('false' as json), cast('1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-20226 {
+    SELECT MAKEDATE(cast('false' as json), cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-20238 {
+    SELECT MAKEDATE(cast('false' as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-20422 {
+    SELECT MAKEDATE(cast(2 as json), 1.5e0);
+}
+expect {
+    2002-01-02
+}
+
+test t-20425 {
+    SELECT MAKEDATE(cast(2 as json), -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-20431 {
+    SELECT MAKEDATE(cast(2 as json), 1.1);
+}
+expect {
+    2002-01-01
+}
+
+test t-20434 {
+    SELECT MAKEDATE(cast(2 as json), -1.7);
+}
+expect {
+    NULL
+}
+
+test t-20442 {
+    SELECT MAKEDATE(cast(2 as json), 0x1);
+}
+expect {
+    2002-01-01
+}
+
+test t-20444 {
+    SELECT MAKEDATE(cast(2 as json), X'00');
+}
+expect {
+    NULL
+}
+
+test t-20450 {
+    SELECT MAKEDATE(cast(2 as json), x'09');
+}
+expect {
+    2002-01-09
+}
+
+test t-20459 {
+    SELECT MAKEDATE(cast(2 as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-20473 {
+    SELECT MAKEDATE(cast(2 as json), -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-20478 {
+    SELECT MAKEDATE(cast(2 as json), time '32:34:58');
+}
+expect {
+    2887-08-06
+}
+
+test t-20482 {
+    SELECT MAKEDATE(cast(2 as json), time '31:34:58.4');
+}
+expect {
+    2860-03-20
+}
+
+test t-20495 {
+    SELECT MAKEDATE(cast(2 as json), 103458);
+}
+expect {
+    2285-04-04
+}
+
+test t-20502 {
+    SELECT MAKEDATE(cast(2 as json), '103458.123456');
+}
+expect {
+    2285-04-04
+}
+
+test t-20511 {
+    SELECT MAKEDATE(cast(2 as json), time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-20513 {
+    SELECT MAKEDATE(cast(2 as json), time'00:00:59.01011');
+}
+expect {
+    2002-02-28
+}
+
+test t-20518 {
+    SELECT MAKEDATE(cast(2 as json), '101:34:58');
+}
+expect {
+    2002-04-11
+}
+
+test t-20524 {
+    SELECT MAKEDATE(cast(2 as json), '1969-02-18');
+}
+expect {
+    2007-05-23
+}
+
+test t-20545 {
+    SELECT MAKEDATE(cast(2 as json), cast('1.1' as json));
+}
+expect {
+    2002-01-01
+}
+
+test t-20556 {
+    SELECT MAKEDATE(cast(2 as json), cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-20564 {
+    SELECT MAKEDATE(cast(2 as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-20574 {
+    SELECT MAKEDATE(cast(1.1 as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-20583 {
+    SELECT MAKEDATE(cast(1.1 as json), 1.0e0);
+}
+expect {
+    2001-01-01
+}
+
+test t-20585 {
+    SELECT MAKEDATE(cast(1.1 as json), -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-20588 {
+    SELECT MAKEDATE(cast(1.1 as json), -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-20600 {
+    SELECT MAKEDATE(cast(1.1 as json), _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-20604 {
+    SELECT MAKEDATE(cast(1.1 as json), 0x1);
+}
+expect {
+    2001-01-01
+}
+
+test t-20611 {
+    SELECT MAKEDATE(cast(1.1 as json), 0x9);
+}
+expect {
+    2001-01-09
+}
+
+test t-20640 {
+    SELECT MAKEDATE(cast(1.1 as json), time '32:34:58');
+}
+expect {
+    2886-08-06
+}
+
+test t-20651 {
+    SELECT MAKEDATE(cast(1.1 as json), timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-20653 {
+    SELECT MAKEDATE(cast(1.1 as json), 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-20657 {
+    SELECT MAKEDATE(cast(1.1 as json), 103458);
+}
+expect {
+    2284-04-04
+}
+
+test t-20659 {
+    SELECT MAKEDATE(cast(1.1 as json), '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-20661 {
+    SELECT MAKEDATE(cast(1.1 as json), '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-20672 {
+    SELECT MAKEDATE(cast(1.1 as json), time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-20705 {
+    SELECT MAKEDATE(cast(1.1 as json), cast('1' as json));
+}
+expect {
+    2001-01-01
+}
+
+test t-20712 {
+    SELECT MAKEDATE(cast(1.1 as json), cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-20713 {
+    SELECT MAKEDATE(cast(1.1 as json), cast('invalid' as json));
+}
+expect error {
+}
+
+test t-20718 {
+    SELECT MAKEDATE(cast(1.1 as json), cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-20720 {
+    SELECT MAKEDATE(cast(1.1 as json), cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-20734 {
+    SELECT MAKEDATE(cast(1.1 as json), cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-20765 {
+    SELECT MAKEDATE(cast(-1.1 as json), 0x0);
+}
+expect {
+    NULL
+}
+
+test t-20776 {
+    SELECT MAKEDATE(cast(-1.1 as json), true);
+}
+expect {
+    NULL
+}
+
+test t-20793 {
+    SELECT MAKEDATE(cast(-1.1 as json), 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-20798 {
+    SELECT MAKEDATE(cast(-1.1 as json), JSON_OBJECT());
+}
+expect {
+    NULL
+}
+
+test t-20812 {
+    SELECT MAKEDATE(cast(-1.1 as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-20813 {
+    SELECT MAKEDATE(cast(-1.1 as json), timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-20832 {
+    SELECT MAKEDATE(cast(-1.1 as json), '103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-20838 {
+    SELECT MAKEDATE(cast(-1.1 as json), time'00:00:59.2132234');
+}
+expect {
+    NULL
+}
+
+test t-20851 {
+    SELECT MAKEDATE(cast(-1.1 as json), '3001-02-18 23:59:59');
+}
+expect {
+    NULL
+}
+
+test t-20853 {
+    SELECT MAKEDATE(cast(-1.1 as json), cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-20867 {
+    SELECT MAKEDATE(cast(-1.1 as json), cast('1' as json));
+}
+expect {
+    NULL
+}
+
+test t-20881 {
+    SELECT MAKEDATE(cast(-1.1 as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-20888 {
+    SELECT MAKEDATE(cast(-1.1 as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-20894 {
+    SELECT MAKEDATE(cast(-1.1 as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-20896 {
+    SELECT MAKEDATE(cast(-1.1 as json), cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-20924 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-20930 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), X'00');
+}
+expect {
+    NULL
+}
+
+test t-20933 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), 0b1001);
+}
+expect {
+    NULL
+}
+
+test t-20936 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), x'09');
+}
+expect {
+    NULL
+}
+
+test t-20951 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-20959 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-20966 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-20974 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-20996 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-20999 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), time'00:00:59.01011');
+}
+expect {
+    NULL
+}
+
+test t-21014 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-21030 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), cast('2' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-21052 {
+    SELECT MAKEDATE(cast(9223372036854775807 as json), cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-21065 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), ' 255 ');
+}
+expect {
+    NULL
+}
+
+test t-21074 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-21078 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-21084 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), '-1.5');
+}
+expect {
+    NULL
+}
+
+test t-21085 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-21086 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-21090 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), 0x1);
+}
+expect {
+    NULL
+}
+
+test t-21126 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), time '32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21128 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21129 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), time '10:04:58.1');
+}
+expect {
+    NULL
+}
+
+test t-21133 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), time '5 10:34:58.9');
+}
+expect {
+    NULL
+}
+
+test t-21153 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-21157 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-21164 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21171 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-21175 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), '3001-02-18 23:59:59');
+}
+expect {
+    NULL
+}
+
+test t-21176 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-21179 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast(false as json));
+}
+expect {
+    NULL
+}
+
+test t-21183 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast('true' as json));
+}
+expect {
+    NULL
+}
+
+test t-21187 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast(1.1 as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-21199 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast('invalid' as json));
+}
+expect error {
+}
+
+test t-21201 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-21205 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-21207 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-21210 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-21216 {
+    SELECT MAKEDATE(cast(18446744073709551615 as json), cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-21226 {
+    SELECT MAKEDATE(cast('1' as json), ' 1 ');
+}
+expect {
+    2001-01-01
+}
+
+test t-21228 {
+    SELECT MAKEDATE(cast('1' as json), '\t1foo\t');
+}
+expect {
+    2001-01-01
+}
+
+test t-21243 {
+    SELECT MAKEDATE(cast('1' as json), -1.1);
+}
+expect {
+    NULL
+}
+
+test t-21267 {
+    SELECT MAKEDATE(cast('1' as json), NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-21288 {
+    SELECT MAKEDATE(cast('1' as json), time '32:34:58');
+}
+expect {
+    2886-08-06
+}
+
+test t-21293 {
+    SELECT MAKEDATE(cast('1' as json), time '32:34:58.5');
+}
+expect {
+    2886-08-07
+}
+
+test t-21303 {
+    SELECT MAKEDATE(cast('1' as json), 20000101103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-21322 {
+    SELECT MAKEDATE(cast('1' as json), time'00:00:01.0000');
+}
+expect {
+    2001-01-01
+}
+
+test t-21327 {
+    SELECT MAKEDATE(cast('1' as json), '10:04:58');
+}
+expect {
+    2001-01-10
+}
+
+test t-21351 {
+    SELECT MAKEDATE(cast('1' as json), cast(9223372036854775807 as json));
+}
+expect {
+    NULL
+}
+
+test t-21352 {
+    SELECT MAKEDATE(cast('1' as json), cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-21359 {
+    SELECT MAKEDATE(cast('1' as json), cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-21384 {
+    SELECT MAKEDATE(cast('2' as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-21387 {
+    SELECT MAKEDATE(cast('2' as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-21389 {
+    SELECT MAKEDATE(cast('2' as json), ' 255 ');
+}
+expect {
+    2002-09-12
+}
+
+test t-21401 {
+    SELECT MAKEDATE(cast('2' as json), 1.5);
+}
+expect {
+    2002-01-02
+}
+
+test t-21413 {
+    SELECT MAKEDATE(cast('2' as json), 0x0);
+}
+expect {
+    NULL
+}
+
+test t-21417 {
+    SELECT MAKEDATE(cast('2' as json), X'01');
+}
+expect {
+    2002-01-01
+}
+
+test t-21422 {
+    SELECT MAKEDATE(cast('2' as json), x'09');
+}
+expect {
+    2002-01-09
+}
+
+test t-21427 {
+    SELECT MAKEDATE(cast('2' as json), 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-21436 {
+    SELECT MAKEDATE(cast('2' as json), 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-21437 {
+    SELECT MAKEDATE(cast('2' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-21443 {
+    SELECT MAKEDATE(cast('2' as json), 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-21449 {
+    SELECT MAKEDATE(cast('2' as json), time '31:34:58');
+}
+expect {
+    2860-03-20
+}
+
+test t-21451 {
+    SELECT MAKEDATE(cast('2' as json), time '130:34:58');
+}
+expect {
+    5570-09-30
+}
+
+test t-21453 {
+    SELECT MAKEDATE(cast('2' as json), time '10:04:58.1');
+}
+expect {
+    2277-01-16
+}
+
+test t-21470 {
+    SELECT MAKEDATE(cast('2' as json), '20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-21477 {
+    SELECT MAKEDATE(cast('2' as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-21491 {
+    SELECT MAKEDATE(cast('2' as json), '5 10:34:58');
+}
+expect {
+    2002-01-05
+}
+
+test t-21495 {
+    SELECT MAKEDATE(cast('2' as json), '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-21502 {
+    SELECT MAKEDATE(cast('2' as json), cast(true as json));
+}
+expect {
+    2002-01-01
+}
+
+test t-21507 {
+    SELECT MAKEDATE(cast('2' as json), cast('true' as json));
+}
+expect {
+    2002-01-01
+}
+
+test t-21516 {
+    SELECT MAKEDATE(cast('2' as json), cast('2' as json));
+}
+expect {
+    2002-01-02
+}
+
+test t-21526 {
+    SELECT MAKEDATE(cast('2' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-21528 {
+    SELECT MAKEDATE(cast('2' as json), cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-21541 {
+    SELECT MAKEDATE(cast('2' as json), cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-21549 {
+    SELECT MAKEDATE(cast('1.1' as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-21552 {
+    SELECT MAKEDATE(cast('1.1' as json), '\t1foo\t');
+}
+expect {
+    2001-01-01
+}
+
+test t-21564 {
+    SELECT MAKEDATE(cast('1.1' as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-21576 {
+    SELECT MAKEDATE(cast('1.1' as json), 0x1);
+}
+expect {
+    2001-01-01
+}
+
+test t-21577 {
+    SELECT MAKEDATE(cast('1.1' as json), 0xff);
+}
+expect {
+    2001-09-12
+}
+
+test t-21593 {
+    SELECT MAKEDATE(cast('1.1' as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-21599 {
+    SELECT MAKEDATE(cast('1.1' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-21613 {
+    SELECT MAKEDATE(cast('1.1' as json), time '130:34:58');
+}
+expect {
+    5569-09-30
+}
+
+test t-21614 {
+    SELECT MAKEDATE(cast('1.1' as json), time '5 10:34:58');
+}
+expect {
+    5569-09-30
+}
+
+test t-21619 {
+    SELECT MAKEDATE(cast('1.1' as json), time '5 10:34:58.9');
+}
+expect {
+    5569-10-01
+}
+
+test t-21621 {
+    SELECT MAKEDATE(cast('1.1' as json), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21642 {
+    SELECT MAKEDATE(cast('1.1' as json), '103458.123456foo');
+}
+expect {
+    2284-04-04
+}
+
+test t-21657 {
+    SELECT MAKEDATE(cast('1.1' as json), '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-21662 {
+    SELECT MAKEDATE(cast('1.1' as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-21668 {
+    SELECT MAKEDATE(cast('1.1' as json), cast('null' as json));
+}
+expect {
+    NULL
+}
+
+test t-21678 {
+    SELECT MAKEDATE(cast('1.1' as json), cast('2' as json));
+}
+expect {
+    2001-01-02
+}
+
+test t-21693 {
+    SELECT MAKEDATE(cast('1.1' as json), cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-21712 {
+    SELECT MAKEDATE(cast('-1.1' as json), ' 1 ');
+}
+expect {
+    NULL
+}
+
+test t-21720 {
+    SELECT MAKEDATE(cast('-1.1' as json), 1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-21736 {
+    SELECT MAKEDATE(cast('-1.1' as json), _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-21740 {
+    SELECT MAKEDATE(cast('-1.1' as json), X'00');
+}
+expect {
+    NULL
+}
+
+test t-21744 {
+    SELECT MAKEDATE(cast('-1.1' as json), b'1001');
+}
+expect {
+    NULL
+}
+
+test t-21745 {
+    SELECT MAKEDATE(cast('-1.1' as json), 0x9);
+}
+expect {
+    NULL
+}
+
+test t-21747 {
+    SELECT MAKEDATE(cast('-1.1' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-21750 {
+    SELECT MAKEDATE(cast('-1.1' as json), NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-21752 {
+    SELECT MAKEDATE(cast('-1.1' as json), NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-21772 {
+    SELECT MAKEDATE(cast('-1.1' as json), time '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-21776 {
+    SELECT MAKEDATE(cast('-1.1' as json), time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21778 {
+    SELECT MAKEDATE(cast('-1.1' as json), time '31:34:58.4');
+}
+expect {
+    NULL
+}
+
+test t-21787 {
+    SELECT MAKEDATE(cast('-1.1' as json), 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-21788 {
+    SELECT MAKEDATE(cast('-1.1' as json), 20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-21795 {
+    SELECT MAKEDATE(cast('-1.1' as json), '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-21798 {
+    SELECT MAKEDATE(cast('-1.1' as json), '103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-21800 {
+    SELECT MAKEDATE(cast('-1.1' as json), '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-21801 {
+    SELECT MAKEDATE(cast('-1.1' as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-21810 {
+    SELECT MAKEDATE(cast('-1.1' as json), time'00:00:59.2132234');
+}
+expect {
+    NULL
+}
+
+test t-21813 {
+    SELECT MAKEDATE(cast('-1.1' as json), '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-21824 {
+    SELECT MAKEDATE(cast('-1.1' as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-21845 {
+    SELECT MAKEDATE(cast('-1.1' as json), cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-21850 {
+    SELECT MAKEDATE(cast('-1.1' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-21861 {
+    SELECT MAKEDATE(cast('-1.1' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-21864 {
+    SELECT MAKEDATE(cast('-1.1' as json), cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-21897 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), '');
+}
+expect {
+    NULL
+}
+
+test t-21908 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), x'09');
+}
+expect {
+    NULL
+}
+
+test t-21911 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), false);
+}
+expect {
+    NULL
+}
+
+test t-21917 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-21931 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-21936 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), time '32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21942 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), time '130:34:58.6');
+}
+expect {
+    NULL
+}
+
+test t-21945 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21946 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-21965 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), '103458foo');
+}
+expect {
+    NULL
+}
+
+test t-21974 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-21980 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), '0000-02-29');
+}
+expect {
+    NULL
+}
+
+test t-21986 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-22012 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-22017 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-22018 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-22023 {
+    SELECT MAKEDATE(cast('9223372036854775807' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-22039 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), ' 255 foo');
+}
+expect {
+    NULL
+}
+
+test t-22050 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-22057 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-22060 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-22063 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), 0xff);
+}
+expect {
+    NULL
+}
+
+test t-22069 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), 0x9);
+}
+expect {
+    NULL
+}
+
+test t-22088 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), 0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-22095 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), JSON_ARRAY());
+}
+expect {
+    NULL
+}
+
+test t-22102 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), time '31:34:58.4');
+}
+expect {
+    NULL
+}
+
+test t-22120 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), '20000101');
+}
+expect {
+    NULL
+}
+
+test t-22128 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), '103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-22137 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-22142 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), '0000-02-29');
+}
+expect {
+    NULL
+}
+
+test t-22149 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-22151 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast(false as json));
+}
+expect {
+    NULL
+}
+
+test t-22155 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast('true' as json));
+}
+expect {
+    NULL
+}
+
+test t-22160 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast(-1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-22166 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-22179 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-22182 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-22183 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-22189 {
+    SELECT MAKEDATE(cast('18446744073709551615' as json), cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-22203 {
+    SELECT MAKEDATE(cast('"foo"' as json), 1.0e0);
+}
+expect {
+    2000-01-01
+}
+
+test t-22204 {
+    SELECT MAKEDATE(cast('"foo"' as json), 1.5e0);
+}
+expect {
+    2000-01-02
+}
+
+test t-22205 {
+    SELECT MAKEDATE(cast('"foo"' as json), -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-22215 {
+    SELECT MAKEDATE(cast('"foo"' as json), -1.1);
+}
+expect {
+    NULL
+}
+
+test t-22219 {
+    SELECT MAKEDATE(cast('"foo"' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-22241 {
+    SELECT MAKEDATE(cast('"foo"' as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-22274 {
+    SELECT MAKEDATE(cast('"foo"' as json), 20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-22294 {
+    SELECT MAKEDATE(cast('"foo"' as json), time'00:00:01.0000');
+}
+expect {
+    2000-01-01
+}
+
+test t-22297 {
+    SELECT MAKEDATE(cast('"foo"' as json), time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-22298 {
+    SELECT MAKEDATE(cast('"foo"' as json), time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-22311 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast(1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-22318 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-22325 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast('1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-22327 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast('1.1' as json));
+}
+expect {
+    2000-01-01
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22333 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast('invalid' as json));
+}
+expect error {
+}
+
+test t-22337 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-22355 {
+    SELECT MAKEDATE(cast('"foo"' as json), cast(time '5 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-22356 {
+    SELECT MAKEDATE(cast('"bar"' as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-22374 {
+    SELECT MAKEDATE(cast('"bar"' as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-22392 {
+    SELECT MAKEDATE(cast('"bar"' as json), b'1001');
+}
+expect {
+    2000-01-09
+}
+
+test t-22409 {
+    SELECT MAKEDATE(cast('"bar"' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-22413 {
+    SELECT MAKEDATE(cast('"bar"' as json), 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-22438 {
+    SELECT MAKEDATE(cast('"bar"' as json), 20000101);
+}
+expect {
+    NULL
+}
+
+test t-22439 {
+    SELECT MAKEDATE(cast('"bar"' as json), 103458);
+}
+expect {
+    2283-04-04
+}
+
+test t-22441 {
+    SELECT MAKEDATE(cast('"bar"' as json), '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-22442 {
+    SELECT MAKEDATE(cast('"bar"' as json), '20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-22444 {
+    SELECT MAKEDATE(cast('"bar"' as json), '20000101');
+}
+expect {
+    NULL
+}
+
+test t-22449 {
+    SELECT MAKEDATE(cast('"bar"' as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-22456 {
+    SELECT MAKEDATE(cast('"bar"' as json), time'00:00:01.0000');
+}
+expect {
+    2000-01-01
+}
+
+test t-22459 {
+    SELECT MAKEDATE(cast('"bar"' as json), time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-22460 {
+    SELECT MAKEDATE(cast('"bar"' as json), time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-22462 {
+    SELECT MAKEDATE(cast('"bar"' as json), '101:34:58');
+}
+expect {
+    2000-04-10
+}
+
+test t-22471 {
+    SELECT MAKEDATE(cast('"bar"' as json), '3001-02-18 23:59:59');
+}
+expect {
+    2008-03-19
+}
+
+test t-22475 {
+    SELECT MAKEDATE(cast('"bar"' as json), cast(false as json));
+}
+expect {
+    NULL
+}
+
+test t-22479 {
+    SELECT MAKEDATE(cast('"bar"' as json), cast('true' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-22487 {
+    SELECT MAKEDATE(cast('"bar"' as json), cast('1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-22514 {
+    SELECT MAKEDATE(cast('"bar"' as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22519 {
+    SELECT MAKEDATE(cast('invalid' as json), 1);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22521 {
+    SELECT MAKEDATE(cast('invalid' as json), ' 0 ');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22525 {
+    SELECT MAKEDATE(cast('invalid' as json), ' 255 foo');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22529 {
+    SELECT MAKEDATE(cast('invalid' as json), -1.5e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22531 {
+    SELECT MAKEDATE(cast('invalid' as json), -1.1e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22534 {
+    SELECT MAKEDATE(cast('invalid' as json), 0.000);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22537 {
+    SELECT MAKEDATE(cast('invalid' as json), 1.1);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22543 {
+    SELECT MAKEDATE(cast('invalid' as json), 'foobar');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22550 {
+    SELECT MAKEDATE(cast('invalid' as json), X'00');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22551 {
+    SELECT MAKEDATE(cast('invalid' as json), X'01');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22552 {
+    SELECT MAKEDATE(cast('invalid' as json), X'ff');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22556 {
+    SELECT MAKEDATE(cast('invalid' as json), x'09');
+}
+expect error {
+}
+
+test t-22557 {
+    SELECT MAKEDATE(cast('invalid' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-22560 {
+    SELECT MAKEDATE(cast('invalid' as json), NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-22570 {
+    SELECT MAKEDATE(cast('invalid' as json), 1 - NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22581 {
+    SELECT MAKEDATE(cast('invalid' as json), JSON_ARRAY());
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22590 {
+    SELECT MAKEDATE(cast('invalid' as json), time '130:34:58.6');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22594 {
+    SELECT MAKEDATE(cast('invalid' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22595 {
+    SELECT MAKEDATE(cast('invalid' as json), timestamp '2000-01-01 10:34:58.978654');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22598 {
+    SELECT MAKEDATE(cast('invalid' as json), 20000101103458.1234);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22599 {
+    SELECT MAKEDATE(cast('invalid' as json), 20000101103458.123456);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22603 {
+    SELECT MAKEDATE(cast('invalid' as json), '20000101103458');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22616 {
+    SELECT MAKEDATE(cast('invalid' as json), time '-31:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22628 {
+    SELECT MAKEDATE(cast('invalid' as json), '0000-02-29');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22654 {
+    SELECT MAKEDATE(cast('invalid' as json), cast('18446744073709551615' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-22669 {
+    SELECT MAKEDATE(cast('invalid' as json), cast('\{"b": 2, "a": 1\}' as json));
+}
+expect error {
+}
+
+test t-22680 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-22696 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), 0.000);
+}
+expect {
+    NULL
+}
+
+test t-22700 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), 1.7);
+}
+expect {
+    2000-01-02
+}
+
+test t-22705 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-22747 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-22756 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-22768 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), '20000101');
+}
+expect {
+    NULL
+}
+
+test t-22785 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), '10:04:58');
+}
+expect {
+    2000-01-10
+}
+
+test t-22797 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast(1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-22800 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-22802 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast('null' as json));
+}
+expect {
+    NULL
+}
+
+test t-22816 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast('18446744073709551615' as json));
+}
+expect {
+    NULL
+}
+
+test t-22818 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-22826 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-22828 {
+    SELECT MAKEDATE(cast(_binary' "foo"' as json), cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-22859 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), 1.5);
+}
+expect {
+    2000-01-02
+}
+
+test t-22868 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-22871 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), 0x0);
+}
+expect {
+    NULL
+}
+
+test t-22875 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), X'01');
+}
+expect {
+    2000-01-01
+}
+
+test t-22876 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), X'ff');
+}
+expect {
+    2000-09-11
+}
+
+test t-22877 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), 0b1001);
+}
+expect {
+    2000-01-09
+}
+
+test t-22888 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-22900 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-22908 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), time '32:34:58');
+}
+expect {
+    2885-08-05
+}
+
+test t-22918 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-22923 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), 20000101103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-22937 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), '103458foo');
+}
+expect {
+    2283-04-04
+}
+
+test t-22941 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-22943 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), time'00:00:59.01011');
+}
+expect {
+    2000-02-28
+}
+
+test t-22964 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), cast('null' as json));
+}
+expect {
+    NULL
+}
+
+test t-22968 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), cast(2 as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-22976 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-22982 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-22993 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-23000 {
+    SELECT MAKEDATE(cast(_binary '"bar"' as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-23009 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), ' 255 ');
+}
+expect {
+    2000-09-11
+}
+
+test t-23019 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), 0.0);
+}
+expect {
+    NULL
+}
+
+test t-23022 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-23043 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-23044 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), true);
+}
+expect {
+    2000-01-01
+}
+
+test t-23058 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), 0xFF666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-23091 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-23124 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-23127 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast('true' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-23128 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-23131 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast(1.1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-23136 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast('2' as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-23146 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-23154 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-23161 {
+    SELECT MAKEDATE(cast(0xFF666F6F626172FF as json), cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-23168 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), 255);
+}
+expect {
+    2000-09-11
+}
+
+test t-23169 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-23180 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-23191 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-23215 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-23224 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-23235 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), time '10:04:58.1');
+}
+expect {
+    2275-01-16
+}
+
+test t-23238 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), time '130:34:58.6');
+}
+expect {
+    5568-09-30
+}
+
+test t-23240 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-23241 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-23244 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-23245 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-23259 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-23260 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-23278 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), '1969-02-18');
+}
+expect {
+    2005-05-22
+}
+
+test t-23279 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), '1970-01-01 00:00:01');
+}
+expect {
+    2005-05-23
+}
+
+test t-23292 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), cast(2 as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-23306 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-23311 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-23319 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-23322 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-23325 {
+    SELECT MAKEDATE(cast(0x666F6F626172FF as json), cast(time '12:34:56' as json));
+}
+expect {
+    NULL
+}
+
+test t-23328 {
+    SELECT MAKEDATE(cast(0b01 as json), 0);
+}
+expect {
+    NULL
+}
+
+test t-23330 {
+    SELECT MAKEDATE(cast(0b01 as json), 255);
+}
+expect {
+    2000-09-11
+}
+
+test t-23331 {
+    SELECT MAKEDATE(cast(0b01 as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-23333 {
+    SELECT MAKEDATE(cast(0b01 as json), ' 255 ');
+}
+expect {
+    2000-09-11
+}
+
+test t-23337 {
+    SELECT MAKEDATE(cast(0b01 as json), 1.0e0);
+}
+expect {
+    2000-01-01
+}
+
+test t-23355 {
+    SELECT MAKEDATE(cast(0b01 as json), '');
+}
+expect {
+    NULL
+}
+
+test t-23369 {
+    SELECT MAKEDATE(cast(0b01 as json), false);
+}
+expect {
+    NULL
+}
+
+test t-23373 {
+    SELECT MAKEDATE(cast(0b01 as json), NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-23379 {
+    SELECT MAKEDATE(cast(0b01 as json), NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-23380 {
+    SELECT MAKEDATE(cast(0b01 as json), 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-23383 {
+    SELECT MAKEDATE(cast(0b01 as json), 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-23408 {
+    SELECT MAKEDATE(cast(0b01 as json), 20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-23418 {
+    SELECT MAKEDATE(cast(0b01 as json), '103458.123456');
+}
+expect {
+    2283-04-04
+}
+
+test t-23431 {
+    SELECT MAKEDATE(cast(0b01 as json), time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-23432 {
+    SELECT MAKEDATE(cast(0b01 as json), time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-23456 {
+    SELECT MAKEDATE(cast(0b01 as json), cast(-1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-23458 {
+    SELECT MAKEDATE(cast(0b01 as json), cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-23465 {
+    SELECT MAKEDATE(cast(0b01 as json), cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-23477 {
+    SELECT MAKEDATE(cast(0b01 as json), cast('["ab", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-23488 {
+    SELECT MAKEDATE(cast(0b01 as json), cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-23491 {
+    SELECT MAKEDATE(cast(0b001 as json), 1);
+}
+expect {
+    2000-01-01
+}
+
+test t-23507 {
+    SELECT MAKEDATE(cast(0b001 as json), 1.5);
+}
+expect {
+    2000-01-02
+}
+
+test t-23517 {
+    SELECT MAKEDATE(cast(0b001 as json), '');
+}
+expect {
+    NULL
+}
+
+test t-23555 {
+    SELECT MAKEDATE(cast(0b001 as json), time '31:34:58');
+}
+expect {
+    2858-03-20
+}
+
+test t-23564 {
+    SELECT MAKEDATE(cast(0b001 as json), date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-23577 {
+    SELECT MAKEDATE(cast(0b001 as json), '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-23583 {
+    SELECT MAKEDATE(cast(0b001 as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-23593 {
+    SELECT MAKEDATE(cast(0b001 as json), time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-23598 {
+    SELECT MAKEDATE(cast(0b001 as json), '2000-01-01');
+}
+expect {
+    2005-06-22
+}
+
+test t-23603 {
+    SELECT MAKEDATE(cast(0b001 as json), '1970-01-01 00:00:01');
+}
+expect {
+    2005-05-23
+}
+
+test t-23606 {
+    SELECT MAKEDATE(cast(0b001 as json), cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-23639 {
+    SELECT MAKEDATE(cast(0b001 as json), cast('["ab", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-23648 {
+    SELECT MAKEDATE(cast(0b001 as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-23672 {
+    SELECT MAKEDATE(cast('["a"]' as json), 1.7);
+}
+expect {
+    2000-01-02
+}
+
+test t-23685 {
+    SELECT MAKEDATE(cast('["a"]' as json), X'01');
+}
+expect {
+    2000-01-01
+}
+
+test t-23702 {
+    SELECT MAKEDATE(cast('["a"]' as json), NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-23719 {
+    SELECT MAKEDATE(cast('["a"]' as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-23720 {
+    SELECT MAKEDATE(cast('["a"]' as json), time '5 10:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-23724 {
+    SELECT MAKEDATE(cast('["a"]' as json), time '130:34:58.6');
+}
+expect {
+    5568-09-30
+}
+
+test t-23729 {
+    SELECT MAKEDATE(cast('["a"]' as json), timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-23735 {
+    SELECT MAKEDATE(cast('["a"]' as json), 103458);
+}
+expect {
+    2283-04-04
+}
+
+test t-23740 {
+    SELECT MAKEDATE(cast('["a"]' as json), '20000101');
+}
+expect {
+    NULL
+}
+
+test t-23746 {
+    SELECT MAKEDATE(cast('["a"]' as json), '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-23760 {
+    SELECT MAKEDATE(cast('["a"]' as json), '2000-01-01');
+}
+expect {
+    2005-06-22
+}
+
+test t-23762 {
+    SELECT MAKEDATE(cast('["a"]' as json), '0000-02-29');
+}
+expect {
+    NULL
+}
+
+test t-23779 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast(1.1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-23780 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast(-1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-23793 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-23795 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-23796 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-23805 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-23813 {
+    SELECT MAKEDATE(cast('["a"]' as json), cast(time '5 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-23818 {
+    SELECT MAKEDATE(cast('["ab"]' as json), ' 1 ');
+}
+expect {
+    2000-01-01
+}
+
+test t-23825 {
+    SELECT MAKEDATE(cast('["ab"]' as json), -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-23839 {
+    SELECT MAKEDATE(cast('["ab"]' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-23841 {
+    SELECT MAKEDATE(cast('["ab"]' as json), '');
+}
+expect {
+    NULL
+}
+
+test t-23851 {
+    SELECT MAKEDATE(cast('["ab"]' as json), 0x9);
+}
+expect {
+    2000-01-09
+}
+
+test t-23873 {
+    SELECT MAKEDATE(cast('["ab"]' as json), 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-23885 {
+    SELECT MAKEDATE(cast('["ab"]' as json), time '32:34:58.5');
+}
+expect {
+    2885-08-06
+}
+
+test t-23891 {
+    SELECT MAKEDATE(cast('["ab"]' as json), timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-23892 {
+    SELECT MAKEDATE(cast('["ab"]' as json), timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-23896 {
+    SELECT MAKEDATE(cast('["ab"]' as json), 20000101);
+}
+expect {
+    NULL
+}
+
+test t-23906 {
+    SELECT MAKEDATE(cast('["ab"]' as json), '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-23908 {
+    SELECT MAKEDATE(cast('["ab"]' as json), '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-23909 {
+    SELECT MAKEDATE(cast('["ab"]' as json), '103458foo');
+}
+expect {
+    2283-04-04
+}
+
+test t-23914 {
+    SELECT MAKEDATE(cast('["ab"]' as json), time'00:00:01.0000');
+}
+expect {
+    2000-01-01
+}
+
+test t-23923 {
+    SELECT MAKEDATE(cast('["ab"]' as json), '2000-01-01 12:34:58');
+}
+expect {
+    2005-06-22
+}
+
+test t-23929 {
+    SELECT MAKEDATE(cast('["ab"]' as json), '3001-02-18 23:59:59');
+}
+expect {
+    2008-03-19
+}
+
+test t-23935 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-23937 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast('true' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-23938 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-23948 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-23954 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-23955 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-23956 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-23957 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-23959 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-23967 {
+    SELECT MAKEDATE(cast('["ab"]' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-24004 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-24006 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), 0x1);
+}
+expect {
+    2000-01-01
+}
+
+test t-24011 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), 0b1001);
+}
+expect {
+    2000-01-09
+}
+
+test t-24013 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), 0x9);
+}
+expect {
+    2000-01-09
+}
+
+test t-24018 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-24026 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-24043 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-24050 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-24054 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-24076 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), time'00:00:01.0000');
+}
+expect {
+    2000-01-01
+}
+
+test t-24083 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), '5 10:34:58');
+}
+expect {
+    2000-01-05
+}
+
+test t-24086 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), '0000-02-29');
+}
+expect {
+    NULL
+}
+
+test t-24088 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), '1969-02-18');
+}
+expect {
+    2005-05-22
+}
+
+test t-24119 {
+    SELECT MAKEDATE(cast('["ab", "cd", "ef"]' as json), cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-24139 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 1);
+}
+expect {
+    2000-01-01
+}
+
+test t-24146 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-24148 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 1.5e0);
+}
+expect {
+    2000-01-02
+}
+
+test t-24153 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 0.0);
+}
+expect {
+    NULL
+}
+
+test t-24158 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 1.7);
+}
+expect {
+    2000-01-02
+}
+
+test t-24163 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-24165 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), '');
+}
+expect {
+    NULL
+}
+
+test t-24166 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-24175 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 0x9);
+}
+expect {
+    2000-01-09
+}
+
+test t-24178 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), true);
+}
+expect {
+    2000-01-01
+}
+
+test t-24189 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-24204 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), time '32:34:58');
+}
+expect {
+    2885-08-05
+}
+
+test t-24205 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-24210 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), time '130:34:58.6');
+}
+expect {
+    5568-09-30
+}
+
+test t-24214 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-24217 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-24226 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), '20000101');
+}
+expect {
+    NULL
+}
+
+test t-24231 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-24262 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-24264 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), cast(2 as json));
+}
+expect {
+    2000-01-02
+}
+
+test t-24268 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-24277 {
+    SELECT MAKEDATE(cast('["ab", "ef"]' as json), cast('invalid' as json));
+}
+expect error {
+}
+
+test t-24307 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), ' 255 foo');
+}
+expect {
+    2000-09-11
+}
+
+test t-24313 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-24318 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-24319 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), 1.1);
+}
+expect {
+    2000-01-01
+}
+
+test t-24332 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), X'00');
+}
+expect {
+    NULL
+}
+
+test t-24345 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-24347 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-24353 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-24355 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-24365 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), time '31:34:58');
+}
+expect {
+    2858-03-20
+}
+
+test t-24371 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), time '32:34:58.5');
+}
+expect {
+    2885-08-06
+}
+
+test t-24397 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-24398 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-24412 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), '1969-02-18');
+}
+expect {
+    2005-05-22
+}
+
+test t-24429 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), cast(9223372036854775807 as json));
+}
+expect {
+    NULL
+}
+
+test t-24433 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), cast('1.1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-24437 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-24441 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-24449 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), cast('["ab", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-24456 {
+    SELECT MAKEDATE(cast('\{"a": 1, "b": 2\}' as json), cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-24470 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-24476 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-24503 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), false);
+}
+expect {
+    NULL
+}
+
+test t-24504 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-24513 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-24517 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-24522 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-24531 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), time '10:04:58.1');
+}
+expect {
+    2275-01-16
+}
+
+test t-24545 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), 103458);
+}
+expect {
+    2283-04-04
+}
+
+test t-24557 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), '103458foo');
+}
+expect {
+    2283-04-04
+}
+
+test t-24563 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), time'00:00:59.01011');
+}
+expect {
+    2000-02-28
+}
+
+test t-24566 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-24572 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), '0000-02-29');
+}
+expect {
+    NULL
+}
+
+test t-24575 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), '1970-01-01 00:00:01');
+}
+expect {
+    2005-05-23
+}
+
+test t-24582 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-24589 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), cast(1.1 as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-24593 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), cast('1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-24599 {
+    SELECT MAKEDATE(cast('\{"b": 2, "a": 1\}' as json), cast('"foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-24633 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), 1.0e0);
+}
+expect {
+    2000-01-01
+}
+
+test t-24637 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-24642 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), -1.5);
+}
+expect {
+    NULL
+}
+
+test t-24649 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-24652 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), _binary 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-24664 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), true);
+}
+expect {
+    2000-01-01
+}
+
+test t-24668 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-24673 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-24677 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-24678 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), 0xFF666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-24679 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-24691 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), time '130:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-24692 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), time '5 10:34:58');
+}
+expect {
+    5568-09-29
+}
+
+test t-24695 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), time '32:34:58.5');
+}
+expect {
+    2885-08-06
+}
+
+test t-24709 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-24711 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-24714 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '103458.123456');
+}
+expect {
+    2283-04-04
+}
+
+test t-24716 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-24725 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), time'00:00:59.01011');
+}
+expect {
+    2000-02-28
+}
+
+test t-24730 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '101:34:58');
+}
+expect {
+    2000-04-10
+}
+
+test t-24732 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '2000-01-01');
+}
+expect {
+    2005-06-22
+}
+
+test t-24735 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-24742 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast(true as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-24747 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast('true' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-24748 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast('false' as json));
+}
+expect {
+    NULL
+}
+
+test t-24754 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-24757 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast('1.1' as json));
+}
+expect {
+    2000-01-01
+}
+
+test t-24771 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-24776 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-24777 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-24782 {
+    SELECT MAKEDATE(cast('\{"c": 1, "b": 2\}' as json), cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-24789 {
+    SELECT MAKEDATE(cast('\{"b": 2, "c": 1\}' as json), ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-24791 {
+    SELECT MAKEDATE(cast('\{"b": 2, "c": 1\}' as json), ' 255 ');
+}
+expect {
+    2000-09-11
+}
+
+test t-24794 {
+    SELECT MAKEDATE(cast('\{"b": 2, "c": 1\}' as json), 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-24825 {
+    SELECT MAKEDATE(cast('\{"b": 2, "c": 1\}' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-24826 {
+    SELECT MAKEDATE(cast('\{"b": 2, "c": 1\}' as json), true);
+}
+expect {
+    2000-01-01
+}

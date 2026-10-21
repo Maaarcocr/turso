@@ -1,0 +1,343 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT REGEXP_SUBSTR('Michael!', '.*');
+}
+expect {
+    Michael!
+}
+
+test t-1 {
+    SELECT REGEXP_SUBSTR('new*\n*line', 'new\\\*.\\\*line');
+}
+expect {
+    NULL
+}
+
+test t-2 {
+    SELECT REGEXP_SUBSTR('a', '^[a-d]');
+}
+expect {
+    a
+}
+
+test t-3 {
+    SELECT REGEXP_SUBSTR('CamelCase', 'CAMELCASE');
+}
+expect {
+    CamelCase
+}
+
+test t-4 {
+    SELECT REGEXP_SUBSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-6 {
+    SELECT REGEXP_SUBSTR(' ', '[[:blank:]]');
+}
+expect raw {
+ 
+}
+
+test t-7 {
+    SELECT REGEXP_SUBSTR('\t', '[[:blank:]]');
+}
+expect raw {
+	
+}
+
+test t-8 {
+    SELECT REGEXP_SUBSTR(' ', '[[:space:]]');
+}
+expect raw {
+ 
+}
+
+test t-9 {
+    SELECT REGEXP_SUBSTR('\t', '[[:space:]]');
+}
+expect raw {
+	
+}
+
+test t-10 {
+    SELECT REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_general_ci);
+}
+expect {
+    a
+}
+
+test t-11 {
+    SELECT REGEXP_SUBSTR(_latin1'a', _latin1'A' collate latin1_bin);
+}
+expect {
+    NULL
+}
+
+test t-12 {
+    SELECT REGEXP_SUBSTR('a', '\\\p\{alphabetic\}');
+}
+expect {
+    a
+}
+
+test t-13 {
+    SELECT REGEXP_SUBSTR('a', '\\\P\{alphabetic\}');
+}
+expect {
+    NULL
+}
+
+test t-15 {
+    SELECT REGEXP_SUBSTR('a', '\\\p\{Lowercase_letter\}');
+}
+expect {
+    a
+}
+
+test t-16 {
+    SELECT REGEXP_SUBSTR('a', '\\\p\{Uppercase_letter\}');
+}
+expect {
+    a
+}
+
+test t-17 {
+    SELECT REGEXP_SUBSTR('A', '\\\p\{Lowercase_letter\}');
+}
+expect {
+    A
+}
+
+test t-18 {
+    SELECT REGEXP_SUBSTR('A', '\\\p\{Uppercase_letter\}');
+}
+expect {
+    A
+}
+
+test t-23 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'dog');
+}
+expect {
+    dog
+}
+
+test t-24 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'dog', 2);
+}
+expect {
+    dog
+}
+
+test t-25 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'dog', 1, 1);
+}
+expect {
+    dog
+}
+
+test t-26 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'i');
+}
+expect {
+    dog
+}
+
+test t-27 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-28 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'dog', 1, 2);
+}
+expect {
+    dog
+}
+
+test t-29 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'i');
+}
+expect {
+    dog
+}
+
+test t-30 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 2, 'c');
+}
+expect {
+    NULL
+}
+
+test t-31 {
+    SELECT REGEXP_SUBSTR('aa aaa aaaa', 'a\{2\}');
+}
+expect {
+    aa
+}
+
+test t-32 {
+    SELECT REGEXP_SUBSTR('aa aaa aaaa', 'a\{4\}');
+}
+expect {
+    aaaa
+}
+
+test t-33 {
+    SELECT REGEXP_SUBSTR(1234, 12);
+}
+expect {
+    12
+}
+
+test t-34 {
+    SELECT REGEXP_SUBSTR(1234, 12, 1);
+}
+expect {
+    12
+}
+
+# mysql-error: 3686 HY000 Index out of bounds in regular expression search.
+test t-35 {
+    SELECT REGEXP_SUBSTR(1234, 12, 100);
+}
+expect error {
+}
+
+test t-36 {
+    SELECT REGEXP_SUBSTR(1234, 12, 1, 1);
+}
+expect {
+    12
+}
+
+test t-37 {
+    SELECT REGEXP_SUBSTR(1234, 12, 1, 1, 'c');
+}
+expect {
+    12
+}
+
+test t-38 {
+    SELECT REGEXP_SUBSTR(NULL, 'DOG', 1, 1, 'i');
+}
+expect {
+    NULL
+}
+
+test t-39 {
+    SELECT REGEXP_SUBSTR('dog cat dog', NULL, 1, 1, 'i');
+}
+expect {
+    NULL
+}
+
+test t-40 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', NULL, 1, 'i');
+}
+expect {
+    NULL
+}
+
+test t-41 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, NULL, 'i');
+}
+expect {
+    NULL
+}
+
+test t-42 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test t-43 {
+    SELECT REGEXP_SUBSTR(NULL, '[', 1, 1, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test t-44 {
+    SELECT REGEXP_SUBSTR('dog cat dog', '[', NULL, 1, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test t-45 {
+    SELECT REGEXP_SUBSTR('dog cat dog', '[', 1, NULL, 'i');
+}
+expect error {
+}
+
+test t-46 {
+    SELECT REGEXP_SUBSTR('dog cat dog', '[', 1, 1, NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1583 42000 Incorrect parameters in the call to native function 'regexp_substr'
+test t-47 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 0, 1, 'i');
+}
+expect error {
+}
+
+# mysql-error: 1583 42000 Incorrect parameters in the call to native function 'regexp_substr'
+test t-48 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', -1, 1, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3686 HY000 Index out of bounds in regular expression search.
+test t-49 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 100, 1, 'i');
+}
+expect error {
+}
+
+# mysql-error: 1210 HY000 Incorrect arguments to regexp_substr
+test t-50 {
+    SELECT REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 0);
+}
+expect error {
+}
+
+test t-51 {
+    SELECT REGEXP_SUBSTR(' ', ' ', 1);
+}
+expect raw {
+ 
+}
+
+test t-52 {
+    SELECT REGEXP_SUBSTR(' ', ' ', 2);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3686 HY000 Index out of bounds in regular expression search.
+test t-53 {
+    SELECT REGEXP_SUBSTR(' ', ' ', 3);
+}
+expect error {
+}

@@ -1,0 +1,1351 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-1 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$**.b');
+}
+expect error {
+}
+
+test t-2 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.c');
+}
+expect {
+    NULL
+}
+
+test t-3 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-5 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.b[1]');
+}
+expect {
+    NULL
+}
+
+test t-6 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-7 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$**[0]');
+}
+expect error {
+}
+
+test t-8 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-9 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-10 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$**.a');
+}
+expect error {
+}
+
+test t-11 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-12 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-13 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[*].a');
+}
+expect error {
+}
+
+test t-14 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-15 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-16 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-17 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-18 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-19 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-20 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-21 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[0]');
+}
+expect {
+    ["a"]
+}
+
+test t-22 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[1]');
+}
+expect {
+    ["a"]
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-23 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$[2][*]');
+}
+expect error {
+}
+
+test t-24 {
+    SELECT JSON_KEYS('[ \{ "a": 1 \}, \{ "a": 2 \} ]', '$');
+}
+expect {
+    NULL
+}
+
+test t-25 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}');
+}
+expect {
+    ["a", "b"]
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-26 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$**.b');
+}
+expect error {
+}
+
+test t-27 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.c');
+}
+expect {
+    NULL
+}
+
+test t-28 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-30 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.b[1]');
+}
+expect {
+    ["c"]
+}
+
+test t-31 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-32 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$**[0]');
+}
+expect error {
+}
+
+test t-33 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-34 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-35 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$**.a');
+}
+expect error {
+}
+
+test t-36 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-37 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-38 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[*].a');
+}
+expect error {
+}
+
+test t-39 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-40 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-41 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-42 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-43 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-44 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-45 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-46 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-47 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[1]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-48 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$[2][*]');
+}
+expect error {
+}
+
+test t-49 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}', '$');
+}
+expect {
+    ["a", "b"]
+}
+
+test t-50 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}');
+}
+expect {
+    ["a", "b"]
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-51 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$**.b');
+}
+expect error {
+}
+
+test t-52 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.c');
+}
+expect {
+    NULL
+}
+
+test t-53 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-55 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.b[1]');
+}
+expect {
+    ["c"]
+}
+
+test t-56 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-57 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$**[0]');
+}
+expect error {
+}
+
+test t-58 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-59 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-60 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$**.a');
+}
+expect error {
+}
+
+test t-61 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-62 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-63 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[*].a');
+}
+expect error {
+}
+
+test t-64 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-65 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-66 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-67 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-68 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-69 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-70 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-71 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-72 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[1]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-73 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$[2][*]');
+}
+expect error {
+}
+
+test t-74 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}', '$');
+}
+expect {
+    ["a", "b"]
+}
+
+test t-75 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}');
+}
+expect {
+    ["a", "b"]
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-76 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$**.b');
+}
+expect error {
+}
+
+test t-77 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.c');
+}
+expect {
+    NULL
+}
+
+test t-78 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-80 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.b[1]');
+}
+expect {
+    ["c"]
+}
+
+test t-81 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-82 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$**[0]');
+}
+expect error {
+}
+
+test t-83 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-84 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-85 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$**.a');
+}
+expect error {
+}
+
+test t-86 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-87 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-88 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[*].a');
+}
+expect error {
+}
+
+test t-89 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-90 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-91 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-92 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-93 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-94 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-95 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-96 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-97 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[1]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-98 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$[2][*]');
+}
+expect error {
+}
+
+test t-99 {
+    SELECT JSON_KEYS('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}', '$');
+}
+expect {
+    ["a", "b"]
+}
+
+test t-100 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}');
+}
+expect {
+    ["a", "b", "c"]
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-101 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$**.b');
+}
+expect error {
+}
+
+test t-102 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.c');
+}
+expect {
+    ["d"]
+}
+
+test t-103 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-105 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.b[1]');
+}
+expect {
+    NULL
+}
+
+test t-106 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-107 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$**[0]');
+}
+expect error {
+}
+
+test t-108 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-109 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-110 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$**.a');
+}
+expect error {
+}
+
+test t-111 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-112 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-113 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[*].a');
+}
+expect error {
+}
+
+test t-114 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-115 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-116 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-117 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-118 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-119 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-120 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-121 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-122 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[1]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-123 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$[2][*]');
+}
+expect error {
+}
+
+test t-124 {
+    SELECT JSON_KEYS('\{"a": 1, "b": 2, "c": \{"d": 4\}\}', '$');
+}
+expect {
+    ["a", "b", "c"]
+}
+
+test t-125 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-126 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$**.b');
+}
+expect error {
+}
+
+test t-127 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.c');
+}
+expect {
+    NULL
+}
+
+test t-128 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-130 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.b[1]');
+}
+expect {
+    NULL
+}
+
+test t-131 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-132 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$**[0]');
+}
+expect error {
+}
+
+test t-133 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-134 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-135 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$**.a');
+}
+expect error {
+}
+
+test t-136 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-137 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-138 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[*].a');
+}
+expect error {
+}
+
+test t-139 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-140 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-141 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-142 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-143 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-144 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-145 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-146 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-147 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[1]');
+}
+expect {
+    ["b"]
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-148 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$[2][*]');
+}
+expect error {
+}
+
+test t-149 {
+    SELECT JSON_KEYS('["a", \{"b": [true, false]\}, [10, 20]]', '$');
+}
+expect {
+    NULL
+}
+
+test t-150 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-151 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$**.b');
+}
+expect error {
+}
+
+test t-152 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.c');
+}
+expect {
+    NULL
+}
+
+test t-153 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-155 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.b[1]');
+}
+expect {
+    NULL
+}
+
+test t-156 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[0][0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-157 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$**[0]');
+}
+expect error {
+}
+
+test t-158 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-159 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-160 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$**.a');
+}
+expect error {
+}
+
+test t-161 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-162 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[*].b');
+}
+expect error {
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-163 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[*].a');
+}
+expect error {
+}
+
+test t-164 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-165 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-166 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.a');
+}
+expect {
+    NULL
+}
+
+test t-167 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.e');
+}
+expect {
+    NULL
+}
+
+test t-168 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.b');
+}
+expect {
+    NULL
+}
+
+test t-169 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-170 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-171 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-172 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[1]');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 42000 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test t-173 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$[2][*]');
+}
+expect error {
+}
+
+test t-174 {
+    SELECT JSON_KEYS('[10, 20, [30, 40]]', '$');
+}
+expect {
+    NULL
+}
+
+test t-175 {
+    SELECT JSON_KEYS(NULL);
+}
+expect {
+    NULL
+}
+
+test t-176 {
+    SELECT JSON_KEYS(NULL, '$**.b');
+}
+expect {
+    NULL
+}
+
+test t-177 {
+    SELECT JSON_KEYS(NULL, '$.c');
+}
+expect {
+    NULL
+}
+
+test t-178 {
+    SELECT JSON_KEYS(NULL, '$.b[1].c');
+}
+expect {
+    NULL
+}
+
+test t-180 {
+    SELECT JSON_KEYS(NULL, '$.b[1]');
+}
+expect {
+    NULL
+}
+
+test t-181 {
+    SELECT JSON_KEYS(NULL, '$[0][0]');
+}
+expect {
+    NULL
+}
+
+test t-182 {
+    SELECT JSON_KEYS(NULL, '$**[0]');
+}
+expect {
+    NULL
+}
+
+test t-183 {
+    SELECT JSON_KEYS(NULL, '$.a[0]');
+}
+expect {
+    NULL
+}
+
+test t-184 {
+    SELECT JSON_KEYS(NULL, '$[0].a[0]');
+}
+expect {
+    NULL
+}
+
+test t-185 {
+    SELECT JSON_KEYS(NULL, '$**.a');
+}
+expect {
+    NULL
+}
+
+test t-186 {
+    SELECT JSON_KEYS(NULL, '$[0][0][0].a');
+}
+expect {
+    NULL
+}
+
+test t-187 {
+    SELECT JSON_KEYS(NULL, '$[*].b');
+}
+expect {
+    NULL
+}
+
+test t-188 {
+    SELECT JSON_KEYS(NULL, '$[*].a');
+}
+expect {
+    NULL
+}
+
+test t-189 {
+    SELECT JSON_KEYS(NULL, '$[1].b[0]');
+}
+expect {
+    NULL
+}
+
+test t-190 {
+    SELECT JSON_KEYS(NULL, '$[2][2]');
+}
+expect {
+    NULL
+}
+
+test t-191 {
+    SELECT JSON_KEYS(NULL, '$.a');
+}
+expect {
+    NULL
+}
+
+test t-192 {
+    SELECT JSON_KEYS(NULL, '$.e');
+}
+expect {
+    NULL
+}
+
+test t-193 {
+    SELECT JSON_KEYS(NULL, '$.b');
+}
+expect {
+    NULL
+}
+
+test t-194 {
+    SELECT JSON_KEYS(NULL, '$.c.d');
+}
+expect {
+    NULL
+}
+
+test t-195 {
+    SELECT JSON_KEYS(NULL, '$.a.d');
+}
+expect {
+    NULL
+}
+
+test t-196 {
+    SELECT JSON_KEYS(NULL, '$[0]');
+}
+expect {
+    NULL
+}
+
+test t-197 {
+    SELECT JSON_KEYS(NULL, '$[1]');
+}
+expect {
+    NULL
+}
+
+test t-198 {
+    SELECT JSON_KEYS(NULL, '$[2][*]');
+}
+expect {
+    NULL
+}
+
+test t-199 {
+    SELECT JSON_KEYS(NULL, '$');
+}
+expect {
+    NULL
+}

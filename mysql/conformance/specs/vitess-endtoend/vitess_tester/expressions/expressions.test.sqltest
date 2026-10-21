@@ -1,0 +1,63 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/vitess_tester/expressions/expressions.test
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t0
+(
+    c1 BIT,
+    INDEX idx_c1 (c1)
+);
+    INSERT INTO t0(c1)
+VALUES ('');
+}
+
+@setup s1
+test l16 {
+    SELECT ((t0.c1 = 'a'))
+FROM t0;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l19 {
+    SELECT *
+FROM t0
+WHERE ((t0.c1 = 'a'));
+}
+expect unordered {
+}
+
+test l24 {
+    SELECT (1 LIKE ('a' IS NULL));
+}
+expect unordered {
+    0
+}
+
+test l25 {
+    SELECT (NOT (1 LIKE ('a' IS NULL)));
+}
+expect unordered {
+    1
+}
+
+test l27 {
+    SELECT (~ (1 || 0)) IS NULL;
+}
+expect unordered {
+    0
+}
+
+test l29 {
+    SELECT 1
+WHERE (~ (1 || 0)) IS NULL;
+}
+expect unordered {
+}

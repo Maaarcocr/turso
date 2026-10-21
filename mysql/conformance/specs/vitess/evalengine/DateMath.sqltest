@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-1 {
+    SELECT DATE_SUB(DATE'2018-05-01',INTERVAL 1 YEAR);
+}
+expect {
+    2017-05-01
+}
+
+test t-2 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 SECOND);
+}
+expect {
+    2021-01-01 00:00:00
+}
+
+test t-4 {
+    SELECT DATE_ADD(TIMESTAMP'2100-12-31 23:59:59', INTERVAL '1:1' MINUTE_SECOND);
+}
+expect {
+    2101-01-01 00:01:00
+}
+
+test t-6 {
+    SELECT DATE_ADD(TIMESTAMP'1900-01-01 00:00:00', INTERVAL '-1 10' DAY_HOUR);
+}
+expect {
+    1899-12-30 14:00:00
+}
+
+test t-8 {
+    SELECT DATE_ADD(TIMESTAMP'1992-12-31 23:59:59.000002', INTERVAL '1.999999' SECOND_MICROSECOND);
+}
+expect {
+    1993-01-01 00:00:01.000001
+}
+
+test t-12 {
+    SELECT TIMESTAMPADD(WEEK,1,'2003-01-02');
+}
+expect {
+    2003-01-09
+}
+
+test t-14 {
+    SELECT TIMESTAMPADD(MONTH, 1, DATE '2024-03-31');
+}
+expect {
+    2024-04-30
+}
+
+test t-17 {
+    SELECT TIMESTAMPADD(day, 1, DATE'2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-20 {
+    SELECT TIMESTAMPADD(day, '1:1', DATE'2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-22 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' day);
+}
+expect {
+    2018-04-30
+}
+
+test t-25 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1 10' day);
+}
+expect {
+    2018-05-02
+}
+
+test t-27 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 10' day);
+}
+expect {
+    2018-05-02
+}
+
+test t-35 {
+    SELECT TIMESTAMPADD(day, 30, DATE'2018-05-01');
+}
+expect {
+    2018-05-31
+}
+
+test t-42 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' day);
+}
+expect {
+    2018-05-02
+}
+
+test t-44 {
+    SELECT TIMESTAMPADD(day, '1.999', DATE'2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-45 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1:1:1' day);
+}
+expect {
+    2018-05-02
+}
+
+test t-49 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1 1:1' day);
+}
+expect {
+    2018-04-30
+}
+
+test t-54 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:10' day);
+}
+expect {
+    2018-05-02
+}
+
+test t-59 {
+    SELECT TIMESTAMPADD(day, 1.5, DATE'2018-05-01');
+}
+expect {
+    2018-05-03
+}
+
+test t-61 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000 day);
+}
+expect {
+    2018-04-29
+}
+
+test t-64 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 6/4 day);
+}
+expect {
+    2018-04-29
+}
+
+test t-65 {
+    SELECT TIMESTAMPADD(day, 6/4, DATE'2018-05-01');
+}
+expect {
+    2018-05-03
+}
+
+test t-78 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day);
+}
+expect {
+    2018-05-03
+}
+
+test t-86 {
+    SELECT TIMESTAMPADD(day, '1.0', DATE'2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-96 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 1:1:1' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-99 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1 10' week);
+}
+expect {
+    2018-04-24
+}
+
+test t-102 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 10' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-106 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 week);
+}
+expect {
+    2017-09-26
+}
+
+test t-111 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999999' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-117 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-123 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1 1:1' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-134 {
+    SELECT TIMESTAMPADD(week, 1.5, DATE'2018-05-01');
+}
+expect {
+    2018-05-15
+}
+
+test t-148 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000e0 week);
+}
+expect {
+    2018-04-17
+}
+
+test t-150 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) week);
+}
+expect {
+    2018-05-15
+}
+
+test t-154 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) week);
+}
+expect {
+    2018-04-17
+}
+
+test t-164 {
+    SELECT TIMESTAMPADD(week, '1.0foobar', DATE'2018-05-01');
+}
+expect {
+    2018-05-08
+}
+
+test t-170 {
+    SELECT TIMESTAMPADD(month, '1:1', DATE'2018-05-01');
+}
+expect {
+    2018-06-01
+}
+
+test t-173 {
+    SELECT TIMESTAMPADD(month, '1 1:1:1', DATE'2018-05-01');
+}
+expect {
+    2018-06-01
+}
+
+test t-179 {
+    SELECT TIMESTAMPADD(month, '1 10', DATE'2018-05-01');
+}
+expect {
+    2018-06-01
+}
+
+test t-180 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 31 month);
+}
+expect {
+    2020-12-01
+}
+
+test t-181 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 month);
+}
+expect {
+    2015-10-01
+}
+
+test t-184 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 month);
+}
+expect {
+    2015-11-01
+}
+
+test t-185 {
+    SELECT TIMESTAMPADD(month, 30, DATE'2018-05-01');
+}
+expect {
+    2020-11-01
+}
+
+test t-186 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999999' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-188 {
+    SELECT TIMESTAMPADD(month, '1.999999', DATE'2018-05-01');
+}
+expect {
+    2018-06-01
+}
+
+test t-192 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-210 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000 month);
+}
+expect {
+    2018-07-01
+}
+
+test t-211 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000 month);
+}
+expect {
+    2018-03-01
+}
+
+test t-216 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '6/4' month);
+}
+expect {
+    2018-11-01
+}
+
+test t-223 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000e0 month);
+}
+expect {
+    2018-03-01
+}
+
+test t-232 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 month);
+}
+expect {
+    2018-04-01
+}
+
+test t-233 {
+    SELECT TIMESTAMPADD(month, 1e0, DATE'2018-05-01');
+}
+expect {
+    2018-06-01
+}
+
+test t-234 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-238 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0foobar' month);
+}
+expect {
+    2018-04-01
+}
+
+test t-253 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 10' year);
+}
+expect {
+    2017-05-01
+}
+
+test t-259 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 year);
+}
+expect {
+    1988-05-01
+}
+
+test t-262 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' year);
+}
+expect {
+    2017-05-01
+}
+
+test t-263 {
+    SELECT TIMESTAMPADD(year, '1.999999', DATE'2018-05-01');
+}
+expect {
+    2019-05-01
+}
+
+test t-265 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.999 year);
+}
+expect {
+    2016-05-01
+}
+
+test t-287 {
+    SELECT TIMESTAMPADD(year, 1.5000, DATE'2018-05-01');
+}
+expect {
+    2020-05-01
+}
+
+test t-295 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5e0 year);
+}
+expect {
+    2016-05-01
+}
+
+test t-296 {
+    SELECT TIMESTAMPADD(year, 1.5e0, DATE'2018-05-01');
+}
+expect {
+    2020-05-01
+}
+
+test t-307 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 year);
+}
+expect {
+    2017-05-01
+}
+
+test t-318 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1' day_hour);
+}
+expect {
+    2018-05-02 01:00:00
+}
+
+test t-331 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 day_hour);
+}
+expect {
+    2018-04-29 17:00:00
+}
+
+test t-337 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' day_hour);
+}
+expect {
+    1904-04-01 09:00:00
+}
+
+test t-343 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999' day_hour);
+}
+expect {
+    2018-03-19 09:00:00
+}
+
+test t-348 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1 1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-349 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1 1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-352 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1:10' day_hour);
+}
+expect {
+    2018-05-02 10:00:00
+}
+
+test t-361 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000 day_hour);
+}
+expect {
+    2017-10-03 16:00:00
+}
+
+test t-369 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5e0 day_hour);
+}
+expect {
+    2018-05-02 05:00:00
+}
+
+test t-376 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_hour);
+}
+expect {
+    2018-04-29 19:00:00
+}
+
+test t-378 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_hour);
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-385 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' day_hour);
+}
+expect {
+    2018-04-30 00:00:00
+}
+
+test t-396 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 1:1:1' day_microsecond);
+}
+expect {
+    2018-05-01 01:01:01.100000
+}
+
+test t-412 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' day_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.000001
+}
+
+test t-415 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.999 day_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.001000
+}
+
+test t-417 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.999000
+}
+
+test t-426 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1:10' day_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.900000
+}
+
+test t-438 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 6/4 day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-444 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5e0 day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-450 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-462 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0foobar' day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.000000
+}
+
+test t-469 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1' day_minute);
+}
+expect {
+    2018-04-30 22:59:00
+}
+
+test t-474 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1 10' day_minute);
+}
+expect {
+    2018-04-30 22:50:00
+}
+
+test t-487 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' day_minute);
+}
+expect {
+    2016-06-05 12:21:00
+}
+
+test t-489 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.999 day_minute);
+}
+expect {
+    2018-05-01 17:39:00
+}
+
+test t-490 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.999 day_minute);
+}
+expect {
+    2018-04-30 06:21:00
+}
+
+test t-499 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1 1:1' day_minute);
+}
+expect {
+    NULL
+}
+
+test t-501 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1:10' day_minute);
+}
+expect {
+    2018-04-30 22:50:00
+}
+
+test t-505 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:10' day_minute);
+}
+expect {
+    2018-04-30 22:50:00
+}
+
+test t-514 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 6/4 day_minute);
+}
+expect {
+    2018-04-27 11:40:00
+}
+
+test t-516 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '6/4' day_minute);
+}
+expect {
+    2018-05-01 06:04:00
+}
+
+test t-517 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '6/4' day_minute);
+}
+expect {
+    2018-04-30 17:56:00
+}
+
+test t-519 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5e0 day_minute);
+}
+expect {
+    2018-05-01 01:05:00
+}
+
+test t-522 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000e0 day_minute);
+}
+expect {
+    2018-05-01 01:05:00
+}
+
+test t-529 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_minute);
+}
+expect {
+    2018-04-30 23:58:00
+}
+
+test t-547 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' day_second);
+}
+expect {
+    2018-04-29 22:58:59
+}
+
+test t-573 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1 1:1' day_second);
+}
+expect {
+    2018-05-02 01:01:01
+}
+
+test t-576 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1:10' day_second);
+}
+expect {
+    2018-04-30 23:58:50
+}
+
+test t-594 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5e0 day_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-606 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1e0 day_second);
+}
+expect {
+    2018-05-01 00:00:01
+}
+
+test t-609 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0' day_second);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-613 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0foobar' day_second);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-620 {
+    SELECT TIMESTAMPADD(hour, '1:1', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-650 {
+    SELECT TIMESTAMPADD(hour, '1:1 1:1', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-651 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1:10' hour);
+}
+expect {
+    2018-04-30 23:00:00
+}
+
+test t-656 {
+    SELECT TIMESTAMPADD(hour, '1:10', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-660 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000 hour);
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-666 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '6/4' hour);
+}
+expect {
+    2018-05-01 06:00:00
+}
+
+test t-674 {
+    SELECT TIMESTAMPADD(hour, 1.5000e0, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-678 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour);
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-680 {
+    SELECT TIMESTAMPADD(hour, CAST(6/4 AS DECIMAL(3,0)), DATE'2018-05-01');
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-684 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0' hour);
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-697 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' hour_microsecond);
+}
+expect {
+    2018-04-30 22:58:58.900000
+}
+
+test t-705 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 31 hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:00.310000
+}
+
+test t-711 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999999' hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.999999
+}
+
+test t-724 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1 1:1' hour_microsecond);
+}
+expect {
+    2018-04-30 22:58:58.900000
+}
+
+test t-726 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1:10' hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.900000
+}
+
+test t-732 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5 hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-736 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-738 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 6/4 hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-739 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 6/4 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-745 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5e0 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-747 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000e0 hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-760 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.000000
+}
+
+test t-763 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0foobar' hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.000000
+}
+
+test t-769 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1' hour_minute);
+}
+expect {
+    2018-04-30 22:59:00
+}
+
+test t-771 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 1:1:1' hour_minute);
+}
+expect {
+    NULL
+}
+
+test t-775 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1 10' hour_minute);
+}
+expect {
+    2018-05-01 01:10:00
+}
+
+test t-784 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 hour_minute);
+}
+expect {
+    2018-04-30 23:30:00
+}
+
+test t-786 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999999' hour_minute);
+}
+expect {
+    2020-03-25 11:39:00
+}
+
+test t-798 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1 1:1' hour_minute);
+}
+expect {
+    NULL
+}
+
+test t-805 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:10' hour_minute);
+}
+expect {
+    2018-04-30 22:50:00
+}
+
+test t-817 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '6/4' hour_minute);
+}
+expect {
+    2018-04-30 17:56:00
+}
+
+test t-835 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' hour_minute);
+}
+expect {
+    2018-04-30 23:00:00
+}
+
+test t-837 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0foobar' hour_minute);
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-846 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-847 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-849 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1 10' hour_second);
+}
+expect {
+    2018-04-30 23:58:50
+}
+
+test t-856 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 hour_second);
+}
+expect {
+    2018-04-30 23:59:29
+}
+
+test t-864 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.999 hour_second);
+}
+expect {
+    2018-05-01 00:17:39
+}
+
+test t-873 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1 1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-877 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1:10' hour_second);
+}
+expect {
+    2018-05-01 00:01:10
+}
+
+test t-886 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000 hour_second);
+}
+expect {
+    2018-04-30 22:35:40
+}
+
+test t-897 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000e0 hour_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-900 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) hour_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-903 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour_second);
+}
+expect {
+    2018-05-01 00:00:02
+}
+
+test t-907 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 hour_second);
+}
+expect {
+    2018-04-30 23:59:59
+}
+
+test t-910 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' hour_second);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-912 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0foobar' hour_second);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-915 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1 microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000001
+}
+
+test t-916 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1 microsecond);
+}
+expect {
+    2018-04-30 23:59:59.999999
+}
+
+test t-919 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1' microsecond);
+}
+expect {
+    2018-04-30 23:59:59.999999
+}
+
+test t-925 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1 10' microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000001
+}
+
+test t-931 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 microsecond);
+}
+expect {
+    2018-04-30 23:59:59.999969
+}
+
+test t-935 {
+    SELECT TIMESTAMPADD(microsecond, 30, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:00.000030
+}
+
+test t-939 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.999 microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000002
+}
+
+test t-953 {
+    SELECT TIMESTAMPADD(microsecond, '-1:10', DATE'2018-05-01');
+}
+expect {
+    2018-04-30 23:59:59.999999
+}
+
+test t-954 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:10' microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000001
+}
+
+test t-958 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5 microsecond);
+}
+expect {
+    2018-04-30 23:59:59.999998
+}
+
+test t-959 {
+    SELECT TIMESTAMPADD(microsecond, 1.5, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:00.000002
+}
+
+test t-965 {
+    SELECT TIMESTAMPADD(microsecond, 6/4, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:00.000002
+}
+
+test t-975 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000002
+}
+
+test t-981 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1e0 microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000001
+}
+
+test t-982 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 microsecond);
+}
+expect {
+    2018-04-30 23:59:59.999999
+}
+
+test t-984 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0' microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000001
+}
+
+test t-989 {
+    SELECT TIMESTAMPADD(microsecond, '1.0foobar', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:00.000001
+}
+
+test t-990 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1 minute);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-995 {
+    SELECT TIMESTAMPADD(minute, '1:1', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-998 {
+    SELECT TIMESTAMPADD(minute, '1 1:1:1', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-1000 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1 10' minute);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-1001 {
+    SELECT TIMESTAMPADD(minute, '-1 10', DATE'2018-05-01');
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1003 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 10' minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1009 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 minute);
+}
+expect {
+    2018-04-30 23:30:00
+}
+
+test t-1010 {
+    SELECT TIMESTAMPADD(minute, 30, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:30:00
+}
+
+test t-1012 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1013 {
+    SELECT TIMESTAMPADD(minute, '1.999999', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-1019 {
+    SELECT TIMESTAMPADD(minute, '1.999', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-1021 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1:1:1' minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1028 {
+    SELECT TIMESTAMPADD(minute, '-1:10', DATE'2018-05-01');
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1030 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:10' minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1035 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000 minute);
+}
+expect {
+    2018-05-01 00:02:00
+}
+
+test t-1042 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '6/4' minute);
+}
+expect {
+    2018-04-30 23:54:00
+}
+
+test t-1046 {
+    SELECT TIMESTAMPADD(minute, 1.5e0, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:02:00
+}
+
+test t-1058 {
+    SELECT TIMESTAMPADD(minute, 1e0, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-1059 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.0' minute);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-1071 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 1:1:1' minute_microsecond);
+}
+expect {
+    NULL
+}
+
+test t-1072 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' minute_microsecond);
+}
+expect {
+    NULL
+}
+
+test t-1078 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 10' minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.900000
+}
+
+test t-1081 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.690000
+}
+
+test t-1084 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.700000
+}
+
+test t-1086 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999999' minute_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.999999
+}
+
+test t-1092 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' minute_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.999000
+}
+
+test t-1096 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1:1:1' minute_microsecond);
+}
+expect {
+    NULL
+}
+
+test t-1104 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:10' minute_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.100000
+}
+
+test t-1114 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 6/4 minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-1116 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '6/4' minute_microsecond);
+}
+expect {
+    2018-05-01 00:00:06.400000
+}
+
+test t-1120 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5e0 minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-1123 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000e0 minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-1131 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1e0 minute_microsecond);
+}
+expect {
+    2018-05-01 00:00:00.100000
+}
+
+test t-1132 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.900000
+}
+
+test t-1135 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' minute_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.000000
+}
+
+test t-1159 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 minute_second);
+}
+expect {
+    2018-04-30 23:59:30
+}
+
+test t-1161 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999999' minute_second);
+}
+expect {
+    2018-05-12 13:47:39
+}
+
+test t-1162 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' minute_second);
+}
+expect {
+    2018-04-19 10:12:21
+}
+
+test t-1167 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' minute_second);
+}
+expect {
+    2018-05-01 00:17:39
+}
+
+test t-1170 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1:1:1' minute_second);
+}
+expect {
+    NULL
+}
+
+test t-1171 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1:1:1' minute_second);
+}
+expect {
+    NULL
+}
+
+test t-1177 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1:10' minute_second);
+}
+expect {
+    2018-05-01 00:01:10
+}
+
+test t-1180 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:10' minute_second);
+}
+expect {
+    2018-04-30 23:58:50
+}
+
+test t-1182 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5 minute_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-1183 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5 minute_second);
+}
+expect {
+    2018-04-30 23:58:55
+}
+
+test t-1198 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000e0 minute_second);
+}
+expect {
+    2018-04-30 23:58:55
+}
+
+test t-1200 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) minute_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-1207 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 minute_second);
+}
+expect {
+    2018-04-30 23:59:59
+}
+
+test t-1210 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' minute_second);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-1220 {
+    SELECT TIMESTAMPADD(quarter, '1:1', DATE'2018-05-01');
+}
+expect {
+    2018-08-01
+}
+
+test t-1222 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' quarter);
+}
+expect {
+    2018-02-01
+}
+
+test t-1224 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '-1 10' quarter);
+}
+expect {
+    2018-02-01
+}
+
+test t-1229 {
+    SELECT TIMESTAMPADD(quarter, '1 10', DATE'2018-05-01');
+}
+expect {
+    2018-08-01
+}
+
+test t-1233 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 30 quarter);
+}
+expect {
+    2025-11-01
+}
+
+test t-1234 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 quarter);
+}
+expect {
+    2010-11-01
+}
+
+test t-1237 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' quarter);
+}
+expect {
+    2018-02-01
+}
+
+test t-1249 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1 1:1' quarter);
+}
+expect {
+    2018-02-01
+}
+
+test t-1252 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '-1:10' quarter);
+}
+expect {
+    2018-08-01
+}
+
+test t-1255 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:10' quarter);
+}
+expect {
+    2018-02-01
+}
+
+test t-1259 {
+    SELECT TIMESTAMPADD(quarter, 1.5, DATE'2018-05-01');
+}
+expect {
+    2018-11-01
+}
+
+test t-1260 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000 quarter);
+}
+expect {
+    2018-11-01
+}
+
+test t-1262 {
+    SELECT TIMESTAMPADD(quarter, 1.5000, DATE'2018-05-01');
+}
+expect {
+    2018-11-01
+}
+
+test t-1263 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 6/4 quarter);
+}
+expect {
+    2018-11-01
+}
+
+test t-1272 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000e0 quarter);
+}
+expect {
+    2018-11-01
+}
+
+test t-1274 {
+    SELECT TIMESTAMPADD(quarter, 1.5000e0, DATE'2018-05-01');
+}
+expect {
+    2018-11-01
+}
+
+test t-1275 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) quarter);
+}
+expect {
+    2018-11-01
+}
+
+test t-1277 {
+    SELECT TIMESTAMPADD(quarter, CAST(6/4 AS DECIMAL(3,1)), DATE'2018-05-01');
+}
+expect {
+    2018-11-01
+}
+
+test t-1278 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) quarter);
+}
+expect {
+    2018-11-01
+}
+
+test t-1280 {
+    SELECT TIMESTAMPADD(quarter, CAST(6/4 AS DECIMAL(3,0)), DATE'2018-05-01');
+}
+expect {
+    2018-11-01
+}
+
+test t-1282 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1e0 quarter);
+}
+expect {
+    2018-02-01
+}
+
+test t-1286 {
+    SELECT TIMESTAMPADD(quarter, '1.0', DATE'2018-05-01');
+}
+expect {
+    2018-08-01
+}
+
+test t-1290 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1 second);
+}
+expect {
+    2018-05-01 00:00:01
+}
+
+test t-1297 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 1:1:1' second);
+}
+expect {
+    2018-04-30 23:59:59.000000
+}
+
+test t-1301 {
+    SELECT TIMESTAMPADD(second, '-1 10', DATE'2018-05-01');
+}
+expect {
+    2018-04-30 23:59:59.000000
+}
+
+test t-1305 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 31 second);
+}
+expect {
+    2018-05-01 00:00:31
+}
+
+test t-1306 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 31 second);
+}
+expect {
+    2018-04-30 23:59:29
+}
+
+test t-1307 {
+    SELECT TIMESTAMPADD(second, 31, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:31
+}
+
+test t-1310 {
+    SELECT TIMESTAMPADD(second, 30, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:30
+}
+
+test t-1312 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.999999' second);
+}
+expect {
+    2018-04-30 23:59:58.000001
+}
+
+test t-1313 {
+    SELECT TIMESTAMPADD(second, '1.999999', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:01.999999
+}
+
+test t-1315 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.999 second);
+}
+expect {
+    2018-04-30 23:59:58.001
+}
+
+test t-1317 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1.999' second);
+}
+expect {
+    2018-05-01 00:00:01.999000
+}
+
+test t-1319 {
+    SELECT TIMESTAMPADD(second, '1.999', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:01.999000
+}
+
+test t-1323 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1 1:1' second);
+}
+expect {
+    2018-05-01 00:00:01.000000
+}
+
+test t-1332 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5 second);
+}
+expect {
+    2018-05-01 00:00:01.5
+}
+
+test t-1333 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5 second);
+}
+expect {
+    2018-04-30 23:59:58.5
+}
+
+test t-1336 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.5000 second);
+}
+expect {
+    2018-04-30 23:59:58.5000
+}
+
+test t-1337 {
+    SELECT TIMESTAMPADD(second, 1.5000, DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:01.5000
+}
+
+test t-1338 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 6/4 second);
+}
+expect {
+    2018-05-01 00:00:01.5000
+}
+
+test t-1339 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 6/4 second);
+}
+expect {
+    2018-04-30 23:59:58.5000
+}
+
+test t-1364 {
+    SELECT TIMESTAMPADD(second, '1.0foobar', DATE'2018-05-01');
+}
+expect {
+    2018-05-01 00:00:01.000000
+}
+
+test t-1377 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 10' second_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.100000
+}
+
+test t-1384 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 30 second_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.700000
+}
+
+test t-1389 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.999 second_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.999000
+}
+
+test t-1404 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:10' second_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.100000
+}
+
+test t-1410 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000 second_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-1413 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 6/4 second_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-1422 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 1.5000e0 second_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-1435 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' second_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.000000
+}
+
+test t-1443 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1:1' year_month);
+}
+expect {
+    2019-06-01
+}
+
+test t-1452 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL '1 10' year_month);
+}
+expect {
+    2020-03-01
+}
+
+test t-1453 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1 10' year_month);
+}
+expect {
+    2016-07-01
+}
+
+test t-1455 {
+    SELECT DATE_ADD(DATE'2018-05-01', INTERVAL 31 year_month);
+}
+expect {
+    2020-12-01
+}
+
+test t-1465 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 1.999 year_month);
+}
+expect {
+    1934-02-01
+}
+
+test t-1471 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1:1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-1474 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1:1 1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-1489 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL 6/4 year_month);
+}
+expect {
+    1600-09-01
+}
+
+test t-1501 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) year_month);
+}
+expect {
+    2016-12-01
+}
+
+test t-1510 {
+    SELECT DATE_SUB(DATE'2018-05-01', INTERVAL '1.0' year_month);
+}
+expect {
+    2017-05-01
+}
+
+test t-1515 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 day);
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1518 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' day);
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1526 {
+    SELECT TIMESTAMPADD(day, '-1 10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-30 23:59:59
+}
+
+test t-1531 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 day);
+}
+expect {
+    2020-11-30 23:59:59
+}
+
+test t-1537 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999999' day);
+}
+expect {
+    2020-12-30 23:59:59
+}
+
+test t-1538 {
+    SELECT TIMESTAMPADD(day, '1.999999', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1539 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 day);
+}
+expect {
+    2021-01-02 23:59:59
+}
+
+test t-1542 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' day);
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1544 {
+    SELECT TIMESTAMPADD(day, '1.999', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1545 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' day);
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1551 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' day);
+}
+expect {
+    2020-12-30 23:59:59
+}
+
+test t-1571 {
+    SELECT TIMESTAMPADD(day, 1.5e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-02 23:59:59
+}
+
+test t-1574 {
+    SELECT TIMESTAMPADD(day, 1.5000e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-02 23:59:59
+}
+
+test t-1576 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day);
+}
+expect {
+    2020-12-29 23:59:59
+}
+
+test t-1579 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day);
+}
+expect {
+    2020-12-29 23:59:59
+}
+
+test t-1582 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1e0 day);
+}
+expect {
+    2020-12-30 23:59:59
+}
+
+test t-1583 {
+    SELECT TIMESTAMPADD(day, 1e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1589 {
+    SELECT TIMESTAMPADD(day, '1.0foobar', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 23:59:59
+}
+
+test t-1592 {
+    SELECT TIMESTAMPADD(week, 1, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1594 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' week);
+}
+expect {
+    2020-12-24 23:59:59
+}
+
+test t-1596 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' week);
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1598 {
+    SELECT TIMESTAMPADD(week, '1 1:1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1601 {
+    SELECT TIMESTAMPADD(week, '-1 10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-24 23:59:59
+}
+
+test t-1603 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' week);
+}
+expect {
+    2020-12-24 23:59:59
+}
+
+test t-1606 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 week);
+}
+expect {
+    2020-05-28 23:59:59
+}
+
+test t-1607 {
+    SELECT TIMESTAMPADD(week, 31, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-08-05 23:59:59
+}
+
+test t-1613 {
+    SELECT TIMESTAMPADD(week, '1.999999', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1617 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' week);
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1627 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' week);
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1643 {
+    SELECT TIMESTAMPADD(week, '6/4', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-02-11 23:59:59
+}
+
+test t-1648 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000e0 week);
+}
+expect {
+    2020-12-17 23:59:59
+}
+
+test t-1652 {
+    SELECT TIMESTAMPADD(week, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-14 23:59:59
+}
+
+test t-1658 {
+    SELECT TIMESTAMPADD(week, 1e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-07 23:59:59
+}
+
+test t-1671 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' month);
+}
+expect {
+    2021-01-31 23:59:59
+}
+
+test t-1673 {
+    SELECT TIMESTAMPADD(month, '1 1:1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-31 23:59:59
+}
+
+test t-1674 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' month);
+}
+expect {
+    2020-11-30 23:59:59
+}
+
+test t-1678 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' month);
+}
+expect {
+    2020-11-30 23:59:59
+}
+
+test t-1684 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 30 month);
+}
+expect {
+    2018-06-30 23:59:59
+}
+
+test t-1711 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 month);
+}
+expect {
+    2020-10-31 23:59:59
+}
+
+test t-1712 {
+    SELECT TIMESTAMPADD(month, 1.5000, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-02-28 23:59:59
+}
+
+test t-1714 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 month);
+}
+expect {
+    2020-10-31 23:59:59
+}
+
+test t-1715 {
+    SELECT TIMESTAMPADD(month, 6/4, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-02-28 23:59:59
+}
+
+test t-1724 {
+    SELECT TIMESTAMPADD(month, 1.5000e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-02-28 23:59:59
+}
+
+test t-1735 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' month);
+}
+expect {
+    2020-11-30 23:59:59
+}
+
+test t-1746 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' year);
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1752 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' year);
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1755 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 year);
+}
+expect {
+    2051-12-31 23:59:59
+}
+
+test t-1765 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 year);
+}
+expect {
+    2018-12-31 23:59:59
+}
+
+test t-1769 {
+    SELECT TIMESTAMPADD(year, '1.999', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1771 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' year);
+}
+expect {
+    2019-12-31 23:59:59
+}
+
+test t-1772 {
+    SELECT TIMESTAMPADD(year, '1:1:1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1775 {
+    SELECT TIMESTAMPADD(year, '1:1 1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1776 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' year);
+}
+expect {
+    2019-12-31 23:59:59
+}
+
+test t-1777 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' year);
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1795 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 year);
+}
+expect {
+    2018-12-31 23:59:59
+}
+
+test t-1796 {
+    SELECT TIMESTAMPADD(year, 1.5e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2022-12-31 23:59:59
+}
+
+test t-1797 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000e0 year);
+}
+expect {
+    2022-12-31 23:59:59
+}
+
+test t-1802 {
+    SELECT TIMESTAMPADD(year, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2022-12-31 23:59:59
+}
+
+test t-1803 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) year);
+}
+expect {
+    2022-12-31 23:59:59
+}
+
+test t-1804 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) year);
+}
+expect {
+    2018-12-31 23:59:59
+}
+
+test t-1809 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' year);
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-1819 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' day_hour);
+}
+expect {
+    2020-12-30 22:59:59
+}
+
+test t-1825 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' day_hour);
+}
+expect {
+    2021-01-02 09:59:59
+}
+
+test t-1827 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' day_hour);
+}
+expect {
+    2021-01-02 09:59:59
+}
+
+test t-1830 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 day_hour);
+}
+expect {
+    2021-01-02 06:59:59
+}
+
+test t-1836 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999999' day_hour);
+}
+expect {
+    2135-01-31 14:59:59
+}
+
+test t-1840 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 day_hour);
+}
+expect {
+    2020-11-19 08:59:59
+}
+
+test t-1842 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' day_hour);
+}
+expect {
+    2021-02-12 14:59:59
+}
+
+test t-1848 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1 1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-1857 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 day_hour);
+}
+expect {
+    2021-01-02 04:59:59
+}
+
+test t-1872 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000e0 day_hour);
+}
+expect {
+    2021-01-02 04:59:59
+}
+
+test t-1876 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_hour);
+}
+expect {
+    2020-12-30 18:59:59
+}
+
+test t-1888 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' day_hour);
+}
+expect {
+    2020-12-30 23:59:59
+}
+
+test t-1897 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' day_microsecond);
+}
+expect {
+    2020-12-31 22:58:57.900000
+}
+
+test t-1900 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' day_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.100000
+}
+
+test t-1915 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 day_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.001000
+}
+
+test t-1921 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' day_microsecond);
+}
+expect {
+    2020-12-31 22:58:57.900000
+}
+
+test t-1933 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 day_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-1936 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 day_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-1938 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 day_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.500000
+}
+
+test t-1963 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' day_microsecond);
+}
+expect {
+    2020-12-31 23:59:58.000000
+}
+
+test t-1968 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' day_minute);
+}
+expect {
+    2021-01-01 01:00:59
+}
+
+test t-1974 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' day_minute);
+}
+expect {
+    2020-12-31 22:49:59
+}
+
+test t-1980 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 day_minute);
+}
+expect {
+    2021-01-01 00:30:59
+}
+
+test t-1981 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 day_minute);
+}
+expect {
+    2020-12-31 23:28:59
+}
+
+test t-1990 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 day_minute);
+}
+expect {
+    2020-12-31 06:20:59
+}
+
+test t-1992 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' day_minute);
+}
+expect {
+    2021-01-01 17:38:59
+}
+
+test t-1993 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' day_minute);
+}
+expect {
+    2020-12-31 06:20:59
+}
+
+test t-1995 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' day_minute);
+}
+expect {
+    NULL
+}
+
+test t-2001 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' day_minute);
+}
+expect {
+    2020-12-31 22:49:59
+}
+
+test t-2016 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' day_minute);
+}
+expect {
+    2021-01-01 06:03:59
+}
+
+test t-2017 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' day_minute);
+}
+expect {
+    2020-12-31 17:55:59
+}
+
+test t-2020 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 day_minute);
+}
+expect {
+    2020-12-31 22:54:59
+}
+
+test t-2029 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_minute);
+}
+expect {
+    2020-12-31 23:57:59
+}
+
+test t-2038 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' day_minute);
+}
+expect {
+    2020-12-31 22:59:59
+}
+
+test t-2055 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 day_second);
+}
+expect {
+    2021-01-01 00:00:30
+}
+
+test t-2086 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 day_second);
+}
+expect {
+    2020-12-31 22:35:39
+}
+
+test t-2092 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' day_second);
+}
+expect {
+    2020-12-31 23:53:55
+}
+
+test t-2104 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_second);
+}
+expect {
+    2020-12-31 23:59:57
+}
+
+test t-2110 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' day_second);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2112 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' day_second);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2116 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 hour);
+}
+expect {
+    2020-12-31 22:59:59
+}
+
+test t-2120 {
+    SELECT TIMESTAMPADD(hour, '1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2123 {
+    SELECT TIMESTAMPADD(hour, '1 1:1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2129 {
+    SELECT TIMESTAMPADD(hour, '1 10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2131 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 hour);
+}
+expect {
+    2020-12-30 16:59:59
+}
+
+test t-2135 {
+    SELECT TIMESTAMPADD(hour, 30, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-02 05:59:59
+}
+
+test t-2136 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999999' hour);
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2138 {
+    SELECT TIMESTAMPADD(hour, '1.999999', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2140 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 hour);
+}
+expect {
+    2020-12-31 21:59:59
+}
+
+test t-2141 {
+    SELECT TIMESTAMPADD(hour, 1.999, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 01:59:59
+}
+
+test t-2150 {
+    SELECT TIMESTAMPADD(hour, '1:1 1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2156 {
+    SELECT TIMESTAMPADD(hour, '1:10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2159 {
+    SELECT TIMESTAMPADD(hour, 1.5, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 01:59:59
+}
+
+test t-2160 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 hour);
+}
+expect {
+    2021-01-01 01:59:59
+}
+
+test t-2161 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 hour);
+}
+expect {
+    2020-12-31 21:59:59
+}
+
+test t-2164 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 hour);
+}
+expect {
+    2020-12-31 21:59:59
+}
+
+test t-2166 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' hour);
+}
+expect {
+    2021-01-01 05:59:59
+}
+
+test t-2177 {
+    SELECT TIMESTAMPADD(hour, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 01:59:59
+}
+
+test t-2187 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' hour);
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2188 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' hour);
+}
+expect {
+    2020-12-31 22:59:59
+}
+
+test t-2193 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.100000
+}
+
+test t-2199 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' hour_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.900000
+}
+
+test t-2217 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.999000
+}
+
+test t-2227 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.100000
+}
+
+test t-2235 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.500000
+}
+
+test t-2241 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:05.400000
+}
+
+test t-2242 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' hour_microsecond);
+}
+expect {
+    2020-12-31 23:59:52.600000
+}
+
+test t-2244 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.500000
+}
+
+test t-2254 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour_microsecond);
+}
+expect {
+    2020-12-31 23:59:58.800000
+}
+
+test t-2262 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' hour_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2265 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 hour_minute);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2271 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' hour_minute);
+}
+expect {
+    NULL
+}
+
+test t-2274 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' hour_minute);
+}
+expect {
+    2020-12-31 22:49:59
+}
+
+test t-2277 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' hour_minute);
+}
+expect {
+    2021-01-01 01:09:59
+}
+
+test t-2293 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' hour_minute);
+}
+expect {
+    2020-12-31 06:20:59
+}
+
+test t-2304 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:10' hour_minute);
+}
+expect {
+    2021-01-01 01:09:59
+}
+
+test t-2317 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' hour_minute);
+}
+expect {
+    2020-12-31 17:55:59
+}
+
+test t-2334 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' hour_minute);
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2337 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' hour_minute);
+}
+expect {
+    2021-01-01 00:59:59
+}
+
+test t-2344 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' hour_second);
+}
+expect {
+    2020-12-31 23:58:58
+}
+
+test t-2352 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' hour_second);
+}
+expect {
+    2021-01-01 00:01:09
+}
+
+test t-2358 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 30 hour_second);
+}
+expect {
+    2021-01-01 00:00:29
+}
+
+test t-2361 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999999' hour_second);
+}
+expect {
+    2021-01-12 13:47:38
+}
+
+test t-2367 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' hour_second);
+}
+expect {
+    2021-01-01 00:17:38
+}
+
+test t-2368 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' hour_second);
+}
+expect {
+    2020-12-31 23:42:20
+}
+
+test t-2370 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-2371 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-2379 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:10' hour_second);
+}
+expect {
+    2021-01-01 00:01:09
+}
+
+test t-2389 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 hour_second);
+}
+expect {
+    2020-12-31 22:35:39
+}
+
+test t-2394 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 hour_second);
+}
+expect {
+    2021-01-01 00:01:04
+}
+
+test t-2400 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,1)) hour_second);
+}
+expect {
+    2021-01-01 00:01:04
+}
+
+test t-2406 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1e0 hour_second);
+}
+expect {
+    2021-01-01 00:00:00
+}
+
+test t-2413 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' hour_second);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2416 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 microsecond);
+}
+expect {
+    2020-12-31 23:59:58.999999
+}
+
+test t-2420 {
+    SELECT TIMESTAMPADD(microsecond, '1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000001
+}
+
+test t-2425 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' microsecond);
+}
+expect {
+    2020-12-31 23:59:59.000001
+}
+
+test t-2429 {
+    SELECT TIMESTAMPADD(microsecond, '1 10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000001
+}
+
+test t-2453 {
+    SELECT TIMESTAMPADD(microsecond, '-1:10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:58.999999
+}
+
+test t-2459 {
+    SELECT TIMESTAMPADD(microsecond, 1.5, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000002
+}
+
+test t-2465 {
+    SELECT TIMESTAMPADD(microsecond, 6/4, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000002
+}
+
+test t-2468 {
+    SELECT TIMESTAMPADD(microsecond, '6/4', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000006
+}
+
+test t-2475 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,1)) microsecond);
+}
+expect {
+    2020-12-31 23:59:59.000002
+}
+
+test t-2479 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) microsecond);
+}
+expect {
+    2020-12-31 23:59:58.999998
+}
+
+test t-2482 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1e0 microsecond);
+}
+expect {
+    2020-12-31 23:59:58.999999
+}
+
+test t-2486 {
+    SELECT TIMESTAMPADD(microsecond, '1.0', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000001
+}
+
+test t-2488 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' microsecond);
+}
+expect {
+    2020-12-31 23:59:58.999999
+}
+
+test t-2490 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 minute);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2492 {
+    SELECT TIMESTAMPADD(minute, 1, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2493 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' minute);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2499 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' minute);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2511 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999999' minute);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2517 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' minute);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2518 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' minute);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2521 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' minute);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2526 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' minute);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2533 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 minute);
+}
+expect {
+    2020-12-31 23:57:59
+}
+
+test t-2534 {
+    SELECT TIMESTAMPADD(minute, 1.5, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:01:59
+}
+
+test t-2537 {
+    SELECT TIMESTAMPADD(minute, 1.5000, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:01:59
+}
+
+test t-2539 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 minute);
+}
+expect {
+    2020-12-31 23:57:59
+}
+
+test t-2540 {
+    SELECT TIMESTAMPADD(minute, 6/4, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:01:59
+}
+
+test t-2553 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) minute);
+}
+expect {
+    2021-01-01 00:01:59
+}
+
+test t-2558 {
+    SELECT TIMESTAMPADD(minute, 1e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2559 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' minute);
+}
+expect {
+    2021-01-01 00:00:59
+}
+
+test t-2563 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' minute);
+}
+expect {
+    2020-12-31 23:58:59
+}
+
+test t-2580 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:59.310000
+}
+
+test t-2587 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999999' minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.000001
+}
+
+test t-2590 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.001000
+}
+
+test t-2599 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1 1:1' minute_microsecond);
+}
+expect {
+    NULL
+}
+
+test t-2601 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.900000
+}
+
+test t-2608 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-2610 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 minute_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.500000
+}
+
+test t-2617 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '6/4' minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:52.600000
+}
+
+test t-2623 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000e0 minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-2626 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,1)) minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-2637 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' minute_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2638 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' minute_microsecond);
+}
+expect {
+    2020-12-31 23:59:58.000000
+}
+
+test t-2641 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 minute_second);
+}
+expect {
+    2020-12-31 23:59:58
+}
+
+test t-2644 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1' minute_second);
+}
+expect {
+    2020-12-31 23:58:58
+}
+
+test t-2653 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' minute_second);
+}
+expect {
+    2020-12-31 23:58:49
+}
+
+test t-2655 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 minute_second);
+}
+expect {
+    2021-01-01 00:00:30
+}
+
+test t-2658 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 30 minute_second);
+}
+expect {
+    2021-01-01 00:00:29
+}
+
+test t-2659 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 30 minute_second);
+}
+expect {
+    2020-12-31 23:59:29
+}
+
+test t-2667 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' minute_second);
+}
+expect {
+    2021-01-01 00:17:38
+}
+
+test t-2679 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:10' minute_second);
+}
+expect {
+    2021-01-01 00:01:09
+}
+
+test t-2686 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 minute_second);
+}
+expect {
+    2020-12-31 22:35:39
+}
+
+test t-2704 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) minute_second);
+}
+expect {
+    2020-12-31 23:59:57
+}
+
+test t-2706 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1e0 minute_second);
+}
+expect {
+    2021-01-01 00:00:00
+}
+
+test t-2715 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 quarter);
+}
+expect {
+    2021-03-31 23:59:59
+}
+
+test t-2724 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' quarter);
+}
+expect {
+    2020-09-30 23:59:59
+}
+
+test t-2725 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' quarter);
+}
+expect {
+    2021-03-31 23:59:59
+}
+
+test t-2730 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 quarter);
+}
+expect {
+    2028-09-30 23:59:59
+}
+
+test t-2739 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 quarter);
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2743 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' quarter);
+}
+expect {
+    2020-09-30 23:59:59
+}
+
+test t-2747 {
+    SELECT TIMESTAMPADD(quarter, '1:1:1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-03-31 23:59:59
+}
+
+test t-2748 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1 1:1' quarter);
+}
+expect {
+    2021-03-31 23:59:59
+}
+
+test t-2749 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1 1:1' quarter);
+}
+expect {
+    2020-09-30 23:59:59
+}
+
+test t-2758 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 quarter);
+}
+expect {
+    2020-06-30 23:59:59
+}
+
+test t-2759 {
+    SELECT TIMESTAMPADD(quarter, 1.5, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2762 {
+    SELECT TIMESTAMPADD(quarter, 1.5000, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2763 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 quarter);
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2764 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 quarter);
+}
+expect {
+    2020-06-30 23:59:59
+}
+
+test t-2765 {
+    SELECT TIMESTAMPADD(quarter, 6/4, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2769 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 quarter);
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2770 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 quarter);
+}
+expect {
+    2020-06-30 23:59:59
+}
+
+test t-2773 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000e0 quarter);
+}
+expect {
+    2020-06-30 23:59:59
+}
+
+test t-2774 {
+    SELECT TIMESTAMPADD(quarter, 1.5000e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2777 {
+    SELECT TIMESTAMPADD(quarter, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-06-30 23:59:59
+}
+
+test t-2787 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' quarter);
+}
+expect {
+    2021-03-31 23:59:59
+}
+
+test t-2788 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' quarter);
+}
+expect {
+    2020-09-30 23:59:59
+}
+
+test t-2791 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1 second);
+}
+expect {
+    2020-12-31 23:59:58
+}
+
+test t-2795 {
+    SELECT TIMESTAMPADD(second, '1:1', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2800 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1 10' second);
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2802 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 10' second);
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2804 {
+    SELECT TIMESTAMPADD(second, '1 10', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2806 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 second);
+}
+expect {
+    2020-12-31 23:59:28
+}
+
+test t-2810 {
+    SELECT TIMESTAMPADD(second, 30, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:29
+}
+
+test t-2815 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 second);
+}
+expect {
+    2020-12-31 23:59:57.001
+}
+
+test t-2821 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1:1:1' second);
+}
+expect {
+    2020-12-31 23:59:58.000000
+}
+
+test t-2834 {
+    SELECT TIMESTAMPADD(second, 1.5, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.5
+}
+
+test t-2837 {
+    SELECT TIMESTAMPADD(second, 1.5000, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.5000
+}
+
+test t-2840 {
+    SELECT TIMESTAMPADD(second, 6/4, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.5000
+}
+
+test t-2845 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5e0 second);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-2857 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1e0 second);
+}
+expect {
+    2020-12-31 23:59:58.000000
+}
+
+test t-2858 {
+    SELECT TIMESTAMPADD(second, 1e0, TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2860 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' second);
+}
+expect {
+    2020-12-31 23:59:58.000000
+}
+
+test t-2861 {
+    SELECT TIMESTAMPADD(second, '1.0', TIMESTAMP'2020-12-31 23:59:59');
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2862 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' second);
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2872 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' second_microsecond);
+}
+expect {
+    NULL
+}
+
+test t-2890 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 second_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.001000
+}
+
+test t-2902 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '-1:10' second_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.100000
+}
+
+test t-2905 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:10' second_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.900000
+}
+
+test t-2907 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 second_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.500000
+}
+
+test t-2913 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 second_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.500000
+}
+
+test t-2926 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,1)) second_microsecond);
+}
+expect {
+    2020-12-31 23:59:57.500000
+}
+
+test t-2928 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) second_microsecond);
+}
+expect {
+    2020-12-31 23:59:59.200000
+}
+
+test t-2934 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0' second_microsecond);
+}
+expect {
+    2021-01-01 00:00:00.000000
+}
+
+test t-2938 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' second_microsecond);
+}
+expect {
+    2020-12-31 23:59:58.000000
+}
+
+test t-2946 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-2947 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1 1:1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-2956 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 31 year_month);
+}
+expect {
+    2018-05-31 23:59:59
+}
+
+test t-2965 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.999 year_month);
+}
+expect {
+    1936-09-30 23:59:59
+}
+
+test t-2967 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.999' year_month);
+}
+expect {
+    2105-03-31 23:59:59
+}
+
+test t-2973 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:1 1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-2980 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1:10' year_month);
+}
+expect {
+    2019-02-28 23:59:59
+}
+
+test t-2982 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 year_month);
+}
+expect {
+    2022-05-31 23:59:59
+}
+
+test t-2983 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5 year_month);
+}
+expect {
+    2019-07-31 23:59:59
+}
+
+test t-2985 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 1.5000 year_month);
+}
+expect {
+    2438-08-31 23:59:59
+}
+
+test t-2989 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL 6/4 year_month);
+}
+expect {
+    1603-04-30 23:59:59
+}
+
+test t-3004 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL CAST(6/4 AS DECIMAL(3,0)) year_month);
+}
+expect {
+    2020-10-31 23:59:59
+}
+
+test t-3012 {
+    SELECT DATE_ADD(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' year_month);
+}
+expect {
+    2021-12-31 23:59:59
+}
+
+test t-3013 {
+    SELECT DATE_SUB(TIMESTAMP'2020-12-31 23:59:59', INTERVAL '1.0foobar' year_month);
+}
+expect {
+    2019-12-31 23:59:59
+}
+
+test t-3017 {
+    SELECT TIMESTAMPADD(day, 1, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-02 00:00:00
+}
+
+test t-3021 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' day);
+}
+expect {
+    2025-01-02 00:00:00
+}
+
+test t-3024 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' day);
+}
+expect {
+    2024-12-31 00:00:00
+}
+
+test t-3029 {
+    SELECT TIMESTAMPADD(day, '1 10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-02 00:00:00
+}
+
+test t-3036 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' day);
+}
+expect {
+    2025-01-02 00:00:00
+}
+
+test t-3049 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' day);
+}
+expect {
+    2024-12-31 00:00:00
+}
+
+test t-3053 {
+    SELECT TIMESTAMPADD(day, '-1:10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-31 00:00:00
+}
+
+test t-3058 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 day);
+}
+expect {
+    2024-12-30 00:00:00
+}
+
+test t-3059 {
+    SELECT TIMESTAMPADD(day, 1.5, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-03 00:00:00
+}
+
+test t-3060 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 day);
+}
+expect {
+    2025-01-03 00:00:00
+}
+
+test t-3067 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' day);
+}
+expect {
+    2024-12-26 00:00:00
+}
+
+test t-3068 {
+    SELECT TIMESTAMPADD(day, '6/4', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-07 00:00:00
+}
+
+test t-3073 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 day);
+}
+expect {
+    2024-12-30 00:00:00
+}
+
+test t-3074 {
+    SELECT TIMESTAMPADD(day, 1.5000e0, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-03 00:00:00
+}
+
+test t-3076 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day);
+}
+expect {
+    2024-12-30 00:00:00
+}
+
+test t-3077 {
+    SELECT TIMESTAMPADD(day, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-03 00:00:00
+}
+
+test t-3082 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 day);
+}
+expect {
+    2024-12-31 00:00:00
+}
+
+test t-3083 {
+    SELECT TIMESTAMPADD(day, 1e0, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-02 00:00:00
+}
+
+test t-3103 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 10' week);
+}
+expect {
+    2024-12-25 00:00:00
+}
+
+test t-3109 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 week);
+}
+expect {
+    2024-06-05 00:00:00
+}
+
+test t-3114 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 week);
+}
+expect {
+    2025-01-15 00:00:00
+}
+
+test t-3122 {
+    SELECT TIMESTAMPADD(week, '1:1:1:1', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-08 00:00:00
+}
+
+test t-3126 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' week);
+}
+expect {
+    2024-12-25 00:00:00
+}
+
+test t-3129 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' week);
+}
+expect {
+    2025-01-08 00:00:00
+}
+
+test t-3130 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' week);
+}
+expect {
+    2024-12-25 00:00:00
+}
+
+test t-3133 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 week);
+}
+expect {
+    2024-12-18 00:00:00
+}
+
+test t-3136 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 week);
+}
+expect {
+    2024-12-18 00:00:00
+}
+
+test t-3140 {
+    SELECT TIMESTAMPADD(week, 6/4, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-15 00:00:00
+}
+
+test t-3145 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 week);
+}
+expect {
+    2024-12-18 00:00:00
+}
+
+test t-3149 {
+    SELECT TIMESTAMPADD(week, 1.5000e0, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-15 00:00:00
+}
+
+test t-3152 {
+    SELECT TIMESTAMPADD(week, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-15 00:00:00
+}
+
+test t-3156 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 week);
+}
+expect {
+    2025-01-08 00:00:00
+}
+
+test t-3157 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 week);
+}
+expect {
+    2024-12-25 00:00:00
+}
+
+test t-3161 {
+    SELECT TIMESTAMPADD(week, '1.0', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-08 00:00:00
+}
+
+test t-3162 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' week);
+}
+expect {
+    2025-01-08 00:00:00
+}
+
+test t-3164 {
+    SELECT TIMESTAMPADD(week, '1.0foobar', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-08 00:00:00
+}
+
+test t-3166 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3167 {
+    SELECT TIMESTAMPADD(month, 1, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3169 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3171 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' month);
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3174 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3176 {
+    SELECT TIMESTAMPADD(month, '-1 10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3183 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 month);
+}
+expect {
+    2027-07-01 00:00:00
+}
+
+test t-3185 {
+    SELECT TIMESTAMPADD(month, 30, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2027-07-01 00:00:00
+}
+
+test t-3186 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' month);
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3193 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999' month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3200 {
+    SELECT TIMESTAMPADD(month, '1:1 1:1', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3201 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3203 {
+    SELECT TIMESTAMPADD(month, '-1:10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-3204 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' month);
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3206 {
+    SELECT TIMESTAMPADD(month, '1:10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3210 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 month);
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3211 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 month);
+}
+expect {
+    2024-11-01 00:00:00
+}
+
+test t-3212 {
+    SELECT TIMESTAMPADD(month, 1.5000, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3213 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 6/4 month);
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3215 {
+    SELECT TIMESTAMPADD(month, 6/4, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3216 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' month);
+}
+expect {
+    2025-07-01 00:00:00
+}
+
+test t-3218 {
+    SELECT TIMESTAMPADD(month, '6/4', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-07-01 00:00:00
+}
+
+test t-3222 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 month);
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3225 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) month);
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3227 {
+    SELECT TIMESTAMPADD(month, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-03-01 00:00:00
+}
+
+test t-3236 {
+    SELECT TIMESTAMPADD(month, '1.0', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3239 {
+    SELECT TIMESTAMPADD(month, '1.0foobar', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-3241 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3247 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3250 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' year);
+}
+expect {
+    2026-01-01 00:00:00
+}
+
+test t-3253 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 10' year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3258 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 year);
+}
+expect {
+    2055-01-01 00:00:00
+}
+
+test t-3262 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3264 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 year);
+}
+expect {
+    2027-01-01 00:00:00
+}
+
+test t-3265 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 year);
+}
+expect {
+    2023-01-01 00:00:00
+}
+
+test t-3270 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1:1:1' year);
+}
+expect {
+    2026-01-01 00:00:00
+}
+
+test t-3271 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1:1:1' year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3280 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3293 {
+    SELECT TIMESTAMPADD(year, '6/4', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2031-01-01 00:00:00
+}
+
+test t-3297 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 year);
+}
+expect {
+    2027-01-01 00:00:00
+}
+
+test t-3303 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) year);
+}
+expect {
+    2027-01-01 00:00:00
+}
+
+test t-3307 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 year);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-3315 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 day_hour);
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3319 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' day_hour);
+}
+expect {
+    2024-12-30 23:00:00
+}
+
+test t-3325 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' day_hour);
+}
+expect {
+    2025-01-02 10:00:00
+}
+
+test t-3334 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 day_hour);
+}
+expect {
+    2024-12-30 18:00:00
+}
+
+test t-3337 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' day_hour);
+}
+expect {
+    1910-12-03 09:00:00
+}
+
+test t-3343 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999' day_hour);
+}
+expect {
+    2024-11-19 09:00:00
+}
+
+test t-3348 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-3349 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-3352 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' day_hour);
+}
+expect {
+    2025-01-02 10:00:00
+}
+
+test t-3354 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' day_hour);
+}
+expect {
+    2025-01-02 10:00:00
+}
+
+test t-3361 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 day_hour);
+}
+expect {
+    2024-06-05 16:00:00
+}
+
+test t-3369 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 day_hour);
+}
+expect {
+    2025-01-02 05:00:00
+}
+
+test t-3373 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 day_hour);
+}
+expect {
+    2024-12-30 19:00:00
+}
+
+test t-3376 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_hour);
+}
+expect {
+    2024-12-30 19:00:00
+}
+
+test t-3378 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_hour);
+}
+expect {
+    2025-01-01 02:00:00
+}
+
+test t-3387 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' day_hour);
+}
+expect {
+    2025-01-02 00:00:00
+}
+
+test t-3394 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' day_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.900000
+}
+
+test t-3399 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' day_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.900000
+}
+
+test t-3405 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 day_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.310000
+}
+
+test t-3412 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' day_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.000001
+}
+
+test t-3414 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 day_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.999000
+}
+
+test t-3424 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' day_microsecond);
+}
+expect {
+    2024-12-31 22:58:58.900000
+}
+
+test t-3429 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' day_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.100000
+}
+
+test t-3435 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 day_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.500000
+}
+
+test t-3444 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 day_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.500000
+}
+
+test t-3457 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 day_microsecond);
+}
+expect {
+    2024-12-31 23:59:59.900000
+}
+
+test t-3463 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' day_microsecond);
+}
+expect {
+    2024-12-31 23:59:59.000000
+}
+
+test t-3466 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 day_minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-3471 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' day_minute);
+}
+expect {
+    NULL
+}
+
+test t-3472 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' day_minute);
+}
+expect {
+    NULL
+}
+
+test t-3480 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 day_minute);
+}
+expect {
+    2025-01-01 00:31:00
+}
+
+test t-3481 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 day_minute);
+}
+expect {
+    2024-12-31 23:29:00
+}
+
+test t-3489 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 day_minute);
+}
+expect {
+    2025-01-01 17:39:00
+}
+
+test t-3498 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' day_minute);
+}
+expect {
+    NULL
+}
+
+test t-3501 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' day_minute);
+}
+expect {
+    2024-12-31 22:50:00
+}
+
+test t-3502 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' day_minute);
+}
+expect {
+    2025-01-01 01:10:00
+}
+
+test t-3505 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' day_minute);
+}
+expect {
+    2024-12-31 22:50:00
+}
+
+test t-3510 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 day_minute);
+}
+expect {
+    2025-01-04 12:20:00
+}
+
+test t-3528 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_minute);
+}
+expect {
+    2025-01-01 00:02:00
+}
+
+test t-3538 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' day_minute);
+}
+expect {
+    2024-12-31 23:00:00
+}
+
+test t-3541 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 day_second);
+}
+expect {
+    2024-12-31 23:59:59
+}
+
+test t-3546 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' day_second);
+}
+expect {
+    2025-01-02 01:01:01
+}
+
+test t-3553 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 10' day_second);
+}
+expect {
+    2024-12-31 23:58:50
+}
+
+test t-3564 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 day_second);
+}
+expect {
+    2025-01-01 00:17:39
+}
+
+test t-3570 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1:1:1' day_second);
+}
+expect {
+    2025-01-02 01:01:01
+}
+
+test t-3573 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' day_second);
+}
+expect {
+    2025-01-02 01:01:01
+}
+
+test t-3577 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' day_second);
+}
+expect {
+    2025-01-01 00:01:10
+}
+
+test t-3582 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 day_second);
+}
+expect {
+    2025-01-01 00:01:05
+}
+
+test t-3589 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 6/4 day_second);
+}
+expect {
+    2024-12-31 22:35:40
+}
+
+test t-3594 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 day_second);
+}
+expect {
+    2025-01-01 00:01:05
+}
+
+test t-3601 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_second);
+}
+expect {
+    2024-12-31 23:58:55
+}
+
+test t-3603 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_second);
+}
+expect {
+    2025-01-01 00:00:02
+}
+
+test t-3604 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_second);
+}
+expect {
+    2024-12-31 23:59:58
+}
+
+test t-3606 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 day_second);
+}
+expect {
+    2025-01-01 00:00:01
+}
+
+test t-3613 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' day_second);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-3618 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' hour);
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3620 {
+    SELECT TIMESTAMPADD(hour, '1:1', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3624 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' hour);
+}
+expect {
+    2024-12-31 23:00:00
+}
+
+test t-3626 {
+    SELECT TIMESTAMPADD(hour, '-1 10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-31 23:00:00
+}
+
+test t-3627 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 10' hour);
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3638 {
+    SELECT TIMESTAMPADD(hour, '1.999999', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3639 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 hour);
+}
+expect {
+    2025-01-01 02:00:00
+}
+
+test t-3653 {
+    SELECT TIMESTAMPADD(hour, '-1:10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-31 23:00:00
+}
+
+test t-3658 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 hour);
+}
+expect {
+    2024-12-31 22:00:00
+}
+
+test t-3665 {
+    SELECT TIMESTAMPADD(hour, 6/4, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 02:00:00
+}
+
+test t-3678 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour);
+}
+expect {
+    2025-01-01 02:00:00
+}
+
+test t-3686 {
+    SELECT TIMESTAMPADD(hour, '1.0', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3689 {
+    SELECT TIMESTAMPADD(hour, '1.0foobar', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 01:00:00
+}
+
+test t-3690 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 hour_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.100000
+}
+
+test t-3697 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' hour_microsecond);
+}
+expect {
+    2024-12-31 22:58:58.900000
+}
+
+test t-3727 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' hour_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.100000
+}
+
+test t-3732 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 hour_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.500000
+}
+
+test t-3741 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' hour_microsecond);
+}
+expect {
+    2025-01-01 00:00:06.400000
+}
+
+test t-3750 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) hour_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.500000
+}
+
+test t-3751 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) hour_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.500000
+}
+
+test t-3754 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour_microsecond);
+}
+expect {
+    2024-12-31 23:59:59.800000
+}
+
+test t-3762 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' hour_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-3763 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' hour_microsecond);
+}
+expect {
+    2024-12-31 23:59:59.000000
+}
+
+test t-3766 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 hour_minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-3768 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' hour_minute);
+}
+expect {
+    2025-01-01 01:01:00
+}
+
+test t-3781 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 hour_minute);
+}
+expect {
+    2024-12-31 23:29:00
+}
+
+test t-3786 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' hour_minute);
+}
+expect {
+    2026-11-26 11:39:00
+}
+
+test t-3789 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 hour_minute);
+}
+expect {
+    2025-01-01 17:39:00
+}
+
+test t-3790 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 hour_minute);
+}
+expect {
+    2024-12-31 06:21:00
+}
+
+test t-3805 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' hour_minute);
+}
+expect {
+    2024-12-31 22:50:00
+}
+
+test t-3810 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 hour_minute);
+}
+expect {
+    2025-01-04 12:20:00
+}
+
+test t-3811 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 hour_minute);
+}
+expect {
+    2024-12-28 11:40:00
+}
+
+test t-3822 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 hour_minute);
+}
+expect {
+    2025-01-01 01:05:00
+}
+
+test t-3823 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 hour_minute);
+}
+expect {
+    2024-12-31 22:55:00
+}
+
+test t-3832 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 hour_minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-3840 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 hour_second);
+}
+expect {
+    2025-01-01 00:00:01
+}
+
+test t-3841 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 hour_second);
+}
+expect {
+    2024-12-31 23:59:59
+}
+
+test t-3844 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' hour_second);
+}
+expect {
+    2024-12-31 23:58:59
+}
+
+test t-3846 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-3853 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 10' hour_second);
+}
+expect {
+    2024-12-31 23:58:50
+}
+
+test t-3856 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 hour_second);
+}
+expect {
+    2024-12-31 23:59:29
+}
+
+test t-3862 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999999' hour_second);
+}
+expect {
+    2024-12-20 10:12:21
+}
+
+test t-3865 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 hour_second);
+}
+expect {
+    2024-12-31 23:42:21
+}
+
+test t-3871 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-3892 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' hour_second);
+}
+expect {
+    2024-12-31 23:53:56
+}
+
+test t-3897 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 hour_second);
+}
+expect {
+    2025-01-01 00:01:05
+}
+
+test t-3901 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) hour_second);
+}
+expect {
+    2024-12-31 23:58:55
+}
+
+test t-3907 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 hour_second);
+}
+expect {
+    2024-12-31 23:59:59
+}
+
+test t-3916 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 microsecond);
+}
+expect {
+    2024-12-31 23:59:59.999999
+}
+
+test t-3917 {
+    SELECT TIMESTAMPADD(microsecond, 1, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:00.000001
+}
+
+test t-3920 {
+    SELECT TIMESTAMPADD(microsecond, '1:1', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:00.000001
+}
+
+test t-3921 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1 1:1:1' microsecond);
+}
+expect {
+    2025-01-01 00:00:00.000001
+}
+
+test t-3925 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' microsecond);
+}
+expect {
+    2025-01-01 00:00:00.000001
+}
+
+test t-3926 {
+    SELECT TIMESTAMPADD(microsecond, '-1 10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-31 23:59:59.999999
+}
+
+test t-3931 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 microsecond);
+}
+expect {
+    2024-12-31 23:59:59.999969
+}
+
+test t-3934 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 microsecond);
+}
+expect {
+    2024-12-31 23:59:59.999970
+}
+
+test t-3935 {
+    SELECT TIMESTAMPADD(microsecond, 30, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:00.000030
+}
+
+test t-3958 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 microsecond);
+}
+expect {
+    2024-12-31 23:59:59.999998
+}
+
+test t-3972 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 microsecond);
+}
+expect {
+    2025-01-01 00:00:00.000002
+}
+
+test t-3975 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) microsecond);
+}
+expect {
+    2025-01-01 00:00:00.000002
+}
+
+test t-3976 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) microsecond);
+}
+expect {
+    2024-12-31 23:59:59.999998
+}
+
+test t-3999 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4000 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' minute);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4004 {
+    SELECT TIMESTAMPADD(minute, '1 10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4015 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 minute);
+}
+expect {
+    2024-12-31 23:58:00
+}
+
+test t-4018 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999' minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4019 {
+    SELECT TIMESTAMPADD(minute, '1.999', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4023 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' minute);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4027 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' minute);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4028 {
+    SELECT TIMESTAMPADD(minute, '-1:10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4038 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 6/4 minute);
+}
+expect {
+    2025-01-01 00:02:00
+}
+
+test t-4039 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 6/4 minute);
+}
+expect {
+    2024-12-31 23:58:00
+}
+
+test t-4054 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) minute);
+}
+expect {
+    2024-12-31 23:58:00
+}
+
+test t-4056 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 minute);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4057 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4058 {
+    SELECT TIMESTAMPADD(minute, 1e0, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4060 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0' minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4062 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' minute);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4063 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' minute);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4065 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 minute_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.100000
+}
+
+test t-4068 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' minute_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.100000
+}
+
+test t-4080 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 minute_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.310000
+}
+
+test t-4081 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 minute_microsecond);
+}
+expect {
+    2024-12-31 23:59:59.690000
+}
+
+test t-4099 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' minute_microsecond);
+}
+expect {
+    NULL
+}
+
+test t-4114 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 6/4 minute_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.500000
+}
+
+test t-4117 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' minute_microsecond);
+}
+expect {
+    2024-12-31 23:59:53.600000
+}
+
+test t-4119 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 minute_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.500000
+}
+
+test t-4132 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 minute_microsecond);
+}
+expect {
+    2024-12-31 23:59:59.900000
+}
+
+test t-4137 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' minute_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4143 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' minute_second);
+}
+expect {
+    2025-01-01 00:01:01
+}
+
+test t-4144 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' minute_second);
+}
+expect {
+    2024-12-31 23:58:59
+}
+
+test t-4165 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 minute_second);
+}
+expect {
+    2024-12-31 23:42:21
+}
+
+test t-4167 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999' minute_second);
+}
+expect {
+    2025-01-01 00:17:39
+}
+
+test t-4177 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1:10' minute_second);
+}
+expect {
+    2025-01-01 00:01:10
+}
+
+test t-4182 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 minute_second);
+}
+expect {
+    2025-01-01 00:01:05
+}
+
+test t-4185 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 minute_second);
+}
+expect {
+    2025-01-01 01:24:20
+}
+
+test t-4186 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 minute_second);
+}
+expect {
+    2024-12-31 22:35:40
+}
+
+test t-4197 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000e0 minute_second);
+}
+expect {
+    2025-01-01 00:01:05
+}
+
+test t-4203 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) minute_second);
+}
+expect {
+    2025-01-01 00:00:02
+}
+
+test t-4204 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) minute_second);
+}
+expect {
+    2024-12-31 23:59:58
+}
+
+test t-4209 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0' minute_second);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4212 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' minute_second);
+}
+expect {
+    2025-01-01 00:01:00
+}
+
+test t-4213 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' minute_second);
+}
+expect {
+    2024-12-31 23:59:00
+}
+
+test t-4229 {
+    SELECT TIMESTAMPADD(quarter, '1 10', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-04-01 00:00:00
+}
+
+test t-4240 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.999 quarter);
+}
+expect {
+    2024-07-01 00:00:00
+}
+
+test t-4269 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 quarter);
+}
+expect {
+    2025-07-01 00:00:00
+}
+
+test t-4271 {
+    SELECT TIMESTAMPADD(quarter, 1.5e0, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-07-01 00:00:00
+}
+
+test t-4275 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) quarter);
+}
+expect {
+    2025-07-01 00:00:00
+}
+
+test t-4277 {
+    SELECT TIMESTAMPADD(quarter, CAST(6/4 AS DECIMAL(3,1)), TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-07-01 00:00:00
+}
+
+test t-4279 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) quarter);
+}
+expect {
+    2024-07-01 00:00:00
+}
+
+test t-4281 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 quarter);
+}
+expect {
+    2025-04-01 00:00:00
+}
+
+test t-4283 {
+    SELECT TIMESTAMPADD(quarter, 1e0, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-04-01 00:00:00
+}
+
+test t-4284 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0' quarter);
+}
+expect {
+    2025-04-01 00:00:00
+}
+
+test t-4288 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' quarter);
+}
+expect {
+    2024-10-01 00:00:00
+}
+
+test t-4289 {
+    SELECT TIMESTAMPADD(quarter, '1.0foobar', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-04-01 00:00:00
+}
+
+test t-4291 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 second);
+}
+expect {
+    2024-12-31 23:59:59
+}
+
+test t-4294 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1' second);
+}
+expect {
+    2024-12-31 23:59:59.000000
+}
+
+test t-4299 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' second);
+}
+expect {
+    2024-12-31 23:59:59.000000
+}
+
+test t-4300 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' second);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4307 {
+    SELECT TIMESTAMPADD(second, 31, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:31
+}
+
+test t-4308 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 second);
+}
+expect {
+    2025-01-01 00:00:30
+}
+
+test t-4309 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 30 second);
+}
+expect {
+    2024-12-31 23:59:30
+}
+
+test t-4323 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' second);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4333 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 second);
+}
+expect {
+    2024-12-31 23:59:58.5
+}
+
+test t-4335 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5000 second);
+}
+expect {
+    2025-01-01 00:00:01.5000
+}
+
+test t-4339 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 6/4 second);
+}
+expect {
+    2024-12-31 23:59:58.5000
+}
+
+test t-4340 {
+    SELECT TIMESTAMPADD(second, 6/4, TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:01.5000
+}
+
+test t-4341 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' second);
+}
+expect {
+    2025-01-01 00:00:06.000000
+}
+
+test t-4342 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '6/4' second);
+}
+expect {
+    2024-12-31 23:59:54.000000
+}
+
+test t-4355 {
+    SELECT TIMESTAMPADD(second, CAST(6/4 AS DECIMAL(3,0)), TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:02
+}
+
+test t-4356 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 second);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4357 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 second);
+}
+expect {
+    2024-12-31 23:59:59.000000
+}
+
+test t-4359 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0' second);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4361 {
+    SELECT TIMESTAMPADD(second, '1.0', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4364 {
+    SELECT TIMESTAMPADD(second, '1.0foobar', TIMESTAMP'2025-01-01 00:00:00');
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4365 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 second_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.100000
+}
+
+test t-4375 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '-1 10' second_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.100000
+}
+
+test t-4380 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 31 second_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.310000
+}
+
+test t-4393 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.999' second_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.001000
+}
+
+test t-4405 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:10' second_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.900000
+}
+
+test t-4408 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5 second_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.500000
+}
+
+test t-4420 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 second_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.500000
+}
+
+test t-4426 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,1)) second_microsecond);
+}
+expect {
+    2024-12-31 23:59:58.500000
+}
+
+test t-4431 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 second_microsecond);
+}
+expect {
+    2025-01-01 00:00:00.100000
+}
+
+test t-4437 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' second_microsecond);
+}
+expect {
+    2025-01-01 00:00:01.000000
+}
+
+test t-4441 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1 year_month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-4471 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1:1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-4473 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1:1 1:1' year_month);
+}
+expect {
+    NULL
+}
+
+test t-4495 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1.5e0 year_month);
+}
+expect {
+    2023-08-01 00:00:00
+}
+
+test t-4504 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL CAST(6/4 AS DECIMAL(3,0)) year_month);
+}
+expect {
+    2024-11-01 00:00:00
+}
+
+test t-4506 {
+    SELECT DATE_ADD(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 year_month);
+}
+expect {
+    2025-02-01 00:00:00
+}
+
+test t-4507 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL 1e0 year_month);
+}
+expect {
+    2024-12-01 00:00:00
+}
+
+test t-4513 {
+    SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0foobar' year_month);
+}
+expect {
+    2024-01-01 00:00:00
+}
+
+test t-4523 {
+    SELECT TIMESTAMPADD(day, '1 1:1:1', '2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-4528 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 10' day);
+}
+expect {
+    2018-04-30
+}
+
+test t-4541 {
+    SELECT TIMESTAMPADD(day, 1.999, '2018-05-01');
+}
+expect {
+    2018-05-03
+}
+
+test t-4547 {
+    SELECT TIMESTAMPADD(day, '1:1:1:1', '2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-4551 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '-1:10' day);
+}
+expect {
+    2018-04-30
+}
+
+test t-4554 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:10' day);
+}
+expect {
+    2018-05-02
+}
+
+test t-4556 {
+    SELECT TIMESTAMPADD(day, '1:10', '2018-05-01');
+}
+expect {
+    2018-05-02
+}
+
+test t-4557 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 day);
+}
+expect {
+    2018-05-03
+}
+
+test t-4559 {
+    SELECT TIMESTAMPADD(day, 1.5, '2018-05-01');
+}
+expect {
+    2018-05-03
+}
+
+test t-4562 {
+    SELECT TIMESTAMPADD(day, 1.5000, '2018-05-01');
+}
+expect {
+    2018-05-03
+}
+
+test t-4566 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '6/4' day);
+}
+expect {
+    2018-05-07
+}
+
+test t-4575 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day);
+}
+expect {
+    2018-05-03
+}
+
+test t-4577 {
+    SELECT TIMESTAMPADD(day, CAST(6/4 AS DECIMAL(3,1)), '2018-05-01');
+}
+expect {
+    2018-05-03
+}
+
+test t-4592 {
+    SELECT TIMESTAMPADD(week, 1, '2018-05-01');
+}
+expect {
+    2018-05-08
+}
+
+test t-4601 {
+    SELECT TIMESTAMPADD(week, '-1 10', '2018-05-01');
+}
+expect {
+    2018-04-24
+}
+
+test t-4606 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 31 week);
+}
+expect {
+    2017-09-26
+}
+
+test t-4608 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 30 week);
+}
+expect {
+    2018-11-27
+}
+
+test t-4609 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 30 week);
+}
+expect {
+    2017-10-03
+}
+
+test t-4613 {
+    SELECT TIMESTAMPADD(week, '1.999999', '2018-05-01');
+}
+expect {
+    2018-05-08
+}
+
+test t-4618 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.999' week);
+}
+expect {
+    2018-04-24
+}
+
+test t-4619 {
+    SELECT TIMESTAMPADD(week, '1.999', '2018-05-01');
+}
+expect {
+    2018-05-08
+}
+
+test t-4627 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1:10' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-4629 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:10' week);
+}
+expect {
+    2018-05-08
+}
+
+test t-4632 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 week);
+}
+expect {
+    2018-05-15
+}
+
+test t-4633 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5 week);
+}
+expect {
+    2018-04-17
+}
+
+test t-4634 {
+    SELECT TIMESTAMPADD(week, 1.5, '2018-05-01');
+}
+expect {
+    2018-05-15
+}
+
+test t-4642 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '6/4' week);
+}
+expect {
+    2018-03-20
+}
+
+test t-4648 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000e0 week);
+}
+expect {
+    2018-04-17
+}
+
+test t-4650 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) week);
+}
+expect {
+    2018-05-15
+}
+
+test t-4665 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1 month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4670 {
+    SELECT TIMESTAMPADD(month, '1:1', '2018-05-01');
+}
+expect {
+    2018-06-01
+}
+
+test t-4675 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1 10' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4677 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1 10' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4678 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 10' month);
+}
+expect {
+    2018-04-01
+}
+
+test t-4685 {
+    SELECT TIMESTAMPADD(month, 30, '2018-05-01');
+}
+expect {
+    2020-11-01
+}
+
+test t-4686 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.999999' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4690 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.999 month);
+}
+expect {
+    2018-03-01
+}
+
+test t-4692 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.999' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4702 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1:10' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4705 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:10' month);
+}
+expect {
+    2018-04-01
+}
+
+test t-4714 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 6/4 month);
+}
+expect {
+    2018-03-01
+}
+
+test t-4725 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) month);
+}
+expect {
+    2018-07-01
+}
+
+test t-4734 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.0' month);
+}
+expect {
+    2018-06-01
+}
+
+test t-4740 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1 year);
+}
+expect {
+    2019-05-01
+}
+
+test t-4741 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1 year);
+}
+expect {
+    2017-05-01
+}
+
+test t-4746 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1 1:1:1' year);
+}
+expect {
+    2019-05-01
+}
+
+test t-4752 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1 10' year);
+}
+expect {
+    2019-05-01
+}
+
+test t-4762 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.999999' year);
+}
+expect {
+    2017-05-01
+}
+
+test t-4763 {
+    SELECT TIMESTAMPADD(year, '1.999999', '2018-05-01');
+}
+expect {
+    2019-05-01
+}
+
+test t-4764 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.999 year);
+}
+expect {
+    2020-05-01
+}
+
+test t-4765 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.999 year);
+}
+expect {
+    2016-05-01
+}
+
+test t-4766 {
+    SELECT TIMESTAMPADD(year, 1.999, '2018-05-01');
+}
+expect {
+    2020-05-01
+}
+
+test t-4773 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:1 1:1' year);
+}
+expect {
+    2019-05-01
+}
+
+test t-4775 {
+    SELECT TIMESTAMPADD(year, '1:1 1:1', '2018-05-01');
+}
+expect {
+    2019-05-01
+}
+
+test t-4776 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '-1:10' year);
+}
+expect {
+    2017-05-01
+}
+
+test t-4781 {
+    SELECT TIMESTAMPADD(year, '1:10', '2018-05-01');
+}
+expect {
+    2019-05-01
+}
+
+test t-4782 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 year);
+}
+expect {
+    2020-05-01
+}
+
+test t-4787 {
+    SELECT TIMESTAMPADD(year, 1.5000, '2018-05-01');
+}
+expect {
+    2020-05-01
+}
+
+test t-4793 {
+    SELECT TIMESTAMPADD(year, '6/4', '2018-05-01');
+}
+expect {
+    2024-05-01
+}
+
+test t-4807 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1e0 year);
+}
+expect {
+    2017-05-01
+}
+
+test t-4808 {
+    SELECT TIMESTAMPADD(year, 1e0, '2018-05-01');
+}
+expect {
+    2019-05-01
+}
+
+test t-4809 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.0' year);
+}
+expect {
+    2019-05-01
+}
+
+test t-4813 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.0foobar' year);
+}
+expect {
+    2017-05-01
+}
+
+test t-4819 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:1' day_hour);
+}
+expect {
+    2018-04-29 23:00:00
+}
+
+test t-4822 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 1:1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-4825 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1 10' day_hour);
+}
+expect {
+    2018-05-02 10:00:00
+}
+
+test t-4834 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 30 day_hour);
+}
+expect {
+    2018-04-29 18:00:00
+}
+
+test t-4849 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:1 1:1' day_hour);
+}
+expect {
+    NULL
+}
+
+test t-4851 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '-1:10' day_hour);
+}
+expect {
+    2018-04-29 14:00:00
+}
+
+test t-4857 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 day_hour);
+}
+expect {
+    2018-05-02 05:00:00
+}
+
+test t-4861 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000 day_hour);
+}
+expect {
+    2017-10-03 16:00:00
+}
+
+test t-4863 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 6/4 day_hour);
+}
+expect {
+    2018-11-26 08:00:00
+}
+
+test t-4866 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '6/4' day_hour);
+}
+expect {
+    2018-05-07 04:00:00
+}
+
+test t-4872 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5000e0 day_hour);
+}
+expect {
+    2018-05-02 05:00:00
+}
+
+test t-4875 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_hour);
+}
+expect {
+    2018-05-02 05:00:00
+}
+
+test t-4885 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.0' day_hour);
+}
+expect {
+    2018-04-30 00:00:00
+}
+
+test t-4890 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1 day_microsecond);
+}
+expect {
+    2018-05-01 00:00:00.100000
+}
+
+test t-4893 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:1' day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.100000
+}
+
+test t-4894 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:1' day_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.900000
+}
+
+test t-4896 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1 1:1:1' day_microsecond);
+}
+expect {
+    2018-05-01 01:01:01.100000
+}
+
+test t-4902 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1 10' day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.100000
+}
+
+test t-4917 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.999' day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.999000
+}
+
+test t-4923 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:1 1:1' day_microsecond);
+}
+expect {
+    2018-05-01 01:01:01.100000
+}
+
+test t-4935 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5000 day_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-4948 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000e0 day_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-4954 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.800000
+}
+
+test t-4957 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1e0 day_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.900000
+}
+
+test t-4960 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.0' day_microsecond);
+}
+expect {
+    2018-04-30 23:59:59
+}
+
+test t-4966 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1 day_minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-4977 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1 10' day_minute);
+}
+expect {
+    2018-05-01 01:10:00
+}
+
+test t-4978 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 10' day_minute);
+}
+expect {
+    2018-04-30 22:50:00
+}
+
+test t-5002 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1:10' day_minute);
+}
+expect {
+    2018-05-01 01:10:00
+}
+
+test t-5005 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:10' day_minute);
+}
+expect {
+    2018-04-30 22:50:00
+}
+
+test t-5007 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 day_minute);
+}
+expect {
+    2018-05-01 01:05:00
+}
+
+test t-5010 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5000 day_minute);
+}
+expect {
+    2018-05-04 12:20:00
+}
+
+test t-5020 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5e0 day_minute);
+}
+expect {
+    2018-04-30 22:55:00
+}
+
+test t-5032 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1e0 day_minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-5055 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 31 day_second);
+}
+expect {
+    2018-05-01 00:00:31
+}
+
+test t-5059 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 30 day_second);
+}
+expect {
+    2018-04-30 23:59:30
+}
+
+test t-5061 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.999999' day_second);
+}
+expect {
+    2018-05-12 13:47:39
+}
+
+test t-5071 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:1:1:1' day_second);
+}
+expect {
+    2018-04-29 22:58:59
+}
+
+test t-5073 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:1 1:1' day_second);
+}
+expect {
+    2018-05-02 01:01:01
+}
+
+test t-5080 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:10' day_second);
+}
+expect {
+    2018-04-30 23:58:50
+}
+
+test t-5082 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 day_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-5085 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5000 day_second);
+}
+expect {
+    2018-05-01 01:24:20
+}
+
+test t-5086 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000 day_second);
+}
+expect {
+    2018-04-30 22:35:40
+}
+
+test t-5088 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 6/4 day_second);
+}
+expect {
+    2018-05-01 01:24:20
+}
+
+test t-5089 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 6/4 day_second);
+}
+expect {
+    2018-04-30 22:35:40
+}
+
+test t-5100 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) day_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-5103 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) day_second);
+}
+expect {
+    2018-05-01 00:00:02
+}
+
+test t-5107 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1e0 day_second);
+}
+expect {
+    2018-04-30 23:59:59
+}
+
+test t-5112 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.0foobar' day_second);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-5120 {
+    SELECT TIMESTAMPADD(hour, '1:1', '2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-5129 {
+    SELECT TIMESTAMPADD(hour, '1 10', '2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-5130 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 31 hour);
+}
+expect {
+    2018-05-02 07:00:00
+}
+
+test t-5131 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 31 hour);
+}
+expect {
+    2018-04-29 17:00:00
+}
+
+test t-5132 {
+    SELECT TIMESTAMPADD(hour, 31, '2018-05-01');
+}
+expect {
+    2018-05-02 07:00:00
+}
+
+test t-5138 {
+    SELECT TIMESTAMPADD(hour, '1.999999', '2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-5139 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.999 hour);
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-5155 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:10' hour);
+}
+expect {
+    2018-04-30 23:00:00
+}
+
+test t-5156 {
+    SELECT TIMESTAMPADD(hour, '1:10', '2018-05-01');
+}
+expect {
+    2018-05-01 01:00:00
+}
+
+test t-5158 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5 hour);
+}
+expect {
+    2018-04-30 22:00:00
+}
+
+test t-5163 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 6/4 hour);
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-5170 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5e0 hour);
+}
+expect {
+    2018-04-30 22:00:00
+}
+
+test t-5173 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000e0 hour);
+}
+expect {
+    2018-04-30 22:00:00
+}
+
+test t-5178 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour);
+}
+expect {
+    2018-05-01 02:00:00
+}
+
+test t-5197 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 1:1:1' hour_microsecond);
+}
+expect {
+    2018-04-30 22:58:58.900000
+}
+
+test t-5200 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1 10' hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.100000
+}
+
+test t-5205 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 31 hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:00.310000
+}
+
+test t-5206 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 31 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.690000
+}
+
+test t-5215 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.999 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.001000
+}
+
+test t-5232 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-5236 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:58.500000
+}
+
+test t-5250 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,1)) hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01.500000
+}
+
+test t-5257 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1e0 hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:59.900000
+}
+
+test t-5262 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.0foobar' hour_microsecond);
+}
+expect {
+    2018-05-01 00:00:01
+}
+
+test t-5263 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.0foobar' hour_microsecond);
+}
+expect {
+    2018-04-30 23:59:59
+}
+
+test t-5265 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1 hour_minute);
+}
+expect {
+    2018-05-01 00:01:00
+}
+
+test t-5280 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 31 hour_minute);
+}
+expect {
+    2018-05-01 00:31:00
+}
+
+test t-5283 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 30 hour_minute);
+}
+expect {
+    2018-05-01 00:30:00
+}
+
+test t-5286 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1.999999' hour_minute);
+}
+expect {
+    2020-03-25 11:39:00
+}
+
+test t-5287 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.999999' hour_minute);
+}
+expect {
+    2016-06-05 12:21:00
+}
+
+test t-5299 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1:1 1:1' hour_minute);
+}
+expect {
+    NULL
+}
+
+test t-5302 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '-1:10' hour_minute);
+}
+expect {
+    2018-05-01 01:10:00
+}
+
+test t-5304 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:10' hour_minute);
+}
+expect {
+    2018-05-01 01:10:00
+}
+
+test t-5311 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5000 hour_minute);
+}
+expect {
+    2018-04-27 11:40:00
+}
+
+test t-5314 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 6/4 hour_minute);
+}
+expect {
+    2018-04-27 11:40:00
+}
+
+test t-5316 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '6/4' hour_minute);
+}
+expect {
+    2018-05-01 06:04:00
+}
+
+test t-5317 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '6/4' hour_minute);
+}
+expect {
+    2018-04-30 17:56:00
+}
+
+test t-5332 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1e0 hour_minute);
+}
+expect {
+    2018-04-30 23:59:00
+}
+
+test t-5335 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1.0' hour_minute);
+}
+expect {
+    2018-04-30 23:00:00
+}
+
+test t-5340 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1 hour_second);
+}
+expect {
+    2018-05-01 00:00:01
+}
+
+test t-5347 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 1:1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-5353 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL '1 10' hour_second);
+}
+expect {
+    2018-04-30 23:58:50
+}
+
+test t-5365 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.999 hour_second);
+}
+expect {
+    2018-04-30 23:42:21
+}
+
+test t-5373 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:1 1:1' hour_second);
+}
+expect {
+    NULL
+}
+
+test t-5379 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '1:10' hour_second);
+}
+expect {
+    2018-05-01 00:01:10
+}
+
+test t-5382 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1.5 hour_second);
+}
+expect {
+    2018-05-01 00:01:05
+}
+
+test t-5383 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL 1.5 hour_second);
+}
+expect {
+    2018-04-30 23:58:55
+}
+
+test t-5391 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL '6/4' hour_second);
+}
+expect {
+    2018-05-01 00:06:04
+}
+
+test t-5403 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour_second);
+}
+expect {
+    2018-05-01 00:00:02
+}
+
+test t-5404 {
+    SELECT DATE_SUB('2018-05-01', INTERVAL CAST(6/4 AS DECIMAL(3,0)) hour_second);
+}
+expect {
+    2018-04-30 23:59:58
+}
+
+test t-5406 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1e0 hour_second);
+}
+expect {
+    2018-05-01 00:00:01
+}
+
+test t-5415 {
+    SELECT DATE_ADD('2018-05-01', INTERVAL 1 microsecond);
+}
+expect {
+    2018-05-01 00:00:00.000001
+}

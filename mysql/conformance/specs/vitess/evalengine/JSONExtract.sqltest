@@ -1,0 +1,1395 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE vteval_test(autopk int primary key auto_increment, column0 JSON);
+}
+
+setup s2 {
+    INSERT INTO vteval_test(column0) VALUES ('[ \{ "a": 1 \}, \{ "a": 2 \} ]');
+}
+
+setup s3 {
+    INSERT INTO vteval_test(column0) VALUES ('\{ "a" : "foo", "b" : [ true, \{ "c" : 123, "c" : 456 \} ] \}');
+}
+
+setup s4 {
+    INSERT INTO vteval_test(column0) VALUES ('\{ "a" : "foo", "b" : [ true, \{ "c" : "123" \} ] \}');
+}
+
+setup s5 {
+    INSERT INTO vteval_test(column0) VALUES ('\{ "a" : "foo", "b" : [ true, \{ "c" : 123 \} ] \}');
+}
+
+@setup s1
+@setup s2
+test t-0 {
+    SELECT column0->>'$**.b' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-1 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-2 {
+    SELECT cast(column0->>'$**.b' as char) <=> cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-3 {
+    SELECT column0->>'$**.b' FROM vteval_test;
+}
+expect {
+    [[true, \{"c": 456\}]]
+}
+
+@setup s1
+@setup s3
+test t-4 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    [[true, \{"c": 456\}]]
+}
+
+@setup s1
+@setup s3
+test t-5 {
+    SELECT cast(column0->>'$**.b' as char) <=> cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-6 {
+    SELECT column0->>'$**.b' FROM vteval_test;
+}
+expect {
+    [[true, \{"c": "123"\}]]
+}
+
+@setup s1
+@setup s4
+test t-7 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    [[true, \{"c": "123"\}]]
+}
+
+@setup s1
+@setup s4
+test t-8 {
+    SELECT cast(column0->>'$**.b' as char) <=> cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-9 {
+    SELECT column0->>'$**.b' FROM vteval_test;
+}
+expect {
+    [[true, \{"c": 123\}]]
+}
+
+@setup s1
+@setup s5
+test t-10 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    [[true, \{"c": 123\}]]
+}
+
+@setup s1
+@setup s5
+test t-11 {
+    SELECT cast(column0->>'$**.b' as char) <=> cast(json_unquote(json_extract(column0, '$**.b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-12 {
+    SELECT column0->>'$.c' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-13 {
+    SELECT cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-14 {
+    SELECT cast(column0->>'$.c' as char) <=> cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-15 {
+    SELECT column0->>'$.c' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s3
+test t-16 {
+    SELECT cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s3
+test t-17 {
+    SELECT cast(column0->>'$.c' as char) <=> cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-18 {
+    SELECT column0->>'$.c' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s4
+test t-19 {
+    SELECT cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s4
+test t-20 {
+    SELECT cast(column0->>'$.c' as char) <=> cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-21 {
+    SELECT column0->>'$.c' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s5
+test t-22 {
+    SELECT cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s5
+test t-23 {
+    SELECT cast(column0->>'$.c' as char) <=> cast(json_unquote(json_extract(column0, '$.c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-24 {
+    SELECT column0->>'$.b[1].c' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-25 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-26 {
+    SELECT cast(column0->>'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-27 {
+    SELECT column0->>'$.b[1].c' FROM vteval_test;
+}
+expect {
+    456
+}
+
+@setup s1
+@setup s3
+test t-28 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    456
+}
+
+@setup s1
+@setup s3
+test t-29 {
+    SELECT cast(column0->>'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-30 {
+    SELECT column0->>'$.b[1].c' FROM vteval_test;
+}
+expect {
+    123
+}
+
+@setup s1
+@setup s4
+test t-31 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    123
+}
+
+@setup s1
+@setup s4
+test t-32 {
+    SELECT cast(column0->>'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-33 {
+    SELECT column0->>'$.b[1].c' FROM vteval_test;
+}
+expect {
+    123
+}
+
+@setup s1
+@setup s5
+test t-34 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    123
+}
+
+@setup s1
+@setup s5
+test t-35 {
+    SELECT cast(column0->>'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-36 {
+    SELECT column0->'$.b[1].c' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-38 {
+    SELECT cast(column0->'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-39 {
+    SELECT column0->'$.b[1].c' FROM vteval_test;
+}
+expect {
+    456
+}
+
+@setup s1
+@setup s3
+test t-41 {
+    SELECT cast(column0->'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-42 {
+    SELECT column0->'$.b[1].c' FROM vteval_test;
+}
+expect {
+    "123"
+}
+
+@setup s1
+@setup s4
+test t-44 {
+    SELECT cast(column0->'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    0
+}
+
+@setup s1
+@setup s5
+test t-45 {
+    SELECT column0->'$.b[1].c' FROM vteval_test;
+}
+expect {
+    123
+}
+
+@setup s1
+@setup s5
+test t-47 {
+    SELECT cast(column0->'$.b[1].c' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1].c')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-48 {
+    SELECT column0->>'$.b[1]' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-49 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-50 {
+    SELECT cast(column0->>'$.b[1]' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-51 {
+    SELECT column0->>'$.b[1]' FROM vteval_test;
+}
+expect {
+    \{"c": 456\}
+}
+
+@setup s1
+@setup s3
+test t-52 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    \{"c": 456\}
+}
+
+@setup s1
+@setup s3
+test t-53 {
+    SELECT cast(column0->>'$.b[1]' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-54 {
+    SELECT column0->>'$.b[1]' FROM vteval_test;
+}
+expect {
+    \{"c": "123"\}
+}
+
+@setup s1
+@setup s4
+test t-55 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    \{"c": "123"\}
+}
+
+@setup s1
+@setup s4
+test t-56 {
+    SELECT cast(column0->>'$.b[1]' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-57 {
+    SELECT column0->>'$.b[1]' FROM vteval_test;
+}
+expect {
+    \{"c": 123\}
+}
+
+@setup s1
+@setup s5
+test t-58 {
+    SELECT cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    \{"c": 123\}
+}
+
+@setup s1
+@setup s5
+test t-59 {
+    SELECT cast(column0->>'$.b[1]' as char) <=> cast(json_unquote(json_extract(column0, '$.b[1]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-60 {
+    SELECT column0->>'$[0][0]' FROM vteval_test;
+}
+expect {
+    \{"a": 1\}
+}
+
+@setup s1
+@setup s2
+test t-61 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    \{"a": 1\}
+}
+
+@setup s1
+@setup s2
+test t-62 {
+    SELECT cast(column0->>'$[0][0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-63 {
+    SELECT column0->>'$[0][0]' FROM vteval_test;
+}
+expect {
+    \{"a": "foo", "b": [true, \{"c": 456\}]\}
+}
+
+@setup s1
+@setup s3
+test t-64 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    \{"a": "foo", "b": [true, \{"c": 456\}]\}
+}
+
+@setup s1
+@setup s3
+test t-65 {
+    SELECT cast(column0->>'$[0][0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-66 {
+    SELECT column0->>'$[0][0]' FROM vteval_test;
+}
+expect {
+    \{"a": "foo", "b": [true, \{"c": "123"\}]\}
+}
+
+@setup s1
+@setup s4
+test t-67 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    \{"a": "foo", "b": [true, \{"c": "123"\}]\}
+}
+
+@setup s1
+@setup s4
+test t-68 {
+    SELECT cast(column0->>'$[0][0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-69 {
+    SELECT column0->>'$[0][0]' FROM vteval_test;
+}
+expect {
+    \{"a": "foo", "b": [true, \{"c": 123\}]\}
+}
+
+@setup s1
+@setup s5
+test t-70 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    \{"a": "foo", "b": [true, \{"c": 123\}]\}
+}
+
+@setup s1
+@setup s5
+test t-71 {
+    SELECT cast(column0->>'$[0][0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-72 {
+    SELECT column0->>'$**[0]' FROM vteval_test;
+}
+expect {
+    [\{"a": 1\}, 1, \{"a": 2\}, 2]
+}
+
+@setup s1
+@setup s2
+test t-73 {
+    SELECT cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    [\{"a": 1\}, 1, \{"a": 2\}, 2]
+}
+
+@setup s1
+@setup s2
+test t-74 {
+    SELECT cast(column0->>'$**[0]' as char) <=> cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-75 {
+    SELECT column0->>'$**[0]' FROM vteval_test;
+}
+expect {
+    [\{"a": "foo", "b": [true, \{"c": 456\}]\}, "foo", true, \{"c": 456\}, 456]
+}
+
+@setup s1
+@setup s3
+test t-76 {
+    SELECT cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    [\{"a": "foo", "b": [true, \{"c": 456\}]\}, "foo", true, \{"c": 456\}, 456]
+}
+
+@setup s1
+@setup s3
+test t-77 {
+    SELECT cast(column0->>'$**[0]' as char) <=> cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-78 {
+    SELECT column0->>'$**[0]' FROM vteval_test;
+}
+expect {
+    [\{"a": "foo", "b": [true, \{"c": "123"\}]\}, "foo", true, \{"c": "123"\}, "123"]
+}
+
+@setup s1
+@setup s4
+test t-79 {
+    SELECT cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    [\{"a": "foo", "b": [true, \{"c": "123"\}]\}, "foo", true, \{"c": "123"\}, "123"]
+}
+
+@setup s1
+@setup s4
+test t-80 {
+    SELECT cast(column0->>'$**[0]' as char) <=> cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-81 {
+    SELECT column0->>'$**[0]' FROM vteval_test;
+}
+expect {
+    [\{"a": "foo", "b": [true, \{"c": 123\}]\}, "foo", true, \{"c": 123\}, 123]
+}
+
+@setup s1
+@setup s5
+test t-82 {
+    SELECT cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    [\{"a": "foo", "b": [true, \{"c": 123\}]\}, "foo", true, \{"c": 123\}, 123]
+}
+
+@setup s1
+@setup s5
+test t-83 {
+    SELECT cast(column0->>'$**[0]' as char) <=> cast(json_unquote(json_extract(column0, '$**[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-84 {
+    SELECT column0->>'$.a[0]' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-85 {
+    SELECT cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-86 {
+    SELECT cast(column0->>'$.a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-87 {
+    SELECT column0->>'$.a[0]' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s3
+test t-88 {
+    SELECT cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s3
+test t-89 {
+    SELECT cast(column0->>'$.a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-90 {
+    SELECT column0->>'$.a[0]' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s4
+test t-91 {
+    SELECT cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s4
+test t-92 {
+    SELECT cast(column0->>'$.a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-93 {
+    SELECT column0->>'$.a[0]' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s5
+test t-94 {
+    SELECT cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s5
+test t-95 {
+    SELECT cast(column0->>'$.a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$.a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-96 {
+    SELECT column0->>'$[0].a[0]' FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-97 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-98 {
+    SELECT cast(column0->>'$[0].a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-99 {
+    SELECT column0->>'$[0].a[0]' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s3
+test t-100 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s3
+test t-101 {
+    SELECT cast(column0->>'$[0].a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-102 {
+    SELECT column0->>'$[0].a[0]' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s4
+test t-103 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s4
+test t-104 {
+    SELECT cast(column0->>'$[0].a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-105 {
+    SELECT column0->>'$[0].a[0]' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s5
+test t-106 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s5
+test t-107 {
+    SELECT cast(column0->>'$[0].a[0]' as char) <=> cast(json_unquote(json_extract(column0, '$[0].a[0]')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-108 {
+    SELECT column0->>'$**.a' FROM vteval_test;
+}
+expect {
+    [1, 2]
+}
+
+@setup s1
+@setup s2
+test t-109 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    [1, 2]
+}
+
+@setup s1
+@setup s2
+test t-110 {
+    SELECT cast(column0->>'$**.a' as char) <=> cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-111 {
+    SELECT column0->>'$**.a' FROM vteval_test;
+}
+expect {
+    ["foo"]
+}
+
+@setup s1
+@setup s3
+test t-112 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    ["foo"]
+}
+
+@setup s1
+@setup s3
+test t-113 {
+    SELECT cast(column0->>'$**.a' as char) <=> cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-114 {
+    SELECT column0->>'$**.a' FROM vteval_test;
+}
+expect {
+    ["foo"]
+}
+
+@setup s1
+@setup s4
+test t-115 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    ["foo"]
+}
+
+@setup s1
+@setup s4
+test t-116 {
+    SELECT cast(column0->>'$**.a' as char) <=> cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-117 {
+    SELECT column0->>'$**.a' FROM vteval_test;
+}
+expect {
+    ["foo"]
+}
+
+@setup s1
+@setup s5
+test t-118 {
+    SELECT cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    ["foo"]
+}
+
+@setup s1
+@setup s5
+test t-119 {
+    SELECT cast(column0->>'$**.a' as char) <=> cast(json_unquote(json_extract(column0, '$**.a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-120 {
+    SELECT column0->>'$[0][0][0].a' FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-121 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-122 {
+    SELECT cast(column0->>'$[0][0][0].a' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-123 {
+    SELECT column0->>'$[0][0][0].a' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s3
+test t-124 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s3
+test t-125 {
+    SELECT cast(column0->>'$[0][0][0].a' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-126 {
+    SELECT column0->>'$[0][0][0].a' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s4
+test t-127 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s4
+test t-128 {
+    SELECT cast(column0->>'$[0][0][0].a' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-129 {
+    SELECT column0->>'$[0][0][0].a' FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s5
+test t-130 {
+    SELECT cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    foo
+}
+
+@setup s1
+@setup s5
+test t-131 {
+    SELECT cast(column0->>'$[0][0][0].a' as char) <=> cast(json_unquote(json_extract(column0, '$[0][0][0].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-132 {
+    SELECT column0->>'$[*].b' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-133 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s2
+test t-134 {
+    SELECT cast(column0->>'$[*].b' as char) <=> cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-135 {
+    SELECT column0->>'$[*].b' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s3
+test t-136 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s3
+test t-137 {
+    SELECT cast(column0->>'$[*].b' as char) <=> cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-138 {
+    SELECT column0->>'$[*].b' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s4
+test t-139 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s4
+test t-140 {
+    SELECT cast(column0->>'$[*].b' as char) <=> cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-141 {
+    SELECT column0->>'$[*].b' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s5
+test t-142 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s5
+test t-143 {
+    SELECT cast(column0->>'$[*].b' as char) <=> cast(json_unquote(json_extract(column0, '$[*].b')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s2
+test t-144 {
+    SELECT column0->>'$[*].a' FROM vteval_test;
+}
+expect {
+    [1, 2]
+}
+
+@setup s1
+@setup s2
+test t-145 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    [1, 2]
+}
+
+@setup s1
+@setup s2
+test t-146 {
+    SELECT cast(column0->>'$[*].a' as char) <=> cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s3
+test t-147 {
+    SELECT column0->>'$[*].a' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s3
+test t-148 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s3
+test t-149 {
+    SELECT cast(column0->>'$[*].a' as char) <=> cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s4
+test t-150 {
+    SELECT column0->>'$[*].a' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s4
+test t-151 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s4
+test t-152 {
+    SELECT cast(column0->>'$[*].a' as char) <=> cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}
+
+@setup s1
+@setup s5
+test t-153 {
+    SELECT column0->>'$[*].a' FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s5
+test t-154 {
+    SELECT cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    NULL
+}
+
+@setup s1
+@setup s5
+test t-155 {
+    SELECT cast(column0->>'$[*].a' as char) <=> cast(json_unquote(json_extract(column0, '$[*].a')) as char) FROM vteval_test;
+}
+expect {
+    1
+}

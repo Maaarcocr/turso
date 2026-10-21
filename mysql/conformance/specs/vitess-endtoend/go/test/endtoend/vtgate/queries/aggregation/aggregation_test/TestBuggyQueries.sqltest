@@ -1,0 +1,85 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t10 (
+   k BIGINT PRIMARY KEY,
+   a INT,
+   b INT
+);
+}
+
+setup s2 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+    CREATE TABLE t10 (
+   k BIGINT PRIMARY KEY,
+   a INT,
+   b INT
+);
+    insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null);
+}
+
+setup s3 {
+    insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null);
+}
+
+@setup s1
+test l568 {
+    insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20), (20, null, null);
+}
+expect unordered {
+}
+
+@setup s2
+test l570 {
+    select sum(t1.a) from t10 as t1, t10 as t2;
+}
+expect unordered {
+    900
+}
+
+@setup s2
+test l573 {
+    select t1.a, sum(t1.a), count(*), t1.a, sum(t1.a), count(*) from t10 as t1, t10 as t2 group by t1.a;
+}
+expect unordered {
+    100|300|3|100|300|3
+    200|600|3|200|600|3
+    NULL|NULL|3|NULL|NULL|3
+}
+
+@setup s1
+@setup s3
+test l578 {
+    select sum(tbl1.a), min(tbl0.b) from t10 as tbl0, t10 as tbl1 left join t10 as tbl2 on tbl1.a = tbl2.a and tbl1.b = tbl2.k;
+}
+expect unordered {
+    900|10
+}
+
+@setup s1
+@setup s3
+test l579 {
+    select count(*) from t10 left join t10 as t11 on t10.a = t11.b where t11.a;
+}
+expect unordered {
+    0
+}

@@ -1,0 +1,85 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+}
+
+setup s3 {
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+    insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2);
+    insert into t2(id, shardKey) values (1, 10), (2, 20);
+}
+
+setup s4 {
+    CREATE TABLE emp (
+    empno bigint NOT NULL,
+    ename VARCHAR(10),
+    job VARCHAR(9),
+    mgr bigint,
+    hiredate DATE,
+    sal bigint,
+    comm bigint,
+    deptno bigint,
+    PRIMARY KEY (empno)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+    set sql_mode='';
+}
+
+@setup s1
+test l467 {
+    insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2);
+}
+expect unordered {
+}
+
+@setup s2
+test l468 {
+    insert into t2(id, shardKey) values (1, 10), (2, 20);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l470 {
+    SELECT t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id;
+}
+expect unordered {
+    1|name 1|2
+    2|name 2|2
+}
+
+@setup s4
+test l473 {
+    select tbl0.comm, count(*) from emp as tbl0, emp as tbl1 where tbl0.empno = tbl1.deptno;
+}
+expect unordered {
+    NULL|0
+}

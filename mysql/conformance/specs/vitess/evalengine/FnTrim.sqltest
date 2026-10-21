@@ -1,0 +1,7047 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT TRIM(" Å å" );
+}
+expect {
+    Å å
+}
+
+test t-1 {
+    SELECT TRIM(NULL);
+}
+expect {
+    NULL
+}
+
+test t-2 {
+    SELECT TRIM("");
+}
+expect {
+    
+}
+
+test t-3 {
+    SELECT TRIM("a");
+}
+expect {
+    a
+}
+
+test t-4 {
+    SELECT TRIM("abc");
+}
+expect {
+    abc
+}
+
+test t-5 {
+    SELECT TRIM('abca');
+}
+expect {
+    abca
+}
+
+test t-6 {
+    SELECT TRIM('aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-7 {
+    SELECT TRIM(1);
+}
+expect {
+    1
+}
+
+test t-8 {
+    SELECT TRIM(-1);
+}
+expect {
+    -1
+}
+
+test t-9 {
+    SELECT TRIM(0123);
+}
+expect {
+    123
+}
+
+test t-10 {
+    SELECT TRIM(0xAACC);
+}
+expect {
+    ��
+}
+
+test t-11 {
+    SELECT TRIM(3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-12 {
+    SELECT TRIM(" 中文测试");
+}
+expect {
+    中文测试
+}
+
+test t-13 {
+    SELECT TRIM("日本語テスト ");
+}
+expect {
+    日本語テスト
+}
+
+test t-14 {
+    SELECT TRIM("한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-16 {
+    SELECT TRIM('123');
+}
+expect {
+    123
+}
+
+test t-17 {
+    SELECT TRIM(9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-18 {
+    SELECT TRIM(-9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-19 {
+    SELECT TRIM(999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-20 {
+    SELECT TRIM(-999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-23 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0);
+}
+expect raw {
+ x 
+}
+
+test t-24 {
+    SELECT TRIM(_latin1 0xA078A0);
+}
+expect raw {
+ x 
+}
+
+test t-25 {
+    SELECT TRIM(LEADING FROM " Å å" );
+}
+expect {
+    Å å
+}
+
+test t-26 {
+    SELECT TRIM(TRAILING FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-27 {
+    SELECT TRIM(BOTH FROM " Å å" );
+}
+expect {
+    Å å
+}
+
+test t-28 {
+    SELECT TRIM(LEADING FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-29 {
+    SELECT TRIM(TRAILING FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-30 {
+    SELECT TRIM(BOTH FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-31 {
+    SELECT TRIM(LEADING FROM "");
+}
+expect {
+    
+}
+
+test t-32 {
+    SELECT TRIM(TRAILING FROM "");
+}
+expect {
+    
+}
+
+test t-33 {
+    SELECT TRIM(BOTH FROM "");
+}
+expect {
+    
+}
+
+test t-34 {
+    SELECT TRIM(LEADING FROM "a");
+}
+expect {
+    a
+}
+
+test t-35 {
+    SELECT TRIM(TRAILING FROM "a");
+}
+expect {
+    a
+}
+
+test t-36 {
+    SELECT TRIM(BOTH FROM "a");
+}
+expect {
+    a
+}
+
+test t-37 {
+    SELECT TRIM(LEADING FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-38 {
+    SELECT TRIM(TRAILING FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-39 {
+    SELECT TRIM(BOTH FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-40 {
+    SELECT TRIM(LEADING FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-41 {
+    SELECT TRIM(TRAILING FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-42 {
+    SELECT TRIM(BOTH FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-43 {
+    SELECT TRIM(LEADING FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-44 {
+    SELECT TRIM(TRAILING FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-45 {
+    SELECT TRIM(BOTH FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-46 {
+    SELECT TRIM(LEADING FROM 1);
+}
+expect {
+    1
+}
+
+test t-47 {
+    SELECT TRIM(TRAILING FROM 1);
+}
+expect {
+    1
+}
+
+test t-48 {
+    SELECT TRIM(BOTH FROM 1);
+}
+expect {
+    1
+}
+
+test t-49 {
+    SELECT TRIM(LEADING FROM -1);
+}
+expect {
+    -1
+}
+
+test t-50 {
+    SELECT TRIM(TRAILING FROM -1);
+}
+expect {
+    -1
+}
+
+test t-51 {
+    SELECT TRIM(BOTH FROM -1);
+}
+expect {
+    -1
+}
+
+test t-52 {
+    SELECT TRIM(LEADING FROM 0123);
+}
+expect {
+    123
+}
+
+test t-53 {
+    SELECT TRIM(TRAILING FROM 0123);
+}
+expect {
+    123
+}
+
+test t-54 {
+    SELECT TRIM(BOTH FROM 0123);
+}
+expect {
+    123
+}
+
+test t-55 {
+    SELECT TRIM(LEADING FROM 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-56 {
+    SELECT TRIM(TRAILING FROM 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-57 {
+    SELECT TRIM(BOTH FROM 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-58 {
+    SELECT TRIM(LEADING FROM 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-59 {
+    SELECT TRIM(TRAILING FROM 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-60 {
+    SELECT TRIM(BOTH FROM 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-61 {
+    SELECT TRIM(LEADING FROM " 中文测试");
+}
+expect {
+    中文测试
+}
+
+test t-62 {
+    SELECT TRIM(TRAILING FROM " 中文测试");
+}
+expect raw {
+ 中文测试
+}
+
+test t-63 {
+    SELECT TRIM(BOTH FROM " 中文测试");
+}
+expect {
+    中文测试
+}
+
+test t-64 {
+    SELECT TRIM(LEADING FROM "日本語テスト ");
+}
+expect raw {
+日本語テスト 
+}
+
+test t-65 {
+    SELECT TRIM(TRAILING FROM "日本語テスト ");
+}
+expect {
+    日本語テスト
+}
+
+test t-66 {
+    SELECT TRIM(BOTH FROM "日本語テスト ");
+}
+expect {
+    日本語テスト
+}
+
+test t-67 {
+    SELECT TRIM(LEADING FROM "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-68 {
+    SELECT TRIM(TRAILING FROM "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-69 {
+    SELECT TRIM(BOTH FROM "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-73 {
+    SELECT TRIM(LEADING FROM '123');
+}
+expect {
+    123
+}
+
+test t-74 {
+    SELECT TRIM(TRAILING FROM '123');
+}
+expect {
+    123
+}
+
+test t-75 {
+    SELECT TRIM(BOTH FROM '123');
+}
+expect {
+    123
+}
+
+test t-76 {
+    SELECT TRIM(LEADING FROM 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-77 {
+    SELECT TRIM(TRAILING FROM 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-78 {
+    SELECT TRIM(BOTH FROM 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-79 {
+    SELECT TRIM(LEADING FROM -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-80 {
+    SELECT TRIM(TRAILING FROM -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-81 {
+    SELECT TRIM(BOTH FROM -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-82 {
+    SELECT TRIM(LEADING FROM 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-83 {
+    SELECT TRIM(TRAILING FROM 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-84 {
+    SELECT TRIM(BOTH FROM 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-85 {
+    SELECT TRIM(LEADING FROM -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-86 {
+    SELECT TRIM(TRAILING FROM -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-87 {
+    SELECT TRIM(BOTH FROM -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-94 {
+    SELECT TRIM(LEADING FROM _utf8mb4 0xC2A078C2A0);
+}
+expect raw {
+ x 
+}
+
+test t-95 {
+    SELECT TRIM(TRAILING FROM _utf8mb4 0xC2A078C2A0);
+}
+expect raw {
+ x 
+}
+
+test t-96 {
+    SELECT TRIM(BOTH FROM _utf8mb4 0xC2A078C2A0);
+}
+expect raw {
+ x 
+}
+
+test t-97 {
+    SELECT TRIM(LEADING FROM _latin1 0xA078A0);
+}
+expect raw {
+ x 
+}
+
+test t-98 {
+    SELECT TRIM(TRAILING FROM _latin1 0xA078A0);
+}
+expect raw {
+ x 
+}
+
+test t-99 {
+    SELECT TRIM(BOTH FROM _latin1 0xA078A0);
+}
+expect raw {
+ x 
+}
+
+test t-100 {
+    SELECT TRIM(" Å å"  FROM " Å å" );
+}
+expect {
+    
+}
+
+test t-101 {
+    SELECT TRIM(LEADING " Å å"  FROM " Å å" );
+}
+expect {
+    
+}
+
+test t-102 {
+    SELECT TRIM(TRAILING " Å å"  FROM " Å å" );
+}
+expect {
+    
+}
+
+test t-103 {
+    SELECT TRIM(BOTH " Å å"  FROM " Å å" );
+}
+expect {
+    
+}
+
+test t-104 {
+    SELECT TRIM(NULL FROM " Å å" );
+}
+expect {
+    NULL
+}
+
+test t-105 {
+    SELECT TRIM(LEADING NULL FROM " Å å" );
+}
+expect {
+    NULL
+}
+
+test t-106 {
+    SELECT TRIM(TRAILING NULL FROM " Å å" );
+}
+expect {
+    NULL
+}
+
+test t-107 {
+    SELECT TRIM(BOTH NULL FROM " Å å" );
+}
+expect {
+    NULL
+}
+
+test t-108 {
+    SELECT TRIM("" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-109 {
+    SELECT TRIM(LEADING "" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-110 {
+    SELECT TRIM(TRAILING "" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-111 {
+    SELECT TRIM(BOTH "" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-112 {
+    SELECT TRIM("a" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-113 {
+    SELECT TRIM(LEADING "a" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-114 {
+    SELECT TRIM(TRAILING "a" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-115 {
+    SELECT TRIM(BOTH "a" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-116 {
+    SELECT TRIM("abc" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-117 {
+    SELECT TRIM(LEADING "abc" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-118 {
+    SELECT TRIM(TRAILING "abc" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-119 {
+    SELECT TRIM(BOTH "abc" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-120 {
+    SELECT TRIM('abca' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-121 {
+    SELECT TRIM(LEADING 'abca' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-122 {
+    SELECT TRIM(TRAILING 'abca' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-123 {
+    SELECT TRIM(BOTH 'abca' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-124 {
+    SELECT TRIM('aabcaa' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-125 {
+    SELECT TRIM(LEADING 'aabcaa' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-126 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-127 {
+    SELECT TRIM(BOTH 'aabcaa' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-128 {
+    SELECT TRIM(1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-129 {
+    SELECT TRIM(LEADING 1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-130 {
+    SELECT TRIM(TRAILING 1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-131 {
+    SELECT TRIM(BOTH 1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-132 {
+    SELECT TRIM(-1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-133 {
+    SELECT TRIM(LEADING -1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-134 {
+    SELECT TRIM(TRAILING -1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-135 {
+    SELECT TRIM(BOTH -1 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-136 {
+    SELECT TRIM(0123 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-137 {
+    SELECT TRIM(LEADING 0123 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-138 {
+    SELECT TRIM(TRAILING 0123 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-139 {
+    SELECT TRIM(BOTH 0123 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-140 {
+    SELECT TRIM(0xAACC FROM " Å å" );
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-141 {
+    SELECT TRIM(LEADING 0xAACC FROM " Å å" );
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-142 {
+    SELECT TRIM(TRAILING 0xAACC FROM " Å å" );
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-143 {
+    SELECT TRIM(BOTH 0xAACC FROM " Å å" );
+}
+expect error {
+}
+
+test t-144 {
+    SELECT TRIM(3.1415926 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-145 {
+    SELECT TRIM(LEADING 3.1415926 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-146 {
+    SELECT TRIM(TRAILING 3.1415926 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-147 {
+    SELECT TRIM(BOTH 3.1415926 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-148 {
+    SELECT TRIM(" 中文测试" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-149 {
+    SELECT TRIM(LEADING " 中文测试" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-150 {
+    SELECT TRIM(TRAILING " 中文测试" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-151 {
+    SELECT TRIM(BOTH " 中文测试" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-152 {
+    SELECT TRIM("日本語テスト " FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-153 {
+    SELECT TRIM(LEADING "日本語テスト " FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-154 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-155 {
+    SELECT TRIM(BOTH "日本語テスト " FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-156 {
+    SELECT TRIM("한국어 시험" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-157 {
+    SELECT TRIM(LEADING "한국어 시험" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-158 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-159 {
+    SELECT TRIM(BOTH "한국어 시험" FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-164 {
+    SELECT TRIM('123' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-165 {
+    SELECT TRIM(LEADING '123' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-166 {
+    SELECT TRIM(TRAILING '123' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-167 {
+    SELECT TRIM(BOTH '123' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-168 {
+    SELECT TRIM(9223372036854775807 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-169 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-170 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-171 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-172 {
+    SELECT TRIM(-9223372036854775808 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-173 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-174 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-175 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-176 {
+    SELECT TRIM(999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-177 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-178 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-179 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-180 {
+    SELECT TRIM(-999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-181 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-182 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-183 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-188 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-189 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-190 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-191 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-192 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-193 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-194 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-195 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-196 {
+    SELECT TRIM(_latin1 0xA078A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-197 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-198 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-199 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM " Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-200 {
+    SELECT TRIM(" Å å"  FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-201 {
+    SELECT TRIM(LEADING " Å å"  FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-202 {
+    SELECT TRIM(TRAILING " Å å"  FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-203 {
+    SELECT TRIM(BOTH " Å å"  FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-204 {
+    SELECT TRIM(NULL FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-205 {
+    SELECT TRIM(LEADING NULL FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-206 {
+    SELECT TRIM(TRAILING NULL FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-207 {
+    SELECT TRIM(BOTH NULL FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-208 {
+    SELECT TRIM("" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-209 {
+    SELECT TRIM(LEADING "" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-210 {
+    SELECT TRIM(TRAILING "" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-211 {
+    SELECT TRIM(BOTH "" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-212 {
+    SELECT TRIM("a" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-213 {
+    SELECT TRIM(LEADING "a" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-214 {
+    SELECT TRIM(TRAILING "a" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-215 {
+    SELECT TRIM(BOTH "a" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-216 {
+    SELECT TRIM("abc" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-217 {
+    SELECT TRIM(LEADING "abc" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-218 {
+    SELECT TRIM(TRAILING "abc" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-219 {
+    SELECT TRIM(BOTH "abc" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-220 {
+    SELECT TRIM('abca' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-221 {
+    SELECT TRIM(LEADING 'abca' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-222 {
+    SELECT TRIM(TRAILING 'abca' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-223 {
+    SELECT TRIM(BOTH 'abca' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-224 {
+    SELECT TRIM('aabcaa' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-225 {
+    SELECT TRIM(LEADING 'aabcaa' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-226 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-227 {
+    SELECT TRIM(BOTH 'aabcaa' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-228 {
+    SELECT TRIM(1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-229 {
+    SELECT TRIM(LEADING 1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-230 {
+    SELECT TRIM(TRAILING 1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-231 {
+    SELECT TRIM(BOTH 1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-232 {
+    SELECT TRIM(-1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-233 {
+    SELECT TRIM(LEADING -1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-234 {
+    SELECT TRIM(TRAILING -1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-235 {
+    SELECT TRIM(BOTH -1 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-236 {
+    SELECT TRIM(0123 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-237 {
+    SELECT TRIM(LEADING 0123 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-238 {
+    SELECT TRIM(TRAILING 0123 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-239 {
+    SELECT TRIM(BOTH 0123 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-240 {
+    SELECT TRIM(0xAACC FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-241 {
+    SELECT TRIM(LEADING 0xAACC FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-242 {
+    SELECT TRIM(TRAILING 0xAACC FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-243 {
+    SELECT TRIM(BOTH 0xAACC FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-244 {
+    SELECT TRIM(3.1415926 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-245 {
+    SELECT TRIM(LEADING 3.1415926 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-246 {
+    SELECT TRIM(TRAILING 3.1415926 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-247 {
+    SELECT TRIM(BOTH 3.1415926 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-248 {
+    SELECT TRIM(" 中文测试" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-249 {
+    SELECT TRIM(LEADING " 中文测试" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-250 {
+    SELECT TRIM(TRAILING " 中文测试" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-251 {
+    SELECT TRIM(BOTH " 中文测试" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-252 {
+    SELECT TRIM("日本語テスト " FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-253 {
+    SELECT TRIM(LEADING "日本語テスト " FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-254 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-255 {
+    SELECT TRIM(BOTH "日本語テスト " FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-256 {
+    SELECT TRIM("한국어 시험" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-257 {
+    SELECT TRIM(LEADING "한국어 시험" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-258 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-259 {
+    SELECT TRIM(BOTH "한국어 시험" FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-264 {
+    SELECT TRIM('123' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-265 {
+    SELECT TRIM(LEADING '123' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-266 {
+    SELECT TRIM(TRAILING '123' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-267 {
+    SELECT TRIM(BOTH '123' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-268 {
+    SELECT TRIM(9223372036854775807 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-269 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-270 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-271 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-272 {
+    SELECT TRIM(-9223372036854775808 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-273 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-274 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-275 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-276 {
+    SELECT TRIM(999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-277 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-278 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-279 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-280 {
+    SELECT TRIM(-999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-281 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-282 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-283 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-288 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-289 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-290 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-291 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-292 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-293 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-294 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-295 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-296 {
+    SELECT TRIM(_latin1 0xA078A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-297 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-298 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-299 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM NULL);
+}
+expect {
+    NULL
+}
+
+test t-300 {
+    SELECT TRIM(" Å å"  FROM "");
+}
+expect {
+    
+}
+
+test t-301 {
+    SELECT TRIM(LEADING " Å å"  FROM "");
+}
+expect {
+    
+}
+
+test t-302 {
+    SELECT TRIM(TRAILING " Å å"  FROM "");
+}
+expect {
+    
+}
+
+test t-303 {
+    SELECT TRIM(BOTH " Å å"  FROM "");
+}
+expect {
+    
+}
+
+test t-304 {
+    SELECT TRIM(NULL FROM "");
+}
+expect {
+    NULL
+}
+
+test t-305 {
+    SELECT TRIM(LEADING NULL FROM "");
+}
+expect {
+    NULL
+}
+
+test t-306 {
+    SELECT TRIM(TRAILING NULL FROM "");
+}
+expect {
+    NULL
+}
+
+test t-307 {
+    SELECT TRIM(BOTH NULL FROM "");
+}
+expect {
+    NULL
+}
+
+test t-308 {
+    SELECT TRIM("" FROM "");
+}
+expect {
+    
+}
+
+test t-309 {
+    SELECT TRIM(LEADING "" FROM "");
+}
+expect {
+    
+}
+
+test t-310 {
+    SELECT TRIM(TRAILING "" FROM "");
+}
+expect {
+    
+}
+
+test t-311 {
+    SELECT TRIM(BOTH "" FROM "");
+}
+expect {
+    
+}
+
+test t-312 {
+    SELECT TRIM("a" FROM "");
+}
+expect {
+    
+}
+
+test t-313 {
+    SELECT TRIM(LEADING "a" FROM "");
+}
+expect {
+    
+}
+
+test t-314 {
+    SELECT TRIM(TRAILING "a" FROM "");
+}
+expect {
+    
+}
+
+test t-315 {
+    SELECT TRIM(BOTH "a" FROM "");
+}
+expect {
+    
+}
+
+test t-316 {
+    SELECT TRIM("abc" FROM "");
+}
+expect {
+    
+}
+
+test t-317 {
+    SELECT TRIM(LEADING "abc" FROM "");
+}
+expect {
+    
+}
+
+test t-318 {
+    SELECT TRIM(TRAILING "abc" FROM "");
+}
+expect {
+    
+}
+
+test t-319 {
+    SELECT TRIM(BOTH "abc" FROM "");
+}
+expect {
+    
+}
+
+test t-320 {
+    SELECT TRIM('abca' FROM "");
+}
+expect {
+    
+}
+
+test t-321 {
+    SELECT TRIM(LEADING 'abca' FROM "");
+}
+expect {
+    
+}
+
+test t-322 {
+    SELECT TRIM(TRAILING 'abca' FROM "");
+}
+expect {
+    
+}
+
+test t-323 {
+    SELECT TRIM(BOTH 'abca' FROM "");
+}
+expect {
+    
+}
+
+test t-324 {
+    SELECT TRIM('aabcaa' FROM "");
+}
+expect {
+    
+}
+
+test t-325 {
+    SELECT TRIM(LEADING 'aabcaa' FROM "");
+}
+expect {
+    
+}
+
+test t-326 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM "");
+}
+expect {
+    
+}
+
+test t-327 {
+    SELECT TRIM(BOTH 'aabcaa' FROM "");
+}
+expect {
+    
+}
+
+test t-328 {
+    SELECT TRIM(1 FROM "");
+}
+expect {
+    
+}
+
+test t-329 {
+    SELECT TRIM(LEADING 1 FROM "");
+}
+expect {
+    
+}
+
+test t-330 {
+    SELECT TRIM(TRAILING 1 FROM "");
+}
+expect {
+    
+}
+
+test t-331 {
+    SELECT TRIM(BOTH 1 FROM "");
+}
+expect {
+    
+}
+
+test t-332 {
+    SELECT TRIM(-1 FROM "");
+}
+expect {
+    
+}
+
+test t-333 {
+    SELECT TRIM(LEADING -1 FROM "");
+}
+expect {
+    
+}
+
+test t-334 {
+    SELECT TRIM(TRAILING -1 FROM "");
+}
+expect {
+    
+}
+
+test t-335 {
+    SELECT TRIM(BOTH -1 FROM "");
+}
+expect {
+    
+}
+
+test t-336 {
+    SELECT TRIM(0123 FROM "");
+}
+expect {
+    
+}
+
+test t-337 {
+    SELECT TRIM(LEADING 0123 FROM "");
+}
+expect {
+    
+}
+
+test t-338 {
+    SELECT TRIM(TRAILING 0123 FROM "");
+}
+expect {
+    
+}
+
+test t-339 {
+    SELECT TRIM(BOTH 0123 FROM "");
+}
+expect {
+    
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-340 {
+    SELECT TRIM(0xAACC FROM "");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-341 {
+    SELECT TRIM(LEADING 0xAACC FROM "");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-342 {
+    SELECT TRIM(TRAILING 0xAACC FROM "");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-343 {
+    SELECT TRIM(BOTH 0xAACC FROM "");
+}
+expect error {
+}
+
+test t-344 {
+    SELECT TRIM(3.1415926 FROM "");
+}
+expect {
+    
+}
+
+test t-345 {
+    SELECT TRIM(LEADING 3.1415926 FROM "");
+}
+expect {
+    
+}
+
+test t-346 {
+    SELECT TRIM(TRAILING 3.1415926 FROM "");
+}
+expect {
+    
+}
+
+test t-347 {
+    SELECT TRIM(BOTH 3.1415926 FROM "");
+}
+expect {
+    
+}
+
+test t-348 {
+    SELECT TRIM(" 中文测试" FROM "");
+}
+expect {
+    
+}
+
+test t-349 {
+    SELECT TRIM(LEADING " 中文测试" FROM "");
+}
+expect {
+    
+}
+
+test t-350 {
+    SELECT TRIM(TRAILING " 中文测试" FROM "");
+}
+expect {
+    
+}
+
+test t-351 {
+    SELECT TRIM(BOTH " 中文测试" FROM "");
+}
+expect {
+    
+}
+
+test t-352 {
+    SELECT TRIM("日本語テスト " FROM "");
+}
+expect {
+    
+}
+
+test t-353 {
+    SELECT TRIM(LEADING "日本語テスト " FROM "");
+}
+expect {
+    
+}
+
+test t-354 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM "");
+}
+expect {
+    
+}
+
+test t-355 {
+    SELECT TRIM(BOTH "日本語テスト " FROM "");
+}
+expect {
+    
+}
+
+test t-356 {
+    SELECT TRIM("한국어 시험" FROM "");
+}
+expect {
+    
+}
+
+test t-357 {
+    SELECT TRIM(LEADING "한국어 시험" FROM "");
+}
+expect {
+    
+}
+
+test t-358 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM "");
+}
+expect {
+    
+}
+
+test t-359 {
+    SELECT TRIM(BOTH "한국어 시험" FROM "");
+}
+expect {
+    
+}
+
+test t-364 {
+    SELECT TRIM('123' FROM "");
+}
+expect {
+    
+}
+
+test t-365 {
+    SELECT TRIM(LEADING '123' FROM "");
+}
+expect {
+    
+}
+
+test t-366 {
+    SELECT TRIM(TRAILING '123' FROM "");
+}
+expect {
+    
+}
+
+test t-367 {
+    SELECT TRIM(BOTH '123' FROM "");
+}
+expect {
+    
+}
+
+test t-368 {
+    SELECT TRIM(9223372036854775807 FROM "");
+}
+expect {
+    
+}
+
+test t-369 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM "");
+}
+expect {
+    
+}
+
+test t-370 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM "");
+}
+expect {
+    
+}
+
+test t-371 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM "");
+}
+expect {
+    
+}
+
+test t-372 {
+    SELECT TRIM(-9223372036854775808 FROM "");
+}
+expect {
+    
+}
+
+test t-373 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM "");
+}
+expect {
+    
+}
+
+test t-374 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM "");
+}
+expect {
+    
+}
+
+test t-375 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM "");
+}
+expect {
+    
+}
+
+test t-376 {
+    SELECT TRIM(999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-377 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-378 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-379 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-380 {
+    SELECT TRIM(-999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-381 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-382 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-383 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM "");
+}
+expect {
+    
+}
+
+test t-388 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM "");
+}
+expect {
+    
+}
+
+test t-389 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM "");
+}
+expect {
+    
+}
+
+test t-390 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM "");
+}
+expect {
+    
+}
+
+test t-391 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM "");
+}
+expect {
+    
+}
+
+test t-392 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM "");
+}
+expect {
+    
+}
+
+test t-393 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM "");
+}
+expect {
+    
+}
+
+test t-394 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM "");
+}
+expect {
+    
+}
+
+test t-395 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM "");
+}
+expect {
+    
+}
+
+test t-396 {
+    SELECT TRIM(_latin1 0xA078A0 FROM "");
+}
+expect {
+    
+}
+
+test t-397 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM "");
+}
+expect {
+    
+}
+
+test t-398 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM "");
+}
+expect {
+    
+}
+
+test t-399 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM "");
+}
+expect {
+    
+}
+
+test t-400 {
+    SELECT TRIM(" Å å"  FROM "a");
+}
+expect {
+    a
+}
+
+test t-401 {
+    SELECT TRIM(LEADING " Å å"  FROM "a");
+}
+expect {
+    a
+}
+
+test t-402 {
+    SELECT TRIM(TRAILING " Å å"  FROM "a");
+}
+expect {
+    a
+}
+
+test t-403 {
+    SELECT TRIM(BOTH " Å å"  FROM "a");
+}
+expect {
+    a
+}
+
+test t-404 {
+    SELECT TRIM(NULL FROM "a");
+}
+expect {
+    NULL
+}
+
+test t-405 {
+    SELECT TRIM(LEADING NULL FROM "a");
+}
+expect {
+    NULL
+}
+
+test t-406 {
+    SELECT TRIM(TRAILING NULL FROM "a");
+}
+expect {
+    NULL
+}
+
+test t-407 {
+    SELECT TRIM(BOTH NULL FROM "a");
+}
+expect {
+    NULL
+}
+
+test t-408 {
+    SELECT TRIM("" FROM "a");
+}
+expect {
+    a
+}
+
+test t-409 {
+    SELECT TRIM(LEADING "" FROM "a");
+}
+expect {
+    a
+}
+
+test t-410 {
+    SELECT TRIM(TRAILING "" FROM "a");
+}
+expect {
+    a
+}
+
+test t-411 {
+    SELECT TRIM(BOTH "" FROM "a");
+}
+expect {
+    a
+}
+
+test t-412 {
+    SELECT TRIM("a" FROM "a");
+}
+expect {
+    
+}
+
+test t-413 {
+    SELECT TRIM(LEADING "a" FROM "a");
+}
+expect {
+    
+}
+
+test t-414 {
+    SELECT TRIM(TRAILING "a" FROM "a");
+}
+expect {
+    
+}
+
+test t-415 {
+    SELECT TRIM(BOTH "a" FROM "a");
+}
+expect {
+    
+}
+
+test t-416 {
+    SELECT TRIM("abc" FROM "a");
+}
+expect {
+    a
+}
+
+test t-417 {
+    SELECT TRIM(LEADING "abc" FROM "a");
+}
+expect {
+    a
+}
+
+test t-418 {
+    SELECT TRIM(TRAILING "abc" FROM "a");
+}
+expect {
+    a
+}
+
+test t-419 {
+    SELECT TRIM(BOTH "abc" FROM "a");
+}
+expect {
+    a
+}
+
+test t-420 {
+    SELECT TRIM('abca' FROM "a");
+}
+expect {
+    a
+}
+
+test t-421 {
+    SELECT TRIM(LEADING 'abca' FROM "a");
+}
+expect {
+    a
+}
+
+test t-422 {
+    SELECT TRIM(TRAILING 'abca' FROM "a");
+}
+expect {
+    a
+}
+
+test t-423 {
+    SELECT TRIM(BOTH 'abca' FROM "a");
+}
+expect {
+    a
+}
+
+test t-424 {
+    SELECT TRIM('aabcaa' FROM "a");
+}
+expect {
+    a
+}
+
+test t-425 {
+    SELECT TRIM(LEADING 'aabcaa' FROM "a");
+}
+expect {
+    a
+}
+
+test t-426 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM "a");
+}
+expect {
+    a
+}
+
+test t-427 {
+    SELECT TRIM(BOTH 'aabcaa' FROM "a");
+}
+expect {
+    a
+}
+
+test t-428 {
+    SELECT TRIM(1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-429 {
+    SELECT TRIM(LEADING 1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-430 {
+    SELECT TRIM(TRAILING 1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-431 {
+    SELECT TRIM(BOTH 1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-432 {
+    SELECT TRIM(-1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-433 {
+    SELECT TRIM(LEADING -1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-434 {
+    SELECT TRIM(TRAILING -1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-435 {
+    SELECT TRIM(BOTH -1 FROM "a");
+}
+expect {
+    a
+}
+
+test t-436 {
+    SELECT TRIM(0123 FROM "a");
+}
+expect {
+    a
+}
+
+test t-437 {
+    SELECT TRIM(LEADING 0123 FROM "a");
+}
+expect {
+    a
+}
+
+test t-438 {
+    SELECT TRIM(TRAILING 0123 FROM "a");
+}
+expect {
+    a
+}
+
+test t-439 {
+    SELECT TRIM(BOTH 0123 FROM "a");
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-440 {
+    SELECT TRIM(0xAACC FROM "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-441 {
+    SELECT TRIM(LEADING 0xAACC FROM "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-442 {
+    SELECT TRIM(TRAILING 0xAACC FROM "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-443 {
+    SELECT TRIM(BOTH 0xAACC FROM "a");
+}
+expect error {
+}
+
+test t-444 {
+    SELECT TRIM(3.1415926 FROM "a");
+}
+expect {
+    a
+}
+
+test t-445 {
+    SELECT TRIM(LEADING 3.1415926 FROM "a");
+}
+expect {
+    a
+}
+
+test t-446 {
+    SELECT TRIM(TRAILING 3.1415926 FROM "a");
+}
+expect {
+    a
+}
+
+test t-447 {
+    SELECT TRIM(BOTH 3.1415926 FROM "a");
+}
+expect {
+    a
+}
+
+test t-448 {
+    SELECT TRIM(" 中文测试" FROM "a");
+}
+expect {
+    a
+}
+
+test t-449 {
+    SELECT TRIM(LEADING " 中文测试" FROM "a");
+}
+expect {
+    a
+}
+
+test t-450 {
+    SELECT TRIM(TRAILING " 中文测试" FROM "a");
+}
+expect {
+    a
+}
+
+test t-451 {
+    SELECT TRIM(BOTH " 中文测试" FROM "a");
+}
+expect {
+    a
+}
+
+test t-452 {
+    SELECT TRIM("日本語テスト " FROM "a");
+}
+expect {
+    a
+}
+
+test t-453 {
+    SELECT TRIM(LEADING "日本語テスト " FROM "a");
+}
+expect {
+    a
+}
+
+test t-454 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM "a");
+}
+expect {
+    a
+}
+
+test t-455 {
+    SELECT TRIM(BOTH "日本語テスト " FROM "a");
+}
+expect {
+    a
+}
+
+test t-456 {
+    SELECT TRIM("한국어 시험" FROM "a");
+}
+expect {
+    a
+}
+
+test t-457 {
+    SELECT TRIM(LEADING "한국어 시험" FROM "a");
+}
+expect {
+    a
+}
+
+test t-458 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM "a");
+}
+expect {
+    a
+}
+
+test t-459 {
+    SELECT TRIM(BOTH "한국어 시험" FROM "a");
+}
+expect {
+    a
+}
+
+test t-464 {
+    SELECT TRIM('123' FROM "a");
+}
+expect {
+    a
+}
+
+test t-465 {
+    SELECT TRIM(LEADING '123' FROM "a");
+}
+expect {
+    a
+}
+
+test t-466 {
+    SELECT TRIM(TRAILING '123' FROM "a");
+}
+expect {
+    a
+}
+
+test t-467 {
+    SELECT TRIM(BOTH '123' FROM "a");
+}
+expect {
+    a
+}
+
+test t-468 {
+    SELECT TRIM(9223372036854775807 FROM "a");
+}
+expect {
+    a
+}
+
+test t-469 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM "a");
+}
+expect {
+    a
+}
+
+test t-470 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM "a");
+}
+expect {
+    a
+}
+
+test t-471 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM "a");
+}
+expect {
+    a
+}
+
+test t-472 {
+    SELECT TRIM(-9223372036854775808 FROM "a");
+}
+expect {
+    a
+}
+
+test t-473 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM "a");
+}
+expect {
+    a
+}
+
+test t-474 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM "a");
+}
+expect {
+    a
+}
+
+test t-475 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM "a");
+}
+expect {
+    a
+}
+
+test t-476 {
+    SELECT TRIM(999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-477 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-478 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-479 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-480 {
+    SELECT TRIM(-999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-481 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-482 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-483 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM "a");
+}
+expect {
+    a
+}
+
+test t-488 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM "a");
+}
+expect {
+    a
+}
+
+test t-489 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM "a");
+}
+expect {
+    a
+}
+
+test t-490 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM "a");
+}
+expect {
+    a
+}
+
+test t-491 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM "a");
+}
+expect {
+    a
+}
+
+test t-492 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-493 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-494 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-495 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-496 {
+    SELECT TRIM(_latin1 0xA078A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-497 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-498 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-499 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM "a");
+}
+expect {
+    a
+}
+
+test t-500 {
+    SELECT TRIM(" Å å"  FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-501 {
+    SELECT TRIM(LEADING " Å å"  FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-502 {
+    SELECT TRIM(TRAILING " Å å"  FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-503 {
+    SELECT TRIM(BOTH " Å å"  FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-504 {
+    SELECT TRIM(NULL FROM "abc");
+}
+expect {
+    NULL
+}
+
+test t-505 {
+    SELECT TRIM(LEADING NULL FROM "abc");
+}
+expect {
+    NULL
+}
+
+test t-506 {
+    SELECT TRIM(TRAILING NULL FROM "abc");
+}
+expect {
+    NULL
+}
+
+test t-507 {
+    SELECT TRIM(BOTH NULL FROM "abc");
+}
+expect {
+    NULL
+}
+
+test t-508 {
+    SELECT TRIM("" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-509 {
+    SELECT TRIM(LEADING "" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-510 {
+    SELECT TRIM(TRAILING "" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-511 {
+    SELECT TRIM(BOTH "" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-512 {
+    SELECT TRIM("a" FROM "abc");
+}
+expect {
+    bc
+}
+
+test t-513 {
+    SELECT TRIM(LEADING "a" FROM "abc");
+}
+expect {
+    bc
+}
+
+test t-514 {
+    SELECT TRIM(TRAILING "a" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-515 {
+    SELECT TRIM(BOTH "a" FROM "abc");
+}
+expect {
+    bc
+}
+
+test t-516 {
+    SELECT TRIM("abc" FROM "abc");
+}
+expect {
+    
+}
+
+test t-517 {
+    SELECT TRIM(LEADING "abc" FROM "abc");
+}
+expect {
+    
+}
+
+test t-518 {
+    SELECT TRIM(TRAILING "abc" FROM "abc");
+}
+expect {
+    
+}
+
+test t-519 {
+    SELECT TRIM(BOTH "abc" FROM "abc");
+}
+expect {
+    
+}
+
+test t-520 {
+    SELECT TRIM('abca' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-521 {
+    SELECT TRIM(LEADING 'abca' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-522 {
+    SELECT TRIM(TRAILING 'abca' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-523 {
+    SELECT TRIM(BOTH 'abca' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-524 {
+    SELECT TRIM('aabcaa' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-525 {
+    SELECT TRIM(LEADING 'aabcaa' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-526 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-527 {
+    SELECT TRIM(BOTH 'aabcaa' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-528 {
+    SELECT TRIM(1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-529 {
+    SELECT TRIM(LEADING 1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-530 {
+    SELECT TRIM(TRAILING 1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-531 {
+    SELECT TRIM(BOTH 1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-532 {
+    SELECT TRIM(-1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-533 {
+    SELECT TRIM(LEADING -1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-534 {
+    SELECT TRIM(TRAILING -1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-535 {
+    SELECT TRIM(BOTH -1 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-536 {
+    SELECT TRIM(0123 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-537 {
+    SELECT TRIM(LEADING 0123 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-538 {
+    SELECT TRIM(TRAILING 0123 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-539 {
+    SELECT TRIM(BOTH 0123 FROM "abc");
+}
+expect {
+    abc
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-540 {
+    SELECT TRIM(0xAACC FROM "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-541 {
+    SELECT TRIM(LEADING 0xAACC FROM "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-542 {
+    SELECT TRIM(TRAILING 0xAACC FROM "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-543 {
+    SELECT TRIM(BOTH 0xAACC FROM "abc");
+}
+expect error {
+}
+
+test t-544 {
+    SELECT TRIM(3.1415926 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-545 {
+    SELECT TRIM(LEADING 3.1415926 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-546 {
+    SELECT TRIM(TRAILING 3.1415926 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-547 {
+    SELECT TRIM(BOTH 3.1415926 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-548 {
+    SELECT TRIM(" 中文测试" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-549 {
+    SELECT TRIM(LEADING " 中文测试" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-550 {
+    SELECT TRIM(TRAILING " 中文测试" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-551 {
+    SELECT TRIM(BOTH " 中文测试" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-552 {
+    SELECT TRIM("日本語テスト " FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-553 {
+    SELECT TRIM(LEADING "日本語テスト " FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-554 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-555 {
+    SELECT TRIM(BOTH "日本語テスト " FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-556 {
+    SELECT TRIM("한국어 시험" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-557 {
+    SELECT TRIM(LEADING "한국어 시험" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-558 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-559 {
+    SELECT TRIM(BOTH "한국어 시험" FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-564 {
+    SELECT TRIM('123' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-565 {
+    SELECT TRIM(LEADING '123' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-566 {
+    SELECT TRIM(TRAILING '123' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-567 {
+    SELECT TRIM(BOTH '123' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-568 {
+    SELECT TRIM(9223372036854775807 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-569 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-570 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-571 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-572 {
+    SELECT TRIM(-9223372036854775808 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-573 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-574 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-575 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-576 {
+    SELECT TRIM(999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-577 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-578 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-579 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-580 {
+    SELECT TRIM(-999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-581 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-582 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-583 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-588 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-589 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-590 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-591 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-592 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-593 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-594 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-595 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-596 {
+    SELECT TRIM(_latin1 0xA078A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-597 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-598 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-599 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM "abc");
+}
+expect {
+    abc
+}
+
+test t-600 {
+    SELECT TRIM(" Å å"  FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-601 {
+    SELECT TRIM(LEADING " Å å"  FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-602 {
+    SELECT TRIM(TRAILING " Å å"  FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-603 {
+    SELECT TRIM(BOTH " Å å"  FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-604 {
+    SELECT TRIM(NULL FROM 'abca');
+}
+expect {
+    NULL
+}
+
+test t-605 {
+    SELECT TRIM(LEADING NULL FROM 'abca');
+}
+expect {
+    NULL
+}
+
+test t-606 {
+    SELECT TRIM(TRAILING NULL FROM 'abca');
+}
+expect {
+    NULL
+}
+
+test t-607 {
+    SELECT TRIM(BOTH NULL FROM 'abca');
+}
+expect {
+    NULL
+}
+
+test t-608 {
+    SELECT TRIM("" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-609 {
+    SELECT TRIM(LEADING "" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-610 {
+    SELECT TRIM(TRAILING "" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-611 {
+    SELECT TRIM(BOTH "" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-612 {
+    SELECT TRIM("a" FROM 'abca');
+}
+expect {
+    bc
+}
+
+test t-613 {
+    SELECT TRIM(LEADING "a" FROM 'abca');
+}
+expect {
+    bca
+}
+
+test t-614 {
+    SELECT TRIM(TRAILING "a" FROM 'abca');
+}
+expect {
+    abc
+}
+
+test t-615 {
+    SELECT TRIM(BOTH "a" FROM 'abca');
+}
+expect {
+    bc
+}
+
+test t-616 {
+    SELECT TRIM("abc" FROM 'abca');
+}
+expect {
+    a
+}
+
+test t-617 {
+    SELECT TRIM(LEADING "abc" FROM 'abca');
+}
+expect {
+    a
+}
+
+test t-618 {
+    SELECT TRIM(TRAILING "abc" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-619 {
+    SELECT TRIM(BOTH "abc" FROM 'abca');
+}
+expect {
+    a
+}
+
+test t-620 {
+    SELECT TRIM('abca' FROM 'abca');
+}
+expect {
+    
+}
+
+test t-621 {
+    SELECT TRIM(LEADING 'abca' FROM 'abca');
+}
+expect {
+    
+}
+
+test t-622 {
+    SELECT TRIM(TRAILING 'abca' FROM 'abca');
+}
+expect {
+    
+}
+
+test t-623 {
+    SELECT TRIM(BOTH 'abca' FROM 'abca');
+}
+expect {
+    
+}
+
+test t-624 {
+    SELECT TRIM('aabcaa' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-625 {
+    SELECT TRIM(LEADING 'aabcaa' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-626 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-627 {
+    SELECT TRIM(BOTH 'aabcaa' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-628 {
+    SELECT TRIM(1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-629 {
+    SELECT TRIM(LEADING 1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-630 {
+    SELECT TRIM(TRAILING 1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-631 {
+    SELECT TRIM(BOTH 1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-632 {
+    SELECT TRIM(-1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-633 {
+    SELECT TRIM(LEADING -1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-634 {
+    SELECT TRIM(TRAILING -1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-635 {
+    SELECT TRIM(BOTH -1 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-636 {
+    SELECT TRIM(0123 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-637 {
+    SELECT TRIM(LEADING 0123 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-638 {
+    SELECT TRIM(TRAILING 0123 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-639 {
+    SELECT TRIM(BOTH 0123 FROM 'abca');
+}
+expect {
+    abca
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-640 {
+    SELECT TRIM(0xAACC FROM 'abca');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-641 {
+    SELECT TRIM(LEADING 0xAACC FROM 'abca');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-642 {
+    SELECT TRIM(TRAILING 0xAACC FROM 'abca');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-643 {
+    SELECT TRIM(BOTH 0xAACC FROM 'abca');
+}
+expect error {
+}
+
+test t-644 {
+    SELECT TRIM(3.1415926 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-645 {
+    SELECT TRIM(LEADING 3.1415926 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-646 {
+    SELECT TRIM(TRAILING 3.1415926 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-647 {
+    SELECT TRIM(BOTH 3.1415926 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-648 {
+    SELECT TRIM(" 中文测试" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-649 {
+    SELECT TRIM(LEADING " 中文测试" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-650 {
+    SELECT TRIM(TRAILING " 中文测试" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-651 {
+    SELECT TRIM(BOTH " 中文测试" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-652 {
+    SELECT TRIM("日本語テスト " FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-653 {
+    SELECT TRIM(LEADING "日本語テスト " FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-654 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-655 {
+    SELECT TRIM(BOTH "日本語テスト " FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-656 {
+    SELECT TRIM("한국어 시험" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-657 {
+    SELECT TRIM(LEADING "한국어 시험" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-658 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-659 {
+    SELECT TRIM(BOTH "한국어 시험" FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-664 {
+    SELECT TRIM('123' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-665 {
+    SELECT TRIM(LEADING '123' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-666 {
+    SELECT TRIM(TRAILING '123' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-667 {
+    SELECT TRIM(BOTH '123' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-668 {
+    SELECT TRIM(9223372036854775807 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-669 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-670 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-671 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-672 {
+    SELECT TRIM(-9223372036854775808 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-673 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-674 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-675 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-676 {
+    SELECT TRIM(999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-677 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-678 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-679 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-680 {
+    SELECT TRIM(-999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-681 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-682 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-683 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-688 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-689 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-690 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-691 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-692 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-693 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-694 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-695 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-696 {
+    SELECT TRIM(_latin1 0xA078A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-697 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-698 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-699 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM 'abca');
+}
+expect {
+    abca
+}
+
+test t-700 {
+    SELECT TRIM(" Å å"  FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-701 {
+    SELECT TRIM(LEADING " Å å"  FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-702 {
+    SELECT TRIM(TRAILING " Å å"  FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-703 {
+    SELECT TRIM(BOTH " Å å"  FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-704 {
+    SELECT TRIM(NULL FROM 'aabcaa');
+}
+expect {
+    NULL
+}
+
+test t-705 {
+    SELECT TRIM(LEADING NULL FROM 'aabcaa');
+}
+expect {
+    NULL
+}
+
+test t-706 {
+    SELECT TRIM(TRAILING NULL FROM 'aabcaa');
+}
+expect {
+    NULL
+}
+
+test t-707 {
+    SELECT TRIM(BOTH NULL FROM 'aabcaa');
+}
+expect {
+    NULL
+}
+
+test t-708 {
+    SELECT TRIM("" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-709 {
+    SELECT TRIM(LEADING "" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-710 {
+    SELECT TRIM(TRAILING "" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-711 {
+    SELECT TRIM(BOTH "" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-712 {
+    SELECT TRIM("a" FROM 'aabcaa');
+}
+expect {
+    bc
+}
+
+test t-713 {
+    SELECT TRIM(LEADING "a" FROM 'aabcaa');
+}
+expect {
+    bcaa
+}
+
+test t-714 {
+    SELECT TRIM(TRAILING "a" FROM 'aabcaa');
+}
+expect {
+    aabc
+}
+
+test t-715 {
+    SELECT TRIM(BOTH "a" FROM 'aabcaa');
+}
+expect {
+    bc
+}
+
+test t-716 {
+    SELECT TRIM("abc" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-717 {
+    SELECT TRIM(LEADING "abc" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-718 {
+    SELECT TRIM(TRAILING "abc" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-719 {
+    SELECT TRIM(BOTH "abc" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-720 {
+    SELECT TRIM('abca' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-721 {
+    SELECT TRIM(LEADING 'abca' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-722 {
+    SELECT TRIM(TRAILING 'abca' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-723 {
+    SELECT TRIM(BOTH 'abca' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-724 {
+    SELECT TRIM('aabcaa' FROM 'aabcaa');
+}
+expect {
+    
+}
+
+test t-725 {
+    SELECT TRIM(LEADING 'aabcaa' FROM 'aabcaa');
+}
+expect {
+    
+}
+
+test t-726 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM 'aabcaa');
+}
+expect {
+    
+}
+
+test t-727 {
+    SELECT TRIM(BOTH 'aabcaa' FROM 'aabcaa');
+}
+expect {
+    
+}
+
+test t-728 {
+    SELECT TRIM(1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-729 {
+    SELECT TRIM(LEADING 1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-730 {
+    SELECT TRIM(TRAILING 1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-731 {
+    SELECT TRIM(BOTH 1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-732 {
+    SELECT TRIM(-1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-733 {
+    SELECT TRIM(LEADING -1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-734 {
+    SELECT TRIM(TRAILING -1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-735 {
+    SELECT TRIM(BOTH -1 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-736 {
+    SELECT TRIM(0123 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-737 {
+    SELECT TRIM(LEADING 0123 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-738 {
+    SELECT TRIM(TRAILING 0123 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-739 {
+    SELECT TRIM(BOTH 0123 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-740 {
+    SELECT TRIM(0xAACC FROM 'aabcaa');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-741 {
+    SELECT TRIM(LEADING 0xAACC FROM 'aabcaa');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-742 {
+    SELECT TRIM(TRAILING 0xAACC FROM 'aabcaa');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-743 {
+    SELECT TRIM(BOTH 0xAACC FROM 'aabcaa');
+}
+expect error {
+}
+
+test t-744 {
+    SELECT TRIM(3.1415926 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-745 {
+    SELECT TRIM(LEADING 3.1415926 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-746 {
+    SELECT TRIM(TRAILING 3.1415926 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-747 {
+    SELECT TRIM(BOTH 3.1415926 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-748 {
+    SELECT TRIM(" 中文测试" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-749 {
+    SELECT TRIM(LEADING " 中文测试" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-750 {
+    SELECT TRIM(TRAILING " 中文测试" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-751 {
+    SELECT TRIM(BOTH " 中文测试" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-752 {
+    SELECT TRIM("日本語テスト " FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-753 {
+    SELECT TRIM(LEADING "日本語テスト " FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-754 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-755 {
+    SELECT TRIM(BOTH "日本語テスト " FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-756 {
+    SELECT TRIM("한국어 시험" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-757 {
+    SELECT TRIM(LEADING "한국어 시험" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-758 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-759 {
+    SELECT TRIM(BOTH "한국어 시험" FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-764 {
+    SELECT TRIM('123' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-765 {
+    SELECT TRIM(LEADING '123' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-766 {
+    SELECT TRIM(TRAILING '123' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-767 {
+    SELECT TRIM(BOTH '123' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-768 {
+    SELECT TRIM(9223372036854775807 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-769 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-770 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-771 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-772 {
+    SELECT TRIM(-9223372036854775808 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-773 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-774 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-775 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-776 {
+    SELECT TRIM(999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-777 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-778 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-779 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-780 {
+    SELECT TRIM(-999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-781 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-782 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-783 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-788 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-789 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-790 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-791 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-792 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-793 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-794 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-795 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-796 {
+    SELECT TRIM(_latin1 0xA078A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-797 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-798 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-799 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM 'aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-800 {
+    SELECT TRIM(" Å å"  FROM 1);
+}
+expect {
+    1
+}
+
+test t-801 {
+    SELECT TRIM(LEADING " Å å"  FROM 1);
+}
+expect {
+    1
+}
+
+test t-802 {
+    SELECT TRIM(TRAILING " Å å"  FROM 1);
+}
+expect {
+    1
+}
+
+test t-803 {
+    SELECT TRIM(BOTH " Å å"  FROM 1);
+}
+expect {
+    1
+}
+
+test t-804 {
+    SELECT TRIM(NULL FROM 1);
+}
+expect {
+    NULL
+}
+
+test t-805 {
+    SELECT TRIM(LEADING NULL FROM 1);
+}
+expect {
+    NULL
+}
+
+test t-806 {
+    SELECT TRIM(TRAILING NULL FROM 1);
+}
+expect {
+    NULL
+}
+
+test t-807 {
+    SELECT TRIM(BOTH NULL FROM 1);
+}
+expect {
+    NULL
+}
+
+test t-808 {
+    SELECT TRIM("" FROM 1);
+}
+expect {
+    1
+}
+
+test t-809 {
+    SELECT TRIM(LEADING "" FROM 1);
+}
+expect {
+    1
+}
+
+test t-810 {
+    SELECT TRIM(TRAILING "" FROM 1);
+}
+expect {
+    1
+}
+
+test t-811 {
+    SELECT TRIM(BOTH "" FROM 1);
+}
+expect {
+    1
+}
+
+test t-812 {
+    SELECT TRIM("a" FROM 1);
+}
+expect {
+    1
+}
+
+test t-813 {
+    SELECT TRIM(LEADING "a" FROM 1);
+}
+expect {
+    1
+}
+
+test t-814 {
+    SELECT TRIM(TRAILING "a" FROM 1);
+}
+expect {
+    1
+}
+
+test t-815 {
+    SELECT TRIM(BOTH "a" FROM 1);
+}
+expect {
+    1
+}
+
+test t-816 {
+    SELECT TRIM("abc" FROM 1);
+}
+expect {
+    1
+}
+
+test t-817 {
+    SELECT TRIM(LEADING "abc" FROM 1);
+}
+expect {
+    1
+}
+
+test t-818 {
+    SELECT TRIM(TRAILING "abc" FROM 1);
+}
+expect {
+    1
+}
+
+test t-819 {
+    SELECT TRIM(BOTH "abc" FROM 1);
+}
+expect {
+    1
+}
+
+test t-820 {
+    SELECT TRIM('abca' FROM 1);
+}
+expect {
+    1
+}
+
+test t-821 {
+    SELECT TRIM(LEADING 'abca' FROM 1);
+}
+expect {
+    1
+}
+
+test t-822 {
+    SELECT TRIM(TRAILING 'abca' FROM 1);
+}
+expect {
+    1
+}
+
+test t-823 {
+    SELECT TRIM(BOTH 'abca' FROM 1);
+}
+expect {
+    1
+}
+
+test t-824 {
+    SELECT TRIM('aabcaa' FROM 1);
+}
+expect {
+    1
+}
+
+test t-825 {
+    SELECT TRIM(LEADING 'aabcaa' FROM 1);
+}
+expect {
+    1
+}
+
+test t-826 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM 1);
+}
+expect {
+    1
+}
+
+test t-827 {
+    SELECT TRIM(BOTH 'aabcaa' FROM 1);
+}
+expect {
+    1
+}
+
+test t-828 {
+    SELECT TRIM(1 FROM 1);
+}
+expect {
+    
+}
+
+test t-829 {
+    SELECT TRIM(LEADING 1 FROM 1);
+}
+expect {
+    
+}
+
+test t-830 {
+    SELECT TRIM(TRAILING 1 FROM 1);
+}
+expect {
+    
+}
+
+test t-831 {
+    SELECT TRIM(BOTH 1 FROM 1);
+}
+expect {
+    
+}
+
+test t-832 {
+    SELECT TRIM(-1 FROM 1);
+}
+expect {
+    1
+}
+
+test t-833 {
+    SELECT TRIM(LEADING -1 FROM 1);
+}
+expect {
+    1
+}
+
+test t-834 {
+    SELECT TRIM(TRAILING -1 FROM 1);
+}
+expect {
+    1
+}
+
+test t-835 {
+    SELECT TRIM(BOTH -1 FROM 1);
+}
+expect {
+    1
+}
+
+test t-836 {
+    SELECT TRIM(0123 FROM 1);
+}
+expect {
+    1
+}
+
+test t-837 {
+    SELECT TRIM(LEADING 0123 FROM 1);
+}
+expect {
+    1
+}
+
+test t-838 {
+    SELECT TRIM(TRAILING 0123 FROM 1);
+}
+expect {
+    1
+}
+
+test t-839 {
+    SELECT TRIM(BOTH 0123 FROM 1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-840 {
+    SELECT TRIM(0xAACC FROM 1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-841 {
+    SELECT TRIM(LEADING 0xAACC FROM 1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-842 {
+    SELECT TRIM(TRAILING 0xAACC FROM 1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-843 {
+    SELECT TRIM(BOTH 0xAACC FROM 1);
+}
+expect error {
+}
+
+test t-844 {
+    SELECT TRIM(3.1415926 FROM 1);
+}
+expect {
+    1
+}
+
+test t-845 {
+    SELECT TRIM(LEADING 3.1415926 FROM 1);
+}
+expect {
+    1
+}
+
+test t-846 {
+    SELECT TRIM(TRAILING 3.1415926 FROM 1);
+}
+expect {
+    1
+}
+
+test t-847 {
+    SELECT TRIM(BOTH 3.1415926 FROM 1);
+}
+expect {
+    1
+}
+
+test t-848 {
+    SELECT TRIM(" 中文测试" FROM 1);
+}
+expect {
+    1
+}
+
+test t-849 {
+    SELECT TRIM(LEADING " 中文测试" FROM 1);
+}
+expect {
+    1
+}
+
+test t-850 {
+    SELECT TRIM(TRAILING " 中文测试" FROM 1);
+}
+expect {
+    1
+}
+
+test t-851 {
+    SELECT TRIM(BOTH " 中文测试" FROM 1);
+}
+expect {
+    1
+}
+
+test t-852 {
+    SELECT TRIM("日本語テスト " FROM 1);
+}
+expect {
+    1
+}
+
+test t-853 {
+    SELECT TRIM(LEADING "日本語テスト " FROM 1);
+}
+expect {
+    1
+}
+
+test t-854 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM 1);
+}
+expect {
+    1
+}
+
+test t-855 {
+    SELECT TRIM(BOTH "日本語テスト " FROM 1);
+}
+expect {
+    1
+}
+
+test t-856 {
+    SELECT TRIM("한국어 시험" FROM 1);
+}
+expect {
+    1
+}
+
+test t-857 {
+    SELECT TRIM(LEADING "한국어 시험" FROM 1);
+}
+expect {
+    1
+}
+
+test t-858 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM 1);
+}
+expect {
+    1
+}
+
+test t-859 {
+    SELECT TRIM(BOTH "한국어 시험" FROM 1);
+}
+expect {
+    1
+}
+
+test t-864 {
+    SELECT TRIM('123' FROM 1);
+}
+expect {
+    1
+}
+
+test t-865 {
+    SELECT TRIM(LEADING '123' FROM 1);
+}
+expect {
+    1
+}
+
+test t-866 {
+    SELECT TRIM(TRAILING '123' FROM 1);
+}
+expect {
+    1
+}
+
+test t-867 {
+    SELECT TRIM(BOTH '123' FROM 1);
+}
+expect {
+    1
+}
+
+test t-868 {
+    SELECT TRIM(9223372036854775807 FROM 1);
+}
+expect {
+    1
+}
+
+test t-869 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM 1);
+}
+expect {
+    1
+}
+
+test t-870 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM 1);
+}
+expect {
+    1
+}
+
+test t-871 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM 1);
+}
+expect {
+    1
+}
+
+test t-872 {
+    SELECT TRIM(-9223372036854775808 FROM 1);
+}
+expect {
+    1
+}
+
+test t-873 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM 1);
+}
+expect {
+    1
+}
+
+test t-874 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM 1);
+}
+expect {
+    1
+}
+
+test t-875 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM 1);
+}
+expect {
+    1
+}
+
+test t-876 {
+    SELECT TRIM(999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-877 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-878 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-879 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-880 {
+    SELECT TRIM(-999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-881 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-882 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-883 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM 1);
+}
+expect {
+    1
+}
+
+test t-888 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM 1);
+}
+expect {
+    1
+}
+
+test t-889 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM 1);
+}
+expect {
+    1
+}
+
+test t-890 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM 1);
+}
+expect {
+    1
+}
+
+test t-891 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM 1);
+}
+expect {
+    1
+}
+
+test t-892 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-893 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-894 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-895 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-896 {
+    SELECT TRIM(_latin1 0xA078A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-897 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-898 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-899 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM 1);
+}
+expect {
+    1
+}
+
+test t-900 {
+    SELECT TRIM(" Å å"  FROM -1);
+}
+expect {
+    -1
+}
+
+test t-901 {
+    SELECT TRIM(LEADING " Å å"  FROM -1);
+}
+expect {
+    -1
+}
+
+test t-902 {
+    SELECT TRIM(TRAILING " Å å"  FROM -1);
+}
+expect {
+    -1
+}
+
+test t-903 {
+    SELECT TRIM(BOTH " Å å"  FROM -1);
+}
+expect {
+    -1
+}
+
+test t-904 {
+    SELECT TRIM(NULL FROM -1);
+}
+expect {
+    NULL
+}
+
+test t-905 {
+    SELECT TRIM(LEADING NULL FROM -1);
+}
+expect {
+    NULL
+}
+
+test t-906 {
+    SELECT TRIM(TRAILING NULL FROM -1);
+}
+expect {
+    NULL
+}
+
+test t-907 {
+    SELECT TRIM(BOTH NULL FROM -1);
+}
+expect {
+    NULL
+}
+
+test t-908 {
+    SELECT TRIM("" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-909 {
+    SELECT TRIM(LEADING "" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-910 {
+    SELECT TRIM(TRAILING "" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-911 {
+    SELECT TRIM(BOTH "" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-912 {
+    SELECT TRIM("a" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-913 {
+    SELECT TRIM(LEADING "a" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-914 {
+    SELECT TRIM(TRAILING "a" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-915 {
+    SELECT TRIM(BOTH "a" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-916 {
+    SELECT TRIM("abc" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-917 {
+    SELECT TRIM(LEADING "abc" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-918 {
+    SELECT TRIM(TRAILING "abc" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-919 {
+    SELECT TRIM(BOTH "abc" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-920 {
+    SELECT TRIM('abca' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-921 {
+    SELECT TRIM(LEADING 'abca' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-922 {
+    SELECT TRIM(TRAILING 'abca' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-923 {
+    SELECT TRIM(BOTH 'abca' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-924 {
+    SELECT TRIM('aabcaa' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-925 {
+    SELECT TRIM(LEADING 'aabcaa' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-926 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-927 {
+    SELECT TRIM(BOTH 'aabcaa' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-928 {
+    SELECT TRIM(1 FROM -1);
+}
+expect {
+    -
+}
+
+test t-929 {
+    SELECT TRIM(LEADING 1 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-930 {
+    SELECT TRIM(TRAILING 1 FROM -1);
+}
+expect {
+    -
+}
+
+test t-931 {
+    SELECT TRIM(BOTH 1 FROM -1);
+}
+expect {
+    -
+}
+
+test t-932 {
+    SELECT TRIM(-1 FROM -1);
+}
+expect {
+    
+}
+
+test t-933 {
+    SELECT TRIM(LEADING -1 FROM -1);
+}
+expect {
+    
+}
+
+test t-934 {
+    SELECT TRIM(TRAILING -1 FROM -1);
+}
+expect {
+    
+}
+
+test t-935 {
+    SELECT TRIM(BOTH -1 FROM -1);
+}
+expect {
+    
+}
+
+test t-936 {
+    SELECT TRIM(0123 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-937 {
+    SELECT TRIM(LEADING 0123 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-938 {
+    SELECT TRIM(TRAILING 0123 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-939 {
+    SELECT TRIM(BOTH 0123 FROM -1);
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-940 {
+    SELECT TRIM(0xAACC FROM -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-941 {
+    SELECT TRIM(LEADING 0xAACC FROM -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-942 {
+    SELECT TRIM(TRAILING 0xAACC FROM -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-943 {
+    SELECT TRIM(BOTH 0xAACC FROM -1);
+}
+expect error {
+}
+
+test t-944 {
+    SELECT TRIM(3.1415926 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-945 {
+    SELECT TRIM(LEADING 3.1415926 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-946 {
+    SELECT TRIM(TRAILING 3.1415926 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-947 {
+    SELECT TRIM(BOTH 3.1415926 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-948 {
+    SELECT TRIM(" 中文测试" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-949 {
+    SELECT TRIM(LEADING " 中文测试" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-950 {
+    SELECT TRIM(TRAILING " 中文测试" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-951 {
+    SELECT TRIM(BOTH " 中文测试" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-952 {
+    SELECT TRIM("日本語テスト " FROM -1);
+}
+expect {
+    -1
+}
+
+test t-953 {
+    SELECT TRIM(LEADING "日本語テスト " FROM -1);
+}
+expect {
+    -1
+}
+
+test t-954 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM -1);
+}
+expect {
+    -1
+}
+
+test t-955 {
+    SELECT TRIM(BOTH "日本語テスト " FROM -1);
+}
+expect {
+    -1
+}
+
+test t-956 {
+    SELECT TRIM("한국어 시험" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-957 {
+    SELECT TRIM(LEADING "한국어 시험" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-958 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-959 {
+    SELECT TRIM(BOTH "한국어 시험" FROM -1);
+}
+expect {
+    -1
+}
+
+test t-964 {
+    SELECT TRIM('123' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-965 {
+    SELECT TRIM(LEADING '123' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-966 {
+    SELECT TRIM(TRAILING '123' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-967 {
+    SELECT TRIM(BOTH '123' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-968 {
+    SELECT TRIM(9223372036854775807 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-969 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-970 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-971 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-972 {
+    SELECT TRIM(-9223372036854775808 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-973 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-974 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-975 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-976 {
+    SELECT TRIM(999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-977 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-978 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-979 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-980 {
+    SELECT TRIM(-999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-981 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-982 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-983 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-988 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-989 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-990 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-991 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM -1);
+}
+expect {
+    -1
+}
+
+test t-992 {
+    SELECT TRIM(_utf8mb4 0xC2A078C2A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-993 {
+    SELECT TRIM(LEADING _utf8mb4 0xC2A078C2A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-994 {
+    SELECT TRIM(TRAILING _utf8mb4 0xC2A078C2A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-995 {
+    SELECT TRIM(BOTH _utf8mb4 0xC2A078C2A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-996 {
+    SELECT TRIM(_latin1 0xA078A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-997 {
+    SELECT TRIM(LEADING _latin1 0xA078A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-998 {
+    SELECT TRIM(TRAILING _latin1 0xA078A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-999 {
+    SELECT TRIM(BOTH _latin1 0xA078A0 FROM -1);
+}
+expect {
+    -1
+}
+
+test t-1000 {
+    SELECT TRIM(" Å å"  FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1001 {
+    SELECT TRIM(LEADING " Å å"  FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1002 {
+    SELECT TRIM(TRAILING " Å å"  FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1003 {
+    SELECT TRIM(BOTH " Å å"  FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1004 {
+    SELECT TRIM(NULL FROM 0123);
+}
+expect {
+    NULL
+}
+
+test t-1005 {
+    SELECT TRIM(LEADING NULL FROM 0123);
+}
+expect {
+    NULL
+}
+
+test t-1006 {
+    SELECT TRIM(TRAILING NULL FROM 0123);
+}
+expect {
+    NULL
+}
+
+test t-1007 {
+    SELECT TRIM(BOTH NULL FROM 0123);
+}
+expect {
+    NULL
+}
+
+test t-1008 {
+    SELECT TRIM("" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1009 {
+    SELECT TRIM(LEADING "" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1010 {
+    SELECT TRIM(TRAILING "" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1011 {
+    SELECT TRIM(BOTH "" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1012 {
+    SELECT TRIM("a" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1013 {
+    SELECT TRIM(LEADING "a" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1014 {
+    SELECT TRIM(TRAILING "a" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1015 {
+    SELECT TRIM(BOTH "a" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1016 {
+    SELECT TRIM("abc" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1017 {
+    SELECT TRIM(LEADING "abc" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1018 {
+    SELECT TRIM(TRAILING "abc" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1019 {
+    SELECT TRIM(BOTH "abc" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1020 {
+    SELECT TRIM('abca' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1021 {
+    SELECT TRIM(LEADING 'abca' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1022 {
+    SELECT TRIM(TRAILING 'abca' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1023 {
+    SELECT TRIM(BOTH 'abca' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1024 {
+    SELECT TRIM('aabcaa' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1025 {
+    SELECT TRIM(LEADING 'aabcaa' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1026 {
+    SELECT TRIM(TRAILING 'aabcaa' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1027 {
+    SELECT TRIM(BOTH 'aabcaa' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1028 {
+    SELECT TRIM(1 FROM 0123);
+}
+expect {
+    23
+}
+
+test t-1029 {
+    SELECT TRIM(LEADING 1 FROM 0123);
+}
+expect {
+    23
+}
+
+test t-1030 {
+    SELECT TRIM(TRAILING 1 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1031 {
+    SELECT TRIM(BOTH 1 FROM 0123);
+}
+expect {
+    23
+}
+
+test t-1032 {
+    SELECT TRIM(-1 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1033 {
+    SELECT TRIM(LEADING -1 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1034 {
+    SELECT TRIM(TRAILING -1 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1035 {
+    SELECT TRIM(BOTH -1 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1036 {
+    SELECT TRIM(0123 FROM 0123);
+}
+expect {
+    
+}
+
+test t-1037 {
+    SELECT TRIM(LEADING 0123 FROM 0123);
+}
+expect {
+    
+}
+
+test t-1038 {
+    SELECT TRIM(TRAILING 0123 FROM 0123);
+}
+expect {
+    
+}
+
+test t-1039 {
+    SELECT TRIM(BOTH 0123 FROM 0123);
+}
+expect {
+    
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1040 {
+    SELECT TRIM(0xAACC FROM 0123);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1041 {
+    SELECT TRIM(LEADING 0xAACC FROM 0123);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1042 {
+    SELECT TRIM(TRAILING 0xAACC FROM 0123);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1043 {
+    SELECT TRIM(BOTH 0xAACC FROM 0123);
+}
+expect error {
+}
+
+test t-1044 {
+    SELECT TRIM(3.1415926 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1045 {
+    SELECT TRIM(LEADING 3.1415926 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1046 {
+    SELECT TRIM(TRAILING 3.1415926 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1047 {
+    SELECT TRIM(BOTH 3.1415926 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1048 {
+    SELECT TRIM(" 中文测试" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1049 {
+    SELECT TRIM(LEADING " 中文测试" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1050 {
+    SELECT TRIM(TRAILING " 中文测试" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1051 {
+    SELECT TRIM(BOTH " 中文测试" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1052 {
+    SELECT TRIM("日本語テスト " FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1053 {
+    SELECT TRIM(LEADING "日本語テスト " FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1054 {
+    SELECT TRIM(TRAILING "日本語テスト " FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1055 {
+    SELECT TRIM(BOTH "日本語テスト " FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1056 {
+    SELECT TRIM("한국어 시험" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1057 {
+    SELECT TRIM(LEADING "한국어 시험" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1058 {
+    SELECT TRIM(TRAILING "한국어 시험" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1059 {
+    SELECT TRIM(BOTH "한국어 시험" FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1064 {
+    SELECT TRIM('123' FROM 0123);
+}
+expect {
+    
+}
+
+test t-1065 {
+    SELECT TRIM(LEADING '123' FROM 0123);
+}
+expect {
+    
+}
+
+test t-1066 {
+    SELECT TRIM(TRAILING '123' FROM 0123);
+}
+expect {
+    
+}
+
+test t-1067 {
+    SELECT TRIM(BOTH '123' FROM 0123);
+}
+expect {
+    
+}
+
+test t-1068 {
+    SELECT TRIM(9223372036854775807 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1069 {
+    SELECT TRIM(LEADING 9223372036854775807 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1070 {
+    SELECT TRIM(TRAILING 9223372036854775807 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1071 {
+    SELECT TRIM(BOTH 9223372036854775807 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1072 {
+    SELECT TRIM(-9223372036854775808 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1073 {
+    SELECT TRIM(LEADING -9223372036854775808 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1074 {
+    SELECT TRIM(TRAILING -9223372036854775808 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1075 {
+    SELECT TRIM(BOTH -9223372036854775808 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1076 {
+    SELECT TRIM(999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1077 {
+    SELECT TRIM(LEADING 999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1078 {
+    SELECT TRIM(TRAILING 999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1079 {
+    SELECT TRIM(BOTH 999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1080 {
+    SELECT TRIM(-999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1081 {
+    SELECT TRIM(LEADING -999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1082 {
+    SELECT TRIM(TRAILING -999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1083 {
+    SELECT TRIM(BOTH -999999999999999999999999 FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1088 {
+    SELECT TRIM(_utf8mb4 '
+abcABCÅå ' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1089 {
+    SELECT TRIM(LEADING _utf8mb4 '
+abcABCÅå ' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1090 {
+    SELECT TRIM(TRAILING _utf8mb4 '
+abcABCÅå ' FROM 0123);
+}
+expect {
+    123
+}
+
+test t-1091 {
+    SELECT TRIM(BOTH _utf8mb4 '
+abcABCÅå ' FROM 0123);
+}
+expect {
+    123
+}

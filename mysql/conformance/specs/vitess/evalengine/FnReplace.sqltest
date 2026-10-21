@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT REPLACE('www.mysql.com', 'w', 'Ww');
+}
+expect {
+    WwWwWw.mysql.com
+}
+
+test t-2 {
+    SELECT REPLACE('straße', 'ß', 'b');
+}
+expect {
+    strabe
+}
+
+test t-11 {
+    SELECT REPLACE("Å å", "Å å", -1);
+}
+expect {
+    -1
+}
+
+test t-12 {
+    SELECT REPLACE("Å å", "Å å", 0123);
+}
+expect {
+    123
+}
+
+test t-14 {
+    SELECT REPLACE("Å å", "Å å", 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-15 {
+    SELECT REPLACE("Å å", "Å å", "中文测试");
+}
+expect {
+    中文测试
+}
+
+test t-18 {
+    SELECT REPLACE("Å å", "Å å", "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-21 {
+    SELECT REPLACE("Å å", "Å å", -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-33 {
+    SELECT REPLACE("Å å", NULL, -1);
+}
+expect {
+    NULL
+}
+
+test t-34 {
+    SELECT REPLACE("Å å", NULL, 0123);
+}
+expect {
+    NULL
+}
+
+test t-39 {
+    SELECT REPLACE("Å å", NULL, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-41 {
+    SELECT REPLACE("Å å", NULL, '123');
+}
+expect {
+    NULL
+}
+
+test t-43 {
+    SELECT REPLACE("Å å", NULL, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-44 {
+    SELECT REPLACE("Å å", NULL, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-46 {
+    SELECT REPLACE("Å å", NULL, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-47 {
+    SELECT REPLACE("Å å", NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-53 {
+    SELECT REPLACE("Å å", "", "abc");
+}
+expect {
+    Å å
+}
+
+test t-69 {
+    SELECT REPLACE("Å å", "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-73 {
+    SELECT REPLACE("Å å", "a", "");
+}
+expect {
+    Å å
+}
+
+test t-74 {
+    SELECT REPLACE("Å å", "a", "a");
+}
+expect {
+    Å å
+}
+
+test t-75 {
+    SELECT REPLACE("Å å", "a", "abc");
+}
+expect {
+    Å å
+}
+
+test t-77 {
+    SELECT REPLACE("Å å", "a", -1);
+}
+expect {
+    Å å
+}
+
+test t-84 {
+    SELECT REPLACE("Å å", "a", "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-86 {
+    SELECT REPLACE("Å å", "a", 9223372036854775807);
+}
+expect {
+    Å å
+}
+
+test t-87 {
+    SELECT REPLACE("Å å", "a", -9223372036854775808);
+}
+expect {
+    Å å
+}
+
+test t-89 {
+    SELECT REPLACE("Å å", "a", -999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-91 {
+    SELECT REPLACE("Å å", "a", _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-93 {
+    SELECT REPLACE("Å å", "abc", "Å å");
+}
+expect {
+    Å å
+}
+
+test t-100 {
+    SELECT REPLACE("Å å", "abc", 0123);
+}
+expect {
+    Å å
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-101 {
+    SELECT REPLACE("Å å", "abc", 0xAACC);
+}
+expect error {
+}
+
+test t-103 {
+    SELECT REPLACE("Å å", "abc", "中文测试");
+}
+expect {
+    Å å
+}
+
+test t-107 {
+    SELECT REPLACE("Å å", "abc", '123');
+}
+expect {
+    Å å
+}
+
+test t-111 {
+    SELECT REPLACE("Å å", "abc", -999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-113 {
+    SELECT REPLACE("Å å", "abc", _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-114 {
+    SELECT REPLACE("Å å", "abc", _latin1 0xFF);
+}
+expect {
+    Å å
+}
+
+test t-115 {
+    SELECT REPLACE("Å å", 1, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-117 {
+    SELECT REPLACE("Å å", 1, "");
+}
+expect {
+    Å å
+}
+
+test t-118 {
+    SELECT REPLACE("Å å", 1, "a");
+}
+expect {
+    Å å
+}
+
+test t-124 {
+    SELECT REPLACE("Å å", 1, 3.1415926);
+}
+expect {
+    Å å
+}
+
+test t-126 {
+    SELECT REPLACE("Å å", 1, "日本語テスト");
+}
+expect {
+    Å å
+}
+
+test t-137 {
+    SELECT REPLACE("Å å", -1, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-140 {
+    SELECT REPLACE("Å å", -1, "a");
+}
+expect {
+    Å å
+}
+
+test t-141 {
+    SELECT REPLACE("Å å", -1, "abc");
+}
+expect {
+    Å å
+}
+
+test t-142 {
+    SELECT REPLACE("Å å", -1, 1);
+}
+expect {
+    Å å
+}
+
+test t-143 {
+    SELECT REPLACE("Å å", -1, -1);
+}
+expect {
+    Å å
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-145 {
+    SELECT REPLACE("Å å", -1, 0xAACC);
+}
+expect error {
+}
+
+test t-146 {
+    SELECT REPLACE("Å å", -1, 3.1415926);
+}
+expect {
+    Å å
+}
+
+test t-147 {
+    SELECT REPLACE("Å å", -1, "中文测试");
+}
+expect {
+    Å å
+}
+
+test t-149 {
+    SELECT REPLACE("Å å", -1, "한국어 시험");
+}
+expect {
+    Å å
+}
+
+test t-153 {
+    SELECT REPLACE("Å å", -1, -9223372036854775808);
+}
+expect {
+    Å å
+}
+
+test t-154 {
+    SELECT REPLACE("Å å", -1, 999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-157 {
+    SELECT REPLACE("Å å", -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-159 {
+    SELECT REPLACE("Å å", 0123, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-172 {
+    SELECT REPLACE("Å å", 0123, "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-173 {
+    SELECT REPLACE("Å å", 0123, '123');
+}
+expect {
+    Å å
+}
+
+test t-177 {
+    SELECT REPLACE("Å å", 0123, -999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-178 {
+    SELECT REPLACE("Å å", 0123, _binary 'Müller' );
+}
+expect {
+    Å å
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-181 {
+    SELECT REPLACE("Å å", 0xAACC, "Å å");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-183 {
+    SELECT REPLACE("Å å", 0xAACC, "");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-189 {
+    SELECT REPLACE("Å å", 0xAACC, 0xAACC);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-193 {
+    SELECT REPLACE("Å å", 0xAACC, "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-197 {
+    SELECT REPLACE("Å å", 0xAACC, -9223372036854775808);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-198 {
+    SELECT REPLACE("Å å", 0xAACC, 999999999999999999999999);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-200 {
+    SELECT REPLACE("Å å", 0xAACC, _binary 'Müller' );
+}
+expect error {
+}
+
+test t-208 {
+    SELECT REPLACE("Å å", 3.1415926, 1);
+}
+expect {
+    Å å
+}
+
+test t-213 {
+    SELECT REPLACE("Å å", 3.1415926, "中文测试");
+}
+expect {
+    Å å
+}
+
+test t-215 {
+    SELECT REPLACE("Å å", 3.1415926, "한국어 시험");
+}
+expect {
+    Å å
+}
+
+test t-216 {
+    SELECT REPLACE("Å å", 3.1415926, "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-222 {
+    SELECT REPLACE("Å å", 3.1415926, _binary 'Müller' );
+}
+expect {
+    Å å
+}
+
+test t-225 {
+    SELECT REPLACE("Å å", "中文测试", "Å å");
+}
+expect {
+    Å å
+}
+
+test t-227 {
+    SELECT REPLACE("Å å", "中文测试", "");
+}
+expect {
+    Å å
+}
+
+test t-229 {
+    SELECT REPLACE("Å å", "中文测试", "abc");
+}
+expect {
+    Å å
+}
+
+test t-238 {
+    SELECT REPLACE("Å å", "中文测试", "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-239 {
+    SELECT REPLACE("Å å", "中文测试", '123');
+}
+expect {
+    Å å
+}
+
+test t-241 {
+    SELECT REPLACE("Å å", "中文测试", -9223372036854775808);
+}
+expect {
+    Å å
+}
+
+test t-242 {
+    SELECT REPLACE("Å å", "中文测试", 999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-244 {
+    SELECT REPLACE("Å å", "中文测试", _binary 'Müller' );
+}
+expect {
+    Å å
+}
+
+test t-250 {
+    SELECT REPLACE("Å å", "日本語テスト", "a");
+}
+expect {
+    Å å
+}
+
+test t-272 {
+    SELECT REPLACE("Å å", "한국어 시험", "a");
+}
+expect {
+    Å å
+}
+
+test t-284 {
+    SELECT REPLACE("Å å", "한국어 시험", 9223372036854775807);
+}
+expect {
+    Å å
+}
+
+test t-287 {
+    SELECT REPLACE("Å å", "한국어 시험", -999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-288 {
+    SELECT REPLACE("Å å", "한국어 시험", _binary 'Müller' );
+}
+expect {
+    Å å
+}
+
+test t-290 {
+    SELECT REPLACE("Å å", "한국어 시험", _latin1 0xFF);
+}
+expect {
+    Å å
+}
+
+test t-292 {
+    SELECT REPLACE("Å å", "😊😂🤢", NULL);
+}
+expect {
+    NULL
+}
+
+test t-296 {
+    SELECT REPLACE("Å å", "😊😂🤢", 1);
+}
+expect {
+    Å å
+}
+
+test t-297 {
+    SELECT REPLACE("Å å", "😊😂🤢", -1);
+}
+expect {
+    Å å
+}
+
+test t-302 {
+    SELECT REPLACE("Å å", "😊😂🤢", "日本語テスト");
+}
+expect {
+    Å å
+}
+
+test t-304 {
+    SELECT REPLACE("Å å", "😊😂🤢", "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-305 {
+    SELECT REPLACE("Å å", "😊😂🤢", '123');
+}
+expect {
+    Å å
+}
+
+test t-306 {
+    SELECT REPLACE("Å å", "😊😂🤢", 9223372036854775807);
+}
+expect {
+    Å å
+}
+
+test t-311 {
+    SELECT REPLACE("Å å", "😊😂🤢", _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-314 {
+    SELECT REPLACE("Å å", '123', NULL);
+}
+expect {
+    NULL
+}
+
+test t-317 {
+    SELECT REPLACE("Å å", '123', "abc");
+}
+expect {
+    Å å
+}
+
+test t-319 {
+    SELECT REPLACE("Å å", '123', -1);
+}
+expect {
+    Å å
+}
+
+test t-320 {
+    SELECT REPLACE("Å å", '123', 0123);
+}
+expect {
+    Å å
+}
+
+test t-324 {
+    SELECT REPLACE("Å å", '123', "日本語テスト");
+}
+expect {
+    Å å
+}
+
+test t-328 {
+    SELECT REPLACE("Å å", '123', 9223372036854775807);
+}
+expect {
+    Å å
+}
+
+test t-331 {
+    SELECT REPLACE("Å å", '123', -999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-335 {
+    SELECT REPLACE("Å å", 9223372036854775807, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-342 {
+    SELECT REPLACE("Å å", 9223372036854775807, 0123);
+}
+expect {
+    Å å
+}
+
+test t-352 {
+    SELECT REPLACE("Å å", 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-355 {
+    SELECT REPLACE("Å å", 9223372036854775807, _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-357 {
+    SELECT REPLACE("Å å", -9223372036854775808, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-362 {
+    SELECT REPLACE("Å å", -9223372036854775808, 1);
+}
+expect {
+    Å å
+}
+
+test t-367 {
+    SELECT REPLACE("Å å", -9223372036854775808, "中文测试");
+}
+expect {
+    Å å
+}
+
+test t-369 {
+    SELECT REPLACE("Å å", -9223372036854775808, "한국어 시험");
+}
+expect {
+    Å å
+}
+
+test t-370 {
+    SELECT REPLACE("Å å", -9223372036854775808, "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-372 {
+    SELECT REPLACE("Å å", -9223372036854775808, 9223372036854775807);
+}
+expect {
+    Å å
+}
+
+test t-373 {
+    SELECT REPLACE("Å å", -9223372036854775808, -9223372036854775808);
+}
+expect {
+    Å å
+}
+
+test t-374 {
+    SELECT REPLACE("Å å", -9223372036854775808, 999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-381 {
+    SELECT REPLACE("Å å", 999999999999999999999999, "");
+}
+expect {
+    Å å
+}
+
+test t-383 {
+    SELECT REPLACE("Å å", 999999999999999999999999, "abc");
+}
+expect {
+    Å å
+}
+
+test t-388 {
+    SELECT REPLACE("Å å", 999999999999999999999999, 3.1415926);
+}
+expect {
+    Å å
+}
+
+test t-389 {
+    SELECT REPLACE("Å å", 999999999999999999999999, "中文测试");
+}
+expect {
+    Å å
+}
+
+test t-392 {
+    SELECT REPLACE("Å å", 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-395 {
+    SELECT REPLACE("Å å", 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    Å å
+}
+
+test t-396 {
+    SELECT REPLACE("Å å", 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-398 {
+    SELECT REPLACE("Å å", 999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    Å å
+}
+
+test t-399 {
+    SELECT REPLACE("Å å", 999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-403 {
+    SELECT REPLACE("Å å", -999999999999999999999999, "");
+}
+expect {
+    Å å
+}
+
+test t-405 {
+    SELECT REPLACE("Å å", -999999999999999999999999, "abc");
+}
+expect {
+    Å å
+}
+
+test t-406 {
+    SELECT REPLACE("Å å", -999999999999999999999999, 1);
+}
+expect {
+    Å å
+}
+
+test t-411 {
+    SELECT REPLACE("Å å", -999999999999999999999999, "中文测试");
+}
+expect {
+    Å å
+}
+
+test t-414 {
+    SELECT REPLACE("Å å", -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    Å å
+}
+
+test t-415 {
+    SELECT REPLACE("Å å", -999999999999999999999999, '123');
+}
+expect {
+    Å å
+}
+
+test t-427 {
+    SELECT REPLACE("Å å", _binary 'Müller' , "abc");
+}
+expect {
+    Å å
+}
+
+test t-435 {
+    SELECT REPLACE("Å å", _binary 'Müller' , "한국어 시험");
+}
+expect {
+    Å å
+}
+
+test t-437 {
+    SELECT REPLACE("Å å", _binary 'Müller' , '123');
+}
+expect {
+    Å å
+}
+
+test t-444 {
+    SELECT REPLACE("Å å", _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    Å å
+}
+
+test t-447 {
+    SELECT REPLACE("Å å", _utf8mb4 'abcABCÅå', "");
+}
+expect {
+    Å å
+}
+
+test t-449 {
+    SELECT REPLACE("Å å", _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    Å å
+}
+
+test t-460 {
+    SELECT REPLACE("Å å", _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    Å å
+}
+
+test t-465 {
+    SELECT REPLACE("Å å", _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å
+}
+
+test t-473 {
+    SELECT REPLACE("Å å", _latin1 0xFF, -1);
+}
+expect {
+    Å å
+}
+
+test t-474 {
+    SELECT REPLACE("Å å", _latin1 0xFF, 0123);
+}
+expect {
+    Å å
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-475 {
+    SELECT REPLACE("Å å", _latin1 0xFF, 0xAACC);
+}
+expect error {
+}
+
+test t-479 {
+    SELECT REPLACE("Å å", _latin1 0xFF, "한국어 시험");
+}
+expect {
+    Å å
+}
+
+test t-481 {
+    SELECT REPLACE("Å å", _latin1 0xFF, '123');
+}
+expect {
+    Å å
+}
+
+test t-485 {
+    SELECT REPLACE("Å å", _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    Å å
+}
+
+test t-486 {
+    SELECT REPLACE("Å å", _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    Å å
+}
+
+test t-489 {
+    SELECT REPLACE(NULL, "Å å", "Å å");
+}
+expect {
+    NULL
+}
+
+test t-491 {
+    SELECT REPLACE(NULL, "Å å", "");
+}
+expect {
+    NULL
+}
+
+test t-493 {
+    SELECT REPLACE(NULL, "Å å", "abc");
+}
+expect {
+    NULL
+}
+
+test t-499 {
+    SELECT REPLACE(NULL, "Å å", "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-505 {
+    SELECT REPLACE(NULL, "Å å", -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-506 {
+    SELECT REPLACE(NULL, "Å å", 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-509 {
+    SELECT REPLACE(NULL, "Å å", _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-510 {
+    SELECT REPLACE(NULL, "Å å", _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-519 {
+    SELECT REPLACE(NULL, NULL, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-520 {
+    SELECT REPLACE(NULL, NULL, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-523 {
+    SELECT REPLACE(NULL, NULL, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-525 {
+    SELECT REPLACE(NULL, NULL, '123');
+}
+expect {
+    NULL
+}
+
+test t-528 {
+    SELECT REPLACE(NULL, NULL, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-530 {
+    SELECT REPLACE(NULL, NULL, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-531 {
+    SELECT REPLACE(NULL, NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-534 {
+    SELECT REPLACE(NULL, "", NULL);
+}
+expect {
+    NULL
+}
+
+test t-548 {
+    SELECT REPLACE(NULL, "", 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-551 {
+    SELECT REPLACE(NULL, "", -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-552 {
+    SELECT REPLACE(NULL, "", _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-553 {
+    SELECT REPLACE(NULL, "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-555 {
+    SELECT REPLACE(NULL, "a", "Å å");
+}
+expect {
+    NULL
+}
+
+test t-556 {
+    SELECT REPLACE(NULL, "a", NULL);
+}
+expect {
+    NULL
+}
+
+test t-557 {
+    SELECT REPLACE(NULL, "a", "");
+}
+expect {
+    NULL
+}
+
+test t-564 {
+    SELECT REPLACE(NULL, "a", 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-570 {
+    SELECT REPLACE(NULL, "a", 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-573 {
+    SELECT REPLACE(NULL, "a", -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-576 {
+    SELECT REPLACE(NULL, "a", _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-581 {
+    SELECT REPLACE(NULL, "abc", "abc");
+}
+expect {
+    NULL
+}
+
+test t-583 {
+    SELECT REPLACE(NULL, "abc", -1);
+}
+expect {
+    NULL
+}
+
+test t-585 {
+    SELECT REPLACE(NULL, "abc", 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-605 {
+    SELECT REPLACE(NULL, 1, -1);
+}
+expect {
+    NULL
+}
+
+test t-608 {
+    SELECT REPLACE(NULL, 1, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-609 {
+    SELECT REPLACE(NULL, 1, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-613 {
+    SELECT REPLACE(NULL, 1, '123');
+}
+expect {
+    NULL
+}
+
+test t-616 {
+    SELECT REPLACE(NULL, 1, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-625 {
+    SELECT REPLACE(NULL, -1, "abc");
+}
+expect {
+    NULL
+}
+
+test t-627 {
+    SELECT REPLACE(NULL, -1, -1);
+}
+expect {
+    NULL
+}
+
+test t-629 {
+    SELECT REPLACE(NULL, -1, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-630 {
+    SELECT REPLACE(NULL, -1, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-631 {
+    SELECT REPLACE(NULL, -1, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-632 {
+    SELECT REPLACE(NULL, -1, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-638 {
+    SELECT REPLACE(NULL, -1, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-642 {
+    SELECT REPLACE(NULL, -1, _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-643 {
+    SELECT REPLACE(NULL, 0123, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-646 {
+    SELECT REPLACE(NULL, 0123, "a");
+}
+expect {
+    NULL
+}
+
+test t-650 {
+    SELECT REPLACE(NULL, 0123, 0123);
+}
+expect {
+    NULL
+}
+
+test t-663 {
+    SELECT REPLACE(NULL, 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-666 {
+    SELECT REPLACE(NULL, 0xAACC, NULL);
+}
+expect {
+    NULL
+}
+
+test t-668 {
+    SELECT REPLACE(NULL, 0xAACC, "a");
+}
+expect {
+    NULL
+}
+
+test t-669 {
+    SELECT REPLACE(NULL, 0xAACC, "abc");
+}
+expect {
+    NULL
+}
+
+test t-670 {
+    SELECT REPLACE(NULL, 0xAACC, 1);
+}
+expect {
+    NULL
+}
+
+test t-673 {
+    SELECT REPLACE(NULL, 0xAACC, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-675 {
+    SELECT REPLACE(NULL, 0xAACC, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-676 {
+    SELECT REPLACE(NULL, 0xAACC, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-677 {
+    SELECT REPLACE(NULL, 0xAACC, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-684 {
+    SELECT REPLACE(NULL, 0xAACC, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-687 {
+    SELECT REPLACE(NULL, 3.1415926, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-688 {
+    SELECT REPLACE(NULL, 3.1415926, NULL);
+}
+expect {
+    NULL
+}
+
+test t-689 {
+    SELECT REPLACE(NULL, 3.1415926, "");
+}
+expect {
+    NULL
+}
+
+test t-690 {
+    SELECT REPLACE(NULL, 3.1415926, "a");
+}
+expect {
+    NULL
+}
+
+test t-692 {
+    SELECT REPLACE(NULL, 3.1415926, 1);
+}
+expect {
+    NULL
+}
+
+test t-697 {
+    SELECT REPLACE(NULL, 3.1415926, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-703 {
+    SELECT REPLACE(NULL, 3.1415926, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-705 {
+    SELECT REPLACE(NULL, 3.1415926, -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-707 {
+    SELECT REPLACE(NULL, 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-708 {
+    SELECT REPLACE(NULL, 3.1415926, _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-712 {
+    SELECT REPLACE(NULL, "中文测试", "a");
+}
+expect {
+    NULL
+}
+
+test t-714 {
+    SELECT REPLACE(NULL, "中文测试", 1);
+}
+expect {
+    NULL
+}
+
+test t-715 {
+    SELECT REPLACE(NULL, "中文测试", -1);
+}
+expect {
+    NULL
+}
+
+test t-717 {
+    SELECT REPLACE(NULL, "中文测试", 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-719 {
+    SELECT REPLACE(NULL, "中文测试", "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-720 {
+    SELECT REPLACE(NULL, "中文测试", "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-722 {
+    SELECT REPLACE(NULL, "中文测试", "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-725 {
+    SELECT REPLACE(NULL, "中文测试", -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-733 {
+    SELECT REPLACE(NULL, "日本語テスト", "");
+}
+expect {
+    NULL
+}
+
+test t-734 {
+    SELECT REPLACE(NULL, "日本語テスト", "a");
+}
+expect {
+    NULL
+}
+
+test t-735 {
+    SELECT REPLACE(NULL, "日本語テスト", "abc");
+}
+expect {
+    NULL
+}
+
+test t-738 {
+    SELECT REPLACE(NULL, "日本語テスト", 0123);
+}
+expect {
+    NULL
+}
+
+test t-739 {
+    SELECT REPLACE(NULL, "日本語テスト", 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-740 {
+    SELECT REPLACE(NULL, "日本語テスト", 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-743 {
+    SELECT REPLACE(NULL, "日本語テスト", "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-753 {
+    SELECT REPLACE(NULL, "한국어 시험", "Å å");
+}
+expect {
+    NULL
+}
+
+test t-754 {
+    SELECT REPLACE(NULL, "한국어 시험", NULL);
+}
+expect {
+    NULL
+}
+
+test t-755 {
+    SELECT REPLACE(NULL, "한국어 시험", "");
+}
+expect {
+    NULL
+}
+
+test t-756 {
+    SELECT REPLACE(NULL, "한국어 시험", "a");
+}
+expect {
+    NULL
+}
+
+test t-758 {
+    SELECT REPLACE(NULL, "한국어 시험", 1);
+}
+expect {
+    NULL
+}
+
+test t-761 {
+    SELECT REPLACE(NULL, "한국어 시험", 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-768 {
+    SELECT REPLACE(NULL, "한국어 시험", 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-775 {
+    SELECT REPLACE(NULL, "😊😂🤢", "Å å");
+}
+expect {
+    NULL
+}
+
+test t-777 {
+    SELECT REPLACE(NULL, "😊😂🤢", "");
+}
+expect {
+    NULL
+}
+
+test t-780 {
+    SELECT REPLACE(NULL, "😊😂🤢", 1);
+}
+expect {
+    NULL
+}
+
+test t-782 {
+    SELECT REPLACE(NULL, "😊😂🤢", 0123);
+}
+expect {
+    NULL
+}
+
+test t-784 {
+    SELECT REPLACE(NULL, "😊😂🤢", 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-788 {
+    SELECT REPLACE(NULL, "😊😂🤢", "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-789 {
+    SELECT REPLACE(NULL, "😊😂🤢", '123');
+}
+expect {
+    NULL
+}
+
+test t-799 {
+    SELECT REPLACE(NULL, '123', "");
+}
+expect {
+    NULL
+}
+
+test t-801 {
+    SELECT REPLACE(NULL, '123', "abc");
+}
+expect {
+    NULL
+}
+
+test t-802 {
+    SELECT REPLACE(NULL, '123', 1);
+}
+expect {
+    NULL
+}
+
+test t-803 {
+    SELECT REPLACE(NULL, '123', -1);
+}
+expect {
+    NULL
+}
+
+test t-805 {
+    SELECT REPLACE(NULL, '123', 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-807 {
+    SELECT REPLACE(NULL, '123', "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-815 {
+    SELECT REPLACE(NULL, '123', -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-818 {
+    SELECT REPLACE(NULL, '123', _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-824 {
+    SELECT REPLACE(NULL, 9223372036854775807, 1);
+}
+expect {
+    NULL
+}
+
+test t-826 {
+    SELECT REPLACE(NULL, 9223372036854775807, 0123);
+}
+expect {
+    NULL
+}
+
+test t-830 {
+    SELECT REPLACE(NULL, 9223372036854775807, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-832 {
+    SELECT REPLACE(NULL, 9223372036854775807, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-833 {
+    SELECT REPLACE(NULL, 9223372036854775807, '123');
+}
+expect {
+    NULL
+}
+
+test t-835 {
+    SELECT REPLACE(NULL, 9223372036854775807, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-836 {
+    SELECT REPLACE(NULL, 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-837 {
+    SELECT REPLACE(NULL, 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-838 {
+    SELECT REPLACE(NULL, 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-844 {
+    SELECT REPLACE(NULL, -9223372036854775808, "a");
+}
+expect {
+    NULL
+}
+
+test t-851 {
+    SELECT REPLACE(NULL, -9223372036854775808, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-854 {
+    SELECT REPLACE(NULL, -9223372036854775808, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-856 {
+    SELECT REPLACE(NULL, -9223372036854775808, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-859 {
+    SELECT REPLACE(NULL, -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-860 {
+    SELECT REPLACE(NULL, -9223372036854775808, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-865 {
+    SELECT REPLACE(NULL, 999999999999999999999999, "");
+}
+expect {
+    NULL
+}
+
+test t-866 {
+    SELECT REPLACE(NULL, 999999999999999999999999, "a");
+}
+expect {
+    NULL
+}
+
+test t-875 {
+    SELECT REPLACE(NULL, 999999999999999999999999, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-877 {
+    SELECT REPLACE(NULL, 999999999999999999999999, '123');
+}
+expect {
+    NULL
+}
+
+test t-882 {
+    SELECT REPLACE(NULL, 999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-888 {
+    SELECT REPLACE(NULL, -999999999999999999999999, "a");
+}
+expect {
+    NULL
+}
+
+test t-889 {
+    SELECT REPLACE(NULL, -999999999999999999999999, "abc");
+}
+expect {
+    NULL
+}
+
+test t-891 {
+    SELECT REPLACE(NULL, -999999999999999999999999, -1);
+}
+expect {
+    NULL
+}
+
+test t-892 {
+    SELECT REPLACE(NULL, -999999999999999999999999, 0123);
+}
+expect {
+    NULL
+}
+
+test t-895 {
+    SELECT REPLACE(NULL, -999999999999999999999999, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-896 {
+    SELECT REPLACE(NULL, -999999999999999999999999, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-898 {
+    SELECT REPLACE(NULL, -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-899 {
+    SELECT REPLACE(NULL, -999999999999999999999999, '123');
+}
+expect {
+    NULL
+}
+
+test t-902 {
+    SELECT REPLACE(NULL, -999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-903 {
+    SELECT REPLACE(NULL, -999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-905 {
+    SELECT REPLACE(NULL, -999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-921 {
+    SELECT REPLACE(NULL, _binary 'Müller' , '123');
+}
+expect {
+    NULL
+}
+
+test t-922 {
+    SELECT REPLACE(NULL, _binary 'Müller' , 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-923 {
+    SELECT REPLACE(NULL, _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-924 {
+    SELECT REPLACE(NULL, _binary 'Müller' , 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-930 {
+    SELECT REPLACE(NULL, _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    NULL
+}
+
+test t-932 {
+    SELECT REPLACE(NULL, _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    NULL
+}
+
+test t-937 {
+    SELECT REPLACE(NULL, _utf8mb4 'abcABCÅå', 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-940 {
+    SELECT REPLACE(NULL, _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-944 {
+    SELECT REPLACE(NULL, _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-949 {
+    SELECT REPLACE(NULL, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-954 {
+    SELECT REPLACE(NULL, _latin1 0xFF, "a");
+}
+expect {
+    NULL
+}
+
+test t-957 {
+    SELECT REPLACE(NULL, _latin1 0xFF, -1);
+}
+expect {
+    NULL
+}
+
+test t-959 {
+    SELECT REPLACE(NULL, _latin1 0xFF, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-962 {
+    SELECT REPLACE(NULL, _latin1 0xFF, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-963 {
+    SELECT REPLACE(NULL, _latin1 0xFF, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-970 {
+    SELECT REPLACE(NULL, _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-974 {
+    SELECT REPLACE("", "Å å", NULL);
+}
+expect {
+    NULL
+}
+
+test t-977 {
+    SELECT REPLACE("", "Å å", "abc");
+}
+expect {
+    
+}
+
+test t-979 {
+    SELECT REPLACE("", "Å å", -1);
+}
+expect {
+    
+}
+
+test t-986 {
+    SELECT REPLACE("", "Å å", "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-988 {
+    SELECT REPLACE("", "Å å", 9223372036854775807);
+}
+expect {
+    
+}
+
+test t-989 {
+    SELECT REPLACE("", "Å å", -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-992 {
+    SELECT REPLACE("", "Å å", _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-993 {
+    SELECT REPLACE("", "Å å", _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-996 {
+    SELECT REPLACE("", NULL, NULL);
+}
+expect {
+    NULL
+}
+
+test t-997 {
+    SELECT REPLACE("", NULL, "");
+}
+expect {
+    NULL
+}
+
+test t-1005 {
+    SELECT REPLACE("", NULL, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-1010 {
+    SELECT REPLACE("", NULL, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-1011 {
+    SELECT REPLACE("", NULL, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-1012 {
+    SELECT REPLACE("", NULL, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-1023 {
+    SELECT REPLACE("", "", -1);
+}
+expect {
+    
+}
+
+test t-1030 {
+    SELECT REPLACE("", "", "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-1035 {
+    SELECT REPLACE("", "", -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1036 {
+    SELECT REPLACE("", "", _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1037 {
+    SELECT REPLACE("", "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1042 {
+    SELECT REPLACE("", "a", "a");
+}
+expect {
+    
+}
+
+test t-1045 {
+    SELECT REPLACE("", "a", -1);
+}
+expect {
+    
+}
+
+test t-1049 {
+    SELECT REPLACE("", "a", "中文测试");
+}
+expect {
+    
+}
+
+test t-1050 {
+    SELECT REPLACE("", "a", "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1058 {
+    SELECT REPLACE("", "a", _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1067 {
+    SELECT REPLACE("", "abc", -1);
+}
+expect {
+    
+}
+
+test t-1071 {
+    SELECT REPLACE("", "abc", "中文测试");
+}
+expect {
+    
+}
+
+test t-1074 {
+    SELECT REPLACE("", "abc", "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-1078 {
+    SELECT REPLACE("", "abc", 999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1081 {
+    SELECT REPLACE("", "abc", _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1083 {
+    SELECT REPLACE("", 1, "Å å");
+}
+expect {
+    
+}
+
+test t-1084 {
+    SELECT REPLACE("", 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1087 {
+    SELECT REPLACE("", 1, "abc");
+}
+expect {
+    
+}
+
+test t-1088 {
+    SELECT REPLACE("", 1, 1);
+}
+expect {
+    
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1091 {
+    SELECT REPLACE("", 1, 0xAACC);
+}
+expect error {
+}
+
+test t-1093 {
+    SELECT REPLACE("", 1, "中文测试");
+}
+expect {
+    
+}
+
+test t-1101 {
+    SELECT REPLACE("", 1, -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1114 {
+    SELECT REPLACE("", -1, 3.1415926);
+}
+expect {
+    
+}
+
+test t-1116 {
+    SELECT REPLACE("", -1, "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1121 {
+    SELECT REPLACE("", -1, -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-1123 {
+    SELECT REPLACE("", -1, -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1125 {
+    SELECT REPLACE("", -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1128 {
+    SELECT REPLACE("", 0123, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1134 {
+    SELECT REPLACE("", 0123, 0123);
+}
+expect {
+    
+}
+
+test t-1137 {
+    SELECT REPLACE("", 0123, "中文测试");
+}
+expect {
+    
+}
+
+test t-1140 {
+    SELECT REPLACE("", 0123, "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-1144 {
+    SELECT REPLACE("", 0123, 999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1147 {
+    SELECT REPLACE("", 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1148 {
+    SELECT REPLACE("", 0123, _latin1 0xFF);
+}
+expect {
+    
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1149 {
+    SELECT REPLACE("", 0xAACC, "Å å");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1150 {
+    SELECT REPLACE("", 0xAACC, NULL);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1151 {
+    SELECT REPLACE("", 0xAACC, "");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1152 {
+    SELECT REPLACE("", 0xAACC, "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1154 {
+    SELECT REPLACE("", 0xAACC, 1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1155 {
+    SELECT REPLACE("", 0xAACC, -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1158 {
+    SELECT REPLACE("", 0xAACC, 3.1415926);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1164 {
+    SELECT REPLACE("", 0xAACC, 9223372036854775807);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1169 {
+    SELECT REPLACE("", 0xAACC, _utf8mb4 'abcABCÅå');
+}
+expect error {
+}
+
+test t-1172 {
+    SELECT REPLACE("", 3.1415926, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1175 {
+    SELECT REPLACE("", 3.1415926, "abc");
+}
+expect {
+    
+}
+
+test t-1176 {
+    SELECT REPLACE("", 3.1415926, 1);
+}
+expect {
+    
+}
+
+test t-1182 {
+    SELECT REPLACE("", 3.1415926, "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1185 {
+    SELECT REPLACE("", 3.1415926, '123');
+}
+expect {
+    
+}
+
+test t-1187 {
+    SELECT REPLACE("", 3.1415926, -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-1194 {
+    SELECT REPLACE("", "中文测试", NULL);
+}
+expect {
+    NULL
+}
+
+test t-1196 {
+    SELECT REPLACE("", "中文测试", "a");
+}
+expect {
+    
+}
+
+test t-1202 {
+    SELECT REPLACE("", "中文测试", 3.1415926);
+}
+expect {
+    
+}
+
+test t-1203 {
+    SELECT REPLACE("", "中文测试", "中文测试");
+}
+expect {
+    
+}
+
+test t-1204 {
+    SELECT REPLACE("", "中文测试", "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1206 {
+    SELECT REPLACE("", "中文测试", "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-1207 {
+    SELECT REPLACE("", "中文测试", '123');
+}
+expect {
+    
+}
+
+test t-1208 {
+    SELECT REPLACE("", "中文测试", 9223372036854775807);
+}
+expect {
+    
+}
+
+test t-1209 {
+    SELECT REPLACE("", "中文测试", -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-1212 {
+    SELECT REPLACE("", "中文测试", _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1214 {
+    SELECT REPLACE("", "中文测试", _latin1 0xFF);
+}
+expect {
+    
+}
+
+test t-1220 {
+    SELECT REPLACE("", "日本語テスト", 1);
+}
+expect {
+    
+}
+
+test t-1225 {
+    SELECT REPLACE("", "日本語テスト", "中文测试");
+}
+expect {
+    
+}
+
+test t-1235 {
+    SELECT REPLACE("", "日本語テスト", _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1237 {
+    SELECT REPLACE("", "한국어 시험", "Å å");
+}
+expect {
+    
+}
+
+test t-1238 {
+    SELECT REPLACE("", "한국어 시험", NULL);
+}
+expect {
+    NULL
+}
+
+test t-1243 {
+    SELECT REPLACE("", "한국어 시험", -1);
+}
+expect {
+    
+}
+
+test t-1255 {
+    SELECT REPLACE("", "한국어 시험", -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1256 {
+    SELECT REPLACE("", "한국어 시험", _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1266 {
+    SELECT REPLACE("", "😊😂🤢", 0123);
+}
+expect {
+    
+}
+
+test t-1278 {
+    SELECT REPLACE("", "😊😂🤢", _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1279 {
+    SELECT REPLACE("", "😊😂🤢", _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1282 {
+    SELECT REPLACE("", '123', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1284 {
+    SELECT REPLACE("", '123', "a");
+}
+expect {
+    
+}
+
+test t-1290 {
+    SELECT REPLACE("", '123', 3.1415926);
+}
+expect {
+    
+}
+
+test t-1292 {
+    SELECT REPLACE("", '123', "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1293 {
+    SELECT REPLACE("", '123', "한국어 시험");
+}
+expect {
+    
+}
+
+test t-1300 {
+    SELECT REPLACE("", '123', _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1307 {
+    SELECT REPLACE("", 9223372036854775807, "abc");
+}
+expect {
+    
+}
+
+test t-1308 {
+    SELECT REPLACE("", 9223372036854775807, 1);
+}
+expect {
+    
+}
+
+test t-1314 {
+    SELECT REPLACE("", 9223372036854775807, "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1315 {
+    SELECT REPLACE("", 9223372036854775807, "한국어 시험");
+}
+expect {
+    
+}
+
+test t-1317 {
+    SELECT REPLACE("", 9223372036854775807, '123');
+}
+expect {
+    
+}
+
+test t-1320 {
+    SELECT REPLACE("", 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1321 {
+    SELECT REPLACE("", 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1326 {
+    SELECT REPLACE("", -9223372036854775808, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1330 {
+    SELECT REPLACE("", -9223372036854775808, 1);
+}
+expect {
+    
+}
+
+test t-1331 {
+    SELECT REPLACE("", -9223372036854775808, -1);
+}
+expect {
+    
+}
+
+test t-1341 {
+    SELECT REPLACE("", -9223372036854775808, -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-1352 {
+    SELECT REPLACE("", 999999999999999999999999, 1);
+}
+expect {
+    
+}
+
+test t-1354 {
+    SELECT REPLACE("", 999999999999999999999999, 0123);
+}
+expect {
+    
+}
+
+test t-1364 {
+    SELECT REPLACE("", 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1366 {
+    SELECT REPLACE("", 999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    
+}
+
+test t-1369 {
+    SELECT REPLACE("", -999999999999999999999999, "Å å");
+}
+expect {
+    
+}
+
+test t-1373 {
+    SELECT REPLACE("", -999999999999999999999999, "abc");
+}
+expect {
+    
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1377 {
+    SELECT REPLACE("", -999999999999999999999999, 0xAACC);
+}
+expect error {
+}
+
+test t-1382 {
+    SELECT REPLACE("", -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-1385 {
+    SELECT REPLACE("", -999999999999999999999999, -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-1386 {
+    SELECT REPLACE("", -999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1387 {
+    SELECT REPLACE("", -999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1389 {
+    SELECT REPLACE("", -999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1395 {
+    SELECT REPLACE("", _binary 'Müller' , "abc");
+}
+expect {
+    
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1399 {
+    SELECT REPLACE("", _binary 'Müller' , 0xAACC);
+}
+expect error {
+}
+
+test t-1412 {
+    SELECT REPLACE("", _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    
+}
+
+test t-1422 {
+    SELECT REPLACE("", _utf8mb4 'abcABCÅå', 3.1415926);
+}
+expect {
+    
+}
+
+test t-1423 {
+    SELECT REPLACE("", _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect {
+    
+}
+
+test t-1425 {
+    SELECT REPLACE("", _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    
+}
+
+test t-1429 {
+    SELECT REPLACE("", _utf8mb4 'abcABCÅå', -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-1431 {
+    SELECT REPLACE("", _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    
+}
+
+test t-1433 {
+    SELECT REPLACE("", _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1438 {
+    SELECT REPLACE("", _latin1 0xFF, "a");
+}
+expect {
+    
+}
+
+test t-1440 {
+    SELECT REPLACE("", _latin1 0xFF, 1);
+}
+expect {
+    
+}
+
+test t-1446 {
+    SELECT REPLACE("", _latin1 0xFF, "日本語テスト");
+}
+expect {
+    
+}
+
+test t-1448 {
+    SELECT REPLACE("", _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    
+}
+
+test t-1455 {
+    SELECT REPLACE("", _latin1 0xFF, _utf8mb4 'abcABCÅå');
+}
+expect {
+    
+}
+
+test t-1457 {
+    SELECT REPLACE("a", "Å å", "Å å");
+}
+expect {
+    a
+}
+
+test t-1459 {
+    SELECT REPLACE("a", "Å å", "");
+}
+expect {
+    a
+}
+
+test t-1462 {
+    SELECT REPLACE("a", "Å å", 1);
+}
+expect {
+    a
+}
+
+test t-1463 {
+    SELECT REPLACE("a", "Å å", -1);
+}
+expect {
+    a
+}
+
+test t-1464 {
+    SELECT REPLACE("a", "Å å", 0123);
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1465 {
+    SELECT REPLACE("a", "Å å", 0xAACC);
+}
+expect error {
+}
+
+test t-1466 {
+    SELECT REPLACE("a", "Å å", 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1467 {
+    SELECT REPLACE("a", "Å å", "中文测试");
+}
+expect {
+    a
+}
+
+test t-1471 {
+    SELECT REPLACE("a", "Å å", '123');
+}
+expect {
+    a
+}
+
+test t-1473 {
+    SELECT REPLACE("a", "Å å", -9223372036854775808);
+}
+expect {
+    a
+}
+
+test t-1474 {
+    SELECT REPLACE("a", "Å å", 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1476 {
+    SELECT REPLACE("a", "Å å", _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1483 {
+    SELECT REPLACE("a", NULL, "abc");
+}
+expect {
+    NULL
+}
+
+test t-1485 {
+    SELECT REPLACE("a", NULL, -1);
+}
+expect {
+    NULL
+}
+
+test t-1490 {
+    SELECT REPLACE("a", NULL, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-1494 {
+    SELECT REPLACE("a", NULL, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-1498 {
+    SELECT REPLACE("a", NULL, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-1499 {
+    SELECT REPLACE("a", NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-1507 {
+    SELECT REPLACE("a", "", -1);
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1509 {
+    SELECT REPLACE("a", "", 0xAACC);
+}
+expect error {
+}
+
+test t-1515 {
+    SELECT REPLACE("a", "", '123');
+}
+expect {
+    a
+}
+
+test t-1516 {
+    SELECT REPLACE("a", "", 9223372036854775807);
+}
+expect {
+    a
+}
+
+test t-1517 {
+    SELECT REPLACE("a", "", -9223372036854775808);
+}
+expect {
+    a
+}
+
+test t-1520 {
+    SELECT REPLACE("a", "", _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1522 {
+    SELECT REPLACE("a", "", _latin1 0xFF);
+}
+expect {
+    a
+}
+
+test t-1529 {
+    SELECT REPLACE("a", "a", -1);
+}
+expect {
+    -1
+}
+
+test t-1530 {
+    SELECT REPLACE("a", "a", 0123);
+}
+expect {
+    123
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1531 {
+    SELECT REPLACE("a", "a", 0xAACC);
+}
+expect error {
+}
+
+test t-1536 {
+    SELECT REPLACE("a", "a", "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-1539 {
+    SELECT REPLACE("a", "a", -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-1541 {
+    SELECT REPLACE("a", "a", -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-1548 {
+    SELECT REPLACE("a", "abc", "a");
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1553 {
+    SELECT REPLACE("a", "abc", 0xAACC);
+}
+expect error {
+}
+
+test t-1555 {
+    SELECT REPLACE("a", "abc", "中文测试");
+}
+expect {
+    a
+}
+
+test t-1559 {
+    SELECT REPLACE("a", "abc", '123');
+}
+expect {
+    a
+}
+
+test t-1562 {
+    SELECT REPLACE("a", "abc", 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1567 {
+    SELECT REPLACE("a", 1, "Å å");
+}
+expect {
+    a
+}
+
+test t-1568 {
+    SELECT REPLACE("a", 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1569 {
+    SELECT REPLACE("a", 1, "");
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1575 {
+    SELECT REPLACE("a", 1, 0xAACC);
+}
+expect error {
+}
+
+test t-1576 {
+    SELECT REPLACE("a", 1, 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1580 {
+    SELECT REPLACE("a", 1, "😊😂🤢");
+}
+expect {
+    a
+}
+
+test t-1588 {
+    SELECT REPLACE("a", 1, _latin1 0xFF);
+}
+expect {
+    a
+}
+
+test t-1589 {
+    SELECT REPLACE("a", -1, "Å å");
+}
+expect {
+    a
+}
+
+test t-1591 {
+    SELECT REPLACE("a", -1, "");
+}
+expect {
+    a
+}
+
+test t-1598 {
+    SELECT REPLACE("a", -1, 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1600 {
+    SELECT REPLACE("a", -1, "日本語テスト");
+}
+expect {
+    a
+}
+
+test t-1602 {
+    SELECT REPLACE("a", -1, "😊😂🤢");
+}
+expect {
+    a
+}
+
+test t-1614 {
+    SELECT REPLACE("a", 0123, "a");
+}
+expect {
+    a
+}
+
+test t-1624 {
+    SELECT REPLACE("a", 0123, "😊😂🤢");
+}
+expect {
+    a
+}
+
+test t-1630 {
+    SELECT REPLACE("a", 0123, _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1631 {
+    SELECT REPLACE("a", 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    a
+}
+
+test t-1632 {
+    SELECT REPLACE("a", 0123, _latin1 0xFF);
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1651 {
+    SELECT REPLACE("a", 0xAACC, -999999999999999999999999);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1654 {
+    SELECT REPLACE("a", 0xAACC, _latin1 0xFF);
+}
+expect error {
+}
+
+test t-1658 {
+    SELECT REPLACE("a", 3.1415926, "a");
+}
+expect {
+    a
+}
+
+test t-1660 {
+    SELECT REPLACE("a", 3.1415926, 1);
+}
+expect {
+    a
+}
+
+test t-1676 {
+    SELECT REPLACE("a", 3.1415926, _latin1 0xFF);
+}
+expect {
+    a
+}
+
+test t-1678 {
+    SELECT REPLACE("a", "中文测试", NULL);
+}
+expect {
+    NULL
+}
+
+test t-1681 {
+    SELECT REPLACE("a", "中文测试", "abc");
+}
+expect {
+    a
+}
+
+test t-1686 {
+    SELECT REPLACE("a", "中文测试", 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1688 {
+    SELECT REPLACE("a", "中文测试", "日本語テスト");
+}
+expect {
+    a
+}
+
+test t-1693 {
+    SELECT REPLACE("a", "中文测试", -9223372036854775808);
+}
+expect {
+    a
+}
+
+test t-1695 {
+    SELECT REPLACE("a", "中文测试", -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1699 {
+    SELECT REPLACE("a", "日本語テスト", "Å å");
+}
+expect {
+    a
+}
+
+test t-1700 {
+    SELECT REPLACE("a", "日本語テスト", NULL);
+}
+expect {
+    NULL
+}
+
+test t-1704 {
+    SELECT REPLACE("a", "日本語テスト", 1);
+}
+expect {
+    a
+}
+
+test t-1705 {
+    SELECT REPLACE("a", "日本語テスト", -1);
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1707 {
+    SELECT REPLACE("a", "日本語テスト", 0xAACC);
+}
+expect error {
+}
+
+test t-1715 {
+    SELECT REPLACE("a", "日本語テスト", -9223372036854775808);
+}
+expect {
+    a
+}
+
+test t-1718 {
+    SELECT REPLACE("a", "日本語テスト", _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1724 {
+    SELECT REPLACE("a", "한국어 시험", "a");
+}
+expect {
+    a
+}
+
+test t-1725 {
+    SELECT REPLACE("a", "한국어 시험", "abc");
+}
+expect {
+    a
+}
+
+test t-1726 {
+    SELECT REPLACE("a", "한국어 시험", 1);
+}
+expect {
+    a
+}
+
+test t-1728 {
+    SELECT REPLACE("a", "한국어 시험", 0123);
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1729 {
+    SELECT REPLACE("a", "한국어 시험", 0xAACC);
+}
+expect error {
+}
+
+test t-1730 {
+    SELECT REPLACE("a", "한국어 시험", 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1733 {
+    SELECT REPLACE("a", "한국어 시험", "한국어 시험");
+}
+expect {
+    a
+}
+
+test t-1736 {
+    SELECT REPLACE("a", "한국어 시험", 9223372036854775807);
+}
+expect {
+    a
+}
+
+test t-1738 {
+    SELECT REPLACE("a", "한국어 시험", 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1739 {
+    SELECT REPLACE("a", "한국어 시험", -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1740 {
+    SELECT REPLACE("a", "한국어 시험", _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1741 {
+    SELECT REPLACE("a", "한국어 시험", _utf8mb4 'abcABCÅå');
+}
+expect {
+    a
+}
+
+test t-1743 {
+    SELECT REPLACE("a", "😊😂🤢", "Å å");
+}
+expect {
+    a
+}
+
+test t-1750 {
+    SELECT REPLACE("a", "😊😂🤢", 0123);
+}
+expect {
+    a
+}
+
+test t-1752 {
+    SELECT REPLACE("a", "😊😂🤢", 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1753 {
+    SELECT REPLACE("a", "😊😂🤢", "中文测试");
+}
+expect {
+    a
+}
+
+test t-1756 {
+    SELECT REPLACE("a", "😊😂🤢", "😊😂🤢");
+}
+expect {
+    a
+}
+
+test t-1758 {
+    SELECT REPLACE("a", "😊😂🤢", 9223372036854775807);
+}
+expect {
+    a
+}
+
+test t-1760 {
+    SELECT REPLACE("a", "😊😂🤢", 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1761 {
+    SELECT REPLACE("a", "😊😂🤢", -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1762 {
+    SELECT REPLACE("a", "😊😂🤢", _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1765 {
+    SELECT REPLACE("a", '123', "Å å");
+}
+expect {
+    a
+}
+
+test t-1767 {
+    SELECT REPLACE("a", '123', "");
+}
+expect {
+    a
+}
+
+test t-1769 {
+    SELECT REPLACE("a", '123', "abc");
+}
+expect {
+    a
+}
+
+test t-1771 {
+    SELECT REPLACE("a", '123', -1);
+}
+expect {
+    a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1773 {
+    SELECT REPLACE("a", '123', 0xAACC);
+}
+expect error {
+}
+
+test t-1777 {
+    SELECT REPLACE("a", '123', "한국어 시험");
+}
+expect {
+    a
+}
+
+test t-1779 {
+    SELECT REPLACE("a", '123', '123');
+}
+expect {
+    a
+}
+
+test t-1781 {
+    SELECT REPLACE("a", '123', -9223372036854775808);
+}
+expect {
+    a
+}
+
+test t-1784 {
+    SELECT REPLACE("a", '123', _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1796 {
+    SELECT REPLACE("a", 9223372036854775807, 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1798 {
+    SELECT REPLACE("a", 9223372036854775807, "日本語テスト");
+}
+expect {
+    a
+}
+
+test t-1804 {
+    SELECT REPLACE("a", 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1806 {
+    SELECT REPLACE("a", 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1808 {
+    SELECT REPLACE("a", 9223372036854775807, _latin1 0xFF);
+}
+expect {
+    a
+}
+
+test t-1812 {
+    SELECT REPLACE("a", -9223372036854775808, "a");
+}
+expect {
+    a
+}
+
+test t-1815 {
+    SELECT REPLACE("a", -9223372036854775808, -1);
+}
+expect {
+    a
+}
+
+test t-1819 {
+    SELECT REPLACE("a", -9223372036854775808, "中文测试");
+}
+expect {
+    a
+}
+
+test t-1822 {
+    SELECT REPLACE("a", -9223372036854775808, "😊😂🤢");
+}
+expect {
+    a
+}
+
+test t-1824 {
+    SELECT REPLACE("a", -9223372036854775808, 9223372036854775807);
+}
+expect {
+    a
+}
+
+test t-1826 {
+    SELECT REPLACE("a", -9223372036854775808, 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1827 {
+    SELECT REPLACE("a", -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1834 {
+    SELECT REPLACE("a", 999999999999999999999999, "a");
+}
+expect {
+    a
+}
+
+test t-1835 {
+    SELECT REPLACE("a", 999999999999999999999999, "abc");
+}
+expect {
+    a
+}
+
+test t-1837 {
+    SELECT REPLACE("a", 999999999999999999999999, -1);
+}
+expect {
+    a
+}
+
+test t-1838 {
+    SELECT REPLACE("a", 999999999999999999999999, 0123);
+}
+expect {
+    a
+}
+
+test t-1841 {
+    SELECT REPLACE("a", 999999999999999999999999, "中文测试");
+}
+expect {
+    a
+}
+
+test t-1845 {
+    SELECT REPLACE("a", 999999999999999999999999, '123');
+}
+expect {
+    a
+}
+
+test t-1848 {
+    SELECT REPLACE("a", 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1849 {
+    SELECT REPLACE("a", 999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1854 {
+    SELECT REPLACE("a", -999999999999999999999999, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1855 {
+    SELECT REPLACE("a", -999999999999999999999999, "");
+}
+expect {
+    a
+}
+
+test t-1856 {
+    SELECT REPLACE("a", -999999999999999999999999, "a");
+}
+expect {
+    a
+}
+
+test t-1860 {
+    SELECT REPLACE("a", -999999999999999999999999, 0123);
+}
+expect {
+    a
+}
+
+test t-1863 {
+    SELECT REPLACE("a", -999999999999999999999999, "中文测试");
+}
+expect {
+    a
+}
+
+test t-1864 {
+    SELECT REPLACE("a", -999999999999999999999999, "日本語テスト");
+}
+expect {
+    a
+}
+
+test t-1866 {
+    SELECT REPLACE("a", -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    a
+}
+
+test t-1867 {
+    SELECT REPLACE("a", -999999999999999999999999, '123');
+}
+expect {
+    a
+}
+
+test t-1868 {
+    SELECT REPLACE("a", -999999999999999999999999, 9223372036854775807);
+}
+expect {
+    a
+}
+
+test t-1871 {
+    SELECT REPLACE("a", -999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1875 {
+    SELECT REPLACE("a", _binary 'Müller' , "Å å");
+}
+expect {
+    a
+}
+
+test t-1876 {
+    SELECT REPLACE("a", _binary 'Müller' , NULL);
+}
+expect {
+    NULL
+}
+
+test t-1881 {
+    SELECT REPLACE("a", _binary 'Müller' , -1);
+}
+expect {
+    a
+}
+
+test t-1884 {
+    SELECT REPLACE("a", _binary 'Müller' , 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1894 {
+    SELECT REPLACE("a", _binary 'Müller' , _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1895 {
+    SELECT REPLACE("a", _binary 'Müller' , _utf8mb4 'abcABCÅå');
+}
+expect {
+    a
+}
+
+test t-1896 {
+    SELECT REPLACE("a", _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    a
+}
+
+test t-1897 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', "Å å");
+}
+expect {
+    a
+}
+
+test t-1901 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    a
+}
+
+test t-1902 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', 1);
+}
+expect {
+    a
+}
+
+test t-1909 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    a
+}
+
+test t-1911 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', '123');
+}
+expect {
+    a
+}
+
+test t-1915 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1916 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', _binary 'Müller' );
+}
+expect {
+    a
+}
+
+test t-1917 {
+    SELECT REPLACE("a", _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    a
+}
+
+test t-1919 {
+    SELECT REPLACE("a", _latin1 0xFF, "Å å");
+}
+expect {
+    a
+}
+
+test t-1920 {
+    SELECT REPLACE("a", _latin1 0xFF, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1921 {
+    SELECT REPLACE("a", _latin1 0xFF, "");
+}
+expect {
+    a
+}
+
+test t-1922 {
+    SELECT REPLACE("a", _latin1 0xFF, "a");
+}
+expect {
+    a
+}
+
+test t-1923 {
+    SELECT REPLACE("a", _latin1 0xFF, "abc");
+}
+expect {
+    a
+}
+
+test t-1928 {
+    SELECT REPLACE("a", _latin1 0xFF, 3.1415926);
+}
+expect {
+    a
+}
+
+test t-1929 {
+    SELECT REPLACE("a", _latin1 0xFF, "中文测试");
+}
+expect {
+    a
+}
+
+test t-1936 {
+    SELECT REPLACE("a", _latin1 0xFF, 999999999999999999999999);
+}
+expect {
+    a
+}
+
+test t-1939 {
+    SELECT REPLACE("a", _latin1 0xFF, _utf8mb4 'abcABCÅå');
+}
+expect {
+    a
+}
+
+test t-1950 {
+    SELECT REPLACE("abc", "Å å", 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-1952 {
+    SELECT REPLACE("abc", "Å å", "日本語テスト");
+}
+expect {
+    abc
+}
+
+test t-1955 {
+    SELECT REPLACE("abc", "Å å", '123');
+}
+expect {
+    abc
+}
+
+test t-1956 {
+    SELECT REPLACE("abc", "Å å", 9223372036854775807);
+}
+expect {
+    abc
+}
+
+test t-1958 {
+    SELECT REPLACE("abc", "Å å", 999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-1961 {
+    SELECT REPLACE("abc", "Å å", _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc
+}
+
+test t-1962 {
+    SELECT REPLACE("abc", "Å å", _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-1963 {
+    SELECT REPLACE("abc", NULL, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-1965 {
+    SELECT REPLACE("abc", NULL, "");
+}
+expect {
+    NULL
+}
+
+test t-1967 {
+    SELECT REPLACE("abc", NULL, "abc");
+}
+expect {
+    NULL
+}
+
+test t-1968 {
+    SELECT REPLACE("abc", NULL, 1);
+}
+expect {
+    NULL
+}
+
+test t-1971 {
+    SELECT REPLACE("abc", NULL, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-1974 {
+    SELECT REPLACE("abc", NULL, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-1975 {
+    SELECT REPLACE("abc", NULL, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-1980 {
+    SELECT REPLACE("abc", NULL, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-1982 {
+    SELECT REPLACE("abc", NULL, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-1986 {
+    SELECT REPLACE("abc", "", NULL);
+}
+expect {
+    NULL
+}
+
+test t-1988 {
+    SELECT REPLACE("abc", "", "a");
+}
+expect {
+    abc
+}
+
+test t-1990 {
+    SELECT REPLACE("abc", "", 1);
+}
+expect {
+    abc
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1993 {
+    SELECT REPLACE("abc", "", 0xAACC);
+}
+expect error {
+}
+
+test t-1997 {
+    SELECT REPLACE("abc", "", "한국어 시험");
+}
+expect {
+    abc
+}
+
+test t-1998 {
+    SELECT REPLACE("abc", "", "😊😂🤢");
+}
+expect {
+    abc
+}
+
+test t-2006 {
+    SELECT REPLACE("abc", "", _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2011 {
+    SELECT REPLACE("abc", "a", "abc");
+}
+expect {
+    abcbc
+}
+
+test t-2012 {
+    SELECT REPLACE("abc", "a", 1);
+}
+expect {
+    1bc
+}
+
+test t-2013 {
+    SELECT REPLACE("abc", "a", -1);
+}
+expect {
+    -1bc
+}
+
+test t-2016 {
+    SELECT REPLACE("abc", "a", 3.1415926);
+}
+expect {
+    3.1415926bc
+}
+
+test t-2021 {
+    SELECT REPLACE("abc", "a", '123');
+}
+expect {
+    123bc
+}
+
+test t-2025 {
+    SELECT REPLACE("abc", "a", -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999bc
+}
+
+test t-2033 {
+    SELECT REPLACE("abc", "abc", "abc");
+}
+expect {
+    abc
+}
+
+test t-2034 {
+    SELECT REPLACE("abc", "abc", 1);
+}
+expect {
+    1
+}
+
+test t-2036 {
+    SELECT REPLACE("abc", "abc", 0123);
+}
+expect {
+    123
+}
+
+test t-2038 {
+    SELECT REPLACE("abc", "abc", 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-2039 {
+    SELECT REPLACE("abc", "abc", "中文测试");
+}
+expect {
+    中文测试
+}
+
+test t-2046 {
+    SELECT REPLACE("abc", "abc", 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-2050 {
+    SELECT REPLACE("abc", "abc", _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-2052 {
+    SELECT REPLACE("abc", 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2053 {
+    SELECT REPLACE("abc", 1, "");
+}
+expect {
+    abc
+}
+
+test t-2055 {
+    SELECT REPLACE("abc", 1, "abc");
+}
+expect {
+    abc
+}
+
+test t-2058 {
+    SELECT REPLACE("abc", 1, 0123);
+}
+expect {
+    abc
+}
+
+test t-2068 {
+    SELECT REPLACE("abc", 1, 999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2070 {
+    SELECT REPLACE("abc", 1, _binary 'Müller' );
+}
+expect {
+    abc
+}
+
+test t-2073 {
+    SELECT REPLACE("abc", -1, "Å å");
+}
+expect {
+    abc
+}
+
+test t-2074 {
+    SELECT REPLACE("abc", -1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2079 {
+    SELECT REPLACE("abc", -1, -1);
+}
+expect {
+    abc
+}
+
+test t-2083 {
+    SELECT REPLACE("abc", -1, "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2085 {
+    SELECT REPLACE("abc", -1, "한국어 시험");
+}
+expect {
+    abc
+}
+
+test t-2089 {
+    SELECT REPLACE("abc", -1, -9223372036854775808);
+}
+expect {
+    abc
+}
+
+test t-2090 {
+    SELECT REPLACE("abc", -1, 999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2096 {
+    SELECT REPLACE("abc", 0123, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2098 {
+    SELECT REPLACE("abc", 0123, "a");
+}
+expect {
+    abc
+}
+
+test t-2099 {
+    SELECT REPLACE("abc", 0123, "abc");
+}
+expect {
+    abc
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2103 {
+    SELECT REPLACE("abc", 0123, 0xAACC);
+}
+expect error {
+}
+
+test t-2104 {
+    SELECT REPLACE("abc", 0123, 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2106 {
+    SELECT REPLACE("abc", 0123, "日本語テスト");
+}
+expect {
+    abc
+}
+
+test t-2107 {
+    SELECT REPLACE("abc", 0123, "한국어 시험");
+}
+expect {
+    abc
+}
+
+test t-2110 {
+    SELECT REPLACE("abc", 0123, 9223372036854775807);
+}
+expect {
+    abc
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2120 {
+    SELECT REPLACE("abc", 0xAACC, "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2122 {
+    SELECT REPLACE("abc", 0xAACC, 1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2123 {
+    SELECT REPLACE("abc", 0xAACC, -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2124 {
+    SELECT REPLACE("abc", 0xAACC, 0123);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2130 {
+    SELECT REPLACE("abc", 0xAACC, "😊😂🤢");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2131 {
+    SELECT REPLACE("abc", 0xAACC, '123');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2133 {
+    SELECT REPLACE("abc", 0xAACC, -9223372036854775808);
+}
+expect error {
+}
+
+test t-2143 {
+    SELECT REPLACE("abc", 3.1415926, "abc");
+}
+expect {
+    abc
+}
+
+test t-2144 {
+    SELECT REPLACE("abc", 3.1415926, 1);
+}
+expect {
+    abc
+}
+
+test t-2148 {
+    SELECT REPLACE("abc", 3.1415926, 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2160 {
+    SELECT REPLACE("abc", 3.1415926, _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2161 {
+    SELECT REPLACE("abc", "中文测试", "Å å");
+}
+expect {
+    abc
+}
+
+test t-2163 {
+    SELECT REPLACE("abc", "中文测试", "");
+}
+expect {
+    abc
+}
+
+test t-2165 {
+    SELECT REPLACE("abc", "中文测试", "abc");
+}
+expect {
+    abc
+}
+
+test t-2168 {
+    SELECT REPLACE("abc", "中文测试", 0123);
+}
+expect {
+    abc
+}
+
+test t-2171 {
+    SELECT REPLACE("abc", "中文测试", "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2179 {
+    SELECT REPLACE("abc", "中文测试", -999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2183 {
+    SELECT REPLACE("abc", "日本語テスト", "Å å");
+}
+expect {
+    abc
+}
+
+test t-2185 {
+    SELECT REPLACE("abc", "日本語テスト", "");
+}
+expect {
+    abc
+}
+
+test t-2190 {
+    SELECT REPLACE("abc", "日本語テスト", 0123);
+}
+expect {
+    abc
+}
+
+test t-2200 {
+    SELECT REPLACE("abc", "日本語テスト", 999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2205 {
+    SELECT REPLACE("abc", "한국어 시험", "Å å");
+}
+expect {
+    abc
+}
+
+test t-2206 {
+    SELECT REPLACE("abc", "한국어 시험", NULL);
+}
+expect {
+    NULL
+}
+
+test t-2208 {
+    SELECT REPLACE("abc", "한국어 시험", "a");
+}
+expect {
+    abc
+}
+
+test t-2214 {
+    SELECT REPLACE("abc", "한국어 시험", 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2215 {
+    SELECT REPLACE("abc", "한국어 시험", "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2223 {
+    SELECT REPLACE("abc", "한국어 시험", -999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2226 {
+    SELECT REPLACE("abc", "한국어 시험", _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2232 {
+    SELECT REPLACE("abc", "😊😂🤢", 1);
+}
+expect {
+    abc
+}
+
+test t-2233 {
+    SELECT REPLACE("abc", "😊😂🤢", -1);
+}
+expect {
+    abc
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2235 {
+    SELECT REPLACE("abc", "😊😂🤢", 0xAACC);
+}
+expect error {
+}
+
+test t-2236 {
+    SELECT REPLACE("abc", "😊😂🤢", 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2239 {
+    SELECT REPLACE("abc", "😊😂🤢", "한국어 시험");
+}
+expect {
+    abc
+}
+
+test t-2240 {
+    SELECT REPLACE("abc", "😊😂🤢", "😊😂🤢");
+}
+expect {
+    abc
+}
+
+test t-2242 {
+    SELECT REPLACE("abc", "😊😂🤢", 9223372036854775807);
+}
+expect {
+    abc
+}
+
+test t-2245 {
+    SELECT REPLACE("abc", "😊😂🤢", -999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2247 {
+    SELECT REPLACE("abc", "😊😂🤢", _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc
+}
+
+test t-2249 {
+    SELECT REPLACE("abc", '123', "Å å");
+}
+expect {
+    abc
+}
+
+test t-2253 {
+    SELECT REPLACE("abc", '123', "abc");
+}
+expect {
+    abc
+}
+
+test t-2254 {
+    SELECT REPLACE("abc", '123', 1);
+}
+expect {
+    abc
+}
+
+test t-2255 {
+    SELECT REPLACE("abc", '123', -1);
+}
+expect {
+    abc
+}
+
+test t-2259 {
+    SELECT REPLACE("abc", '123', "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2263 {
+    SELECT REPLACE("abc", '123', '123');
+}
+expect {
+    abc
+}
+
+test t-2265 {
+    SELECT REPLACE("abc", '123', -9223372036854775808);
+}
+expect {
+    abc
+}
+
+test t-2266 {
+    SELECT REPLACE("abc", '123', 999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2269 {
+    SELECT REPLACE("abc", '123', _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc
+}
+
+test t-2271 {
+    SELECT REPLACE("abc", 9223372036854775807, "Å å");
+}
+expect {
+    abc
+}
+
+test t-2275 {
+    SELECT REPLACE("abc", 9223372036854775807, "abc");
+}
+expect {
+    abc
+}
+
+test t-2280 {
+    SELECT REPLACE("abc", 9223372036854775807, 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2281 {
+    SELECT REPLACE("abc", 9223372036854775807, "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2283 {
+    SELECT REPLACE("abc", 9223372036854775807, "한국어 시험");
+}
+expect {
+    abc
+}
+
+test t-2284 {
+    SELECT REPLACE("abc", 9223372036854775807, "😊😂🤢");
+}
+expect {
+    abc
+}
+
+test t-2286 {
+    SELECT REPLACE("abc", 9223372036854775807, 9223372036854775807);
+}
+expect {
+    abc
+}
+
+test t-2292 {
+    SELECT REPLACE("abc", 9223372036854775807, _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2297 {
+    SELECT REPLACE("abc", -9223372036854775808, "abc");
+}
+expect {
+    abc
+}
+
+test t-2300 {
+    SELECT REPLACE("abc", -9223372036854775808, 0123);
+}
+expect {
+    abc
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2301 {
+    SELECT REPLACE("abc", -9223372036854775808, 0xAACC);
+}
+expect error {
+}
+
+test t-2302 {
+    SELECT REPLACE("abc", -9223372036854775808, 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2303 {
+    SELECT REPLACE("abc", -9223372036854775808, "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2311 {
+    SELECT REPLACE("abc", -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2321 {
+    SELECT REPLACE("abc", 999999999999999999999999, -1);
+}
+expect {
+    abc
+}
+
+test t-2322 {
+    SELECT REPLACE("abc", 999999999999999999999999, 0123);
+}
+expect {
+    abc
+}
+
+test t-2325 {
+    SELECT REPLACE("abc", 999999999999999999999999, "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2331 {
+    SELECT REPLACE("abc", 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    abc
+}
+
+test t-2334 {
+    SELECT REPLACE("abc", 999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    abc
+}
+
+test t-2335 {
+    SELECT REPLACE("abc", 999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc
+}
+
+test t-2337 {
+    SELECT REPLACE("abc", -999999999999999999999999, "Å å");
+}
+expect {
+    abc
+}
+
+test t-2338 {
+    SELECT REPLACE("abc", -999999999999999999999999, NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2345 {
+    SELECT REPLACE("abc", -999999999999999999999999, 0xAACC);
+}
+expect error {
+}
+
+test t-2351 {
+    SELECT REPLACE("abc", -999999999999999999999999, '123');
+}
+expect {
+    abc
+}
+
+test t-2357 {
+    SELECT REPLACE("abc", -999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc
+}
+
+test t-2358 {
+    SELECT REPLACE("abc", -999999999999999999999999, _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2360 {
+    SELECT REPLACE("abc", _binary 'Müller' , NULL);
+}
+expect {
+    NULL
+}
+
+test t-2366 {
+    SELECT REPLACE("abc", _binary 'Müller' , 0123);
+}
+expect {
+    abc
+}
+
+test t-2368 {
+    SELECT REPLACE("abc", _binary 'Müller' , 3.1415926);
+}
+expect {
+    abc
+}
+
+test t-2372 {
+    SELECT REPLACE("abc", _binary 'Müller' , "😊😂🤢");
+}
+expect {
+    abc
+}
+
+test t-2375 {
+    SELECT REPLACE("abc", _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    abc
+}
+
+test t-2376 {
+    SELECT REPLACE("abc", _binary 'Müller' , 999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2378 {
+    SELECT REPLACE("abc", _binary 'Müller' , _binary 'Müller' );
+}
+expect {
+    abc
+}
+
+test t-2380 {
+    SELECT REPLACE("abc", _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2384 {
+    SELECT REPLACE("abc", _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    abc
+}
+
+test t-2386 {
+    SELECT REPLACE("abc", _utf8mb4 'abcABCÅå', 1);
+}
+expect {
+    abc
+}
+
+test t-2391 {
+    SELECT REPLACE("abc", _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2396 {
+    SELECT REPLACE("abc", _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    abc
+}
+
+test t-2399 {
+    SELECT REPLACE("abc", _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    abc
+}
+
+test t-2401 {
+    SELECT REPLACE("abc", _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc
+}
+
+test t-2404 {
+    SELECT REPLACE("abc", _latin1 0xFF, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2406 {
+    SELECT REPLACE("abc", _latin1 0xFF, "a");
+}
+expect {
+    abc
+}
+
+test t-2407 {
+    SELECT REPLACE("abc", _latin1 0xFF, "abc");
+}
+expect {
+    abc
+}
+
+test t-2413 {
+    SELECT REPLACE("abc", _latin1 0xFF, "中文测试");
+}
+expect {
+    abc
+}
+
+test t-2418 {
+    SELECT REPLACE("abc", _latin1 0xFF, 9223372036854775807);
+}
+expect {
+    abc
+}
+
+test t-2419 {
+    SELECT REPLACE("abc", _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    abc
+}
+
+test t-2424 {
+    SELECT REPLACE("abc", _latin1 0xFF, _latin1 0xFF);
+}
+expect {
+    abc
+}
+
+test t-2426 {
+    SELECT REPLACE(1, "Å å", NULL);
+}
+expect {
+    NULL
+}
+
+test t-2428 {
+    SELECT REPLACE(1, "Å å", "a");
+}
+expect {
+    1
+}
+
+test t-2430 {
+    SELECT REPLACE(1, "Å å", 1);
+}
+expect {
+    1
+}
+
+test t-2436 {
+    SELECT REPLACE(1, "Å å", "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2438 {
+    SELECT REPLACE(1, "Å å", "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2443 {
+    SELECT REPLACE(1, "Å å", -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2450 {
+    SELECT REPLACE(1, NULL, "a");
+}
+expect {
+    NULL
+}
+
+test t-2456 {
+    SELECT REPLACE(1, NULL, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-2458 {
+    SELECT REPLACE(1, NULL, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-2461 {
+    SELECT REPLACE(1, NULL, '123');
+}
+expect {
+    NULL
+}
+
+test t-2471 {
+    SELECT REPLACE(1, "", "");
+}
+expect {
+    1
+}
+
+test t-2473 {
+    SELECT REPLACE(1, "", "abc");
+}
+expect {
+    1
+}
+
+test t-2479 {
+    SELECT REPLACE(1, "", "中文测试");
+}
+expect {
+    1
+}
+
+test t-2484 {
+    SELECT REPLACE(1, "", 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-2487 {
+    SELECT REPLACE(1, "", -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2488 {
+    SELECT REPLACE(1, "", _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-2489 {
+    SELECT REPLACE(1, "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-2491 {
+    SELECT REPLACE(1, "a", "Å å");
+}
+expect {
+    1
+}
+
+test t-2492 {
+    SELECT REPLACE(1, "a", NULL);
+}
+expect {
+    NULL
+}
+
+test t-2493 {
+    SELECT REPLACE(1, "a", "");
+}
+expect {
+    1
+}
+
+test t-2494 {
+    SELECT REPLACE(1, "a", "a");
+}
+expect {
+    1
+}
+
+test t-2505 {
+    SELECT REPLACE(1, "a", '123');
+}
+expect {
+    1
+}
+
+test t-2506 {
+    SELECT REPLACE(1, "a", 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-2509 {
+    SELECT REPLACE(1, "a", -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2517 {
+    SELECT REPLACE(1, "abc", "abc");
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2521 {
+    SELECT REPLACE(1, "abc", 0xAACC);
+}
+expect error {
+}
+
+test t-2527 {
+    SELECT REPLACE(1, "abc", '123');
+}
+expect {
+    1
+}
+
+test t-2530 {
+    SELECT REPLACE(1, "abc", 999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2532 {
+    SELECT REPLACE(1, "abc", _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-2534 {
+    SELECT REPLACE(1, "abc", _latin1 0xFF);
+}
+expect {
+    1
+}
+
+test t-2540 {
+    SELECT REPLACE(1, 1, 1);
+}
+expect {
+    1
+}
+
+test t-2544 {
+    SELECT REPLACE(1, 1, 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-2549 {
+    SELECT REPLACE(1, 1, '123');
+}
+expect {
+    123
+}
+
+test t-2555 {
+    SELECT REPLACE(1, 1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abcABCÅå
+}
+
+test t-2558 {
+    SELECT REPLACE(1, -1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2563 {
+    SELECT REPLACE(1, -1, -1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2565 {
+    SELECT REPLACE(1, -1, 0xAACC);
+}
+expect error {
+}
+
+test t-2567 {
+    SELECT REPLACE(1, -1, "中文测试");
+}
+expect {
+    1
+}
+
+test t-2575 {
+    SELECT REPLACE(1, -1, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2577 {
+    SELECT REPLACE(1, -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-2578 {
+    SELECT REPLACE(1, -1, _latin1 0xFF);
+}
+expect {
+    1
+}
+
+test t-2583 {
+    SELECT REPLACE(1, 0123, "abc");
+}
+expect {
+    1
+}
+
+test t-2586 {
+    SELECT REPLACE(1, 0123, 0123);
+}
+expect {
+    1
+}
+
+test t-2589 {
+    SELECT REPLACE(1, 0123, "中文测试");
+}
+expect {
+    1
+}
+
+test t-2593 {
+    SELECT REPLACE(1, 0123, '123');
+}
+expect {
+    1
+}
+
+test t-2599 {
+    SELECT REPLACE(1, 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2604 {
+    SELECT REPLACE(1, 0xAACC, "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2607 {
+    SELECT REPLACE(1, 0xAACC, -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2609 {
+    SELECT REPLACE(1, 0xAACC, 0xAACC);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2611 {
+    SELECT REPLACE(1, 0xAACC, "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2614 {
+    SELECT REPLACE(1, 0xAACC, "😊😂🤢");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2620 {
+    SELECT REPLACE(1, 0xAACC, _binary 'Müller' );
+}
+expect error {
+}
+
+test t-2623 {
+    SELECT REPLACE(1, 3.1415926, "Å å");
+}
+expect {
+    1
+}
+
+test t-2624 {
+    SELECT REPLACE(1, 3.1415926, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2625 {
+    SELECT REPLACE(1, 3.1415926, "");
+}
+expect {
+    1
+}
+
+test t-2626 {
+    SELECT REPLACE(1, 3.1415926, "a");
+}
+expect {
+    1
+}
+
+test t-2633 {
+    SELECT REPLACE(1, 3.1415926, "中文测试");
+}
+expect {
+    1
+}
+
+test t-2634 {
+    SELECT REPLACE(1, 3.1415926, "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2635 {
+    SELECT REPLACE(1, 3.1415926, "한국어 시험");
+}
+expect {
+    1
+}
+
+test t-2637 {
+    SELECT REPLACE(1, 3.1415926, '123');
+}
+expect {
+    1
+}
+
+test t-2639 {
+    SELECT REPLACE(1, 3.1415926, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2641 {
+    SELECT REPLACE(1, 3.1415926, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2645 {
+    SELECT REPLACE(1, "中文测试", "Å å");
+}
+expect {
+    1
+}
+
+test t-2647 {
+    SELECT REPLACE(1, "中文测试", "");
+}
+expect {
+    1
+}
+
+test t-2648 {
+    SELECT REPLACE(1, "中文测试", "a");
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2653 {
+    SELECT REPLACE(1, "中文测试", 0xAACC);
+}
+expect error {
+}
+
+test t-2654 {
+    SELECT REPLACE(1, "中文测试", 3.1415926);
+}
+expect {
+    1
+}
+
+test t-2655 {
+    SELECT REPLACE(1, "中文测试", "中文测试");
+}
+expect {
+    1
+}
+
+test t-2656 {
+    SELECT REPLACE(1, "中文测试", "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2661 {
+    SELECT REPLACE(1, "中文测试", -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2662 {
+    SELECT REPLACE(1, "中文测试", 999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2663 {
+    SELECT REPLACE(1, "中文测试", -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2665 {
+    SELECT REPLACE(1, "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-2666 {
+    SELECT REPLACE(1, "中文测试", _latin1 0xFF);
+}
+expect {
+    1
+}
+
+test t-2667 {
+    SELECT REPLACE(1, "日本語テスト", "Å å");
+}
+expect {
+    1
+}
+
+test t-2672 {
+    SELECT REPLACE(1, "日本語テスト", 1);
+}
+expect {
+    1
+}
+
+test t-2673 {
+    SELECT REPLACE(1, "日本語テスト", -1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2675 {
+    SELECT REPLACE(1, "日本語テスト", 0xAACC);
+}
+expect error {
+}
+
+test t-2676 {
+    SELECT REPLACE(1, "日本語テスト", 3.1415926);
+}
+expect {
+    1
+}
+
+test t-2678 {
+    SELECT REPLACE(1, "日本語テスト", "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2687 {
+    SELECT REPLACE(1, "日本語テスト", _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-2689 {
+    SELECT REPLACE(1, "한국어 시험", "Å å");
+}
+expect {
+    1
+}
+
+test t-2690 {
+    SELECT REPLACE(1, "한국어 시험", NULL);
+}
+expect {
+    NULL
+}
+
+test t-2698 {
+    SELECT REPLACE(1, "한국어 시험", 3.1415926);
+}
+expect {
+    1
+}
+
+test t-2699 {
+    SELECT REPLACE(1, "한국어 시험", "中文测试");
+}
+expect {
+    1
+}
+
+test t-2703 {
+    SELECT REPLACE(1, "한국어 시험", '123');
+}
+expect {
+    1
+}
+
+test t-2706 {
+    SELECT REPLACE(1, "한국어 시험", 999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2713 {
+    SELECT REPLACE(1, "😊😂🤢", "");
+}
+expect {
+    1
+}
+
+test t-2715 {
+    SELECT REPLACE(1, "😊😂🤢", "abc");
+}
+expect {
+    1
+}
+
+test t-2720 {
+    SELECT REPLACE(1, "😊😂🤢", 3.1415926);
+}
+expect {
+    1
+}
+
+test t-2722 {
+    SELECT REPLACE(1, "😊😂🤢", "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2723 {
+    SELECT REPLACE(1, "😊😂🤢", "한국어 시험");
+}
+expect {
+    1
+}
+
+test t-2724 {
+    SELECT REPLACE(1, "😊😂🤢", "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2726 {
+    SELECT REPLACE(1, "😊😂🤢", 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-2732 {
+    SELECT REPLACE(1, "😊😂🤢", _latin1 0xFF);
+}
+expect {
+    1
+}
+
+test t-2736 {
+    SELECT REPLACE(1, '123', "a");
+}
+expect {
+    1
+}
+
+test t-2737 {
+    SELECT REPLACE(1, '123', "abc");
+}
+expect {
+    1
+}
+
+test t-2739 {
+    SELECT REPLACE(1, '123', -1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2741 {
+    SELECT REPLACE(1, '123', 0xAACC);
+}
+expect error {
+}
+
+test t-2743 {
+    SELECT REPLACE(1, '123', "中文测试");
+}
+expect {
+    1
+}
+
+test t-2744 {
+    SELECT REPLACE(1, '123', "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2747 {
+    SELECT REPLACE(1, '123', '123');
+}
+expect {
+    1
+}
+
+test t-2749 {
+    SELECT REPLACE(1, '123', -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2752 {
+    SELECT REPLACE(1, '123', _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-2753 {
+    SELECT REPLACE(1, '123', _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-2755 {
+    SELECT REPLACE(1, 9223372036854775807, "Å å");
+}
+expect {
+    1
+}
+
+test t-2757 {
+    SELECT REPLACE(1, 9223372036854775807, "");
+}
+expect {
+    1
+}
+
+test t-2760 {
+    SELECT REPLACE(1, 9223372036854775807, 1);
+}
+expect {
+    1
+}
+
+test t-2764 {
+    SELECT REPLACE(1, 9223372036854775807, 3.1415926);
+}
+expect {
+    1
+}
+
+test t-2765 {
+    SELECT REPLACE(1, 9223372036854775807, "中文测试");
+}
+expect {
+    1
+}
+
+test t-2766 {
+    SELECT REPLACE(1, 9223372036854775807, "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2767 {
+    SELECT REPLACE(1, 9223372036854775807, "한국어 시험");
+}
+expect {
+    1
+}
+
+test t-2768 {
+    SELECT REPLACE(1, 9223372036854775807, "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2773 {
+    SELECT REPLACE(1, 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2774 {
+    SELECT REPLACE(1, 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-2775 {
+    SELECT REPLACE(1, 9223372036854775807, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-2779 {
+    SELECT REPLACE(1, -9223372036854775808, "");
+}
+expect {
+    1
+}
+
+test t-2782 {
+    SELECT REPLACE(1, -9223372036854775808, 1);
+}
+expect {
+    1
+}
+
+test t-2787 {
+    SELECT REPLACE(1, -9223372036854775808, "中文测试");
+}
+expect {
+    1
+}
+
+test t-2788 {
+    SELECT REPLACE(1, -9223372036854775808, "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2790 {
+    SELECT REPLACE(1, -9223372036854775808, "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2795 {
+    SELECT REPLACE(1, -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2796 {
+    SELECT REPLACE(1, -9223372036854775808, _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-2798 {
+    SELECT REPLACE(1, -9223372036854775808, _latin1 0xFF);
+}
+expect {
+    1
+}
+
+test t-2800 {
+    SELECT REPLACE(1, 999999999999999999999999, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2803 {
+    SELECT REPLACE(1, 999999999999999999999999, "abc");
+}
+expect {
+    1
+}
+
+test t-2804 {
+    SELECT REPLACE(1, 999999999999999999999999, 1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2807 {
+    SELECT REPLACE(1, 999999999999999999999999, 0xAACC);
+}
+expect error {
+}
+
+test t-2813 {
+    SELECT REPLACE(1, 999999999999999999999999, '123');
+}
+expect {
+    1
+}
+
+test t-2815 {
+    SELECT REPLACE(1, 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2825 {
+    SELECT REPLACE(1, -999999999999999999999999, "abc");
+}
+expect {
+    1
+}
+
+test t-2826 {
+    SELECT REPLACE(1, -999999999999999999999999, 1);
+}
+expect {
+    1
+}
+
+test t-2832 {
+    SELECT REPLACE(1, -999999999999999999999999, "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2833 {
+    SELECT REPLACE(1, -999999999999999999999999, "한국어 시험");
+}
+expect {
+    1
+}
+
+test t-2834 {
+    SELECT REPLACE(1, -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2835 {
+    SELECT REPLACE(1, -999999999999999999999999, '123');
+}
+expect {
+    1
+}
+
+test t-2838 {
+    SELECT REPLACE(1, -999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-2844 {
+    SELECT REPLACE(1, _binary 'Müller' , NULL);
+}
+expect {
+    NULL
+}
+
+test t-2850 {
+    SELECT REPLACE(1, _binary 'Müller' , 0123);
+}
+expect {
+    1
+}
+
+test t-2854 {
+    SELECT REPLACE(1, _binary 'Müller' , "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2856 {
+    SELECT REPLACE(1, _binary 'Müller' , "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2858 {
+    SELECT REPLACE(1, _binary 'Müller' , 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-2862 {
+    SELECT REPLACE(1, _binary 'Müller' , _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-2865 {
+    SELECT REPLACE(1, _utf8mb4 'abcABCÅå', "Å å");
+}
+expect {
+    1
+}
+
+test t-2871 {
+    SELECT REPLACE(1, _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    1
+}
+
+test t-2875 {
+    SELECT REPLACE(1, _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect {
+    1
+}
+
+test t-2876 {
+    SELECT REPLACE(1, _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-2878 {
+    SELECT REPLACE(1, _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2880 {
+    SELECT REPLACE(1, _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-2887 {
+    SELECT REPLACE(1, _latin1 0xFF, "Å å");
+}
+expect {
+    1
+}
+
+test t-2888 {
+    SELECT REPLACE(1, _latin1 0xFF, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2889 {
+    SELECT REPLACE(1, _latin1 0xFF, "");
+}
+expect {
+    1
+}
+
+test t-2890 {
+    SELECT REPLACE(1, _latin1 0xFF, "a");
+}
+expect {
+    1
+}
+
+test t-2900 {
+    SELECT REPLACE(1, _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    1
+}
+
+test t-2903 {
+    SELECT REPLACE(1, _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2916 {
+    SELECT REPLACE(-1, "Å å", 0123);
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2917 {
+    SELECT REPLACE(-1, "Å å", 0xAACC);
+}
+expect error {
+}
+
+test t-2920 {
+    SELECT REPLACE(-1, "Å å", "日本語テスト");
+}
+expect {
+    -1
+}
+
+test t-2924 {
+    SELECT REPLACE(-1, "Å å", 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-2926 {
+    SELECT REPLACE(-1, "Å å", 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-2930 {
+    SELECT REPLACE(-1, "Å å", _latin1 0xFF);
+}
+expect {
+    -1
+}
+
+test t-2932 {
+    SELECT REPLACE(-1, NULL, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2935 {
+    SELECT REPLACE(-1, NULL, "abc");
+}
+expect {
+    NULL
+}
+
+test t-2937 {
+    SELECT REPLACE(-1, NULL, -1);
+}
+expect {
+    NULL
+}
+
+test t-2938 {
+    SELECT REPLACE(-1, NULL, 0123);
+}
+expect {
+    NULL
+}
+
+test t-2939 {
+    SELECT REPLACE(-1, NULL, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-2943 {
+    SELECT REPLACE(-1, NULL, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-2944 {
+    SELECT REPLACE(-1, NULL, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-2946 {
+    SELECT REPLACE(-1, NULL, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-2952 {
+    SELECT REPLACE(-1, NULL, _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-2954 {
+    SELECT REPLACE(-1, "", NULL);
+}
+expect {
+    NULL
+}
+
+test t-2956 {
+    SELECT REPLACE(-1, "", "a");
+}
+expect {
+    -1
+}
+
+test t-2965 {
+    SELECT REPLACE(-1, "", "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-2968 {
+    SELECT REPLACE(-1, "", 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-2974 {
+    SELECT REPLACE(-1, "", _latin1 0xFF);
+}
+expect {
+    -1
+}
+
+test t-2977 {
+    SELECT REPLACE(-1, "a", "");
+}
+expect {
+    -1
+}
+
+test t-2981 {
+    SELECT REPLACE(-1, "a", -1);
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2983 {
+    SELECT REPLACE(-1, "a", 0xAACC);
+}
+expect error {
+}
+
+test t-2987 {
+    SELECT REPLACE(-1, "a", "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-2989 {
+    SELECT REPLACE(-1, "a", '123');
+}
+expect {
+    -1
+}
+
+test t-2990 {
+    SELECT REPLACE(-1, "a", 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-2996 {
+    SELECT REPLACE(-1, "a", _latin1 0xFF);
+}
+expect {
+    -1
+}
+
+test t-2999 {
+    SELECT REPLACE(-1, "abc", "");
+}
+expect {
+    -1
+}
+
+test t-3000 {
+    SELECT REPLACE(-1, "abc", "a");
+}
+expect {
+    -1
+}
+
+test t-3001 {
+    SELECT REPLACE(-1, "abc", "abc");
+}
+expect {
+    -1
+}
+
+test t-3003 {
+    SELECT REPLACE(-1, "abc", -1);
+}
+expect {
+    -1
+}
+
+test t-3004 {
+    SELECT REPLACE(-1, "abc", 0123);
+}
+expect {
+    -1
+}
+
+test t-3010 {
+    SELECT REPLACE(-1, "abc", "😊😂🤢");
+}
+expect {
+    -1
+}
+
+test t-3011 {
+    SELECT REPLACE(-1, "abc", '123');
+}
+expect {
+    -1
+}
+
+test t-3013 {
+    SELECT REPLACE(-1, "abc", -9223372036854775808);
+}
+expect {
+    -1
+}
+
+test t-3017 {
+    SELECT REPLACE(-1, "abc", _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1
+}
+
+test t-3019 {
+    SELECT REPLACE(-1, 1, "Å å");
+}
+expect {
+    -Å å
+}
+
+test t-3023 {
+    SELECT REPLACE(-1, 1, "abc");
+}
+expect {
+    -abc
+}
+
+test t-3024 {
+    SELECT REPLACE(-1, 1, 1);
+}
+expect {
+    -1
+}
+
+test t-3025 {
+    SELECT REPLACE(-1, 1, -1);
+}
+expect {
+    --1
+}
+
+test t-3026 {
+    SELECT REPLACE(-1, 1, 0123);
+}
+expect {
+    -123
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3027 {
+    SELECT REPLACE(-1, 1, 0xAACC);
+}
+expect error {
+}
+
+test t-3030 {
+    SELECT REPLACE(-1, 1, "日本語テスト");
+}
+expect {
+    -日本語テスト
+}
+
+test t-3032 {
+    SELECT REPLACE(-1, 1, "😊😂🤢");
+}
+expect {
+    -😊😂🤢
+}
+
+test t-3033 {
+    SELECT REPLACE(-1, 1, '123');
+}
+expect {
+    -123
+}
+
+test t-3035 {
+    SELECT REPLACE(-1, 1, -9223372036854775808);
+}
+expect {
+    --9223372036854775808
+}
+
+test t-3045 {
+    SELECT REPLACE(-1, -1, "abc");
+}
+expect {
+    abc
+}
+
+test t-3048 {
+    SELECT REPLACE(-1, -1, 0123);
+}
+expect {
+    123
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3049 {
+    SELECT REPLACE(-1, -1, 0xAACC);
+}
+expect error {
+}
+
+test t-3052 {
+    SELECT REPLACE(-1, -1, "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-3053 {
+    SELECT REPLACE(-1, -1, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-3060 {
+    SELECT REPLACE(-1, -1, _binary 'Müller' );
+}
+expect {
+    Müller
+}
+
+test t-3064 {
+    SELECT REPLACE(-1, 0123, NULL);
+}
+expect {
+    NULL
+}
+
+test t-3067 {
+    SELECT REPLACE(-1, 0123, "abc");
+}
+expect {
+    -1
+}
+
+test t-3072 {
+    SELECT REPLACE(-1, 0123, 3.1415926);
+}
+expect {
+    -1
+}
+
+test t-3073 {
+    SELECT REPLACE(-1, 0123, "中文测试");
+}
+expect {
+    -1
+}
+
+test t-3075 {
+    SELECT REPLACE(-1, 0123, "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-3076 {
+    SELECT REPLACE(-1, 0123, "😊😂🤢");
+}
+expect {
+    -1
+}
+
+test t-3077 {
+    SELECT REPLACE(-1, 0123, '123');
+}
+expect {
+    -1
+}
+
+test t-3081 {
+    SELECT REPLACE(-1, 0123, -999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3083 {
+    SELECT REPLACE(-1, 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1
+}
+
+test t-3084 {
+    SELECT REPLACE(-1, 0123, _latin1 0xFF);
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3088 {
+    SELECT REPLACE(-1, 0xAACC, "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3089 {
+    SELECT REPLACE(-1, 0xAACC, "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3090 {
+    SELECT REPLACE(-1, 0xAACC, 1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3091 {
+    SELECT REPLACE(-1, 0xAACC, -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3095 {
+    SELECT REPLACE(-1, 0xAACC, "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3099 {
+    SELECT REPLACE(-1, 0xAACC, '123');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3104 {
+    SELECT REPLACE(-1, 0xAACC, _binary 'Müller' );
+}
+expect error {
+}
+
+test t-3107 {
+    SELECT REPLACE(-1, 3.1415926, "Å å");
+}
+expect {
+    -1
+}
+
+test t-3112 {
+    SELECT REPLACE(-1, 3.1415926, 1);
+}
+expect {
+    -1
+}
+
+test t-3116 {
+    SELECT REPLACE(-1, 3.1415926, 3.1415926);
+}
+expect {
+    -1
+}
+
+test t-3118 {
+    SELECT REPLACE(-1, 3.1415926, "日本語テスト");
+}
+expect {
+    -1
+}
+
+test t-3119 {
+    SELECT REPLACE(-1, 3.1415926, "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-3121 {
+    SELECT REPLACE(-1, 3.1415926, '123');
+}
+expect {
+    -1
+}
+
+test t-3122 {
+    SELECT REPLACE(-1, 3.1415926, 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-3124 {
+    SELECT REPLACE(-1, 3.1415926, 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3132 {
+    SELECT REPLACE(-1, "中文测试", "a");
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3137 {
+    SELECT REPLACE(-1, "中文测试", 0xAACC);
+}
+expect error {
+}
+
+test t-3141 {
+    SELECT REPLACE(-1, "中文测试", "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-3142 {
+    SELECT REPLACE(-1, "中文测试", "😊😂🤢");
+}
+expect {
+    -1
+}
+
+test t-3143 {
+    SELECT REPLACE(-1, "中文测试", '123');
+}
+expect {
+    -1
+}
+
+test t-3146 {
+    SELECT REPLACE(-1, "中文测试", 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3153 {
+    SELECT REPLACE(-1, "日本語テスト", "");
+}
+expect {
+    -1
+}
+
+test t-3157 {
+    SELECT REPLACE(-1, "日本語テスト", -1);
+}
+expect {
+    -1
+}
+
+test t-3168 {
+    SELECT REPLACE(-1, "日本語テスト", 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3171 {
+    SELECT REPLACE(-1, "日本語テスト", _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1
+}
+
+test t-3174 {
+    SELECT REPLACE(-1, "한국어 시험", NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3181 {
+    SELECT REPLACE(-1, "한국어 시험", 0xAACC);
+}
+expect error {
+}
+
+test t-3182 {
+    SELECT REPLACE(-1, "한국어 시험", 3.1415926);
+}
+expect {
+    -1
+}
+
+test t-3183 {
+    SELECT REPLACE(-1, "한국어 시험", "中文测试");
+}
+expect {
+    -1
+}
+
+test t-3185 {
+    SELECT REPLACE(-1, "한국어 시험", "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-3196 {
+    SELECT REPLACE(-1, "😊😂🤢", NULL);
+}
+expect {
+    NULL
+}
+
+test t-3198 {
+    SELECT REPLACE(-1, "😊😂🤢", "a");
+}
+expect {
+    -1
+}
+
+test t-3202 {
+    SELECT REPLACE(-1, "😊😂🤢", 0123);
+}
+expect {
+    -1
+}
+
+test t-3204 {
+    SELECT REPLACE(-1, "😊😂🤢", 3.1415926);
+}
+expect {
+    -1
+}
+
+test t-3209 {
+    SELECT REPLACE(-1, "😊😂🤢", '123');
+}
+expect {
+    -1
+}
+
+test t-3214 {
+    SELECT REPLACE(-1, "😊😂🤢", _binary 'Müller' );
+}
+expect {
+    -1
+}
+
+test t-3218 {
+    SELECT REPLACE(-1, '123', NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-3225 {
+    SELECT REPLACE(-1, '123', 0xAACC);
+}
+expect error {
+}
+
+test t-3227 {
+    SELECT REPLACE(-1, '123', "中文测试");
+}
+expect {
+    -1
+}
+
+test t-3228 {
+    SELECT REPLACE(-1, '123', "日本語テスト");
+}
+expect {
+    -1
+}
+
+test t-3229 {
+    SELECT REPLACE(-1, '123', "한국어 시험");
+}
+expect {
+    -1
+}
+
+test t-3234 {
+    SELECT REPLACE(-1, '123', 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3235 {
+    SELECT REPLACE(-1, '123', -999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3239 {
+    SELECT REPLACE(-1, 9223372036854775807, "Å å");
+}
+expect {
+    -1
+}
+
+test t-3240 {
+    SELECT REPLACE(-1, 9223372036854775807, NULL);
+}
+expect {
+    NULL
+}
+
+test t-3241 {
+    SELECT REPLACE(-1, 9223372036854775807, "");
+}
+expect {
+    -1
+}
+
+test t-3252 {
+    SELECT REPLACE(-1, 9223372036854775807, "😊😂🤢");
+}
+expect {
+    -1
+}
+
+test t-3254 {
+    SELECT REPLACE(-1, 9223372036854775807, 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-3259 {
+    SELECT REPLACE(-1, 9223372036854775807, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1
+}
+
+test t-3276 {
+    SELECT REPLACE(-1, -9223372036854775808, 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-3278 {
+    SELECT REPLACE(-1, -9223372036854775808, 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3280 {
+    SELECT REPLACE(-1, -9223372036854775808, _binary 'Müller' );
+}
+expect {
+    -1
+}
+
+test t-3282 {
+    SELECT REPLACE(-1, -9223372036854775808, _latin1 0xFF);
+}
+expect {
+    -1
+}
+
+test t-3284 {
+    SELECT REPLACE(-1, 999999999999999999999999, NULL);
+}
+expect {
+    NULL
+}
+
+test t-3288 {
+    SELECT REPLACE(-1, 999999999999999999999999, 1);
+}
+expect {
+    -1
+}
+
+test t-3296 {
+    SELECT REPLACE(-1, 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    -1
+}
+
+test t-3299 {
+    SELECT REPLACE(-1, 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    -1
+}
+
+test t-3300 {
+    SELECT REPLACE(-1, 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3301 {
+    SELECT REPLACE(-1, 999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    -1
+}
+
+test t-3304 {
+    SELECT REPLACE(-1, 999999999999999999999999, _latin1 0xFF);
+}
+expect {
+    -1
+}

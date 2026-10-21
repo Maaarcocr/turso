@@ -1,0 +1,136 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table tbl_enum_set
+(
+    id       bigint,
+    enum_col enum('xsmall', 'small', 'medium', 'large', 'xlarge'),
+    set_col set('a', 'b', 'c', 'd', 'e', 'f', 'g'),
+    primary key (id)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into tbl_enum_set(id, enum_col, set_col) values (1, 'medium', 'a,b,e'), (2, 'small', 'e,f,g'), (3, 'large', 'c'), (4, 'xsmall', 'a,b'), (5, 'medium', 'a,d');
+}
+
+@setup s1
+test l852 {
+    insert into tbl_enum_set(id, enum_col, set_col) values (1, 'medium', 'a,b,e'), (2, 'small', 'e,f,g'), (3, 'large', 'c'), (4, 'xsmall', 'a,b'), (5, 'medium', 'a,d');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l854 {
+    select id, enum_col, cast(enum_col as signed) from tbl_enum_set order by enum_col, id;
+}
+expect {
+    4|xsmall|1
+    2|small|2
+    1|medium|3
+    5|medium|3
+    3|large|4
+}
+
+@setup s1
+@setup s2
+test l855 {
+    select id, set_col, cast(set_col as unsigned) from tbl_enum_set order by set_col, id;
+}
+expect {
+    4|a,b|3
+    3|c|4
+    5|a,d|9
+    1|a,b,e|19
+    2|e,f,g|112
+}
+
+@setup s1
+@setup s2
+test l860 {
+    select id, enum_col + 0 from tbl_enum_set order by id;
+}
+expect {
+    1|3
+    2|2
+    3|4
+    4|1
+    5|3
+}
+
+@setup s1
+@setup s2
+test l861 {
+    select id, enum_col + 1 from tbl_enum_set order by id;
+}
+expect {
+    1|4
+    2|3
+    3|5
+    4|2
+    5|4
+}
+
+@setup s1
+@setup s2
+test l862 {
+    select id, cast(enum_col as unsigned) from tbl_enum_set order by id;
+}
+expect {
+    1|3
+    2|2
+    3|4
+    4|1
+    5|3
+}
+
+@setup s1
+@setup s2
+test l863 {
+    select id from tbl_enum_set where enum_col = 3 order by id;
+}
+expect {
+    1
+    5
+}
+
+@setup s1
+@setup s2
+test l864 {
+    select id, enum_col from tbl_enum_set where enum_col > 2 order by enum_col, id;
+}
+expect {
+    1|medium
+    5|medium
+    3|large
+}
+
+@setup s1
+@setup s2
+test l865 {
+    select id, set_col + 0 from tbl_enum_set order by id;
+}
+expect {
+    1|19
+    2|112
+    3|4
+    4|3
+    5|9
+}
+
+@setup s1
+@setup s2
+test l866 {
+    select max(cast(enum_col as signed)) from tbl_enum_set;
+}
+expect unordered {
+    4
+}

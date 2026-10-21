@@ -1,0 +1,203 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-1 {
+    SELECT WEIGHT_STRING(_latin1 'foobar');
+}
+expect {
+    FOOBAR
+}
+
+test t-5 {
+    SELECT WEIGHT_STRING('foobar' as binary(3));
+}
+expect {
+    foo
+}
+
+test t-10 {
+    SELECT WEIGHT_STRING(_latin1 'foobar' as char(12));
+}
+expect raw {
+FOOBAR      
+}
+
+test t-12 {
+    SELECT WEIGHT_STRING(_binary 'foobar' as char(12));
+}
+expect {
+    foobar
+}
+
+test t-16 {
+    SELECT WEIGHT_STRING(9223372036854775807);
+}
+expect {
+    ��������
+}
+
+test t-17 {
+    SELECT WEIGHT_STRING(18446744073709551615);
+}
+expect {
+    ��������
+}
+
+test t-21 {
+    SELECT WEIGHT_STRING(9223372036854775807 as char(1));
+}
+expect {
+    ��������
+}
+
+test t-22 {
+    SELECT WEIGHT_STRING(18446744073709551615 as char(1));
+}
+expect {
+    ��������
+}
+
+test t-26 {
+    SELECT WEIGHT_STRING(9223372036854775807 as char(32));
+}
+expect {
+    ��������
+}
+
+test t-27 {
+    SELECT WEIGHT_STRING(18446744073709551615 as char(32));
+}
+expect {
+    ��������
+}
+
+test t-29 {
+    SELECT WEIGHT_STRING(1 as binary(1));
+}
+expect {
+    1
+}
+
+test t-30 {
+    SELECT WEIGHT_STRING(-1 as binary(1));
+}
+expect {
+    -
+}
+
+test t-31 {
+    SELECT WEIGHT_STRING(9223372036854775807 as binary(1));
+}
+expect {
+    9
+}
+
+test t-32 {
+    SELECT WEIGHT_STRING(18446744073709551615 as binary(1));
+}
+expect {
+    1
+}
+
+test t-33 {
+    SELECT WEIGHT_STRING(-9223372036854775808 as binary(1));
+}
+expect {
+    -
+}
+
+test t-39 {
+    SELECT WEIGHT_STRING(1234.0);
+}
+expect {
+    NULL
+}
+
+test t-40 {
+    SELECT WEIGHT_STRING(12340e0);
+}
+expect {
+    NULL
+}
+
+test t-48 {
+    SELECT WEIGHT_STRING(date'2000-01-01' as binary(2));
+}
+expect {
+    20
+}
+
+test t-52 {
+    SELECT WEIGHT_STRING(timestamp'2000-01-01 11:22:33' as binary(12));
+}
+expect {
+    2000-01-01 1
+}
+
+test t-53 {
+    SELECT WEIGHT_STRING(timestamp'2000-01-01 11:22:33' as binary(2));
+}
+expect {
+    20
+}
+
+test t-57 {
+    SELECT WEIGHT_STRING(timestamp'2000-01-01 11:22:33.123456' as binary(12));
+}
+expect {
+    2000-01-01 1
+}
+
+test t-58 {
+    SELECT WEIGHT_STRING(timestamp'2000-01-01 11:22:33.123456' as binary(2));
+}
+expect {
+    20
+}
+
+test t-63 {
+    SELECT WEIGHT_STRING(time'-11:22:33' as binary(2));
+}
+expect {
+    -1
+}
+
+test t-68 {
+    SELECT WEIGHT_STRING(time'11:22:33' as binary(2));
+}
+expect {
+    11
+}
+
+test t-73 {
+    SELECT WEIGHT_STRING(time'101:22:33' as binary(2));
+}
+expect {
+    10
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-91 {
+    SELECT WEIGHT_STRING(cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-106 {
+    SELECT WEIGHT_STRING(cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-107 {
+    SELECT WEIGHT_STRING(cast('"a": 1' as json));
+}
+expect error {
+}

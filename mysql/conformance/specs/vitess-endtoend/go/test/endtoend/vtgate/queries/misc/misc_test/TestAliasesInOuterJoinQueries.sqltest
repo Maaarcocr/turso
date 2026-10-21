@@ -1,0 +1,99 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table tbl
+(
+    id         bigint,
+    unq_col    bigint,
+    nonunq_col bigint not null,
+    primary key (id),
+    unique (unq_col)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine=InnoDB;
+    create table tbl
+(
+    id         bigint,
+    unq_col    bigint,
+    nonunq_col bigint not null,
+    primary key (id),
+    unique (unq_col)
+) Engine = InnoDB;
+    insert into t1(id1, id2) values (1,2), (42,5), (5, 42);
+    insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3), (3, 42, 2);
+}
+
+@setup s1
+test l633 {
+    insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3), (3, 42, 2);
+}
+expect unordered {
+}
+
+@setup s2
+test l636 {
+    select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col;
+}
+expect unordered {
+    1|1|42
+    42|42|NULL
+    5|5|NULL
+}
+
+@setup s2
+test l637 {
+    select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2;
+}
+expect {
+    1|1|42
+    42|42|NULL
+}
+
+@setup s2
+test l638 {
+    select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2 offset 2;
+}
+expect {
+    5|5|NULL
+}
+
+@setup s2
+test l639 {
+    select t1.id1 as t0, t1.id1 as t1, count(*) as leCount from t1 left outer join tbl on t1.id2 = tbl.nonunq_col group by 1, t1;
+}
+expect unordered {
+    1|1|1
+    42|42|1
+    5|5|1
+}
+
+@setup s2
+test l640 {
+    select t.id1, t.id2, derived.unq_col from t1 t join (select id, unq_col, nonunq_col from tbl) as derived on t.id2 = derived.nonunq_col;
+}
+expect unordered {
+    1|2|42
+}
+
+@setup s2
+test l641 {
+    select * from t1 t left join tbl on t.id1 = 666 and t.id2 = tbl.id;
+}
+expect unordered {
+    1|2|NULL|NULL|NULL
+    42|5|NULL|NULL|NULL
+    5|42|NULL|NULL|NULL
+}

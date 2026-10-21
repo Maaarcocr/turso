@@ -1,0 +1,1449 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT hex("Å å");
+}
+expect {
+    C38520C3A5
+}
+
+test t-1 {
+    SELECT hex(NULL);
+}
+expect {
+    NULL
+}
+
+test t-2 {
+    SELECT hex("");
+}
+expect {
+    
+}
+
+test t-3 {
+    SELECT hex("a");
+}
+expect {
+    61
+}
+
+test t-4 {
+    SELECT hex("abc");
+}
+expect {
+    616263
+}
+
+test t-5 {
+    SELECT hex(1);
+}
+expect {
+    1
+}
+
+test t-6 {
+    SELECT hex(-1);
+}
+expect {
+    FFFFFFFFFFFFFFFF
+}
+
+test t-7 {
+    SELECT hex(0123);
+}
+expect {
+    7B
+}
+
+test t-8 {
+    SELECT hex(0xAACC);
+}
+expect {
+    AACC
+}
+
+test t-9 {
+    SELECT hex(3.1415926);
+}
+expect {
+    3
+}
+
+test t-10 {
+    SELECT hex("中文测试");
+}
+expect {
+    E4B8ADE69687E6B58BE8AF95
+}
+
+test t-11 {
+    SELECT hex("日本語テスト");
+}
+expect {
+    E697A5E69CACE8AA9EE38386E382B9E38388
+}
+
+test t-12 {
+    SELECT hex("한국어 시험");
+}
+expect {
+    ED959CEAB5ADEC96B420EC8B9CED9798
+}
+
+test t-13 {
+    SELECT hex("😊😂🤢");
+}
+expect {
+    F09F988AF09F9882F09FA4A2
+}
+
+test t-14 {
+    SELECT hex('123');
+}
+expect {
+    313233
+}
+
+test t-15 {
+    SELECT hex(9223372036854775807);
+}
+expect {
+    7FFFFFFFFFFFFFFF
+}
+
+test t-16 {
+    SELECT hex(-9223372036854775808);
+}
+expect {
+    8000000000000000
+}
+
+test t-17 {
+    SELECT hex(999999999999999999999999);
+}
+expect {
+    7FFFFFFFFFFFFFFF
+}
+
+test t-18 {
+    SELECT hex(-999999999999999999999999);
+}
+expect {
+    8000000000000000
+}
+
+test t-19 {
+    SELECT hex(_binary 'Müller' );
+}
+expect {
+    4DC3BC6C6C6572
+}
+
+test t-20 {
+    SELECT hex(_utf8mb4 'abcABCÅå');
+}
+expect {
+    616263414243C385C3A5
+}
+
+test t-21 {
+    SELECT hex(_latin1 0xFF);
+}
+expect {
+    FF
+}
+
+test t-22 {
+    SELECT hex(0);
+}
+expect {
+    0
+}
+
+test t-24 {
+    SELECT hex(255);
+}
+expect {
+    FF
+}
+
+test t-25 {
+    SELECT hex(' 0 ');
+}
+expect {
+    203020
+}
+
+test t-26 {
+    SELECT hex(' 1 ');
+}
+expect {
+    203120
+}
+
+test t-27 {
+    SELECT hex(' 255 ');
+}
+expect {
+    2032353520
+}
+
+test t-28 {
+    SELECT hex('\t1foo\t');
+}
+expect {
+    0931666F6F09
+}
+
+test t-29 {
+    SELECT hex(' 255 foo');
+}
+expect {
+    2032353520666F6F
+}
+
+test t-30 {
+    SELECT hex(0.0e0);
+}
+expect {
+    0
+}
+
+test t-31 {
+    SELECT hex(1.0e0);
+}
+expect {
+    1
+}
+
+test t-32 {
+    SELECT hex(1.5e0);
+}
+expect {
+    2
+}
+
+test t-33 {
+    SELECT hex(-1.5e0);
+}
+expect {
+    FFFFFFFFFFFFFFFE
+}
+
+test t-34 {
+    SELECT hex(1.1e0);
+}
+expect {
+    1
+}
+
+test t-35 {
+    SELECT hex(-1.1e0);
+}
+expect {
+    FFFFFFFFFFFFFFFF
+}
+
+test t-36 {
+    SELECT hex(-1.7e0);
+}
+expect {
+    FFFFFFFFFFFFFFFE
+}
+
+test t-37 {
+    SELECT hex(0.0);
+}
+expect {
+    0
+}
+
+test t-38 {
+    SELECT hex(0.000);
+}
+expect {
+    0
+}
+
+test t-39 {
+    SELECT hex(1.5);
+}
+expect {
+    2
+}
+
+test t-40 {
+    SELECT hex(-1.5);
+}
+expect {
+    FFFFFFFFFFFFFFFE
+}
+
+test t-41 {
+    SELECT hex(1.1);
+}
+expect {
+    1
+}
+
+test t-42 {
+    SELECT hex(1.7);
+}
+expect {
+    2
+}
+
+test t-43 {
+    SELECT hex(-1.1);
+}
+expect {
+    FFFFFFFFFFFFFFFF
+}
+
+test t-44 {
+    SELECT hex(-1.7);
+}
+expect {
+    FFFFFFFFFFFFFFFE
+}
+
+test t-45 {
+    SELECT hex('1.5');
+}
+expect {
+    312E35
+}
+
+test t-46 {
+    SELECT hex('-1.5');
+}
+expect {
+    2D312E35
+}
+
+test t-47 {
+    SELECT hex('foobar');
+}
+expect {
+    666F6F626172
+}
+
+test t-48 {
+    SELECT hex(_utf8 'foobar');
+}
+expect {
+    666F6F626172
+}
+
+test t-49 {
+    SELECT hex('');
+}
+expect {
+    
+}
+
+test t-50 {
+    SELECT hex(_binary 'foobar');
+}
+expect {
+    666F6F626172
+}
+
+test t-51 {
+    SELECT hex(0x0);
+}
+expect {
+    00
+}
+
+test t-52 {
+    SELECT hex(0x1);
+}
+expect {
+    01
+}
+
+test t-53 {
+    SELECT hex(0xff);
+}
+expect {
+    FF
+}
+
+test t-54 {
+    SELECT hex(X'00');
+}
+expect {
+    00
+}
+
+test t-55 {
+    SELECT hex(X'01');
+}
+expect {
+    01
+}
+
+test t-56 {
+    SELECT hex(X'ff');
+}
+expect {
+    FF
+}
+
+test t-57 {
+    SELECT hex(0b1001);
+}
+expect {
+    09
+}
+
+test t-58 {
+    SELECT hex(b'1001');
+}
+expect {
+    09
+}
+
+test t-59 {
+    SELECT hex(0x9);
+}
+expect {
+    09
+}
+
+test t-60 {
+    SELECT hex(x'09');
+}
+expect {
+    09
+}
+
+test t-62 {
+    SELECT hex(true);
+}
+expect {
+    1
+}
+
+test t-63 {
+    SELECT hex(false);
+}
+expect {
+    0
+}
+
+test t-64 {
+    SELECT hex(NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-65 {
+    SELECT hex(1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-66 {
+    SELECT hex(NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-67 {
+    SELECT hex(NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-68 {
+    SELECT hex(1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-69 {
+    SELECT hex(NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-70 {
+    SELECT hex(NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-71 {
+    SELECT hex(1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-72 {
+    SELECT hex(NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-73 {
+    SELECT hex(NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-74 {
+    SELECT hex(1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-75 {
+    SELECT hex(NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-76 {
+    SELECT hex(0xFF666F6F626172FF);
+}
+expect {
+    FF666F6F626172FF
+}
+
+test t-77 {
+    SELECT hex(0x666F6F626172FF);
+}
+expect {
+    666F6F626172FF
+}
+
+test t-78 {
+    SELECT hex(0xFF666F6F626172);
+}
+expect {
+    FF666F6F626172
+}
+
+test t-81 {
+    SELECT hex(18446744073709551615);
+}
+expect {
+    FFFFFFFFFFFFFFFF
+}
+
+test t-82 {
+    SELECT hex(18446744073709540000e0);
+}
+expect {
+    7FFFFFFFFFFFFFFF
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-83 {
+    SELECT hex(-18446744073709540000e0);
+}
+expect error {
+}
+
+test t-84 {
+    SELECT hex(JSON_OBJECT());
+}
+expect {
+    7B7D
+}
+
+test t-85 {
+    SELECT hex(JSON_ARRAY());
+}
+expect {
+    5B5D
+}
+
+test t-86 {
+    SELECT hex(time '10:04:58');
+}
+expect {
+    31303A30343A3538
+}
+
+test t-87 {
+    SELECT hex(time '31:34:58');
+}
+expect {
+    33313A33343A3538
+}
+
+test t-88 {
+    SELECT hex(time '32:34:58');
+}
+expect {
+    33323A33343A3538
+}
+
+test t-89 {
+    SELECT hex(time '130:34:58');
+}
+expect {
+    3133303A33343A3538
+}
+
+test t-90 {
+    SELECT hex(time '5 10:34:58');
+}
+expect {
+    3133303A33343A3538
+}
+
+test t-91 {
+    SELECT hex(time '10:04:58.1');
+}
+expect {
+    31303A30343A35382E31
+}
+
+test t-92 {
+    SELECT hex(time '31:34:58.4');
+}
+expect {
+    33313A33343A35382E34
+}
+
+test t-93 {
+    SELECT hex(time '32:34:58.5');
+}
+expect {
+    33323A33343A35382E35
+}
+
+test t-94 {
+    SELECT hex(time '130:34:58.6');
+}
+expect {
+    3133303A33343A35382E36
+}
+
+test t-95 {
+    SELECT hex(time '5 10:34:58.9');
+}
+expect {
+    3133303A33343A35382E39
+}
+
+test t-96 {
+    SELECT hex(date '2000-01-01');
+}
+expect {
+    323030302D30312D3031
+}
+
+test t-97 {
+    SELECT hex(timestamp '2000-01-01 10:34:58');
+}
+expect {
+    323030302D30312D30312031303A33343A3538
+}
+
+test t-98 {
+    SELECT hex(timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    323030302D30312D30312031303A33343A35382E313233343536
+}
+
+test t-99 {
+    SELECT hex(timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    323030302D30312D30312031303A33343A35382E393738363534
+}
+
+test t-100 {
+    SELECT hex(timestamp '2024-12-30 10:34:58');
+}
+expect {
+    323032342D31322D33302031303A33343A3538
+}
+
+test t-101 {
+    SELECT hex(20000101103458);
+}
+expect {
+    1230A2EBF762
+}
+
+test t-102 {
+    SELECT hex(20000101103458.1234);
+}
+expect {
+    1230A2EBF762
+}
+
+test t-103 {
+    SELECT hex(20000101103458.123456);
+}
+expect {
+    1230A2EBF762
+}
+
+test t-104 {
+    SELECT hex(20000101);
+}
+expect {
+    1312D65
+}
+
+test t-105 {
+    SELECT hex(103458);
+}
+expect {
+    19422
+}
+
+test t-106 {
+    SELECT hex(103458.123456);
+}
+expect {
+    19422
+}
+
+test t-107 {
+    SELECT hex('20000101103458');
+}
+expect {
+    3230303030313031313033343538
+}
+
+test t-108 {
+    SELECT hex('20000101103458.1234');
+}
+expect {
+    32303030303130313130333435382E31323334
+}
+
+test t-109 {
+    SELECT hex('20000101103458.123456');
+}
+expect {
+    32303030303130313130333435382E313233343536
+}
+
+test t-110 {
+    SELECT hex('20000101');
+}
+expect {
+    3230303030313031
+}
+
+test t-111 {
+    SELECT hex('103458');
+}
+expect {
+    313033343538
+}
+
+test t-112 {
+    SELECT hex('103458.123456');
+}
+expect {
+    3130333435382E313233343536
+}
+
+test t-113 {
+    SELECT hex('20000101103458foo');
+}
+expect {
+    3230303030313031313033343538666F6F
+}
+
+test t-114 {
+    SELECT hex('20000101103458.1234foo');
+}
+expect {
+    32303030303130313130333435382E31323334666F6F
+}
+
+test t-115 {
+    SELECT hex('20000101103458.123456foo');
+}
+expect {
+    32303030303130313130333435382E313233343536666F6F
+}
+
+test t-116 {
+    SELECT hex('20000101foo');
+}
+expect {
+    3230303030313031666F6F
+}
+
+test t-117 {
+    SELECT hex('103458foo');
+}
+expect {
+    313033343538666F6F
+}
+
+test t-118 {
+    SELECT hex('103458.123456foo');
+}
+expect {
+    3130333435382E313233343536666F6F
+}
+
+test t-119 {
+    SELECT hex(time '-10:04:58');
+}
+expect {
+    2D31303A30343A3538
+}
+
+test t-120 {
+    SELECT hex(time '-31:34:58');
+}
+expect {
+    2D33313A33343A3538
+}
+
+test t-121 {
+    SELECT hex(time '-32:34:58');
+}
+expect {
+    2D33323A33343A3538
+}
+
+test t-122 {
+    SELECT hex(time'00:00:01.0000');
+}
+expect {
+    30303A30303A30312E30303030
+}
+
+test t-123 {
+    SELECT hex(time'00:00:59.01011');
+}
+expect {
+    30303A30303A35392E3031303131
+}
+
+test t-124 {
+    SELECT hex(time'00:00:59.2132234');
+}
+expect {
+    30303A30303A35392E323133323233
+}
+
+test t-125 {
+    SELECT hex(time '-101:34:58');
+}
+expect {
+    2D3130313A33343A3538
+}
+
+test t-126 {
+    SELECT hex(time '-5 10:34:58');
+}
+expect {
+    2D3133303A33343A3538
+}
+
+test t-127 {
+    SELECT hex('10:04:58');
+}
+expect {
+    31303A30343A3538
+}
+
+test t-128 {
+    SELECT hex('101:34:58');
+}
+expect {
+    3130313A33343A3538
+}
+
+test t-129 {
+    SELECT hex('5 10:34:58');
+}
+expect {
+    352031303A33343A3538
+}
+
+test t-130 {
+    SELECT hex('2000-01-01');
+}
+expect {
+    323030302D30312D3031
+}
+
+test t-131 {
+    SELECT hex('2000-01-01 12:34:58');
+}
+expect {
+    323030302D30312D30312031323A33343A3538
+}
+
+test t-132 {
+    SELECT hex('0000-02-29');
+}
+expect {
+    303030302D30322D3239
+}
+
+test t-133 {
+    SELECT hex('0000-01-03');
+}
+expect {
+    303030302D30312D3033
+}
+
+test t-134 {
+    SELECT hex('1969-02-18');
+}
+expect {
+    313936392D30322D3138
+}
+
+test t-135 {
+    SELECT hex('1970-01-01 00:00:01');
+}
+expect {
+    313937302D30312D30312030303A30303A3031
+}
+
+test t-136 {
+    SELECT hex('3001-02-19 00:00:00');
+}
+expect {
+    333030312D30322D31392030303A30303A3030
+}
+
+test t-137 {
+    SELECT hex('3001-02-18 23:59:59');
+}
+expect {
+    333030312D30322D31382032333A35393A3539
+}
+
+test t-138 {
+    SELECT hex(cast(0 as json));
+}
+expect {
+    30
+}
+
+test t-139 {
+    SELECT hex(cast(1 as json));
+}
+expect {
+    31
+}
+
+test t-140 {
+    SELECT hex(cast(true as json));
+}
+expect {
+    74727565
+}
+
+test t-141 {
+    SELECT hex(cast(false as json));
+}
+expect {
+    66616C7365
+}
+
+test t-142 {
+    SELECT hex(cast('\{\}' as json));
+}
+expect {
+    7B7D
+}
+
+test t-143 {
+    SELECT hex(cast('[]' as json));
+}
+expect {
+    5B5D
+}
+
+test t-144 {
+    SELECT hex(cast('null' as json));
+}
+expect {
+    6E756C6C
+}
+
+test t-145 {
+    SELECT hex(cast('true' as json));
+}
+expect {
+    74727565
+}
+
+test t-146 {
+    SELECT hex(cast('false' as json));
+}
+expect {
+    66616C7365
+}
+
+test t-148 {
+    SELECT hex(cast(2 as json));
+}
+expect {
+    32
+}
+
+test t-149 {
+    SELECT hex(cast(1.1 as json));
+}
+expect {
+    312E31
+}
+
+test t-150 {
+    SELECT hex(cast(-1.1 as json));
+}
+expect {
+    2D312E31
+}
+
+test t-151 {
+    SELECT hex(cast(9223372036854775807 as json));
+}
+expect {
+    39323233333732303336383534373735383037
+}
+
+test t-152 {
+    SELECT hex(cast(18446744073709551615 as json));
+}
+expect {
+    3138343436373434303733373039353531363135
+}
+
+test t-153 {
+    SELECT hex(cast('1' as json));
+}
+expect {
+    31
+}
+
+test t-154 {
+    SELECT hex(cast('2' as json));
+}
+expect {
+    32
+}
+
+test t-155 {
+    SELECT hex(cast('1.1' as json));
+}
+expect {
+    312E31
+}
+
+test t-156 {
+    SELECT hex(cast('-1.1' as json));
+}
+expect {
+    2D312E31
+}
+
+test t-157 {
+    SELECT hex(cast('9223372036854775807' as json));
+}
+expect {
+    39323233333732303336383534373735383037
+}
+
+test t-158 {
+    SELECT hex(cast('18446744073709551615' as json));
+}
+expect {
+    3138343436373434303733373039353531363135
+}
+
+test t-159 {
+    SELECT hex(cast('"foo"' as json));
+}
+expect {
+    22666F6F22
+}
+
+test t-160 {
+    SELECT hex(cast('"bar"' as json));
+}
+expect {
+    2262617222
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-161 {
+    SELECT hex(cast('invalid' as json));
+}
+expect error {
+}
+
+test t-162 {
+    SELECT hex(cast(_binary' "foo"' as json));
+}
+expect {
+    226261736536343A7479706531353A49434A6D6232386922
+}
+
+test t-163 {
+    SELECT hex(cast(_binary '"bar"' as json));
+}
+expect {
+    226261736536343A7479706531353A496D4A686369493D22
+}
+
+test t-164 {
+    SELECT hex(cast(0xFF666F6F626172FF as json));
+}
+expect {
+    226261736536343A7479706531353A2F325A7662324A686376383D22
+}
+
+test t-165 {
+    SELECT hex(cast(0x666F6F626172FF as json));
+}
+expect {
+    226261736536343A7479706531353A5A6D3976596D46792F773D3D22
+}
+
+test t-166 {
+    SELECT hex(cast(0b01 as json));
+}
+expect {
+    226261736536343A7479706531353A41513D3D22
+}
+
+test t-167 {
+    SELECT hex(cast(0b001 as json));
+}
+expect {
+    226261736536343A7479706531353A41513D3D22
+}
+
+test t-168 {
+    SELECT hex(cast('["a"]' as json));
+}
+expect {
+    5B2261225D
+}
+
+test t-169 {
+    SELECT hex(cast('["ab"]' as json));
+}
+expect {
+    5B226162225D
+}
+
+test t-170 {
+    SELECT hex(cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    5B226162222C20226364222C20226566225D
+}
+
+test t-171 {
+    SELECT hex(cast('["ab", "ef"]' as json));
+}
+expect {
+    5B226162222C20226566225D
+}
+
+test t-172 {
+    SELECT hex(cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    7B2261223A20312C202262223A20327D
+}
+
+test t-173 {
+    SELECT hex(cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    7B2261223A20312C202262223A20327D
+}
+
+test t-174 {
+    SELECT hex(cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    7B2262223A20322C202263223A20317D
+}
+
+test t-175 {
+    SELECT hex(cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    7B2262223A20322C202263223A20317D
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-176 {
+    SELECT hex(cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-177 {
+    SELECT hex(cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-178 {
+    SELECT hex(cast(date '2000-01-01' as json));
+}
+expect {
+    22323030302D30312D303122
+}
+
+test t-179 {
+    SELECT hex(cast(date '2000-01-02' as json));
+}
+expect {
+    22323030302D30312D303222
+}
+
+test t-180 {
+    SELECT hex(cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    22323030302D30312D30312031323A33343A35382E30303030303022
+}
+
+test t-181 {
+    SELECT hex(cast(time '12:34:56' as json));
+}
+expect {
+    2231323A33343A35362E30303030303022
+}
+
+test t-182 {
+    SELECT hex(cast(time '12:34:58' as json));
+}
+expect {
+    2231323A33343A35382E30303030303022
+}
+
+test t-183 {
+    SELECT hex(cast(time '5 12:34:58' as json));
+}
+expect {
+    2230343A33343A35382E30303030303022
+}
+
+test t-186 {
+    SELECT hex(0xFF);
+}
+expect {
+    FF
+}
+
+test t-188 {
+    SELECT hex(1.0);
+}
+expect {
+    1
+}
+
+test t-191 {
+    SELECT hex(-255);
+}
+expect {
+    FFFFFFFFFFFFFF01
+}
+
+test t-192 {
+    SELECT hex(7);
+}
+expect {
+    7
+}
+
+test t-193 {
+    SELECT hex(9);
+}
+expect {
+    9
+}
+
+test t-194 {
+    SELECT hex(13);
+}
+expect {
+    D
+}
+
+test t-201 {
+    SELECT hex(255.0);
+}
+expect {
+    FF
+}
+
+test t-205 {
+    SELECT hex(-1e0);
+}
+expect {
+    FFFFFFFFFFFFFFFF
+}
+
+test t-206 {
+    SELECT hex(-255e0);
+}
+expect {
+    FFFFFFFFFFFFFF01
+}
+
+test t-207 {
+    SELECT hex(7e0);
+}
+expect {
+    7
+}
+
+test t-208 {
+    SELECT hex(9e0);
+}
+expect {
+    9
+}
+
+test t-209 {
+    SELECT hex(13e0);
+}
+expect {
+    D
+}
+
+test t-212 {
+    SELECT hex(9223372036854775808);
+}
+expect {
+    8000000000000000
+}
+
+test t-214 {
+    SELECT hex(18446744073709551616);
+}
+expect {
+    7FFFFFFFFFFFFFFF
+}
+
+test t-215 {
+    SELECT hex(-9223372036854775809);
+}
+expect {
+    8000000000000000
+}
+
+test t-216 {
+    SELECT hex("foobar");
+}
+expect {
+    666F6F626172
+}
+
+test t-217 {
+    SELECT hex("foobar1234");
+}
+expect {
+    666F6F62617231323334
+}
+
+test t-218 {
+    SELECT hex("0");
+}
+expect {
+    30
+}
+
+test t-220 {
+    SELECT hex(-0x1);
+}
+expect {
+    FFFFFFFFFFFFFFFF
+}
+
+test t-223 {
+    SELECT hex("1abcd");
+}
+expect {
+    3161626364
+}
+
+test t-225 {
+    SELECT hex(_binary "foobar");
+}
+expect {
+    666F6F626172
+}
+
+test t-226 {
+    SELECT hex(_binary "foobar1234");
+}
+expect {
+    666F6F62617231323334
+}
+
+test t-227 {
+    SELECT hex(64);
+}
+expect {
+    40
+}
+
+test t-228 {
+    SELECT hex('64');
+}
+expect {
+    3634
+}
+
+test t-229 {
+    SELECT hex(_binary '64');
+}
+expect {
+    3634
+}
+
+test t-230 {
+    SELECT hex(X'40');
+}
+expect {
+    40
+}
+
+test t-231 {
+    SELECT hex(_binary X'40');
+}
+expect {
+    40
+}

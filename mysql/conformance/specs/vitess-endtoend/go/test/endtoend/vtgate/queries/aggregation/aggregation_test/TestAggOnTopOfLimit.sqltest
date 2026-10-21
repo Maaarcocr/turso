@@ -1,0 +1,192 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table aggr_test
+(
+    id   bigint,
+    val1 varchar(16),
+    val2 bigint,
+    primary key (id)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4), (6,'b',null), (7,null,2), (8,null,null);
+}
+
+@setup s1
+test l386 {
+    insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4), (6,'b',null), (7,null,2), (8,null,null);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l391 {
+    select count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+test l392 {
+    select count(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+test l393 {
+    select count(*) from (select id, val1 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+test l394 {
+    select count(val1) from (select id, val1 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l395 {
+    select count(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l396 {
+    select val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1;
+}
+expect unordered {
+    NULL|1
+    a|1
+}
+
+@setup s1
+@setup s2
+test l397 {
+    select val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1;
+}
+expect unordered {
+    NULL|1
+    a|2
+    b|1
+    c|2
+}
+
+@setup s1
+@setup s2
+test l399 {
+    select avg(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+test l400 {
+    select val1, avg(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1;
+}
+expect unordered {
+    NULL|2.0000
+    a|3.5000
+    b|1.0000
+    c|3.5000
+}
+
+@setup s1
+@setup s2
+test l404 {
+    select count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x;
+}
+expect unordered {
+    2|7
+}
+
+@setup s1
+@setup s2
+test l405 {
+    select count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    2|14
+}
+
+@setup s1
+@setup s2
+test l406 {
+    select count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    1|14
+}
+
+@setup s1
+@setup s2
+test l407 {
+    select count(val2), sum(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x;
+}
+expect unordered {
+    0|NULL
+}
+
+@setup s1
+@setup s2
+test l408 {
+    select val1, count(*), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1;
+}
+expect unordered {
+    NULL|1|7
+    a|1|2
+}
+
+@setup s1
+@setup s2
+test l410 {
+    select count(*), sum(val1), avg(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x;
+}
+expect unordered {
+    2|0|0
+}
+
+@setup s1
+@setup s2
+test l411 {
+    select count(val1), sum(id), avg(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x;
+}
+expect unordered {
+    2|7|3.5000
+}
+
+@setup s1
+@setup s2
+test l412 {
+    select val1, count(val2), sum(val2), avg(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1;
+}
+expect unordered {
+    NULL|1|2|2.0000
+    a|2|7|3.5000
+    b|1|1|1.0000
+    c|2|7|3.5000
+}

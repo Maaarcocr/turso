@@ -1,0 +1,1141 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-188617 {
+    SELECT '101:34:58' MOD cast(date '2000-01-02' as json);
+}
+expect {
+    NULL
+}
+
+test t-188668 {
+    SELECT '5 10:34:58' MOD 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-188827 {
+    SELECT '2000-01-01' MOD 1 * NULL;
+}
+expect {
+    NULL
+}
+
+test t-188830 {
+    SELECT '2000-01-01' MOD 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-188850 {
+    SELECT '2000-01-01' MOD time '32:34:58';
+}
+expect {
+    2000
+}
+
+test t-188929 {
+    SELECT '2000-01-01' MOD cast(0b001 as json);
+}
+expect {
+    NULL
+}
+
+test t-188934 {
+    SELECT '2000-01-01' MOD cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-189036 {
+    SELECT '2000-01-01 12:34:58' MOD '103458.123456';
+}
+expect {
+    2000
+}
+
+test t-189059 {
+    SELECT '2000-01-01 12:34:58' MOD '1970-01-01 00:00:01';
+}
+expect {
+    30
+}
+
+test t-189346 {
+    SELECT '0000-01-03' MOD timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    0
+}
+
+test t-189509 {
+    SELECT '1969-02-18' MOD timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    1969
+}
+
+test t-189524 {
+    SELECT '1969-02-18' MOD '20000101103458.1234foo';
+}
+expect {
+    1969
+}
+
+test t-189540 {
+    SELECT '1969-02-18' MOD '2000-01-01';
+}
+expect {
+    1969
+}
+
+test t-189634 {
+    SELECT '1970-01-01 00:00:01' MOD true;
+}
+expect {
+    0
+}
+
+test t-189674 {
+    SELECT '1970-01-01 00:00:01' MOD 20000101103458.1234;
+}
+expect {
+    1970
+}
+
+test t-189690 {
+    SELECT '1970-01-01 00:00:01' MOD '103458.123456foo';
+}
+expect {
+    1970
+}
+
+test t-189694 {
+    SELECT '1970-01-01 00:00:01' MOD time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-189713 {
+    SELECT '1970-01-01 00:00:01' MOD cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-189715 {
+    SELECT '1970-01-01 00:00:01' MOD cast('[]' as json);
+}
+expect {
+    NULL
+}
+
+test t-189737 {
+    SELECT '1970-01-01 00:00:01' MOD cast(0x666F6F626172FF as json);
+}
+expect {
+    NULL
+}
+
+test t-189765 {
+    SELECT '3001-02-19 00:00:00' MOD 1.0e0;
+}
+expect {
+    0
+}
+
+test t-189767 {
+    SELECT '3001-02-19 00:00:00' MOD -1.5e0;
+}
+expect {
+    1
+}
+
+test t-189844 {
+    SELECT '3001-02-19 00:00:00' MOD '20000101';
+}
+expect {
+    3001
+}
+
+test t-189850 {
+    SELECT '3001-02-19 00:00:00' MOD '20000101foo';
+}
+expect {
+    3001
+}
+
+test t-190000 {
+    SELECT '3001-02-18 23:59:59' MOD 20000101;
+}
+expect {
+    3001
+}
+
+test t-190045 {
+    SELECT '3001-02-18 23:59:59' MOD cast(1.1 as json);
+}
+expect {
+    0.1999999999997577
+}
+
+test t-190064 {
+    SELECT '3001-02-18 23:59:59' MOD cast('["a"]' as json);
+}
+expect {
+    NULL
+}
+
+test t-190140 {
+    SELECT cast(0 as json) MOD 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-190203 {
+    SELECT cast(0 as json) MOD cast('true' as json);
+}
+expect {
+    0
+}
+
+test t-190271 {
+    SELECT cast(1 as json) MOD 0x0;
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-190397 {
+    SELECT cast(1 as json) MOD cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-190411 {
+    SELECT cast(true as json) MOD ' 255 foo';
+}
+expect {
+    1
+}
+
+test t-190422 {
+    SELECT cast(true as json) MOD -1.5;
+}
+expect {
+    1
+}
+
+test t-190427 {
+    SELECT cast(true as json) MOD '1.5';
+}
+expect {
+    1
+}
+
+test t-190831 {
+    SELECT cast('\{\}' as json) MOD time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-190990 {
+    SELECT cast('[]' as json) MOD time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-191166 {
+    SELECT cast('null' as json) MOD '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-191256 {
+    SELECT cast('true' as json) MOD NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-191300 {
+    SELECT cast('true' as json) MOD '20000101103458.1234';
+}
+expect {
+    1
+}
+
+test t-191311 {
+    SELECT cast('true' as json) MOD time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-191320 {
+    SELECT cast('true' as json) MOD '101:34:58';
+}
+expect {
+    1
+}
+
+test t-191356 {
+    SELECT cast('true' as json) MOD cast(0xFF666F6F626172FF as json);
+}
+expect {
+    NULL
+}
+
+test t-191362 {
+    SELECT cast('true' as json) MOD cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    NULL
+}
+
+test t-191433 {
+    SELECT cast('false' as json) MOD 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-191730 {
+    SELECT cast(2 as json) MOD 0x1;
+}
+expect {
+    0
+}
+
+test t-191753 {
+    SELECT cast(2 as json) MOD NULL - NULL;
+}
+expect {
+    NULL
+}
+
+test t-191798 {
+    SELECT cast(2 as json) MOD time '-31:34:58';
+}
+expect {
+    2
+}
+
+test t-191879 {
+    SELECT cast(1.1 as json) MOD 1.5;
+}
+expect {
+    1.1
+}
+
+test t-191983 {
+    SELECT cast(1.1 as json) MOD cast('[]' as json);
+}
+expect {
+    NULL
+}
+
+test t-192019 {
+    SELECT cast(1.1 as json) MOD cast(date '2000-01-02' as json);
+}
+expect {
+    NULL
+}
+
+test t-192075 {
+    SELECT cast(-1.1 as json) MOD NULL - 1;
+}
+expect {
+    NULL
+}
+
+test t-192115 {
+    SELECT cast(-1.1 as json) MOD '20000101103458foo';
+}
+expect {
+    -1.1
+}
+
+test t-192161 {
+    SELECT cast(-1.1 as json) MOD cast('"foo"' as json);
+}
+expect {
+    NULL
+}
+
+test t-192190 {
+    SELECT cast(9223372036854775807 as json) MOD ' 1 ';
+}
+expect {
+    0
+}
+
+test t-192237 {
+    SELECT cast(9223372036854775807 as json) MOD NULL - 1;
+}
+expect {
+    NULL
+}
+
+test t-192255 {
+    SELECT cast(9223372036854775807 as json) MOD time '10:04:58.1';
+}
+expect {
+    8673.27727848725
+}
+
+test t-192294 {
+    SELECT cast(9223372036854775807 as json) MOD '2000-01-01';
+}
+expect {
+    1808
+}
+
+test t-192303 {
+    SELECT cast(9223372036854775807 as json) MOD cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-192439 {
+    SELECT cast(18446744073709551615 as json) MOD '20000101103458foo';
+}
+expect {
+    10822754927560
+}
+
+test t-192519 {
+    SELECT cast('1' as json) MOD 1.0e0;
+}
+expect {
+    0
+}
+
+test t-192524 {
+    SELECT cast('1' as json) MOD -1.7e0;
+}
+expect {
+    1
+}
+
+test t-192629 {
+    SELECT cast('1' as json) MOD cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-192796 {
+    SELECT cast('2' as json) MOD cast('false' as json);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-192811 {
+    SELECT cast('2' as json) MOD cast('invalid' as json);
+}
+expect error {
+}
+
+test t-192931 {
+    SELECT cast('1.1' as json) MOD time '-10:04:58';
+}
+expect {
+    1.1
+}
+
+test t-192934 {
+    SELECT cast('1.1' as json) MOD time'00:00:01.0000';
+}
+expect {
+    0.10000000000000009
+}
+
+test t-192977 {
+    SELECT cast('1.1' as json) MOD cast(0x666F6F626172FF as json);
+}
+expect {
+    NULL
+}
+
+test t-193005 {
+    SELECT cast('-1.1' as json) MOD 1.0e0;
+}
+expect {
+    -0.10000000000000009
+}
+
+test t-193088 {
+    SELECT cast('-1.1' as json) MOD '20000101103458.1234foo';
+}
+expect {
+    -1.1
+}
+
+test t-193148 {
+    SELECT cast('-1.1' as json) MOD cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-193200 {
+    SELECT cast('9223372036854775807' as json) MOD NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-193234 {
+    SELECT cast('9223372036854775807' as json) MOD timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    5411377406134.25
+}
+
+test t-193325 {
+    SELECT cast('18446744073709551615' as json) MOD ' 255 ';
+}
+expect {
+    1
+}
+
+test t-193376 {
+    SELECT cast('18446744073709551615' as json) MOD 0xFF666F6F626172;
+}
+expect {
+    4.32246222308352e16
+}
+
+test t-193467 {
+    SELECT cast('18446744073709551615' as json) MOD cast('["ab"]' as json);
+}
+expect {
+    NULL
+}
+
+test t-193528 {
+    SELECT cast('"foo"' as json) MOD 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-193617 {
+    SELECT cast('"foo"' as json) MOD cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-193666 {
+    SELECT cast('"bar"' as json) MOD -1.7;
+}
+expect {
+    0
+}
+
+test t-194057 {
+    SELECT cast(_binary' "foo"' as json) MOD '103458';
+}
+expect {
+    0
+}
+
+test t-194087 {
+    SELECT cast(_binary' "foo"' as json) MOD cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-194095 {
+    SELECT cast(_binary' "foo"' as json) MOD cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-194113 {
+    SELECT cast(_binary' "foo"' as json) MOD cast(0b001 as json);
+}
+expect {
+    NULL
+}
+
+test t-194140 {
+    SELECT cast(_binary '"bar"' as json) MOD 1.5e0;
+}
+expect {
+    0
+}
+
+test t-194163 {
+    SELECT cast(_binary '"bar"' as json) MOD X'01';
+}
+expect {
+    0
+}
+
+test t-194328 {
+    SELECT cast(0xFF666F6F626172FF as json) MOD b'1001';
+}
+expect {
+    0
+}
+
+test t-194336 {
+    SELECT cast(0xFF666F6F626172FF as json) MOD NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-194361 {
+    SELECT cast(0xFF666F6F626172FF as json) MOD time '10:04:58.1';
+}
+expect {
+    0
+}
+
+test t-194406 {
+    SELECT cast(0xFF666F6F626172FF as json) MOD '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-194474 {
+    SELECT cast(0x666F6F626172FF as json) MOD 1.7;
+}
+expect {
+    0
+}
+
+test t-194591 {
+    SELECT cast(0x666F6F626172FF as json) MOD cast('"foo"' as json);
+}
+expect {
+    NULL
+}
+
+test t-194645 {
+    SELECT cast(0b01 as json) MOD 0x0;
+}
+expect {
+    NULL
+}
+
+test t-194871 {
+    SELECT cast(0b001 as json) MOD '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-194888 {
+    SELECT cast(0b001 as json) MOD '0000-02-29';
+}
+expect {
+    NULL
+}
+
+test t-194914 {
+    SELECT cast(0b001 as json) MOD cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+test t-194916 {
+    SELECT cast(0b001 as json) MOD cast('"bar"' as json);
+}
+expect {
+    NULL
+}
+
+test t-194941 {
+    SELECT cast('["a"]' as json) MOD 1;
+}
+expect {
+    0
+}
+
+test t-195032 {
+    SELECT cast('["a"]' as json) MOD '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-195076 {
+    SELECT cast('["a"]' as json) MOD cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+test t-195086 {
+    SELECT cast('["a"]' as json) MOD cast('["a"]' as json);
+}
+expect {
+    NULL
+}
+
+test t-195152 {
+    SELECT cast('["ab"]' as json) MOD NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-195220 {
+    SELECT cast('["ab"]' as json) MOD cast(true as json);
+}
+expect {
+    0
+}
+
+test t-195357 {
+    SELECT cast('["ab", "cd", "ef"]' as json) MOD '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-195368 {
+    SELECT cast('["ab", "cd", "ef"]' as json) MOD time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-195494 {
+    SELECT cast('["ab", "ef"]' as json) MOD time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-195629 {
+    SELECT cast('\{"a": 1, "b": 2\}' as json) MOD false;
+}
+expect {
+    NULL
+}
+
+test t-195649 {
+    SELECT cast('\{"a": 1, "b": 2\}' as json) MOD -18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-195736 {
+    SELECT cast('\{"a": 1, "b": 2\}' as json) MOD cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    NULL
+}
+
+test t-195798 {
+    SELECT cast('\{"b": 2, "a": 1\}' as json) MOD NULL + 1;
+}
+expect {
+    NULL
+}
+
+test t-195993 {
+    SELECT cast('\{"c": 1, "b": 2\}' as json) MOD 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-196091 {
+    SELECT cast('\{"b": 2, "c": 1\}' as json) MOD 1.5;
+}
+expect {
+    0
+}
+
+test t-196099 {
+    SELECT cast('\{"b": 2, "c": 1\}' as json) MOD 'foobar';
+}
+expect {
+    NULL
+}
+
+test t-196214 {
+    SELECT cast('\{"b": 2, "c": 1\}' as json) MOD cast(_binary' "foo"' as json);
+}
+expect {
+    NULL
+}
+
+test t-196220 {
+    SELECT cast('\{"b": 2, "c": 1\}' as json) MOD cast('["a"]' as json);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-196300 {
+    SELECT cast(' "b": 2\}' as json) MOD time '10:04:58';
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-196497 {
+    SELECT cast('"a": 1' as json) MOD time '-32:34:58';
+}
+expect error {
+}
+
+test t-196634 {
+    SELECT cast(date '2000-01-01' as json) MOD date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-196676 {
+    SELECT cast(date '2000-01-01' as json) MOD cast(0 as json);
+}
+expect {
+    NULL
+}
+
+test t-196705 {
+    SELECT cast(date '2000-01-01' as json) MOD cast(0b001 as json);
+}
+expect {
+    NULL
+}
+
+test t-196734 {
+    SELECT cast(date '2000-01-02' as json) MOD 1.1e0;
+}
+expect {
+    0
+}
+
+test t-196784 {
+    SELECT cast(date '2000-01-02' as json) MOD JSON_OBJECT();
+}
+expect {
+    NULL
+}
+
+test t-196889 {
+    SELECT cast(timestamp '2000-01-01 12:34:58' as json) MOD ' 255 ';
+}
+expect {
+    0
+}
+
+test t-196908 {
+    SELECT cast(timestamp '2000-01-01 12:34:58' as json) MOD '-1.5';
+}
+expect {
+    0
+}
+
+test t-196929 {
+    SELECT cast(timestamp '2000-01-01 12:34:58' as json) MOD NULL / 1;
+}
+expect {
+    NULL
+}
+
+test t-197076 {
+    SELECT cast(time '12:34:56' as json) MOD 0x1;
+}
+expect {
+    0
+}
+
+test t-197183 {
+    SELECT cast(time '12:34:56' as json) MOD cast('"foo"' as json);
+}
+expect {
+    NULL
+}
+
+test t-197224 {
+    SELECT cast(time '12:34:58' as json) MOD 0.000;
+}
+expect {
+    NULL
+}
+
+test t-197274 {
+    SELECT cast(time '12:34:58' as json) MOD time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-197387 {
+    SELECT cast(time '5 12:34:58' as json) MOD 1.5;
+}
+expect {
+    0
+}
+
+test t-197403 {
+    SELECT cast(time '5 12:34:58' as json) MOD X'01';
+}
+expect {
+    0
+}
+
+test t-197491 {
+    SELECT cast(time '5 12:34:58' as json) MOD cast('[]' as json);
+}
+expect {
+    NULL
+}
+
+test t-197571 {
+    SELECT 0 MOD "1abcd";
+}
+expect {
+    0
+}
+
+test t-197623 {
+    SELECT 1 MOD 64;
+}
+expect {
+    1
+}
+
+test t-197682 {
+    SELECT 255 MOD -1;
+}
+expect {
+    0
+}
+
+test t-197770 {
+    SELECT 1.0 MOD X'40';
+}
+expect {
+    1.0
+}
+
+test t-197797 {
+    SELECT 1.1 MOD 13e0;
+}
+expect {
+    1.1
+}
+
+test t-197865 {
+    SELECT -1 MOD _binary '64';
+}
+expect {
+    -1
+}
+
+test t-197982 {
+    SELECT 9 MOD 1.5e0;
+}
+expect {
+    0
+}
+
+test t-197998 {
+    SELECT 9 MOD "0";
+}
+expect {
+    NULL
+}
+
+test t-198010 {
+    SELECT 9 MOD X'40';
+}
+expect {
+    9
+}
+
+test t-198332 {
+    SELECT 1.0e0 MOD "foobar";
+}
+expect {
+    NULL
+}
+
+test t-198354 {
+    SELECT 255.0 MOD -1;
+}
+expect {
+    0.0
+}
+
+test t-198381 {
+    SELECT 255.0 MOD "foobar1234";
+}
+expect {
+    NULL
+}
+
+test t-198516 {
+    SELECT 1.1e0 MOD 9e0;
+}
+expect {
+    1.1
+}
+
+test t-198552 {
+    SELECT -1e0 MOD -1.5;
+}
+expect {
+    -1
+}
+
+test t-198618 {
+    SELECT -255e0 MOD 18446744073709551616;
+}
+expect {
+    -255
+}
+
+test t-198664 {
+    SELECT 7e0 MOD 9223372036854775808;
+}
+expect {
+    7
+}
+
+test t-198770 {
+    SELECT 13e0 MOD X'00';
+}
+expect {
+    NULL
+}
+
+test t-198867 {
+    SELECT 9223372036854775807 MOD "1abcd";
+}
+expect {
+    0
+}
+
+test t-199009 {
+    SELECT 18446744073709551616 MOD X'ff';
+}
+expect {
+    1
+}
+
+test t-199127 {
+    SELECT "foobar1234" MOD 1.5;
+}
+expect {
+    0
+}
+
+test t-199170 {
+    SELECT "0" MOD -1;
+}
+expect {
+    0
+}
+
+test t-199272 {
+    SELECT -0x1 MOD -1.5;
+}
+expect {
+    -1.0
+}
+
+test t-199297 {
+    SELECT -0x1 MOD X'ff';
+}
+expect {
+    -1
+}
+
+test t-199485 {
+    SELECT NULL MOD "foobar1234";
+}
+expect {
+    NULL
+}
+
+test t-199500 {
+    SELECT _binary "foobar" MOD 0;
+}
+expect {
+    NULL
+}
+
+test t-199673 {
+    SELECT '64' MOD -9223372036854775808;
+}
+expect {
+    64
+}
+
+test t-199718 {
+    SELECT _binary '64' MOD 18446744073709551615;
+}
+expect {
+    64
+}
+
+test t-199721 {
+    SELECT _binary '64' MOD -9223372036854775808;
+}
+expect {
+    64
+}
+
+test t-199742 {
+    SELECT X'40' MOD 0xFF;
+}
+expect {
+    64
+}
+
+test t-199746 {
+    SELECT X'40' MOD -1;
+}
+expect {
+    0
+}
+
+test t-199796 {
+    SELECT _binary X'40' MOD 7;
+}
+expect {
+    0
+}
+
+test t-199813 {
+    SELECT _binary X'40' MOD 13e0;
+}
+expect {
+    0
+}

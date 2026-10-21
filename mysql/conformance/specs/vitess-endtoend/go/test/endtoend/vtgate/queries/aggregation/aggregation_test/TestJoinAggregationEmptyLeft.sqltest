@@ -1,0 +1,46 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    CREATE TABLE bet_logs (
+    id bigint unsigned NOT NULL,
+    merchant_game_id bigint unsigned NOT NULL,
+    bet_amount DECIMAL(20, 8),
+    game_id bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200);
+    set @@sql_mode = ' ';
+}
+
+@setup s1
+test l641 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l644 {
+    SELECT t1.name, SUM(b.bet_amount) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id;
+}
+expect unordered {
+}

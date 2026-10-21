@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-20139 {
+    SELECT 0x666F6F626172FF NOT LIKE '3001-02-19 00:00:00';
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-20170 {
+    SELECT 0x666F6F626172FF LIKE cast(18446744073709551615 as json);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-20199 {
+    SELECT 0x666F6F626172FF NOT LIKE cast(0b01 as json);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-20208 {
+    SELECT 0x666F6F626172FF LIKE cast('["ab", "ef"]' as json);
+}
+expect error {
+}
+
+test t-20262 {
+    SELECT 0x666F6F626172FF LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-20277 {
+    SELECT 0xFF666F6F626172 NOT LIKE 255;
+}
+expect {
+    1
+}
+
+test t-20289 {
+    SELECT 0xFF666F6F626172 NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-20301 {
+    SELECT 0xFF666F6F626172 NOT LIKE -1.7e0;
+}
+expect {
+    1
+}
+
+test t-20318 {
+    SELECT 0xFF666F6F626172 LIKE '1.5';
+}
+expect {
+    0
+}
+
+test t-20322 {
+    SELECT 0xFF666F6F626172 LIKE 'foobar';
+}
+expect {
+    0
+}
+
+test t-20336 {
+    SELECT 0xFF666F6F626172 LIKE X'00';
+}
+expect {
+    0
+}
+
+test t-20386 {
+    SELECT 0xFF666F6F626172 LIKE 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-20406 {
+    SELECT 0xFF666F6F626172 LIKE time '130:34:58';
+}
+expect {
+    0
+}
+
+test t-20432 {
+    SELECT 0xFF666F6F626172 LIKE 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-20437 {
+    SELECT 0xFF666F6F626172 NOT LIKE 20000101;
+}
+expect {
+    1
+}
+
+test t-20459 {
+    SELECT 0xFF666F6F626172 NOT LIKE '20000101103458.123456foo';
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-20506 {
+    SELECT 0xFF666F6F626172 LIKE cast(1 as json);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-20548 {
+    SELECT 0xFF666F6F626172 LIKE cast('"bar"' as json);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-20551 {
+    SELECT 0xFF666F6F626172 NOT LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-20560 {
+    SELECT 0xFF666F6F626172 LIKE cast(0b01 as json);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-20572 {
+    SELECT 0xFF666F6F626172 LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-20617 {
+    SELECT 0xFF666F6F626172 NOT LIKE 'FOO%';
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-20627 {
+    SELECT 0xFF666F6F626172 NOT LIKE _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs;
+}
+expect error {
+}
+
+test t-20649 {
+    SELECT 9223372036854775807 NOT LIKE ' 255 foo';
+}
+expect {
+    1
+}
+
+test t-20653 {
+    SELECT 9223372036854775807 NOT LIKE 1.0e0;
+}
+expect {
+    1
+}
+
+test t-20665 {
+    SELECT 9223372036854775807 NOT LIKE 0.0;
+}
+expect {
+    1
+}
+
+test t-20688 {
+    SELECT 9223372036854775807 LIKE '';
+}
+expect {
+    0
+}
+
+test t-20750 {
+    SELECT 9223372036854775807 LIKE -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-20763 {
+    SELECT 9223372036854775807 NOT LIKE time '10:04:58';
+}
+expect {
+    1
+}
+
+test t-20787 {
+    SELECT 9223372036854775807 NOT LIKE timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    1
+}
+
+test t-20825 {
+    SELECT 9223372036854775807 NOT LIKE '103458foo';
+}
+expect {
+    1
+}
+
+test t-20839 {
+    SELECT 9223372036854775807 NOT LIKE time'00:00:59.2132234';
+}
+expect {
+    1
+}
+
+test t-20862 {
+    SELECT 9223372036854775807 LIKE '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-20872 {
+    SELECT 9223372036854775807 LIKE cast(false as json);
+}
+expect {
+    0
+}
+
+test t-20898 {
+    SELECT 9223372036854775807 LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-20930 {
+    SELECT 9223372036854775807 LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-20940 {
+    SELECT 9223372036854775807 LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-20942 {
+    SELECT 9223372036854775807 LIKE cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-20966 {
+    SELECT 9223372036854775807 LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-20979 {
+    SELECT 9223372036854775807 NOT LIKE 'FOO%';
+}
+expect {
+    1
+}
+
+test t-21000 {
+    SELECT -9223372036854775808 LIKE 255;
+}
+expect {
+    0
+}
+
+test t-21005 {
+    SELECT -9223372036854775808 NOT LIKE ' 1 ';
+}
+expect {
+    1
+}
+
+test t-21012 {
+    SELECT -9223372036854775808 LIKE 0.0e0;
+}
+expect {
+    0
+}
+
+test t-21023 {
+    SELECT -9223372036854775808 NOT LIKE -1.1e0;
+}
+expect {
+    1
+}
+
+test t-21060 {
+    SELECT -9223372036854775808 LIKE X'00';
+}
+expect {
+    0
+}
+
+test t-21068 {
+    SELECT -9223372036854775808 LIKE b'1001';
+}
+expect {
+    0
+}
+
+test t-21142 {
+    SELECT -9223372036854775808 LIKE time '5 10:34:58.9';
+}
+expect {
+    0
+}
+
+test t-21175 {
+    SELECT -9223372036854775808 NOT LIKE '103458';
+}
+expect {
+    1
+}
+
+test t-21248 {
+    SELECT -9223372036854775808 LIKE cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-21277 {
+    SELECT -9223372036854775808 NOT LIKE cast(_binary' "foo"' as json);
+}
+expect {
+    1
+}
+
+test t-21329 {
+    SELECT -9223372036854775808 NOT LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-21343 {
+    SELECT -9223372036854775808 NOT LIKE 'foo_ar';
+}
+expect {
+    1
+}
+
+test t-21367 {
+    SELECT 18446744073709551615 NOT LIKE ' 1 ';
+}
+expect {
+    1
+}
+
+test t-21372 {
+    SELECT 18446744073709551615 LIKE ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-21375 {
+    SELECT 18446744073709551615 NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-21415 {
+    SELECT 18446744073709551615 NOT LIKE _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-21416 {
+    SELECT 18446744073709551615 LIKE 0x0;
+}
+expect {
+    0
+}
+
+test t-21521 {
+    SELECT 18446744073709551615 NOT LIKE 20000101103458.123456;
+}
+expect {
+    1
+}
+
+test t-21524 {
+    SELECT 18446744073709551615 LIKE 103458;
+}
+expect {
+    0
+}
+
+test t-21536 {
+    SELECT 18446744073709551615 LIKE '103458';
+}
+expect {
+    0
+}
+
+test t-21554 {
+    SELECT 18446744073709551615 LIKE time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-21593 {
+    SELECT 18446744073709551615 NOT LIKE cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-21605 {
+    SELECT 18446744073709551615 NOT LIKE cast('true' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-21636 {
+    SELECT 18446744073709551615 LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-21650 {
+    SELECT 18446744073709551615 LIKE cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-21693 {
+    SELECT 18446744073709551615 NOT LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-21730 {
+    SELECT 18446744073709540000e0 LIKE ' 255 ';
+}
+expect {
+    0
+}
+
+test t-21767 {
+    SELECT 18446744073709540000e0 NOT LIKE '1.5';
+}
+expect {
+    1
+}
+
+test t-21783 {
+    SELECT 18446744073709540000e0 NOT LIKE 0xff;
+}
+expect {
+    1
+}
+
+test t-21832 {
+    SELECT 18446744073709540000e0 LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-21843 {
+    SELECT 18446744073709540000e0 NOT LIKE -18446744073709540000e0;
+}
+expect {
+    1
+}
+
+test t-21863 {
+    SELECT 18446744073709540000e0 NOT LIKE time '32:34:58.5';
+}
+expect {
+    1
+}
+
+test t-21879 {
+    SELECT 18446744073709540000e0 NOT LIKE 20000101103458;
+}
+expect {
+    1
+}
+
+test t-21885 {
+    SELECT 18446744073709540000e0 NOT LIKE 20000101;
+}
+expect {
+    1
+}
+
+test t-21914 {
+    SELECT 18446744073709540000e0 LIKE time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-21929 {
+    SELECT 18446744073709540000e0 NOT LIKE time '-5 10:34:58';
+}
+expect {
+    1
+}
+
+test t-21958 {
+    SELECT 18446744073709540000e0 LIKE cast(false as json);
+}
+expect {
+    0
+}
+
+test t-21969 {
+    SELECT 18446744073709540000e0 NOT LIKE cast('false' as json);
+}
+expect {
+    1
+}
+
+test t-21985 {
+    SELECT 18446744073709540000e0 NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+test t-22027 {
+    SELECT 18446744073709540000e0 NOT LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-22033 {
+    SELECT 18446744073709540000e0 NOT LIKE cast(date '2000-01-01' as json);
+}
+expect {
+    1
+}
+
+test t-22050 {
+    SELECT 18446744073709540000e0 LIKE 1234;
+}
+expect {
+    0
+}
+
+test t-22072 {
+    SELECT 18446744073709540000e0 LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-22091 {
+    SELECT -18446744073709540000e0 NOT LIKE ' 1 ';
+}
+expect {
+    1
+}
+
+test t-22122 {
+    SELECT -18446744073709540000e0 LIKE 1.7;
+}
+expect {
+    0
+}
+
+test t-22141 {
+    SELECT -18446744073709540000e0 NOT LIKE 0x0;
+}
+expect {
+    1
+}
+
+test t-22142 {
+    SELECT -18446744073709540000e0 LIKE 0x1;
+}
+expect {
+    0
+}
+
+test t-22147 {
+    SELECT -18446744073709540000e0 NOT LIKE X'00';
+}
+expect {
+    1
+}
+
+test t-22157 {
+    SELECT -18446744073709540000e0 NOT LIKE 0x9;
+}
+expect {
+    1
+}
+
+test t-22198 {
+    SELECT -18446744073709540000e0 LIKE -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-22215 {
+    SELECT -18446744073709540000e0 NOT LIKE time '32:34:58';
+}
+expect {
+    1
+}
+
+test t-22218 {
+    SELECT -18446744073709540000e0 LIKE time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-22263 {
+    SELECT -18446744073709540000e0 NOT LIKE '103458.123456';
+}
+expect {
+    1
+}
+
+test t-22309 {
+    SELECT -18446744073709540000e0 NOT LIKE '1970-01-01 00:00:01';
+}
+expect {
+    1
+}
+
+test t-22339 {
+    SELECT -18446744073709540000e0 NOT LIKE cast(-1.1 as json);
+}
+expect {
+    1
+}
+
+test t-22356 {
+    SELECT -18446744073709540000e0 LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-22367 {
+    SELECT -18446744073709540000e0 NOT LIKE cast(0xFF666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-22370 {
+    SELECT -18446744073709540000e0 LIKE cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-22379 {
+    SELECT -18446744073709540000e0 NOT LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-22380 {
+    SELECT -18446744073709540000e0 LIKE cast('["ab", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-22383 {
+    SELECT -18446744073709540000e0 NOT LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    1
+}
+
+test t-22396 {
+    SELECT -18446744073709540000e0 LIKE cast(date '2000-01-02' as json);
+}
+expect {
+    0
+}
+
+test t-22403 {
+    SELECT -18446744073709540000e0 NOT LIKE cast(time '12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-22428 {
+    SELECT -18446744073709540000e0 LIKE 'foo_ar';
+}
+expect {
+    0
+}
+
+test t-22446 {
+    SELECT JSON_OBJECT() LIKE 1;
+}
+expect {
+    0
+}
+
+test t-22508 {
+    SELECT JSON_OBJECT() LIKE X'00';
+}
+expect {
+    0
+}
+
+test t-22510 {
+    SELECT JSON_OBJECT() LIKE X'01';
+}
+expect {
+    0
+}
+
+test t-22560 {
+    SELECT JSON_OBJECT() LIKE -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-22569 {
+    SELECT JSON_OBJECT() NOT LIKE JSON_OBJECT();
+}
+expect {
+    0
+}
+
+test t-22577 {
+    SELECT JSON_OBJECT() NOT LIKE time '32:34:58';
+}
+expect {
+    1
+}
+
+test t-22597 {
+    SELECT JSON_OBJECT() NOT LIKE timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    1
+}
+
+test t-22611 {
+    SELECT JSON_OBJECT() NOT LIKE 103458;
+}
+expect {
+    1
+}
+
+test t-22612 {
+    SELECT JSON_OBJECT() LIKE 103458.123456;
+}
+expect {
+    0
+}
+
+test t-22634 {
+    SELECT JSON_OBJECT() LIKE '103458foo';
+}
+expect {
+    0
+}
+
+test t-22679 {
+    SELECT JSON_OBJECT() NOT LIKE cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-22709 {
+    SELECT JSON_OBJECT() NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-22754 {
+    SELECT JSON_OBJECT() LIKE cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-22774 {
+    SELECT JSON_OBJECT() LIKE 1234;
+}
+expect {
+    0
+}
+
+test t-22791 {
+    SELECT JSON_OBJECT() NOT LIKE 'foo_ar';
+}
+expect {
+    1
+}
+
+test t-22805 {
+    SELECT JSON_OBJECT() NOT LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-22832 {
+    SELECT JSON_ARRAY() LIKE -1.1e0;
+}
+expect {
+    0
+}
+
+test t-22863 {
+    SELECT JSON_ARRAY() NOT LIKE _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-22864 {
+    SELECT JSON_ARRAY() LIKE 0x0;
+}
+expect {
+    0
+}
+
+test t-22876 {
+    SELECT JSON_ARRAY() LIKE 0b1001;
+}
+expect {
+    0
+}
+
+test t-22887 {
+    SELECT JSON_ARRAY() NOT LIKE true;
+}
+expect {
+    1
+}
+
+test t-22888 {
+    SELECT JSON_ARRAY() LIKE false;
+}
+expect {
+    0
+}
+
+test t-22889 {
+    SELECT JSON_ARRAY() NOT LIKE false;
+}
+expect {
+    1
+}
+
+test t-22923 {
+    SELECT JSON_ARRAY() NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-22977 {
+    SELECT JSON_ARRAY() NOT LIKE '20000101103458';
+}
+expect {
+    1
+}
+
+test t-23011 {
+    SELECT JSON_ARRAY() NOT LIKE time'00:00:59.2132234';
+}
+expect {
+    1
+}
+
+test t-23034 {
+    SELECT JSON_ARRAY() LIKE '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-23091 {
+    SELECT JSON_ARRAY() NOT LIKE cast(0xFF666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-23127 {
+    SELECT JSON_ARRAY() NOT LIKE cast(time '12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-23168 {
+    SELECT time '10:04:58' LIKE 0;
+}
+expect {
+    0
+}
+
+test t-23195 {
+    SELECT time '10:04:58' NOT LIKE -1.1e0;
+}
+expect {
+    1
+}
+
+test t-23200 {
+    SELECT time '10:04:58' LIKE 0.000;
+}
+expect {
+    0
+}
+
+test t-23206 {
+    SELECT time '10:04:58' LIKE 1.1;
+}
+expect {
+    0
+}
+
+test t-23218 {
+    SELECT time '10:04:58' LIKE 'foobar';
+}
+expect {
+    0
+}
+
+test t-23229 {
+    SELECT time '10:04:58' NOT LIKE 0x1;
+}
+expect {
+    1
+}
+
+test t-23242 {
+    SELECT time '10:04:58' LIKE 0x9;
+}
+expect {
+    0
+}
+
+test t-23248 {
+    SELECT time '10:04:58' LIKE true;
+}
+expect {
+    0
+}
+
+test t-23280 {
+    SELECT time '10:04:58' LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-23298 {
+    SELECT time '10:04:58' LIKE time '31:34:58';
+}
+expect {
+    0
+}
+
+test t-23309 {
+    SELECT time '10:04:58' NOT LIKE time '31:34:58.4';
+}
+expect {
+    1
+}
+
+test t-23325 {
+    SELECT time '10:04:58' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+test t-23336 {
+    SELECT time '10:04:58' LIKE 103458.123456;
+}
+expect {
+    0
+}
+
+test t-23344 {
+    SELECT time '10:04:58' LIKE '20000101';
+}
+expect {
+    0
+}
+
+test t-23358 {
+    SELECT time '10:04:58' LIKE '103458foo';
+}
+expect {
+    0
+}
+
+test t-23359 {
+    SELECT time '10:04:58' NOT LIKE '103458foo';
+}
+expect {
+    1
+}
+
+test t-23382 {
+    SELECT time '10:04:58' LIKE '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-23387 {
+    SELECT time '10:04:58' NOT LIKE '2000-01-01 12:34:58';
+}
+expect {
+    1
+}
+
+test t-23388 {
+    SELECT time '10:04:58' LIKE '0000-02-29';
+}
+expect {
+    0
+}
+
+test t-23415 {
+    SELECT time '10:04:58' NOT LIKE cast('true' as json);
+}
+expect {
+    1
+}
+
+test t-23432 {
+    SELECT time '10:04:58' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-23437 {
+    SELECT time '10:04:58' NOT LIKE cast('-1.1' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-23446 {
+    SELECT time '10:04:58' LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-23464 {
+    SELECT time '10:04:58' LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-23468 {
+    SELECT time '10:04:58' LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-23494 {
+    SELECT time '10:04:58' LIKE 'FOOBAR';
+}
+expect {
+    0
+}
+
+test t-23497 {
+    SELECT time '10:04:58' NOT LIKE '1234';
+}
+expect {
+    1
+}
+
+test t-23520 {
+    SELECT time '10:04:58' LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-23528 {
+    SELECT time '10:04:58' LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-23530 {
+    SELECT time '31:34:58' LIKE 0;
+}
+expect {
+    0
+}
+
+test t-23568 {
+    SELECT time '31:34:58' LIKE 1.1;
+}
+expect {
+    0
+}
+
+test t-23605 {
+    SELECT time '31:34:58' NOT LIKE 0x9;
+}
+expect {
+    1
+}
+
+test t-23661 {
+    SELECT time '31:34:58' NOT LIKE time '31:34:58';
+}
+expect {
+    0
+}
+
+test t-23666 {
+    SELECT time '31:34:58' LIKE time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-23667 {
+    SELECT time '31:34:58' NOT LIKE time '5 10:34:58';
+}
+expect {
+    1
+}
+
+test t-23688 {
+    SELECT time '31:34:58' LIKE 20000101103458;
+}
+expect {
+    0
+}
+
+test t-23725 {
+    SELECT time '31:34:58' NOT LIKE time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-23737 {
+    SELECT time '31:34:58' NOT LIKE time '-101:34:58';
+}
+expect {
+    1
+}
+
+test t-23749 {
+    SELECT time '31:34:58' NOT LIKE '2000-01-01 12:34:58';
+}
+expect {
+    1
+}
+
+test t-23794 {
+    SELECT time '31:34:58' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-23811 {
+    SELECT time '31:34:58' NOT LIKE cast(_binary' "foo"' as json);
+}
+expect {
+    1
+}
+
+test t-23830 {
+    SELECT time '31:34:58' LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-23856 {
+    SELECT time '31:34:58' LIKE 'FOOBAR';
+}
+expect {
+    0
+}
+
+test t-23877 {
+    SELECT time '31:34:58' NOT LIKE 'foo_ar';
+}
+expect {
+    1
+}
+
+test t-23883 {
+    SELECT time '31:34:58' NOT LIKE '12_4';
+}
+expect {
+    1
+}
+
+test t-23904 {
+    SELECT time '32:34:58' LIKE '\t1foo\t';
+}
+expect {
+    0
+}
+
+test t-24049 {
+    SELECT time '32:34:58' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+test t-24078 {
+    SELECT time '32:34:58' LIKE '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-24091 {
+    SELECT time '32:34:58' NOT LIKE time '-32:34:58';
+}
+expect {
+    1
+}
+
+test t-24123 {
+    SELECT time '32:34:58' NOT LIKE '3001-02-18 23:59:59';
+}
+expect {
+    1
+}
+
+test t-24127 {
+    SELECT time '32:34:58' NOT LIKE cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-24135 {
+    SELECT time '32:34:58' NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-24151 {
+    SELECT time '32:34:58' NOT LIKE cast(9223372036854775807 as json);
+}
+expect {
+    1
+}
+
+test t-24163 {
+    SELECT time '32:34:58' NOT LIKE cast('9223372036854775807' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-24171 {
+    SELECT time '32:34:58' NOT LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-24179 {
+    SELECT time '32:34:58' NOT LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-24185 {
+    SELECT time '32:34:58' NOT LIKE cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-24191 {
+    SELECT time '32:34:58' NOT LIKE cast('["ab", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-24192 {
+    SELECT time '32:34:58' LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-24196 {
+    SELECT time '32:34:58' LIKE cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-24226 {
+    SELECT time '32:34:58' LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-24234 {
+    SELECT time '32:34:58' LIKE 'foo%';
+}
+expect {
+    0
+}
+
+test t-24257 {
+    SELECT time '130:34:58' NOT LIKE 1;
+}
+expect {
+    1
+}
+
+test t-24258 {
+    SELECT time '130:34:58' LIKE 255;
+}
+expect {
+    0
+}
+
+test t-24261 {
+    SELECT time '130:34:58' NOT LIKE ' 0 ';
+}
+expect {
+    1
+}
+
+test t-24268 {
+    SELECT time '130:34:58' LIKE ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-24270 {
+    SELECT time '130:34:58' LIKE 0.0e0;
+}
+expect {
+    0
+}
+
+test t-24281 {
+    SELECT time '130:34:58' NOT LIKE -1.1e0;
+}
+expect {
+    1
+}
+
+test t-24284 {
+    SELECT time '130:34:58' LIKE 0.0;
+}
+expect {
+    0
+}
+
+test t-24321 {
+    SELECT time '130:34:58' NOT LIKE X'01';
+}
+expect {
+    1
+}
+
+test t-24333 {
+    SELECT time '130:34:58' NOT LIKE NULL;
+}
+expect {
+    NULL
+}
+
+test t-24373 {
+    SELECT time '130:34:58' NOT LIKE 18446744073709551615;
+}
+expect {
+    1
+}
+
+test t-24401 {
+    SELECT time '130:34:58' NOT LIKE time '5 10:34:58.9';
+}
+expect {
+    1
+}
+
+test t-24411 {
+    SELECT time '130:34:58' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-24532 {
+    SELECT time '130:34:58' LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-24589 {
+    SELECT time '130:34:58' NOT LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-24605 {
+    SELECT time '130:34:58' NOT LIKE '12%';
+}
+expect {
+    1
+}
+
+test t-24611 {
+    SELECT time '130:34:58' NOT LIKE _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-24616 {
+    SELECT time '5 10:34:58' LIKE 0;
+}
+expect {
+    0
+}
+
+test t-24627 {
+    SELECT time '5 10:34:58' NOT LIKE ' 255 ';
+}
+expect {
+    1
+}
+
+test t-24649 {
+    SELECT time '5 10:34:58' NOT LIKE 0.000;
+}
+expect {
+    1
+}
+
+test t-24661 {
+    SELECT time '5 10:34:58' NOT LIKE -1.7;
+}
+expect {
+    1
+}
+
+test t-24667 {
+    SELECT time '5 10:34:58' NOT LIKE 'foobar';
+}
+expect {
+    1
+}
+
+test t-24681 {
+    SELECT time '5 10:34:58' NOT LIKE X'00';
+}
+expect {
+    1
+}
+
+test t-24724 {
+    SELECT time '5 10:34:58' LIKE 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-24725 {
+    SELECT time '5 10:34:58' NOT LIKE 0xFF666F6F626172FF;
+}
+expect {
+    1
+}
+
+test t-24737 {
+    SELECT time '5 10:34:58' NOT LIKE 18446744073709540000e0;
+}
+expect {
+    1
+}
+
+test t-24785 {
+    SELECT time '5 10:34:58' NOT LIKE 103458.123456;
+}
+expect {
+    1
+}
+
+test t-24860 {
+    SELECT time '5 10:34:58' LIKE cast('null' as json);
+}
+expect {
+    0
+}
+
+test t-24886 {
+    SELECT time '5 10:34:58' LIKE cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-24895 {
+    SELECT time '5 10:34:58' NOT LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-24922 {
+    SELECT time '5 10:34:58' LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    0
+}
+
+test t-24959 {
+    SELECT time '5 10:34:58' NOT LIKE 'foo%';
+}
+expect {
+    1
+}
+
+test t-24961 {
+    SELECT time '5 10:34:58' NOT LIKE 'FOO%';
+}
+expect {
+    1
+}
+
+test t-24963 {
+    SELECT time '5 10:34:58' NOT LIKE 'foo_ar';
+}
+expect {
+    1
+}
+
+test t-24967 {
+    SELECT time '5 10:34:58' NOT LIKE '12%';
+}
+expect {
+    1
+}
+
+test t-24969 {
+    SELECT time '5 10:34:58' NOT LIKE '12_4';
+}
+expect {
+    1
+}
+
+test t-25006 {
+    SELECT time '10:04:58.1' LIKE -1.7e0;
+}
+expect {
+    0
+}
+
+test t-25022 {
+    SELECT time '10:04:58.1' LIKE -1.7;
+}
+expect {
+    0
+}
+
+test t-25034 {
+    SELECT time '10:04:58.1' LIKE _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-25035 {
+    SELECT time '10:04:58.1' NOT LIKE _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-25053 {
+    SELECT time '10:04:58.1' NOT LIKE 0x9;
+}
+expect {
+    1
+}
+
+test t-25089 {
+    SELECT time '10:04:58.1' NOT LIKE 0x666F6F626172FF;
+}
+expect {
+    1
+}
+
+test t-25111 {
+    SELECT time '10:04:58.1' NOT LIKE time '32:34:58';
+}
+expect {
+    1
+}
+
+test t-25119 {
+    SELECT time '10:04:58.1' NOT LIKE time '31:34:58.4';
+}
+expect {
+    1
+}
+
+test t-25131 {
+    SELECT time '10:04:58.1' NOT LIKE timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    1
+}
+
+test t-25143 {
+    SELECT time '10:04:58.1' NOT LIKE 20000101;
+}
+expect {
+    1
+}
+
+test t-25244 {
+    SELECT time '10:04:58.1' LIKE cast('1.1' as json);
+}
+expect {
+    0
+}
+
+test t-25252 {
+    SELECT time '10:04:58.1' LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-25269 {
+    SELECT time '10:04:58.1' NOT LIKE cast(0b001 as json);
+}
+expect {
+    1
+}
+
+test t-25274 {
+    SELECT time '10:04:58.1' LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-25287 {
+    SELECT time '10:04:58.1' NOT LIKE cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-25301 {
+    SELECT time '10:04:58.1' NOT LIKE cast(time '5 12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-25305 {
+    SELECT time '10:04:58.1' NOT LIKE 'FOOBAR';
+}
+expect {
+    1
+}
+
+test t-25328 {
+    SELECT time '10:04:58.1' LIKE '12%';
+}
+expect {
+    0
+}
+
+test t-25343 {
+    SELECT time '31:34:58.4' NOT LIKE 1;
+}
+expect {
+    1
+}
+
+test t-25380 {
+    SELECT time '31:34:58.4' LIKE 1.7;
+}
+expect {
+    0
+}
+
+test t-25381 {
+    SELECT time '31:34:58.4' NOT LIKE 1.7;
+}
+expect {
+    1
+}
+
+test t-25409 {
+    SELECT time '31:34:58.4' NOT LIKE X'ff';
+}
+expect {
+    1
+}
+
+test t-25448 {
+    SELECT time '31:34:58.4' LIKE 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-25453 {
+    SELECT time '31:34:58.4' NOT LIKE 0xFF666F6F626172;
+}
+expect {
+    1
+}
+
+test t-25457 {
+    SELECT time '31:34:58.4' NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-25460 {
+    SELECT time '31:34:58.4' LIKE 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-25463 {
+    SELECT time '31:34:58.4' NOT LIKE -18446744073709540000e0;
+}
+expect {
+    1
+}
+
+test t-25514 {
+    SELECT time '31:34:58.4' LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-25549 {
+    SELECT time '31:34:58.4' NOT LIKE time '-5 10:34:58';
+}
+expect {
+    1
+}
+
+test t-25595 {
+    SELECT time '31:34:58.4' NOT LIKE cast(1.1 as json);
+}
+expect {
+    1
+}
+
+test t-25601 {
+    SELECT time '31:34:58.4' NOT LIKE cast(18446744073709551615 as json);
+}
+expect {
+    1
+}
+
+test t-25605 {
+    SELECT time '31:34:58.4' NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+test t-25607 {
+    SELECT time '31:34:58.4' NOT LIKE cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test t-25609 {
+    SELECT time '31:34:58.4' NOT LIKE cast('-1.1' as json);
+}
+expect {
+    1
+}
+
+test t-25617 {
+    SELECT time '31:34:58.4' NOT LIKE cast('"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-25636 {
+    SELECT time '31:34:58.4' LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-25641 {
+    SELECT time '31:34:58.4' NOT LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    1
+}
+
+test t-25688 {
+    SELECT time '31:34:58.4' LIKE 'FOO_AR';
+}
+expect {
+    0
+}
+
+test t-25697 {
+    SELECT time '31:34:58.4' NOT LIKE _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-25752 {
+    SELECT time '32:34:58.5' LIKE 'foobar';
+}
+expect {
+    0
+}
+
+test t-25767 {
+    SELECT time '32:34:58.5' NOT LIKE X'00';
+}
+expect {
+    1
+}
+
+test t-25773 {
+    SELECT time '32:34:58.5' NOT LIKE 0b1001;
+}
+expect {
+    1
+}
+
+test t-25819 {
+    SELECT time '32:34:58.5' NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-25857 {
+    SELECT time '32:34:58.5' NOT LIKE timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    1
+}
+
+test t-25869 {
+    SELECT time '32:34:58.5' NOT LIKE 103458;
+}
+expect {
+    1
+}
+
+test t-25875 {
+    SELECT time '32:34:58.5' NOT LIKE '20000101103458.1234';
+}
+expect {
+    1
+}
+
+test t-25893 {
+    SELECT time '32:34:58.5' NOT LIKE '103458foo';
+}
+expect {
+    1
+}
+
+test t-25913 {
+    SELECT time '32:34:58.5' NOT LIKE '10:04:58';
+}
+expect {
+    1
+}
+
+test t-25921 {
+    SELECT time '32:34:58.5' NOT LIKE '2000-01-01 12:34:58';
+}
+expect {
+    1
+}
+
+test t-25925 {
+    SELECT time '32:34:58.5' NOT LIKE '0000-01-03';
+}
+expect {
+    1
+}
+
+test t-25926 {
+    SELECT time '32:34:58.5' LIKE '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-25929 {
+    SELECT time '32:34:58.5' NOT LIKE '1970-01-01 00:00:01';
+}
+expect {
+    1
+}
+
+test t-25948 {
+    SELECT time '32:34:58.5' LIKE cast('true' as json);
+}
+expect {
+    0
+}
+
+test t-25955 {
+    SELECT time '32:34:58.5' NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-25956 {
+    SELECT time '32:34:58.5' LIKE cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-25959 {
+    SELECT time '32:34:58.5' NOT LIKE cast(-1.1 as json);
+}
+expect {
+    1
+}
+
+test t-25969 {
+    SELECT time '32:34:58.5' NOT LIKE cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test t-25974 {
+    SELECT time '32:34:58.5' LIKE cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-25980 {
+    SELECT time '32:34:58.5' LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-26028 {
+    SELECT time '32:34:58.5' LIKE 'FOOBAR';
+}
+expect {
+    0
+}
+
+test t-26070 {
+    SELECT time '130:34:58.6' LIKE ' 0 ';
+}
+expect {
+    0
+}
+
+test t-26095 {
+    SELECT time '130:34:58.6' NOT LIKE 0.0;
+}
+expect {
+    1
+}
+
+test t-26140 {
+    SELECT time '130:34:58.6' LIKE x'09';
+}
+expect {
+    0
+}
+
+test t-26172 {
+    SELECT time '130:34:58.6' LIKE 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-26195 {
+    SELECT time '130:34:58.6' NOT LIKE time '31:34:58';
+}
+expect {
+    1
+}
+
+test t-26213 {
+    SELECT time '130:34:58.6' NOT LIKE date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-26229 {
+    SELECT time '130:34:58.6' NOT LIKE 20000101;
+}
+expect {
+    1
+}
+
+test t-26234 {
+    SELECT time '130:34:58.6' LIKE '20000101103458';
+}
+expect {
+    0
+}
+
+test t-26259 {
+    SELECT time '130:34:58.6' NOT LIKE time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-26274 {
+    SELECT time '130:34:58.6' LIKE '10:04:58';
+}
+expect {
+    0
+}
+
+test t-26275 {
+    SELECT time '130:34:58.6' NOT LIKE '10:04:58';
+}
+expect {
+    1
+}
+
+test t-26281 {
+    SELECT time '130:34:58.6' NOT LIKE '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-26287 {
+    SELECT time '130:34:58.6' NOT LIKE '0000-01-03';
+}
+expect {
+    1
+}
+
+test t-26298 {
+    SELECT time '130:34:58.6' LIKE cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-26326 {
+    SELECT time '130:34:58.6' LIKE cast('1' as json);
+}
+expect {
+    0
+}
+
+test t-26335 {
+    SELECT time '130:34:58.6' NOT LIKE cast('9223372036854775807' as json);
+}
+expect {
+    1
+}
+
+test t-26357 {
+    SELECT time '130:34:58.6' NOT LIKE cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-26367 {
+    SELECT time '130:34:58.6' NOT LIKE cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-26395 {
+    SELECT time '130:34:58.6' NOT LIKE 1234;
+}
+expect {
+    1
+}
+
+test t-26411 {
+    SELECT time '130:34:58.6' NOT LIKE 'foo_ar';
+}
+expect {
+    1
+}
+
+test t-26433 {
+    SELECT time '5 10:34:58.9' NOT LIKE ' 0 ';
+}
+expect {
+    1
+}
+
+test t-26434 {
+    SELECT time '5 10:34:58.9' LIKE ' 1 ';
+}
+expect {
+    0
+}
+
+test t-26439 {
+    SELECT time '5 10:34:58.9' NOT LIKE '\t1foo\t';
+}
+expect {
+    1
+}
+
+test t-26463 {
+    SELECT time '5 10:34:58.9' NOT LIKE -1.5;
+}
+expect {
+    1
+}
+
+test t-26543 {
+    SELECT time '5 10:34:58.9' NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-26544 {
+    SELECT time '5 10:34:58.9' LIKE 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-26550 {
+    SELECT time '5 10:34:58.9' LIKE JSON_OBJECT();
+}
+expect {
+    0
+}
+
+test t-26557 {
+    SELECT time '5 10:34:58.9' NOT LIKE time '31:34:58';
+}
+expect {
+    1
+}
+
+test t-26579 {
+    SELECT time '5 10:34:58.9' NOT LIKE timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    1
+}
+
+test t-26583 {
+    SELECT time '5 10:34:58.9' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+test t-26593 {
+    SELECT time '5 10:34:58.9' NOT LIKE 103458;
+}
+expect {
+    1
+}
+
+test t-26604 {
+    SELECT time '5 10:34:58.9' LIKE '103458';
+}
+expect {
+    0
+}
+
+test t-26612 {
+    SELECT time '5 10:34:58.9' LIKE '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-26636 {
+    SELECT time '5 10:34:58.9' LIKE '10:04:58';
+}
+expect {
+    0
+}
+
+test t-26640 {
+    SELECT time '5 10:34:58.9' LIKE '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-26646 {
+    SELECT time '5 10:34:58.9' LIKE '0000-02-29';
+}
+expect {
+    0
+}
+
+test t-26672 {
+    SELECT time '5 10:34:58.9' LIKE cast('true' as json);
+}
+expect {
+    0
+}
+
+test t-26679 {
+    SELECT time '5 10:34:58.9' NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-26701 {
+    SELECT time '5 10:34:58.9' NOT LIKE cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-26723 {
+    SELECT time '5 10:34:58.9' NOT LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-26748 {
+    SELECT time '5 10:34:58.9' LIKE cast(time '5 12:34:58' as json);
+}
+expect {
+    0
+}
+
+test t-26772 {
+    SELECT time '5 10:34:58.9' LIKE 'foo_ar';
+}
+expect {
+    0
+}
+
+test t-26776 {
+    SELECT time '5 10:34:58.9' LIKE '12%';
+}
+expect {
+    0
+}
+
+test t-26840 {
+    SELECT date '2000-01-01' LIKE _utf8 'foobar';
+}
+expect {
+    0
+}
+
+test t-26844 {
+    SELECT date '2000-01-01' LIKE _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-26846 {
+    SELECT date '2000-01-01' LIKE 0x0;
+}
+expect {
+    0
+}
+
+test t-26854 {
+    SELECT date '2000-01-01' LIKE X'01';
+}
+expect {
+    0
+}
+
+test t-26862 {
+    SELECT date '2000-01-01' LIKE 0x9;
+}
+expect {
+    0
+}
+
+test t-26871 {
+    SELECT date '2000-01-01' NOT LIKE false;
+}
+expect {
+    1
+}
+
+test t-26910 {
+    SELECT date '2000-01-01' LIKE -18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-26924 {
+    SELECT date '2000-01-01' LIKE time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-26925 {
+    SELECT date '2000-01-01' NOT LIKE time '5 10:34:58';
+}
+expect {
+    1
+}
+
+test t-26948 {
+    SELECT date '2000-01-01' LIKE 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-26951 {
+    SELECT date '2000-01-01' NOT LIKE 20000101103458.123456;
+}
+expect {
+    1
+}
+
+test t-26975 {
+    SELECT date '2000-01-01' NOT LIKE '20000101103458.123456foo';
+}
+expect {
+    1
+}
+
+test t-26996 {
+    SELECT date '2000-01-01' LIKE time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-27032 {
+    SELECT date '2000-01-01' LIKE cast('null' as json);
+}
+expect {
+    0
+}
+
+test t-27037 {
+    SELECT date '2000-01-01' NOT LIKE cast('false' as json);
+}
+expect {
+    1
+}
+
+test t-27050 {
+    SELECT date '2000-01-01' LIKE cast('1' as json);
+}
+expect {
+    0
+}
+
+test t-27053 {
+    SELECT date '2000-01-01' NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+test t-27140 {
+    SELECT date '2000-01-01' LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-27154 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE 255;
+}
+expect {
+    0
+}
+
+test t-27224 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE 0x9;
+}
+expect {
+    0
+}
+
+test t-27268 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-27272 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE -18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-27288 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE time '10:04:58.1';
+}
+expect {
+    0
+}
+
+test t-27305 {
+    SELECT timestamp '2000-01-01 10:34:58' NOT LIKE timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    1
+}
+
+test t-27310 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-27320 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE '20000101103458';
+}
+expect {
+    0
+}
+
+test t-27324 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-27345 {
+    SELECT timestamp '2000-01-01 10:34:58' NOT LIKE time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-27380 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE '3001-02-18 23:59:59';
+}
+expect {
+    0
+}
+
+test t-27382 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE cast(0 as json);
+}
+expect {
+    0
+}
+
+test t-27394 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE cast('null' as json);
+}
+expect {
+    0
+}
+
+test t-27463 {
+    SELECT timestamp '2000-01-01 10:34:58' NOT LIKE cast(date '2000-01-01' as json);
+}
+expect {
+    1
+}
+
+test t-27464 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE cast(date '2000-01-02' as json);
+}
+expect {
+    0
+}
+
+test t-27479 {
+    SELECT timestamp '2000-01-01 10:34:58' NOT LIKE '1234';
+}
+expect {
+    1
+}
+
+test t-27482 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-27495 {
+    SELECT timestamp '2000-01-01 10:34:58' NOT LIKE 'FOO%';
+}
+expect {
+    1
+}
+
+test t-27506 {
+    SELECT timestamp '2000-01-01 10:34:58' LIKE _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-27527 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE ' 255 foo';
+}
+expect {
+    1
+}
+
+test t-27649 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE time '5 10:34:58';
+}
+expect {
+    1
+}
+
+test t-27654 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-27658 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE time '5 10:34:58.9';
+}
+expect {
+    0
+}
+
+test t-27661 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-27680 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE 103458.123456;
+}
+expect {
+    0
+}
+
+test t-27687 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE '20000101103458.123456';
+}
+expect {
+    1
+}
+
+test t-27697 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE '20000101103458.1234foo';
+}
+expect {
+    1
+}
+
+test t-27714 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE time'00:00:59.01011';
+}
+expect {
+    0
+}
+
+test t-27739 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE '1970-01-01 00:00:01';
+}
+expect {
+    1
+}
+
+test t-27741 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE '3001-02-19 00:00:00';
+}
+expect {
+    1
+}
+
+test t-27749 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE cast(true as json);
+}
+expect {
+    1
+}
+
+test t-27752 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE cast('\{\}' as json);
+}
+expect {
+    0
+}
+
+test t-27784 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+test t-27787 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-27809 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-27819 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' NOT LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-27860 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' LIKE 'FOO_AR';
+}
+expect {
+    0
+}
+
+test t-27929 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE '';
+}
+expect {
+    1
+}
+
+test t-27941 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE X'01';
+}
+expect {
+    1
+}
+
+test t-28033 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE 20000101103458;
+}
+expect {
+    1
+}
+
+test t-28047 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE '20000101103458.1234';
+}
+expect {
+    1
+}
+
+test t-28058 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' LIKE '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-28063 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE '20000101foo';
+}
+expect {
+    1
+}
+
+test t-28093 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE '2000-01-01 12:34:58';
+}
+expect {
+    1
+}
+
+test t-28117 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-28128 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' LIKE cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-28169 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' NOT LIKE cast('["ab"]' as json);
+}
+expect {
+    1
+}
+
+test t-28180 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    0
+}
+
+test t-28208 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-28222 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' LIKE 'FOO_AR';
+}
+expect {
+    0
+}
+
+test t-28251 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE ' 255 foo';
+}
+expect {
+    1
+}
+
+test t-28269 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE 0.000;
+}
+expect {
+    1
+}
+
+test t-28275 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE 1.1;
+}
+expect {
+    1
+}
+
+test t-28277 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE 1.7;
+}
+expect {
+    1
+}
+
+test t-28348 {
+    SELECT timestamp '2024-12-30 10:34:58' LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-28356 {
+    SELECT timestamp '2024-12-30 10:34:58' LIKE 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-28407 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE '20000101103458';
+}
+expect {
+    1
+}
+
+test t-28411 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE '20000101103458.123456';
+}
+expect {
+    1
+}
+
+test t-28453 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-28489 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-28500 {
+    SELECT timestamp '2024-12-30 10:34:58' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-28506 {
+    SELECT timestamp '2024-12-30 10:34:58' LIKE cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-28529 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-28585 {
+    SELECT timestamp '2024-12-30 10:34:58' NOT LIKE 'FOO_AR';
+}
+expect {
+    1
+}
+
+test t-28588 {
+    SELECT timestamp '2024-12-30 10:34:58' LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-28600 {
+    SELECT 20000101103458 LIKE 1;
+}
+expect {
+    0
+}
+
+test t-28603 {
+    SELECT 20000101103458 NOT LIKE 255;
+}
+expect {
+    1
+}
+
+test t-28622 {
+    SELECT 20000101103458 LIKE 1.1e0;
+}
+expect {
+    0
+}
+
+test t-28642 {
+    SELECT 20000101103458 LIKE -1.7;
+}
+expect {
+    0
+}
+
+test t-28664 {
+    SELECT 20000101103458 LIKE X'01';
+}
+expect {
+    0
+}
+
+test t-28713 {
+    SELECT 20000101103458 NOT LIKE 9223372036854775807;
+}
+expect {
+    1
+}
+
+test t-28720 {
+    SELECT 20000101103458 LIKE -18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-28745 {
+    SELECT 20000101103458 NOT LIKE time '5 10:34:58.9';
+}
+expect {
+    1
+}
+
+test t-28754 {
+    SELECT 20000101103458 LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-28764 {
+    SELECT 20000101103458 LIKE 103458;
+}
+expect {
+    0
+}
+
+test t-28802 {
+    SELECT 20000101103458 LIKE time'00:00:59.2132234';
+}
+expect {
+    0
+}
+
+test t-28810 {
+    SELECT 20000101103458 LIKE '101:34:58';
+}
+expect {
+    0
+}
+
+test t-28826 {
+    SELECT 20000101103458 LIKE '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-28851 {
+    SELECT 20000101103458 NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-28863 {
+    SELECT 20000101103458 NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+test t-28866 {
+    SELECT 20000101103458 LIKE cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-28905 {
+    SELECT 20000101103458 NOT LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-28996 {
+    SELECT 20000101103458.1234 LIKE -1.5;
+}
+expect {
+    0
+}
+
+test t-29001 {
+    SELECT 20000101103458.1234 NOT LIKE 1.7;
+}
+expect {
+    1
+}
+
+test t-29037 {
+    SELECT 20000101103458.1234 NOT LIKE x'09';
+}
+expect {
+    1
+}
+
+test t-29085 {
+    SELECT 20000101103458.1234 NOT LIKE JSON_OBJECT();
+}
+expect {
+    1
+}
+
+test t-29092 {
+    SELECT 20000101103458.1234 LIKE time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-29131 {
+    SELECT 20000101103458.1234 NOT LIKE '20000101103458';
+}
+expect {
+    1
+}
+
+test t-29134 {
+    SELECT 20000101103458.1234 LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-29142 {
+    SELECT 20000101103458.1234 LIKE '20000101103458foo';
+}
+expect {
+    0
+}
+
+test t-29162 {
+    SELECT 20000101103458.1234 LIKE time'00:00:59.01011';
+}
+expect {
+    0
+}
+
+test t-29177 {
+    SELECT 20000101103458.1234 NOT LIKE '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-29178 {
+    SELECT 20000101103458.1234 LIKE '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+test t-29185 {
+    SELECT 20000101103458.1234 NOT LIKE '1969-02-18';
+}
+expect {
+    1
+}
+
+test t-29187 {
+    SELECT 20000101103458.1234 NOT LIKE '1970-01-01 00:00:01';
+}
+expect {
+    1
+}
+
+test t-29196 {
+    SELECT 20000101103458.1234 LIKE cast(true as json);
+}
+expect {
+    0
+}
+
+test t-29262 {
+    SELECT 20000101103458.1234 LIKE cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    0
+}
+
+test t-29265 {
+    SELECT 20000101103458.1234 NOT LIKE cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    1
+}
+
+test t-29319 {
+    SELECT 20000101103458.1234 NOT LIKE _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-29363 {
+    SELECT 20000101103458.123456 NOT LIKE 1.7;
+}
+expect {
+    1
+}
+
+test t-29366 {
+    SELECT 20000101103458.123456 LIKE -1.7;
+}
+expect {
+    0
+}
+
+test t-29439 {
+    SELECT 20000101103458.123456 NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-29444 {
+    SELECT 20000101103458.123456 LIKE -18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-29462 {
+    SELECT 20000101103458.123456 LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-29481 {
+    SELECT 20000101103458.123456 NOT LIKE 20000101103458;
+}
+expect {
+    1
+}
+
+test t-29539 {
+    SELECT 20000101103458.123456 NOT LIKE '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-29593 {
+    SELECT 20000101103458.123456 NOT LIKE cast('9223372036854775807' as json);
+}
+expect {
+    1
+}
+
+test t-29596 {
+    SELECT 20000101103458.123456 LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-29653 {
+    SELECT 20000101103458.123456 NOT LIKE 1234;
+}
+expect {
+    1
+}
+
+test t-29679 {
+    SELECT 20000101103458.123456 NOT LIKE _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-29713 {
+    SELECT 20000101 NOT LIKE -1.7e0;
+}
+expect {
+    1
+}
+
+test t-29754 {
+    SELECT 20000101 LIKE 0b1001;
+}
+expect {
+    0
+}
+
+test t-29759 {
+    SELECT 20000101 NOT LIKE 0x9;
+}
+expect {
+    1
+}
+
+test t-29761 {
+    SELECT 20000101 NOT LIKE x'09';
+}
+expect {
+    1
+}
+
+test t-29766 {
+    SELECT 20000101 LIKE false;
+}
+expect {
+    0
+}
+
+test t-29824 {
+    SELECT 20000101 LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-29829 {
+    SELECT 20000101 NOT LIKE time '130:34:58.6';
+}
+expect {
+    1
+}
+
+test t-29855 {
+    SELECT 20000101 NOT LIKE '20000101103458';
+}
+expect {
+    1
+}
+
+test t-29873 {
+    SELECT 20000101 NOT LIKE '20000101foo';
+}
+expect {
+    1
+}
+
+test t-29918 {
+    SELECT 20000101 LIKE cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-29927 {
+    SELECT 20000101 NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-29951 {
+    SELECT 20000101 NOT LIKE cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test t-29954 {
+    SELECT 20000101 LIKE cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-29961 {
+    SELECT 20000101 NOT LIKE cast('"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-29976 {
+    SELECT 20000101 LIKE cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-29978 {
+    SELECT 20000101 LIKE cast('["ab"]' as json);
+}
+expect {
+    0
+}
+
+test t-29980 {
+    SELECT 20000101 LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-30044 {
+    SELECT 20000101 LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-30049 {
+    SELECT 103458 NOT LIKE 1;
+}
+expect {
+    1
+}
+
+test t-30118 {
+    SELECT 103458 LIKE b'1001';
+}
+expect {
+    0
+}
+
+test t-30119 {
+    SELECT 103458 NOT LIKE b'1001';
+}
+expect {
+    1
+}
+
+test t-30123 {
+    SELECT 103458 NOT LIKE x'09';
+}
+expect {
+    1
+}
+
+test t-30158 {
+    SELECT 103458 LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-30167 {
+    SELECT 103458 NOT LIKE 18446744073709540000e0;
+}
+expect {
+    1
+}
+
+test t-30186 {
+    SELECT 103458 LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-30222 {
+    SELECT 103458 LIKE '20000101';
+}
+expect {
+    0
+}
+
+test t-30242 {
+    SELECT 103458 LIKE time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-30269 {
+    SELECT 103458 NOT LIKE '0000-01-03';
+}
+expect {
+    1
+}
+
+test t-30275 {
+    SELECT 103458 NOT LIKE '3001-02-19 00:00:00';
+}
+expect {
+    1
+}
+
+test t-30310 {
+    SELECT 103458 LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-30334 {
+    SELECT 103458 LIKE cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-30361 {
+    SELECT 103458 NOT LIKE cast(date '2000-01-02' as json);
+}
+expect {
+    1
+}
+
+test t-30403 {
+    SELECT 103458 NOT LIKE _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-30408 {
+    SELECT 103458.123456 LIKE 0;
+}
+expect {
+    0
+}
+
+test t-30411 {
+    SELECT 103458.123456 NOT LIKE 1;
+}
+expect {
+    1
+}
+
+test t-30428 {
+    SELECT 103458.123456 LIKE 1.5e0;
+}
+expect {
+    0
+}
+
+test t-30458 {
+    SELECT 103458.123456 LIKE 'foobar';
+}
+expect {
+    0
+}
+
+test t-30464 {
+    SELECT 103458.123456 LIKE _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-30476 {
+    SELECT 103458.123456 LIKE X'ff';
+}
+expect {
+    0
+}
+
+test t-30520 {
+    SELECT 103458.123456 LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-30564 {
+    SELECT 103458.123456 LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-30566 {
+    SELECT 103458.123456 LIKE 20000101103458;
+}
+expect {
+    0
+}
+
+test t-30603 {
+    SELECT 103458.123456 NOT LIKE time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-30649 {
+    SELECT 103458.123456 NOT LIKE cast('\{\}' as json);
+}
+expect {
+    1
+}
+
+test t-30652 {
+    SELECT 103458.123456 LIKE cast('null' as json);
+}
+expect {
+    0
+}
+
+test t-30662 {
+    SELECT 103458.123456 LIKE cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-30681 {
+    SELECT 103458.123456 NOT LIKE cast('18446744073709551615' as json);
+}
+expect {
+    1
+}
+
+test t-30713 {
+    SELECT 103458.123456 NOT LIKE cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    1
+}
+
+test t-30714 {
+    SELECT 103458.123456 LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    0
+}
+
+test t-30735 {
+    SELECT 103458.123456 NOT LIKE 'FOOBAR';
+}
+expect {
+    1
+}
+
+test t-30834 {
+    SELECT '20000101103458' LIKE X'00';
+}
+expect {
+    0
+}
+
+test t-30841 {
+    SELECT '20000101103458' NOT LIKE 0b1001;
+}
+expect {
+    1
+}
+
+test t-30844 {
+    SELECT '20000101103458' LIKE 0x9;
+}
+expect {
+    0
+}
+
+test t-30850 {
+    SELECT '20000101103458' LIKE true;
+}
+expect {
+    0
+}
+
+test t-30910 {
+    SELECT '20000101103458' LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-30944 {
+    SELECT '20000101103458' LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-30968 {
+    SELECT '20000101103458' LIKE time '-32:34:58';
+}
+expect {
+    0
+}
+
+test t-30973 {
+    SELECT '20000101103458' NOT LIKE time'00:00:59.01011';
+}
+expect {
+    1
+}
+
+test t-30986 {
+    SELECT '20000101103458' LIKE '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-31009 {
+    SELECT '20000101103458' NOT LIKE cast(false as json);
+}
+expect {
+    1
+}
+
+test t-31023 {
+    SELECT '20000101103458' NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-31030 {
+    SELECT '20000101103458' LIKE cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-31032 {
+    SELECT '20000101103458' LIKE cast('1' as json);
+}
+expect {
+    0
+}
+
+test t-31053 {
+    SELECT '20000101103458' NOT LIKE cast(_binary '"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-31060 {
+    SELECT '20000101103458' LIKE cast(0b001 as json);
+}
+expect {
+    0
+}
+
+test t-31123 {
+    SELECT '20000101103458' NOT LIKE '12_4';
+}
+expect {
+    1
+}
+
+test t-31183 {
+    SELECT '20000101103458.1234' NOT LIKE 'foobar';
+}
+expect {
+    1
+}
+
+test t-31186 {
+    SELECT '20000101103458.1234' LIKE '';
+}
+expect {
+    0
+}
+
+test t-31190 {
+    SELECT '20000101103458.1234' LIKE 0x0;
+}
+expect {
+    0
+}
+
+test t-31210 {
+    SELECT '20000101103458.1234' LIKE NULL;
+}
+expect {
+    NULL
+}
+
+test t-31283 {
+    SELECT '20000101103458.1234' NOT LIKE timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-31363 {
+    SELECT '20000101103458.1234' NOT LIKE '3001-02-18 23:59:59';
+}
+expect {
+    1
+}
+
+test t-31371 {
+    SELECT '20000101103458.1234' NOT LIKE cast(false as json);
+}
+expect {
+    1
+}
+
+test t-31395 {
+    SELECT '20000101103458.1234' NOT LIKE cast('1' as json);
+}
+expect {
+    1
+}
+
+test t-31427 {
+    SELECT '20000101103458.1234' NOT LIKE cast('["ab"]' as json);
+}
+expect {
+    1
+}
+
+test t-31478 {
+    SELECT '20000101103458.1234' LIKE 'foo_ar';
+}
+expect {
+    0
+}
+
+test t-31491 {
+    SELECT '20000101103458.1234' NOT LIKE _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-31502 {
+    SELECT '20000101103458.123456' LIKE ' 1 ';
+}
+expect {
+    0
+}
+
+test t-31514 {
+    SELECT '20000101103458.123456' LIKE 1.5e0;
+}
+expect {
+    0
+}
+
+test t-31534 {
+    SELECT '20000101103458.123456' LIKE 1.7;
+}
+expect {
+    0
+}
+
+test t-31540 {
+    SELECT '20000101103458.123456' LIKE '1.5';
+}
+expect {
+    0
+}
+
+test t-31565 {
+    SELECT '20000101103458.123456' NOT LIKE 0b1001;
+}
+expect {
+    1
+}
+
+test t-31608 {
+    SELECT '20000101103458.123456' LIKE 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-31612 {
+    SELECT '20000101103458.123456' LIKE 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-31619 {
+    SELECT '20000101103458.123456' NOT LIKE JSON_OBJECT();
+}
+expect {
+    1
+}
+
+test t-31621 {
+    SELECT '20000101103458.123456' NOT LIKE JSON_ARRAY();
+}
+expect {
+    1
+}
+
+test t-31622 {
+    SELECT '20000101103458.123456' LIKE time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-31663 {
+    SELECT '20000101103458.123456' NOT LIKE 103458.123456;
+}
+expect {
+    1
+}
+
+test t-31665 {
+    SELECT '20000101103458.123456' NOT LIKE '20000101103458';
+}
+expect {
+    1
+}
+
+test t-31669 {
+    SELECT '20000101103458.123456' NOT LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-31674 {
+    SELECT '20000101103458.123456' LIKE '103458.123456';
+}
+expect {
+    0
+}
+
+test t-31677 {
+    SELECT '20000101103458.123456' NOT LIKE '20000101103458foo';
+}
+expect {
+    1
+}
+
+test t-31688 {
+    SELECT '20000101103458.123456' LIKE time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-31693 {
+    SELECT '20000101103458.123456' NOT LIKE time '-32:34:58';
+}
+expect {
+    1
+}
+
+test t-31710 {
+    SELECT '20000101103458.123456' LIKE '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-31725 {
+    SELECT '20000101103458.123456' NOT LIKE '3001-02-18 23:59:59';
+}
+expect {
+    1
+}
+
+test t-31727 {
+    SELECT '20000101103458.123456' NOT LIKE cast(0 as json);
+}
+expect {
+    1
+}
+
+test t-31731 {
+    SELECT '20000101103458.123456' NOT LIKE cast(true as json);
+}
+expect {
+    1
+}
+
+test t-31755 {
+    SELECT '20000101103458.123456' NOT LIKE cast(18446744073709551615 as json);
+}
+expect {
+    1
+}
+
+test t-31766 {
+    SELECT '20000101103458.123456' LIKE cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+test t-31768 {
+    SELECT '20000101103458.123456' LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-31780 {
+    SELECT '20000101103458.123456' LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-31797 {
+    SELECT '20000101103458.123456' NOT LIKE cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-31806 {
+    SELECT '20000101103458.123456' LIKE cast(date '2000-01-01' as json);
+}
+expect {
+    0
+}
+
+test t-31824 {
+    SELECT '20000101103458.123456' LIKE 1234;
+}
+expect {
+    0
+}
+
+test t-31843 {
+    SELECT '20000101103458.123456' NOT LIKE 'FOO_AR';
+}
+expect {
+    1
+}
+
+test t-31871 {
+    SELECT '20000101' NOT LIKE ' 255 foo';
+}
+expect {
+    1
+}
+
+test t-31873 {
+    SELECT '20000101' NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-31883 {
+    SELECT '20000101' NOT LIKE -1.1e0;
+}
+expect {
+    1
+}
+
+test t-31892 {
+    SELECT '20000101' LIKE -1.5;
+}
+expect {
+    0
+}
+
+test t-31897 {
+    SELECT '20000101' NOT LIKE 1.7;
+}
+expect {
+    1
+}
+
+test t-31901 {
+    SELECT '20000101' NOT LIKE -1.7;
+}
+expect {
+    1
+}
+
+test t-31965 {
+    SELECT '20000101' NOT LIKE 0xFF666F6F626172FF;
+}
+expect {
+    1
+}
+
+test t-31998 {
+    SELECT '20000101' LIKE time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-32032 {
+    SELECT '20000101' LIKE '20000101';
+}
+expect {
+    1
+}
+
+test t-32046 {
+    SELECT '20000101' LIKE '103458foo';
+}
+expect {
+    0
+}
+
+test t-32048 {
+    SELECT '20000101' LIKE '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-32057 {
+    SELECT '20000101' NOT LIKE time'00:00:01.0000';
+}
+expect {
+    1
+}
+
+test t-32097 {
+    SELECT '20000101' NOT LIKE cast('\{\}' as json);
+}
+expect {
+    1
+}
+
+test t-32111 {
+    SELECT '20000101' NOT LIKE cast(1.1 as json);
+}
+expect {
+    1
+}
+
+test t-32118 {
+    SELECT '20000101' LIKE cast('1' as json);
+}
+expect {
+    0
+}
+
+test t-32156 {
+    SELECT '20000101' LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-32185 {
+    SELECT '20000101' NOT LIKE '1234';
+}
+expect {
+    1
+}
+
+test t-32208 {
+    SELECT '20000101' LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-32210 {
+    SELECT '20000101' LIKE _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-32222 {
+    SELECT '103458' LIKE 255;
+}
+expect {
+    0
+}
+
+test t-32235 {
+    SELECT '103458' NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-32327 {
+    SELECT '103458' NOT LIKE 0xFF666F6F626172FF;
+}
+expect {
+    1
+}
+
+test t-32335 {
+    SELECT '103458' NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-32343 {
+    SELECT '103458' NOT LIKE JSON_OBJECT();
+}
+expect {
+    1
+}
+
+test t-32349 {
+    SELECT '103458' NOT LIKE time '31:34:58';
+}
+expect {
+    1
+}
+
+test t-32358 {
+    SELECT '103458' LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-32392 {
+    SELECT '103458' LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-32408 {
+    SELECT '103458' LIKE '103458foo';
+}
+expect {
+    0
+}
+
+test t-32415 {
+    SELECT '103458' NOT LIKE time '-31:34:58';
+}
+expect {
+    1
+}
+
+test t-32419 {
+    SELECT '103458' NOT LIKE time'00:00:01.0000';
+}
+expect {
+    1
+}
+
+test t-32444 {
+    SELECT '103458' LIKE '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+test t-32446 {
+    SELECT '103458' LIKE '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-32452 {
+    SELECT '103458' LIKE cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-32462 {
+    SELECT '103458' LIKE cast('null' as json);
+}
+expect {
+    0
+}
+
+test t-32508 {
+    SELECT '103458' LIKE cast(0b001 as json);
+}
+expect {
+    0
+}
+
+test t-32511 {
+    SELECT '103458' NOT LIKE cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-32516 {
+    SELECT '103458' LIKE cast('["ab", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-32570 {
+    SELECT '103458' LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-32579 {
+    SELECT '103458' NOT LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-32614 {
+    SELECT '103458.123456' LIKE 1.5;
+}
+expect {
+    0
+}
+
+test t-32654 {
+    SELECT '103458.123456' LIKE 0x9;
+}
+expect {
+    0
+}
+
+test t-32658 {
+    SELECT '103458.123456' LIKE NULL;
+}
+expect {
+    NULL
+}
+
+test t-32697 {
+    SELECT '103458.123456' NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-32713 {
+    SELECT '103458.123456' NOT LIKE time '32:34:58';
+}
+expect {
+    1
+}
+
+test t-32716 {
+    SELECT '103458.123456' LIKE time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-32744 {
+    SELECT '103458.123456' LIKE 20000101;
+}
+expect {
+    0
+}
+
+test t-32748 {
+    SELECT '103458.123456' LIKE 103458.123456;
+}
+expect {
+    1
+}
+
+test t-32755 {
+    SELECT '103458.123456' NOT LIKE '20000101103458.123456';
+}
+expect {
+    1
+}
+
+test t-32778 {
+    SELECT '103458.123456' LIKE time '-32:34:58';
+}
+expect {
+    0
+}
+
+test t-32800 {
+    SELECT '103458.123456' LIKE '0000-02-29';
+}
+expect {
+    0
+}
+
+test t-32866 {
+    SELECT '103458.123456' LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-32872 {
+    SELECT '103458.123456' LIKE cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-32877 {
+    SELECT '103458.123456' NOT LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-32895 {
+    SELECT '103458.123456' NOT LIKE cast(date '2000-01-02' as json);
+}
+expect {
+    1
+}
+
+test t-32923 {
+    SELECT '103458.123456' NOT LIKE 'foo%';
+}
+expect {
+    1
+}
+
+test t-32945 {
+    SELECT '20000101103458foo' NOT LIKE 1;
+}
+expect {
+    1
+}
+
+test t-32953 {
+    SELECT '20000101103458foo' NOT LIKE ' 255 ';
+}
+expect {
+    1
+}
+
+test t-32967 {
+    SELECT '20000101103458foo' NOT LIKE 1.1e0;
+}
+expect {
+    1
+}
+
+test t-32978 {
+    SELECT '20000101103458foo' LIKE -1.5;
+}
+expect {
+    0
+}
+
+test t-32987 {
+    SELECT '20000101103458foo' NOT LIKE -1.7;
+}
+expect {
+    1
+}
+
+test t-33056 {
+    SELECT '20000101103458foo' LIKE 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-33106 {
+    SELECT '20000101103458foo' LIKE 20000101;
+}
+expect {
+    0
+}
+
+test t-33149 {
+    SELECT '20000101103458foo' NOT LIKE time '-101:34:58';
+}
+expect {
+    1
+}
+
+test t-33164 {
+    SELECT '20000101103458foo' LIKE '0000-01-03';
+}
+expect {
+    0
+}
+
+test t-33171 {
+    SELECT '20000101103458foo' NOT LIKE '3001-02-19 00:00:00';
+}
+expect {
+    1
+}
+
+test t-33190 {
+    SELECT '20000101103458foo' LIKE cast('false' as json);
+}
+expect {
+    0
+}
+
+test t-33203 {
+    SELECT '20000101103458foo' NOT LIKE cast(18446744073709551615 as json);
+}
+expect {
+    1
+}
+
+test t-33207 {
+    SELECT '20000101103458foo' NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+test t-33210 {
+    SELECT '20000101103458foo' LIKE cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-33236 {
+    SELECT '20000101103458foo' LIKE cast('["ab"]' as json);
+}
+expect {
+    0
+}
+
+test t-33260 {
+    SELECT '20000101103458foo' LIKE cast(time '12:34:56' as json);
+}
+expect {
+    0
+}
+
+test t-33337 {
+    SELECT '20000101103458.1234foo' NOT LIKE 0.000;
+}
+expect {
+    1
+}
+
+test t-33344 {
+    SELECT '20000101103458.1234foo' LIKE 1.7;
+}
+expect {
+    0
+}
+
+test t-33348 {
+    SELECT '20000101103458.1234foo' LIKE -1.7;
+}
+expect {
+    0
+}
+
+test t-33381 {
+    SELECT '20000101103458.1234foo' NOT LIKE x'09';
+}
+expect {
+    1
+}
+
+test t-33465 {
+    SELECT '20000101103458.1234foo' NOT LIKE 20000101103458.1234;
+}
+expect {
+    1
+}
+
+test t-33470 {
+    SELECT '20000101103458.1234foo' LIKE 103458;
+}
+expect {
+    0
+}
+
+test t-33478 {
+    SELECT '20000101103458.1234foo' LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-33498 {
+    SELECT '20000101103458.1234foo' LIKE time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-33514 {
+    SELECT '20000101103458.1234foo' LIKE '10:04:58';
+}
+expect {
+    0
+}
+
+test t-33531 {
+    SELECT '20000101103458.1234foo' NOT LIKE '1970-01-01 00:00:01';
+}
+expect {
+    1
+}
+
+test t-33549 {
+    SELECT '20000101103458.1234foo' NOT LIKE cast('null' as json);
+}
+expect {
+    1
+}
+
+test t-33597 {
+    SELECT '20000101103458.1234foo' NOT LIKE cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-33701 {
+    SELECT '20000101103458.123456foo' NOT LIKE 1.5;
+}
+expect {
+    1
+}
+
+test t-33734 {
+    SELECT '20000101103458.123456foo' LIKE X'ff';
+}
+expect {
+    0
+}
+
+test t-33741 {
+    SELECT '20000101103458.123456foo' NOT LIKE 0x9;
+}
+expect {
+    1
+}
+
+test t-33822 {
+    SELECT '20000101103458.123456foo' LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-33835 {
+    SELECT '20000101103458.123456foo' NOT LIKE 103458.123456;
+}
+expect {
+    1
+}
+
+test t-33888 {
+    SELECT '20000101103458.123456foo' LIKE '0000-01-03';
+}
+expect {
+    0
+}
+
+test t-33909 {
+    SELECT '20000101103458.123456foo' NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-33925 {
+    SELECT '20000101103458.123456foo' NOT LIKE cast(9223372036854775807 as json);
+}
+expect {
+    1
+}
+
+test t-33930 {
+    SELECT '20000101103458.123456foo' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-33936 {
+    SELECT '20000101103458.123456foo' LIKE cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-33962 {
+    SELECT '20000101103458.123456foo' LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-33982 {
+    SELECT '20000101103458.123456foo' LIKE cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    0
+}
+
+test t-33997 {
+    SELECT '20000101103458.123456foo' NOT LIKE 1234;
+}
+expect {
+    1
+}
+
+test t-34008 {
+    SELECT '20000101103458.123456foo' LIKE 'foo%';
+}
+expect {
+    0
+}
+
+test t-34035 {
+    SELECT '20000101foo' NOT LIKE ' 0 ';
+}
+expect {
+    1
+}
+
+test t-34072 {
+    SELECT '20000101foo' LIKE -1.7;
+}
+expect {
+    0
+}
+
+test t-34077 {
+    SELECT '20000101foo' NOT LIKE '-1.5';
+}
+expect {
+    1
+}
+
+test t-34084 {
+    SELECT '20000101foo' LIKE _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-34096 {
+    SELECT '20000101foo' LIKE X'ff';
+}
+expect {
+    0
+}
+
+test t-34100 {
+    SELECT '20000101foo' LIKE b'1001';
+}
+expect {
+    0
+}
+
+test t-34148 {
+    SELECT '20000101foo' LIKE 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-34150 {
+    SELECT '20000101foo' LIKE -18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-34153 {
+    SELECT '20000101foo' NOT LIKE JSON_OBJECT();
+}
+expect {
+    1
+}
+
+test t-34183 {
+    SELECT '20000101foo' NOT LIKE timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    1
+}
+
+test t-34185 {
+    SELECT '20000101foo' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+test t-34207 {
+    SELECT '20000101foo' NOT LIKE '103458';
+}
+expect {
+    1
+}
+
+test t-34228 {
+    SELECT '20000101foo' LIKE time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-34258 {
+    SELECT '20000101foo' LIKE '3001-02-18 23:59:59';
+}
+expect {
+    0
+}
+
+test t-34305 {
+    SELECT '20000101foo' NOT LIKE cast('"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-34315 {
+    SELECT '20000101foo' NOT LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-34357 {
+    SELECT '20000101foo' NOT LIKE '1234';
+}
+expect {
+    1
+}
+
+test t-34380 {
+    SELECT '20000101foo' LIKE '12_4';
+}
+expect {
+    0
+}
+
+test t-34381 {
+    SELECT '20000101foo' NOT LIKE '12_4';
+}
+expect {
+    1
+}
+
+test t-34392 {
+    SELECT '103458foo' LIKE 1;
+}
+expect {
+    0
+}
+
+test t-34404 {
+    SELECT '103458foo' LIKE ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-34409 {
+    SELECT '103458foo' NOT LIKE 1.0e0;
+}
+expect {
+    1
+}
+
+test t-34421 {
+    SELECT '103458foo' NOT LIKE 0.0;
+}
+expect {
+    1
+}
+
+test t-34443 {
+    SELECT '103458foo' NOT LIKE _utf8 'foobar';
+}
+expect {
+    1
+}
+
+test t-34449 {
+    SELECT '103458foo' NOT LIKE 0x0;
+}
+expect {
+    1
+}
+
+test t-34460 {
+    SELECT '103458foo' LIKE 0b1001;
+}
+expect {
+    0
+}
+
+test t-34466 {
+    SELECT '103458foo' LIKE x'09';
+}
+expect {
+    0
+}
+
+test t-34506 {
+    SELECT '103458foo' LIKE -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-34516 {
+    SELECT '103458foo' LIKE JSON_ARRAY();
+}
+expect {
+    0
+}
+
+test t-34524 {
+    SELECT '103458foo' LIKE time '130:34:58';
+}
+expect {
+    0
+}
+
+test t-34528 {
+    SELECT '103458foo' LIKE time '10:04:58.1';
+}
+expect {
+    0
+}
+
+test t-34586 {
+    SELECT '103458foo' LIKE time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-34598 {
+    SELECT '103458foo' LIKE time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-34608 {
+    SELECT '103458foo' LIKE '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+test t-34633 {
+    SELECT '103458foo' NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-34654 {
+    SELECT '103458foo' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-34657 {
+    SELECT '103458foo' NOT LIKE cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test t-34658 {
+    SELECT '103458foo' LIKE cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-34662 {
+    SELECT '103458foo' LIKE cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+test t-34690 {
+    SELECT '103458foo' LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-34757 {
+    SELECT '103458.123456foo' NOT LIKE 255;
+}
+expect {
+    1
+}
+
+test t-34785 {
+    SELECT '103458.123456foo' NOT LIKE 0.000;
+}
+expect {
+    1
+}
+
+test t-34801 {
+    SELECT '103458.123456foo' NOT LIKE '-1.5';
+}
+expect {
+    1
+}
+
+test t-34817 {
+    SELECT '103458.123456foo' NOT LIKE X'00';
+}
+expect {
+    1
+}
+
+test t-34818 {
+    SELECT '103458.123456foo' LIKE X'01';
+}
+expect {
+    0
+}
+
+test t-34873 {
+    SELECT '103458.123456foo' NOT LIKE 18446744073709540000e0;
+}
+expect {
+    1
+}
+
+test t-34883 {
+    SELECT '103458.123456foo' NOT LIKE time '31:34:58';
+}
+expect {
+    1
+}
+
+test t-34895 {
+    SELECT '103458.123456foo' NOT LIKE time '32:34:58.5';
+}
+expect {
+    1
+}
+
+test t-34910 {
+    SELECT '103458.123456foo' LIKE 20000101103458;
+}
+expect {
+    0
+}
+
+test t-34913 {
+    SELECT '103458.123456foo' NOT LIKE 20000101103458.1234;
+}
+expect {
+    1
+}
+
+test t-34947 {
+    SELECT '103458.123456foo' NOT LIKE time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-35001 {
+    SELECT '103458.123456foo' NOT LIKE cast('false' as json);
+}
+expect {
+    1
+}
+
+test t-35022 {
+    SELECT '103458.123456foo' LIKE cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-35035 {
+    SELECT '103458.123456foo' NOT LIKE cast(_binary '"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-35110 {
+    SELECT '103458.123456foo' LIKE _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-35112 {
+    SELECT '103458.123456foo' LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-35113 {
+    SELECT '103458.123456foo' NOT LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-35125 {
+    SELECT time '-10:04:58' NOT LIKE ' 255 ';
+}
+expect {
+    1
+}
+
+test t-35136 {
+    SELECT time '-10:04:58' LIKE -1.5e0;
+}
+expect {
+    0
+}
+
+test t-35160 {
+    SELECT time '-10:04:58' LIKE '1.5';
+}
+expect {
+    0
+}
+
+test t-35256 {
+    SELECT time '-10:04:58' LIKE time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-35270 {
+    SELECT time '-10:04:58' LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-35271 {
+    SELECT time '-10:04:58' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+test t-35279 {
+    SELECT time '-10:04:58' NOT LIKE 20000101;
+}
+expect {
+    1
+}
+
+test t-35291 {
+    SELECT time '-10:04:58' NOT LIKE '20000101';
+}
+expect {
+    1
+}
+
+test t-35337 {
+    SELECT time '-10:04:58' NOT LIKE '0000-01-03';
+}
+expect {
+    1
+}
+
+test t-35366 {
+    SELECT time '-10:04:58' LIKE cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-35382 {
+    SELECT time '-10:04:58' LIKE cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-35400 {
+    SELECT time '-10:04:58' LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-35431 {
+    SELECT time '-10:04:58' NOT LIKE cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-35465 {
+    SELECT time '-10:04:58' NOT LIKE '12%';
+}
+expect {
+    1
+}
+
+test t-35483 {
+    SELECT time '-31:34:58' NOT LIKE ' 0 ';
+}
+expect {
+    1
+}
+
+test t-35537 {
+    SELECT time '-31:34:58' NOT LIKE 0x1;
+}
+expect {
+    1
+}
+
+test t-35547 {
+    SELECT time '-31:34:58' NOT LIKE 0b1001;
+}
+expect {
+    1
+}
+
+test t-35559 {
+    SELECT time '-31:34:58' NOT LIKE false;
+}
+expect {
+    1
+}
+
+test t-35616 {
+    SELECT time '-31:34:58' LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-35627 {
+    SELECT time '-31:34:58' NOT LIKE timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-35629 {
+    SELECT time '-31:34:58' NOT LIKE timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    1
+}
+
+test t-35637 {
+    SELECT time '-31:34:58' NOT LIKE 20000101103458.1234;
+}
+expect {
+    1
+}
+
+test t-35690 {
+    SELECT time '-31:34:58' LIKE '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-35696 {
+    SELECT time '-31:34:58' LIKE '0000-02-29';
+}
+expect {
+    0
+}
+
+test t-35705 {
+    SELECT time '-31:34:58' NOT LIKE '3001-02-19 00:00:00';
+}
+expect {
+    1
+}
+
+test t-35713 {
+    SELECT time '-31:34:58' NOT LIKE cast(true as json);
+}
+expect {
+    1
+}
+
+test t-35719 {
+    SELECT time '-31:34:58' NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-35741 {
+    SELECT time '-31:34:58' NOT LIKE cast('2' as json);
+}
+expect {
+    1
+}
+
+test t-35746 {
+    SELECT time '-31:34:58' LIKE cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-35773 {
+    SELECT time '-31:34:58' NOT LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35784 {
+    SELECT time '-31:34:58' LIKE cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-35811 {
+    SELECT time '-31:34:58' NOT LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-35838 {
+    SELECT time '-32:34:58' LIKE 0;
+}
+expect {
+    0
+}
+
+test t-35857 {
+    SELECT time '-32:34:58' NOT LIKE 1.0e0;
+}
+expect {
+    1
+}
+
+test t-35870 {
+    SELECT time '-32:34:58' LIKE 0.000;
+}
+expect {
+    0
+}
+
+test t-35895 {
+    SELECT time '-32:34:58' NOT LIKE _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-35916 {
+    SELECT time '-32:34:58' LIKE NULL;
+}
+expect {
+    NULL
+}
+
+test t-35921 {
+    SELECT time '-32:34:58' NOT LIKE false;
+}
+expect {
+    1
+}
+
+test t-35981 {
+    SELECT time '-32:34:58' NOT LIKE time '32:34:58.5';
+}
+expect {
+    1
+}
+
+test t-35992 {
+    SELECT time '-32:34:58' LIKE timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-36011 {
+    SELECT time '-32:34:58' NOT LIKE '20000101103458.1234';
+}
+expect {
+    1
+}
+
+test t-36040 {
+    SELECT time '-32:34:58' LIKE time'00:00:59.01011';
+}
+expect {
+    0
+}
+
+test t-36041 {
+    SELECT time '-32:34:58' NOT LIKE time'00:00:59.01011';
+}
+expect {
+    1
+}
+
+test t-36049 {
+    SELECT time '-32:34:58' NOT LIKE '10:04:58';
+}
+expect {
+    1
+}
+
+test t-36051 {
+    SELECT time '-32:34:58' NOT LIKE '101:34:58';
+}
+expect {
+    1
+}
+
+test t-36073 {
+    SELECT time '-32:34:58' NOT LIKE cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-36114 {
+    SELECT time '-32:34:58' LIKE cast('"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-36122 {
+    SELECT time '-32:34:58' LIKE cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-36153 {
+    SELECT time '-32:34:58' NOT LIKE cast(date '2000-01-02' as json);
+}
+expect {
+    1
+}
+
+test t-36192 {
+    SELECT time '-32:34:58' LIKE _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-36195 {
+    SELECT time '-32:34:58' NOT LIKE _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-36206 {
+    SELECT time'00:00:01.0000' LIKE ' 0 ';
+}
+expect {
+    0
+}
+
+test t-36214 {
+    SELECT time'00:00:01.0000' LIKE ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-36241 {
+    SELECT time'00:00:01.0000' NOT LIKE 1.7;
+}
+expect {
+    1
+}
+
+test t-36265 {
+    SELECT time'00:00:01.0000' NOT LIKE X'00';
+}
+expect {
+    1
+}
+
+test t-36267 {
+    SELECT time'00:00:01.0000' NOT LIKE X'01';
+}
+expect {
+    1
+}
+
+test t-36363 {
+    SELECT time'00:00:01.0000' NOT LIKE 20000101103458.123456;
+}
+expect {
+    1
+}
+
+test t-36372 {
+    SELECT time'00:00:01.0000' LIKE '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-36385 {
+    SELECT time'00:00:01.0000' NOT LIKE '20000101103458.1234foo';
+}
+expect {
+    1
+}
+
+test t-36389 {
+    SELECT time'00:00:01.0000' NOT LIKE '20000101foo';
+}
+expect {
+    1
+}
+
+test t-36395 {
+    SELECT time'00:00:01.0000' NOT LIKE time '-10:04:58';
+}
+expect {
+    1
+}
+
+test t-36401 {
+    SELECT time'00:00:01.0000' NOT LIKE time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-36428 {
+    SELECT time'00:00:01.0000' LIKE '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-36462 {
+    SELECT time'00:00:01.0000' LIKE cast('1' as json);
+}
+expect {
+    0
+}
+
+test t-36464 {
+    SELECT time'00:00:01.0000' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-36514 {
+    SELECT time'00:00:01.0000' LIKE cast(date '2000-01-02' as json);
+}
+expect {
+    0
+}
+
+test t-36533 {
+    SELECT time'00:00:01.0000' NOT LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-36546 {
+    SELECT time'00:00:01.0000' LIKE 'foo_ar';
+}
+expect {
+    0
+}
+
+test t-36570 {
+    SELECT time'00:00:59.01011' LIKE ' 1 ';
+}
+expect {
+    0
+}
+
+test t-36573 {
+    SELECT time'00:00:59.01011' NOT LIKE ' 255 ';
+}
+expect {
+    1
+}
+
+test t-36588 {
+    SELECT time'00:00:59.01011' LIKE -1.1e0;
+}
+expect {
+    0
+}
+
+test t-36622 {
+    SELECT time'00:00:59.01011' LIKE 0x1;
+}
+expect {
+    0
+}
+
+test t-36670 {
+    SELECT time'00:00:59.01011' LIKE 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-36687 {
+    SELECT time'00:00:59.01011' NOT LIKE JSON_OBJECT();
+}
+expect {
+    1
+}
+
+test t-36694 {
+    SELECT time'00:00:59.01011' LIKE time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-36719 {
+    SELECT time'00:00:59.01011' NOT LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    1
+}
+
+test t-36740 {
+    SELECT time'00:00:59.01011' LIKE '103458';
+}
+expect {
+    0
+}
+
+test t-36741 {
+    SELECT time'00:00:59.01011' NOT LIKE '103458';
+}
+expect {
+    1
+}
+
+test t-36756 {
+    SELECT time'00:00:59.01011' LIKE time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-36786 {
+    SELECT time'00:00:59.01011' LIKE '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-36821 {
+    SELECT time'00:00:59.01011' NOT LIKE cast(9223372036854775807 as json);
+}
+expect {
+    1
+}
+
+test t-36822 {
+    SELECT time'00:00:59.01011' LIKE cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-36825 {
+    SELECT time'00:00:59.01011' NOT LIKE cast('1' as json);
+}
+expect {
+    1
+}
+
+test t-36829 {
+    SELECT time'00:00:59.01011' NOT LIKE cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test t-36855 {
+    SELECT time'00:00:59.01011' NOT LIKE cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-36868 {
+    SELECT time'00:00:59.01011' LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-36870 {
+    SELECT time'00:00:59.01011' LIKE cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-36878 {
+    SELECT time'00:00:59.01011' LIKE cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    0
+}
+
+test t-36893 {
+    SELECT time'00:00:59.01011' NOT LIKE 1234;
+}
+expect {
+    1
+}
+
+test t-36904 {
+    SELECT time'00:00:59.01011' LIKE 'foo%';
+}
+expect {
+    0
+}
+
+test t-36923 {
+    SELECT time'00:00:59.01011' NOT LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-36946 {
+    SELECT time'00:00:59.2132234' LIKE -1.5e0;
+}
+expect {
+    0
+}
+
+test t-36962 {
+    SELECT time'00:00:59.2132234' LIKE 1.1;
+}
+expect {
+    0
+}
+
+test t-36969 {
+    SELECT time'00:00:59.2132234' NOT LIKE -1.7;
+}
+expect {
+    1
+}
+
+test t-36999 {
+    SELECT time'00:00:59.2132234' NOT LIKE 0x9;
+}
+expect {
+    1
+}
+
+test t-37001 {
+    SELECT time'00:00:59.2132234' NOT LIKE x'09';
+}
+expect {
+    1
+}
+
+test t-37007 {
+    SELECT time'00:00:59.2132234' NOT LIKE false;
+}
+expect {
+    1
+}
+
+test t-37066 {
+    SELECT time'00:00:59.2132234' LIKE time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-37080 {
+    SELECT time'00:00:59.2132234' LIKE timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-37102 {
+    SELECT time'00:00:59.2132234' LIKE '103458';
+}
+expect {
+    0
+}
+
+test t-37118 {
+    SELECT time'00:00:59.2132234' LIKE time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-37147 {
+    SELECT time'00:00:59.2132234' NOT LIKE '0000-01-03';
+}
+expect {
+    1
+}
+
+test t-37171 {
+    SELECT time'00:00:59.2132234' NOT LIKE cast('true' as json);
+}
+expect {
+    1
+}
+
+test t-37182 {
+    SELECT time'00:00:59.2132234' LIKE cast(9223372036854775807 as json);
+}
+expect {
+    0
+}
+
+test t-37188 {
+    SELECT time'00:00:59.2132234' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-37198 {
+    SELECT time'00:00:59.2132234' LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-37206 {
+    SELECT time'00:00:59.2132234' LIKE cast(_binary '"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-37211 {
+    SELECT time'00:00:59.2132234' NOT LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-37227 {
+    SELECT time'00:00:59.2132234' NOT LIKE cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-37236 {
+    SELECT time'00:00:59.2132234' LIKE cast(date '2000-01-01' as json);
+}
+expect {
+    0
+}
+
+test t-37245 {
+    SELECT time'00:00:59.2132234' NOT LIKE cast(time '12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-37251 {
+    SELECT time'00:00:59.2132234' NOT LIKE 'FOOBAR';
+}
+expect {
+    1
+}
+
+test t-37283 {
+    SELECT time'00:00:59.2132234' NOT LIKE _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-37304 {
+    SELECT time '-101:34:58' LIKE 1.0e0;
+}
+expect {
+    0
+}
+
+test t-37306 {
+    SELECT time '-101:34:58' LIKE 1.5e0;
+}
+expect {
+    0
+}
+
+test t-37319 {
+    SELECT time '-101:34:58' NOT LIKE 0.000;
+}
+expect {
+    1
+}
+
+test t-37426 {
+    SELECT time '-101:34:58' LIKE time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-37459 {
+    SELECT time '-101:34:58' NOT LIKE '20000101103458.1234';
+}
+expect {
+    1
+}
+
+test t-37460 {
+    SELECT time '-101:34:58' LIKE '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-37472 {
+    SELECT time '-101:34:58' LIKE '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-37486 {
+    SELECT time '-101:34:58' LIKE time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-37488 {
+    SELECT time '-101:34:58' LIKE time'00:00:59.01011';
+}
+expect {
+    0
+}
+
+test t-37490 {
+    SELECT time '-101:34:58' LIKE time'00:00:59.2132234';
+}
+expect {
+    0
+}
+
+test t-37520 {
+    SELECT time '-101:34:58' LIKE cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-37527 {
+    SELECT time '-101:34:58' NOT LIKE cast('\{\}' as json);
+}
+expect {
+    1
+}
+
+test t-37539 {
+    SELECT time '-101:34:58' NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-37618 {
+    SELECT time '-101:34:58' LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-37655 {
+    SELECT time '-5 10:34:58' NOT LIKE ' 0 ';
+}
+expect {
+    1
+}
+
+test t-37665 {
+    SELECT time '-5 10:34:58' NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-37666 {
+    SELECT time '-5 10:34:58' LIKE 1.0e0;
+}
+expect {
+    0
+}
+
+test t-37678 {
+    SELECT time '-5 10:34:58' LIKE 0.0;
+}
+expect {
+    0
+}
+
+test t-37679 {
+    SELECT time '-5 10:34:58' NOT LIKE 0.0;
+}
+expect {
+    1
+}
+
+test t-37719 {
+    SELECT time '-5 10:34:58' NOT LIKE 0b1001;
+}
+expect {
+    1
+}
+
+test t-37726 {
+    SELECT time '-5 10:34:58' LIKE NULL;
+}
+expect {
+    NULL
+}
+
+test t-37760 {
+    SELECT time '-5 10:34:58' LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-37763 {
+    SELECT time '-5 10:34:58' NOT LIKE 9223372036854775807;
+}
+expect {
+    1
+}
+
+test t-37765 {
+    SELECT time '-5 10:34:58' NOT LIKE -9223372036854775808;
+}
+expect {
+    1
+}
+
+test t-37768 {
+    SELECT time '-5 10:34:58' LIKE 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-37810 {
+    SELECT time '-5 10:34:58' LIKE 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-37831 {
+    SELECT time '-5 10:34:58' NOT LIKE '20000101103458foo';
+}
+expect {
+    1
+}
+
+test t-37845 {
+    SELECT time '-5 10:34:58' NOT LIKE time '-31:34:58';
+}
+expect {
+    1
+}
+
+test t-37877 {
+    SELECT time '-5 10:34:58' NOT LIKE '3001-02-19 00:00:00';
+}
+expect {
+    1
+}
+
+test t-37882 {
+    SELECT time '-5 10:34:58' LIKE cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-37884 {
+    SELECT time '-5 10:34:58' LIKE cast(true as json);
+}
+expect {
+    0
+}
+
+test t-37912 {
+    SELECT time '-5 10:34:58' LIKE cast('2' as json);
+}
+expect {
+    0
+}
+
+test t-37939 {
+    SELECT time '-5 10:34:58' NOT LIKE cast(0b001 as json);
+}
+expect {
+    1
+}
+
+test t-37951 {
+    SELECT time '-5 10:34:58' NOT LIKE cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-37958 {
+    SELECT time '-5 10:34:58' LIKE cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-37974 {
+    SELECT time '-5 10:34:58' LIKE 'FOOBAR';
+}
+expect {
+    0
+}
+
+test t-37980 {
+    SELECT time '-5 10:34:58' LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-37981 {
+    SELECT time '-5 10:34:58' NOT LIKE _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-37982 {
+    SELECT time '-5 10:34:58' LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-37998 {
+    SELECT time '-5 10:34:58' LIKE '12%';
+}
+expect {
+    0
+}
+
+test t-38008 {
+    SELECT time '-5 10:34:58' LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-38017 {
+    SELECT '10:04:58' NOT LIKE ' 0 ';
+}
+expect {
+    1
+}
+
+test t-38026 {
+    SELECT '10:04:58' LIKE 0.0e0;
+}
+expect {
+    0
+}
+
+test t-38030 {
+    SELECT '10:04:58' LIKE 1.5e0;
+}
+expect {
+    0
+}
+
+test t-38050 {
+    SELECT '10:04:58' LIKE 1.7;
+}
+expect {
+    0
+}
+
+test t-38141 {
+    SELECT '10:04:58' NOT LIKE time '31:34:58';
+}
+expect {
+    1
+}
+
+test t-38169 {
+    SELECT '10:04:58' NOT LIKE 20000101103458;
+}
+expect {
+    1
+}
+
+test t-38215 {
+    SELECT '10:04:58' NOT LIKE time'00:00:59.2132234';
+}
+expect {
+    1
+}
+
+test t-38267 {
+    SELECT '10:04:58' NOT LIKE cast(-1.1 as json);
+}
+expect {
+    1
+}
+
+test t-38276 {
+    SELECT '10:04:58' LIKE cast('1.1' as json);
+}
+expect {
+    0
+}
+
+test t-38290 {
+    SELECT '10:04:58' LIKE cast(_binary' "foo"' as json);
+}
+expect {
+    0
+}
+
+test t-38293 {
+    SELECT '10:04:58' NOT LIKE cast(_binary '"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-38298 {
+    SELECT '10:04:58' LIKE cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-38316 {
+    SELECT '10:04:58' LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    0
+}
+
+test t-38354 {
+    SELECT '10:04:58' LIKE 'FOO%';
+}
+expect {
+    0
+}
+
+test t-38355 {
+    SELECT '10:04:58' NOT LIKE 'FOO%';
+}
+expect {
+    1
+}
+
+test t-38368 {
+    SELECT '10:04:58' LIKE _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-38372 {
+    SELECT '101:34:58' LIKE 0;
+}
+expect {
+    0
+}
+
+test t-38389 {
+    SELECT '101:34:58' NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-38390 {
+    SELECT '101:34:58' LIKE 1.0e0;
+}
+expect {
+    0
+}
+
+test t-38398 {
+    SELECT '101:34:58' LIKE -1.1e0;
+}
+expect {
+    0
+}
+
+test t-38501 {
+    SELECT '101:34:58' NOT LIKE time '10:04:58';
+}
+expect {
+    1
+}
+
+test t-38515 {
+    SELECT '101:34:58' NOT LIKE time '32:34:58.5';
+}
+expect {
+    1
+}
+
+test t-38537 {
+    SELECT '101:34:58' NOT LIKE 20000101;
+}
+expect {
+    1
+}
+
+test t-38539 {
+    SELECT '101:34:58' NOT LIKE 103458;
+}
+expect {
+    1
+}
+
+test t-38572 {
+    SELECT '101:34:58' LIKE time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-38598 {
+    SELECT '101:34:58' LIKE '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+test t-38627 {
+    SELECT '101:34:58' NOT LIKE cast(1.1 as json);
+}
+expect {
+    1
+}
+
+test t-38635 {
+    SELECT '101:34:58' NOT LIKE cast('1' as json);
+}
+expect {
+    1
+}
+
+test t-38639 {
+    SELECT '101:34:58' NOT LIKE cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test t-38646 {
+    SELECT '101:34:58' LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-38706 {
+    SELECT '101:34:58' LIKE _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-38739 {
+    SELECT '5 10:34:58' NOT LIKE 255;
+}
+expect {
+    1
+}
+
+test t-38752 {
+    SELECT '5 10:34:58' LIKE 1.0e0;
+}
+expect {
+    0
+}
+
+test t-38773 {
+    SELECT '5 10:34:58' NOT LIKE 1.1;
+}
+expect {
+    1
+}
+
+test t-38794 {
+    SELECT '5 10:34:58' LIKE 0x1;
+}
+expect {
+    0
+}
+
+test t-38804 {
+    SELECT '5 10:34:58' LIKE 0b1001;
+}
+expect {
+    0
+}
+
+test t-38810 {
+    SELECT '5 10:34:58' LIKE x'09';
+}
+expect {
+    0
+}
+
+test t-38917 {
+    SELECT '5 10:34:58' NOT LIKE '20000101103458foo';
+}
+expect {
+    1
+}
+
+test t-38931 {
+    SELECT '5 10:34:58' NOT LIKE time '-31:34:58';
+}
+expect {
+    1
+}
+
+test t-38940 {
+    SELECT '5 10:34:58' LIKE time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-38943 {
+    SELECT '5 10:34:58' NOT LIKE time '-5 10:34:58';
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-39045 {
+    SELECT '5 10:34:58' NOT LIKE cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-39093 {
+    SELECT '5 10:34:58' NOT LIKE _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    1
+}
+
+test t-39094 {
+    SELECT '5 10:34:58' LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-39113 {
+    SELECT '2000-01-01' NOT LIKE 0.0e0;
+}
+expect {
+    1
+}
+
+test t-39154 {
+    SELECT '2000-01-01' LIKE 0x0;
+}
+expect {
+    0
+}
+
+test t-39167 {
+    SELECT '2000-01-01' NOT LIKE 0b1001;
+}
+expect {
+    1
+}
+
+test t-39175 {
+    SELECT '2000-01-01' NOT LIKE NULL;
+}
+expect {
+    NULL
+}
+
+test t-39209 {
+    SELECT '2000-01-01' NOT LIKE 0xFF666F6F626172;
+}
+expect {
+    1
+}
+
+test t-39215 {
+    SELECT '2000-01-01' NOT LIKE 18446744073709551615;
+}
+expect {
+    1
+}
+
+test t-39225 {
+    SELECT '2000-01-01' NOT LIKE time '10:04:58';
+}
+expect {
+    1
+}
+
+test t-39233 {
+    SELECT '2000-01-01' NOT LIKE time '5 10:34:58';
+}
+expect {
+    1
+}
+
+test t-39282 {
+    SELECT '2000-01-01' LIKE '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-39302 {
+    SELECT '2000-01-01' LIKE time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-39319 {
+    SELECT '2000-01-01' NOT LIKE '0000-01-03';
+}
+expect {
+    1
+}
+
+test t-39332 {
+    SELECT '2000-01-01' LIKE cast(true as json);
+}
+expect {
+    0
+}
+
+test t-39337 {
+    SELECT '2000-01-01' NOT LIKE cast('\{\}' as json);
+}
+expect {
+    1
+}
+
+test t-39355 {
+    SELECT '2000-01-01' NOT LIKE cast(9223372036854775807 as json);
+}
+expect {
+    1
+}
+
+test t-39380 {
+    SELECT '2000-01-01' LIKE cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-39456 {
+    SELECT '2000-01-01' LIKE _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs;
+}
+expect {
+    0
+}
+
+test t-39495 {
+    SELECT '2000-01-01 12:34:58' NOT LIKE -1.5;
+}
+expect {
+    1
+}
+
+test t-39526 {
+    SELECT '2000-01-01 12:34:58' LIKE X'ff';
+}
+expect {
+    0
+}
+
+test t-39532 {
+    SELECT '2000-01-01 12:34:58' LIKE 0x9;
+}
+expect {
+    0
+}
+
+test t-39599 {
+    SELECT '2000-01-01 12:34:58' NOT LIKE time '31:34:58.4';
+}
+expect {
+    1
+}
+
+test t-39602 {
+    SELECT '2000-01-01 12:34:58' LIKE time '130:34:58.6';
+}
+expect {
+    0
+}
+
+test t-39622 {
+    SELECT '2000-01-01 12:34:58' LIKE 20000101;
+}
+expect {
+    0
+}
+
+test t-39630 {
+    SELECT '2000-01-01 12:34:58' LIKE '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-39672 {
+    SELECT '2000-01-01 12:34:58' LIKE '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-39682 {
+    SELECT '2000-01-01 12:34:58' LIKE '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-39701 {
+    SELECT '2000-01-01 12:34:58' NOT LIKE cast('[]' as json);
+}
+expect {
+    1
+}
+
+test t-39710 {
+    SELECT '2000-01-01 12:34:58' LIKE cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-39732 {
+    SELECT '2000-01-01 12:34:58' LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-39742 {
+    SELECT '2000-01-01 12:34:58' LIKE cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-39745 {
+    SELECT '2000-01-01 12:34:58' NOT LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-39758 {
+    SELECT '2000-01-01 12:34:58' LIKE cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-39760 {
+    SELECT '2000-01-01 12:34:58' LIKE cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    0
+}
+
+test t-39778 {
+    SELECT '2000-01-01 12:34:58' LIKE cast(time '12:34:58' as json);
+}
+expect {
+    0
+}
+
+test t-39811 {
+    SELECT '2000-01-01 12:34:58' NOT LIKE '12_4';
+}
+expect {
+    1
+}
+
+test t-39853 {
+    SELECT '0000-02-29' NOT LIKE 0.000;
+}
+expect {
+    1
+}
+
+test t-39935 {
+    SELECT '0000-02-29' NOT LIKE 9223372036854775807;
+}
+expect {
+    1
+}
+
+test t-39939 {
+    SELECT '0000-02-29' NOT LIKE 18446744073709551615;
+}
+expect {
+    1
+}
+
+test t-39978 {
+    SELECT '0000-02-29' LIKE 20000101103458;
+}
+expect {
+    0
+}
+
+test t-39984 {
+    SELECT '0000-02-29' LIKE 20000101;
+}
+expect {
+    0
+}
+
+test t-39995 {
+    SELECT '0000-02-29' NOT LIKE '20000101103458.123456';
+}
+expect {
+    1
+}
+
+test t-39997 {
+    SELECT '0000-02-29' NOT LIKE '20000101';
+}
+expect {
+    1
+}
+
+test t-39999 {
+    SELECT '0000-02-29' NOT LIKE '103458';
+}
+expect {
+    1
+}
+
+test t-40018 {
+    SELECT '0000-02-29' LIKE time '-32:34:58';
+}
+expect {
+    0
+}
+
+test t-40020 {
+    SELECT '0000-02-29' LIKE time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-40103 {
+    SELECT '0000-02-29' NOT LIKE cast(_binary '"bar"' as json);
+}
+expect {
+    1
+}
+
+test t-40148 {
+    SELECT '0000-02-29' LIKE '1234';
+}
+expect {
+    0
+}
+
+test t-40164 {
+    SELECT '0000-02-29' LIKE 'FOO%';
+}
+expect {
+    0
+}
+
+test t-40166 {
+    SELECT '0000-02-29' LIKE 'foo_ar';
+}
+expect {
+    0
+}
+
+test t-40186 {
+    SELECT '0000-01-03' LIKE 255;
+}
+expect {
+    0
+}
+
+test t-40294 {
+    SELECT '0000-01-03' LIKE 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-40302 {
+    SELECT '0000-01-03' LIKE 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-40321 {
+    SELECT '0000-01-03' NOT LIKE time '10:04:58.1';
+}
+expect {
+    1
+}
+
+test t-40376 {
+    SELECT '0000-01-03' LIKE time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-40430 {
+    SELECT '0000-01-03' LIKE cast('false' as json);
+}
+expect {
+    0
+}
+
+test t-40454 {
+    SELECT '0000-01-03' LIKE cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-40460 {
+    SELECT '0000-01-03' LIKE cast('invalid' as json);
+}
+expect error {
+}
+
+test t-40464 {
+    SELECT '0000-01-03' LIKE cast(_binary '"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-40479 {
+    SELECT '0000-01-03' NOT LIKE cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-40499 {
+    SELECT '0000-01-03' NOT LIKE cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-40532 {
+    SELECT '0000-01-03' LIKE '12%';
+}
+expect {
+    0
+}
+
+test t-40535 {
+    SELECT '0000-01-03' NOT LIKE '12_4';
+}
+expect {
+    1
+}
+
+test t-40548 {
+    SELECT '1969-02-18' LIKE 255;
+}
+expect {
+    0
+}
+
+test t-40557 {
+    SELECT '1969-02-18' NOT LIKE '\t1foo\t';
+}
+expect {
+    1
+}
+
+test t-40560 {
+    SELECT '1969-02-18' LIKE 0.0e0;
+}
+expect {
+    0
+}
+
+test t-40584 {
+    SELECT '1969-02-18' LIKE 1.7;
+}
+expect {
+    0
+}
+
+test t-40586 {
+    SELECT '1969-02-18' LIKE -1.1;
+}
+expect {
+    0
+}
+
+test t-40614 {
+    SELECT '1969-02-18' LIKE 0b1001;
+}
+expect {
+    0
+}
+
+test t-40625 {
+    SELECT '1969-02-18' NOT LIKE true;
+}
+expect {
+    1
+}
+
+test t-40664 {
+    SELECT '1969-02-18' LIKE 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-40669 {
+    SELECT '1969-02-18' NOT LIKE JSON_OBJECT();
+}
+expect {
+    1
+}
+
+test t-40672 {
+    SELECT '1969-02-18' LIKE time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-40749 {
+    SELECT '1969-02-18' NOT LIKE time'00:00:59.2132234';
+}
+expect {
+    1
+}
+
+test t-40775 {
+    SELECT '1969-02-18' NOT LIKE '3001-02-18 23:59:59';
+}
+expect {
+    1
+}
+
+test t-40778 {
+    SELECT '1969-02-18' LIKE cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-40783 {
+    SELECT '1969-02-18' NOT LIKE cast(false as json);
+}
+expect {
+    1
+}
+
+test t-40789 {
+    SELECT '1969-02-18' NOT LIKE cast('null' as json);
+}
+expect {
+    1
+}
+
+test t-40797 {
+    SELECT '1969-02-18' NOT LIKE cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-40805 {
+    SELECT '1969-02-18' NOT LIKE cast(18446744073709551615 as json);
+}
+expect {
+    1
+}
+
+test t-40830 {
+    SELECT '1969-02-18' LIKE cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-40832 {
+    SELECT '1969-02-18' LIKE cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-40851 {
+    SELECT '1969-02-18' NOT LIKE cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    1
+}

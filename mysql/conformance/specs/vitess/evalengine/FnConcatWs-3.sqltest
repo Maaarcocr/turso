@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-151449 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 20000101103458, NULL);
+}
+expect {
+    20000101103458
+}
+
+test t-151511 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 20000101103458.123456, _binary 'Müller' );
+}
+expect {
+    20000101103458.123456abcABCÅåMüller
+}
+
+test t-151561 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 103458.123456, "a");
+}
+expect {
+    103458.123456abcABCÅåa
+}
+
+test t-151571 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 103458.123456, "😊😂🤢");
+}
+expect {
+    103458.123456abcABCÅå😊😂🤢
+}
+
+test t-151596 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '20000101103458', -9223372036854775808);
+}
+expect {
+    20000101103458abcABCÅå-9223372036854775808
+}
+
+test t-151667 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '20000101', _latin1 0xFF);
+}
+expect {
+    20000101abcABCÅåÿ
+}
+
+test t-151734 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '20000101103458.1234foo', "Å å");
+}
+expect {
+    20000101103458.1234fooabcABCÅåÅ å
+}
+
+test t-151785 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '20000101foo', 0123);
+}
+expect {
+    20000101fooabcABCÅå123
+}
+
+test t-151897 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', time '-32:34:58', 3.1415926);
+}
+expect {
+    -32:34:58abcABCÅå3.1415926
+}
+
+test t-151926 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', time'00:00:01.0000', -9223372036854775808);
+}
+expect {
+    00:00:01.0000abcABCÅå-9223372036854775808
+}
+
+test t-151963 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', time'00:00:59.2132234', 3.1415926);
+}
+expect {
+    00:00:59.213223abcABCÅå3.1415926
+}
+
+test t-151977 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', time '-101:34:58', NULL);
+}
+expect {
+    -101:34:58
+}
+
+test t-152022 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '10:04:58', "");
+}
+expect {
+    10:04:58abcABCÅå
+}
+
+test t-152070 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '5 10:34:58', -1);
+}
+expect {
+    5 10:34:58abcABCÅå-1
+}
+
+test t-152271 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(0 as json), 3.1415926);
+}
+expect {
+    0abcABCÅå3.1415926
+}
+
+test t-152276 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(0 as json), '123');
+}
+expect {
+    0abcABCÅå123
+}
+
+test t-152320 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(true as json), '123');
+}
+expect {
+    trueabcABCÅå123
+}
+
+test t-152550 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(9223372036854775807 as json), "");
+}
+expect {
+    9223372036854775807abcABCÅå
+}
+
+test t-152596 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast('1' as json), "abc");
+}
+expect {
+    1abcABCÅåabc
+}
+
+test t-152918 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(0b001 as json), -999999999999999999999999);
+}
+expect {
+    "base64:type15:AQ=="abcABCÅå-999999999999999999999999
+}
+
+test t-152938 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast('["a"]' as json), -9223372036854775808);
+}
+expect {
+    ["a"]abcABCÅå-9223372036854775808
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-152974 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast('["ab", "cd", "ef"]' as json), 0xAACC);
+}
+expect error {
+}
+
+test t-152981 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast('["ab", "cd", "ef"]' as json), 9223372036854775807);
+}
+expect {
+    ["ab", "cd", "ef"]abcABCÅå9223372036854775807
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-153130 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast('"a": 1' as json), "中文测试");
+}
+expect error {
+}
+
+test t-153157 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(date '2000-01-01' as json), 9223372036854775807);
+}
+expect {
+    "2000-01-01"abcABCÅå9223372036854775807
+}
+
+test t-153191 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(timestamp '2000-01-01 12:34:58' as json), 1);
+}
+expect {
+    "2000-01-01 12:34:58.000000"abcABCÅå1
+}
+
+test t-153196 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(timestamp '2000-01-01 12:34:58' as json), "中文测试");
+}
+expect {
+    "2000-01-01 12:34:58.000000"abcABCÅå中文测试
+}
+
+test t-153222 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '12:34:56' as json), '123');
+}
+expect {
+    "12:34:56.000000"abcABCÅå123
+}
+
+test t-153224 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '12:34:56' as json), -9223372036854775808);
+}
+expect {
+    "12:34:56.000000"abcABCÅå-9223372036854775808
+}
+
+test t-153226 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '12:34:56' as json), -999999999999999999999999);
+}
+expect {
+    "12:34:56.000000"abcABCÅå-999999999999999999999999
+}
+
+test t-153239 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '12:34:58' as json), 3.1415926);
+}
+expect {
+    "12:34:58.000000"abcABCÅå3.1415926
+}
+
+test t-153245 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '12:34:58' as json), 9223372036854775807);
+}
+expect {
+    "12:34:58.000000"abcABCÅå9223372036854775807
+}
+
+test t-153259 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '5 12:34:58' as json), 0123);
+}
+expect {
+    "04:34:58.000000"abcABCÅå123
+}
+
+test t-153262 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', cast(time '5 12:34:58' as json), "中文测试");
+}
+expect {
+    "04:34:58.000000"abcABCÅå中文测试
+}
+
+test t-153305 {
+    SELECT CONCAT_WS(_latin1 0xFF, 1, 3.1415926);
+}
+expect {
+    1ÿ3.1415926
+}
+
+test t-153384 {
+    SELECT CONCAT_WS(_latin1 0xFF, ' 255 ', "Å å");
+}
+expect raw {
+ 255 ÿÅ å
+}
+
+test t-153395 {
+    SELECT CONCAT_WS(_latin1 0xFF, ' 255 ', "日本語テスト");
+}
+expect raw {
+ 255 ÿ日本語テスト
+}
+
+test t-153562 {
+    SELECT CONCAT_WS(_latin1 0xFF, -1.1e0, "");
+}
+expect {
+    -1.1ÿ
+}
+
+test t-153597 {
+    SELECT CONCAT_WS(_latin1 0xFF, -1.7e0, 9223372036854775807);
+}
+expect {
+    -1.7ÿ9223372036854775807
+}
+
+test t-153861 {
+    SELECT CONCAT_WS(_latin1 0xFF, _utf8 'foobar', 9223372036854775807);
+}
+expect {
+    foobarÿ9223372036854775807
+}
+
+test t-153863 {
+    SELECT CONCAT_WS(_latin1 0xFF, _utf8 'foobar', 999999999999999999999999);
+}
+expect {
+    foobarÿ999999999999999999999999
+}
+
+test t-154103 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0x9, 9223372036854775807);
+}
+expect raw {
+	�9223372036854775807
+}
+
+test t-154124 {
+    SELECT CONCAT_WS(_latin1 0xFF, x'09', '123');
+}
+expect raw {
+	�123
+}
+
+test t-154204 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL * 1, -1);
+}
+expect {
+    -1
+}
+
+test t-154228 {
+    SELECT CONCAT_WS(_latin1 0xFF, 1 * NULL, 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-154261 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL * NULL, _binary 'Müller' );
+}
+expect {
+    Müller
+}
+
+test t-154276 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL / 1, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-154337 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL + 1, 0123);
+}
+expect {
+    123
+}
+
+test t-154357 {
+    SELECT CONCAT_WS(_latin1 0xFF, 1 + NULL, 1);
+}
+expect {
+    1
+}
+
+test t-154416 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL - 1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abcABCÅå
+}
+
+test t-154424 {
+    SELECT CONCAT_WS(_latin1 0xFF, 1 - NULL, -1);
+}
+expect {
+    -1
+}
+
+test t-154453 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL - NULL, "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-154526 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0xFF666F6F626172, _utf8mb4 'abcABCÅå');
+}
+expect {
+    �foobar�abcABCÅå
+}
+
+test t-154861 {
+    SELECT CONCAT_WS(_latin1 0xFF, time '130:34:58.6', "a");
+}
+expect {
+    130:34:58.6ÿa
+}
+
+test t-155214 {
+    SELECT CONCAT_WS(_latin1 0xFF, '20000101', "abc");
+}
+expect {
+    20000101ÿabc
+}
+
+test t-155334 {
+    SELECT CONCAT_WS(_latin1 0xFF, '20000101103458.123456foo', '123');
+}
+expect {
+    20000101103458.123456fooÿ123
+}
+
+test t-155349 {
+    SELECT CONCAT_WS(_latin1 0xFF, '20000101foo', 0123);
+}
+expect {
+    20000101fooÿ123
+}
+
+test t-155372 {
+    SELECT CONCAT_WS(_latin1 0xFF, '103458foo', 0xAACC);
+}
+expect {
+    103458foo���
+}
+
+test t-155540 {
+    SELECT CONCAT_WS(_latin1 0xFF, time '-101:34:58', "Å å");
+}
+expect {
+    -101:34:58ÿÅ å
+}
+
+test t-155640 {
+    SELECT CONCAT_WS(_latin1 0xFF, '5 10:34:58', "한국어 시험");
+}
+expect {
+    5 10:34:58ÿ한국어 시험
+}
+
+test t-155704 {
+    SELECT CONCAT_WS(_latin1 0xFF, '0000-02-29', "中文测试");
+}
+expect {
+    0000-02-29ÿ中文测试
+}
+
+test t-155750 {
+    SELECT CONCAT_WS(_latin1 0xFF, '1969-02-18', "한국어 시험");
+}
+expect {
+    1969-02-18ÿ한국어 시험
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-155900 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(false as json), 0xAACC);
+}
+expect error {
+}
+
+test t-155910 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(false as json), -999999999999999999999999);
+}
+expect {
+    falseÿ-999999999999999999999999
+}
+
+test t-155975 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast('null' as json), 999999999999999999999999);
+}
+expect {
+    nullÿ999999999999999999999999
+}
+
+test t-156049 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(2 as json), "a");
+}
+expect {
+    2ÿa
+}
+
+test t-156399 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(0xFF666F6F626172FF as json), NULL);
+}
+expect {
+    "base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-156480 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(0b001 as json), -9223372036854775808);
+}
+expect {
+    "base64:type15:AQ=="ÿ-9223372036854775808
+}
+
+test t-156523 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast('["ab"]' as json), 9223372036854775807);
+}
+expect {
+    ["ab"]ÿ9223372036854775807
+}
+
+test t-156765 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(timestamp '2000-01-01 12:34:58' as json), 9223372036854775807);
+}
+expect {
+    "2000-01-01 12:34:58.000000"ÿ9223372036854775807
+}
+
+test t-156792 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(time '12:34:56' as json), _utf8mb4 'abcABCÅå');
+}
+expect {
+    "12:34:56.000000"ÿabcABCÅå
+}
+
+test t-156819 {
+    SELECT CONCAT_WS(_latin1 0xFF, cast(time '5 12:34:58' as json), "a");
+}
+expect {
+    "04:34:58.000000"ÿa
+}
+
+test t-156880 {
+    SELECT CONCAT_WS("Å å", "Å å", NULL * 1);
+}
+expect {
+    Å å
+}
+
+test t-157048 {
+    SELECT CONCAT_WS("Å å", NULL, NULL + 1);
+}
+expect {
+    
+}
+
+test t-157159 {
+    SELECT CONCAT_WS("Å å", NULL, cast(time '12:34:56' as json));
+}
+expect {
+    "12:34:56.000000"
+}
+
+test t-157415 {
+    SELECT CONCAT_WS("Å å", "a", '20000101103458foo');
+}
+expect {
+    aÅ å20000101103458foo
+}
+
+test t-157549 {
+    SELECT CONCAT_WS("Å å", "abc", JSON_ARRAY());
+}
+expect {
+    abcÅ å[]
+}
+
+test t-157567 {
+    SELECT CONCAT_WS("Å å", "abc", 20000101103458.123456);
+}
+expect {
+    abcÅ å20000101103458.123456
+}
+
+test t-157570 {
+    SELECT CONCAT_WS("Å å", "abc", 103458.123456);
+}
+expect {
+    abcÅ å103458.123456
+}
+
+test t-157595 {
+    SELECT CONCAT_WS("Å å", "abc", '2000-01-01 12:34:58');
+}
+expect {
+    abcÅ å2000-01-01 12:34:58
+}
+
+test t-157915 {
+    SELECT CONCAT_WS("Å å", -1, '10:04:58');
+}
+expect {
+    -1Å å10:04:58
+}
+
+test t-157918 {
+    SELECT CONCAT_WS("Å å", -1, '2000-01-01');
+}
+expect {
+    -1Å å2000-01-01
+}
+
+test t-157943 {
+    SELECT CONCAT_WS("Å å", -1, cast('1.1' as json));
+}
+expect {
+    -1Å å1.1
+}
+
+test t-157946 {
+    SELECT CONCAT_WS("Å å", -1, cast('18446744073709551615' as json));
+}
+expect {
+    -1Å å18446744073709551615
+}
+
+test t-157951 {
+    SELECT CONCAT_WS("Å å", -1, cast(_binary '"bar"' as json));
+}
+expect {
+    -1Å å"base64:type15:ImJhciI="
+}
+
+test t-158027 {
+    SELECT CONCAT_WS("Å å", 0123, 0x666F6F626172FF);
+}
+expect {
+    123Å åfoobar�
+}
+
+test t-158158 {
+    SELECT CONCAT_WS("Å å", 0xAACC, '-1.5');
+}
+expect {
+    ��Å å-1.5
+}
+
+test t-158210 {
+    SELECT CONCAT_WS("Å å", 0xAACC, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    ��Å å2000-01-01 10:34:58.123456
+}
+
+test t-158240 {
+    SELECT CONCAT_WS("Å å", 0xAACC, '101:34:58');
+}
+expect {
+    ��Å å101:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-158262 {
+    SELECT CONCAT_WS("Å å", 0xAACC, cast(-1.1 as json));
+}
+expect error {
+}
+
+test t-158320 {
+    SELECT CONCAT_WS("Å å", 3.1415926, '-1.5');
+}
+expect {
+    3.1415926Å å-1.5
+}
+
+test t-158408 {
+    SELECT CONCAT_WS("Å å", 3.1415926, '1969-02-18');
+}
+expect {
+    3.1415926Å å1969-02-18
+}
+
+test t-158463 {
+    SELECT CONCAT_WS("Å å", "中文测试", ' 255 ');
+}
+expect raw {
+中文测试Å å 255 
+}
+
+test t-158672 {
+    SELECT CONCAT_WS("Å å", "日本語テスト", 1 - NULL);
+}
+expect {
+    日本語テスト
+}
+
+test t-158843 {
+    SELECT CONCAT_WS("Å å", "한국어 시험", -18446744073709540000e0);
+}
+expect {
+    한국어 시험Å å-1.844674407370954e19
+}
+
+test t-158913 {
+    SELECT CONCAT_WS("Å å", "한국어 시험", cast('1' as json));
+}
+expect {
+    한국어 시험Å å1
+}
+
+test t-158982 {
+    SELECT CONCAT_WS("Å å", "😊😂🤢", x'09');
+}
+expect raw {
+😊😂🤢Å å	
+}
+
+test t-158985 {
+    SELECT CONCAT_WS("Å å", "😊😂🤢", false);
+}
+expect {
+    😊😂🤢Å å0
+}
+
+test t-158995 {
+    SELECT CONCAT_WS("Å å", "😊😂🤢", NULL - 1);
+}
+expect {
+    😊😂🤢
+}
+
+test t-159000 {
+    SELECT CONCAT_WS("Å å", "😊😂🤢", 0xFF666F6F626172);
+}
+expect {
+    😊😂🤢Å å�foobar
+}
+
+test t-159158 {
+    SELECT CONCAT_WS("Å å", '123', 1 - NULL);
+}
+expect {
+    123
+}
+
+test t-159176 {
+    SELECT CONCAT_WS("Å å", '123', time '31:34:58.4');
+}
+expect {
+    123Å å31:34:58.4
+}
+
+test t-159497 {
+    SELECT CONCAT_WS("Å å", -9223372036854775808, time '130:34:58');
+}
+expect {
+    -9223372036854775808Å å130:34:58
+}
+
+test t-159508 {
+    SELECT CONCAT_WS("Å å", -9223372036854775808, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    -9223372036854775808Å å2024-12-30 10:34:58
+}
+
+test t-159591 {
+    SELECT CONCAT_WS("Å å", -9223372036854775808, cast(time '5 12:34:58' as json));
+}
+expect {
+    -9223372036854775808Å å"04:34:58.000000"
+}
+
+test t-159689 {
+    SELECT CONCAT_WS("Å å", 999999999999999999999999, time '-10:04:58');
+}
+expect {
+    999999999999999999999999Å å-10:04:58
+}
+
+test t-159744 {
+    SELECT CONCAT_WS("Å å", 999999999999999999999999, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    999999999999999999999999Å å\{"b": 2, "c": 1\}
+}
+
+test t-159772 {
+    SELECT CONCAT_WS("Å å", -999999999999999999999999, -1.5);
+}
+expect {
+    -999999999999999999999999Å å-1.5
+}
+
+test t-159869 {
+    SELECT CONCAT_WS("Å å", -999999999999999999999999, '3001-02-18 23:59:59');
+}
+expect {
+    -999999999999999999999999Å å3001-02-18 23:59:59
+}
+
+test t-159966 {
+    SELECT CONCAT_WS("Å å", _binary 'Müller' , NULL + NULL);
+}
+expect {
+    Müller
+}
+
+test t-160009 {
+    SELECT CONCAT_WS("Å å", _binary 'Müller' , '20000101103458.123456foo');
+}
+expect {
+    MüllerÅ å20000101103458.123456foo
+}
+
+test t-160093 {
+    SELECT CONCAT_WS("Å å", _utf8mb4 'abcABCÅå', 0.0);
+}
+expect {
+    abcABCÅåÅ å0.0
+}
+
+test t-160130 {
+    SELECT CONCAT_WS("Å å", _utf8mb4 'abcABCÅå', 1 - NULL);
+}
+expect {
+    abcABCÅå
+}
+
+test t-160330 {
+    SELECT CONCAT_WS("Å å", _latin1 0xFF, '103458.123456');
+}
+expect {
+    ÿÅ å103458.123456
+}
+
+test t-160376 {
+    SELECT CONCAT_WS("Å å", _latin1 0xFF, cast('18446744073709551615' as json));
+}
+expect {
+    ÿÅ å18446744073709551615
+}
+
+test t-160407 {
+    SELECT CONCAT_WS(NULL, "Å å", ' 255 ');
+}
+expect {
+    NULL
+}
+
+test t-160465 {
+    SELECT CONCAT_WS(NULL, "Å å", JSON_ARRAY());
+}
+expect {
+    NULL
+}
+
+test t-160595 {
+    SELECT CONCAT_WS(NULL, NULL, 0xff);
+}
+expect {
+    NULL
+}
+
+test t-160631 {
+    SELECT CONCAT_WS(NULL, NULL, time '130:34:58');
+}
+expect {
+    NULL
+}
+
+test t-160699 {
+    SELECT CONCAT_WS(NULL, NULL, cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-160708 {
+    SELECT CONCAT_WS(NULL, NULL, cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-160787 {
+    SELECT CONCAT_WS(NULL, "", -18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-160899 {
+    SELECT CONCAT_WS(NULL, "a", -1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-160928 {
+    SELECT CONCAT_WS(NULL, "a", true);
+}
+expect {
+    NULL
+}
+
+test t-161114 {
+    SELECT CONCAT_WS(NULL, "abc", time '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-161119 {
+    SELECT CONCAT_WS(NULL, "abc", time '10:04:58.1');
+}
+expect {
+    NULL
+}
+
+test t-161234 {
+    SELECT CONCAT_WS(NULL, 1, -1.7);
+}
+expect {
+    NULL
+}
+
+test t-161294 {
+    SELECT CONCAT_WS(NULL, 1, 20000101);
+}
+expect {
+    NULL
+}
+
+test t-161358 {
+    SELECT CONCAT_WS(NULL, 1, cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-161438 {
+    SELECT CONCAT_WS(NULL, -1, time '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-161504 {
+    SELECT CONCAT_WS(NULL, -1, cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-161562 {
+    SELECT CONCAT_WS(NULL, 0123, _utf8 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-161643 {
+    SELECT CONCAT_WS(NULL, 0123, '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-161646 {
+    SELECT CONCAT_WS(NULL, 0123, '0000-02-29');
+}
+expect {
+    NULL
+}
+
+test t-161954 {
+    SELECT CONCAT_WS(NULL, 3.1415926, '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-161982 {
+    SELECT CONCAT_WS(NULL, 3.1415926, cast('null' as json));
+}
+expect {
+    NULL
+}
+
+test t-162164 {
+    SELECT CONCAT_WS(NULL, "中文测试", cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-162188 {
+    SELECT CONCAT_WS(NULL, "日本語テスト", ' 1 ');
+}
+expect {
+    NULL
+}
+
+test t-162276 {
+    SELECT CONCAT_WS(NULL, "日本語テスト", '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-162289 {
+    SELECT CONCAT_WS(NULL, "日本語テスト", '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-162434 {
+    SELECT CONCAT_WS(NULL, "한국어 시험", '20000101');
+}
+expect {
+    NULL
+}
+
+test t-162448 {
+    SELECT CONCAT_WS(NULL, "한국어 시험", time'00:00:59.2132234');
+}
+expect {
+    NULL
+}
+
+test t-162684 {
+    SELECT CONCAT_WS(NULL, '123', -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-162768 {
+    SELECT CONCAT_WS(NULL, '123', time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-162789 {
+    SELECT CONCAT_WS(NULL, '123', cast(false as json));
+}
+expect {
+    NULL
+}
+
+test t-162791 {
+    SELECT CONCAT_WS(NULL, '123', cast('[]' as json));
+}
+expect {
+    NULL
+}
+
+test t-162971 {
+    SELECT CONCAT_WS(NULL, 9223372036854775807, cast('invalid' as json));
+}
+expect {
+    NULL
+}
+
+test t-163003 {
+    SELECT CONCAT_WS(NULL, -9223372036854775808, 1.0e0);
+}
+expect {
+    NULL
+}
+
+test t-163021 {
+    SELECT CONCAT_WS(NULL, -9223372036854775808, '');
+}
+expect {
+    NULL
+}
+
+test t-163146 {
+    SELECT CONCAT_WS(NULL, -9223372036854775808, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-163169 {
+    SELECT CONCAT_WS(NULL, 999999999999999999999999, -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-163255 {
+    SELECT CONCAT_WS(NULL, 999999999999999999999999, time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-163279 {
+    SELECT CONCAT_WS(NULL, 999999999999999999999999, cast('true' as json));
+}
+expect {
+    NULL
+}
+
+test t-163392 {
+    SELECT CONCAT_WS(NULL, -999999999999999999999999, date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-163415 {
+    SELECT CONCAT_WS(NULL, -999999999999999999999999, time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-163546 {
+    SELECT CONCAT_WS(NULL, _binary 'Müller' , time '32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-163625 {
+    SELECT CONCAT_WS(NULL, _binary 'Müller' , cast(0b001 as json));
+}
+expect {
+    NULL
+}
+
+test t-163871 {
+    SELECT CONCAT_WS(NULL, _latin1 0xFF, time '130:34:58');
+}
+expect {
+    NULL
+}
+
+test t-163908 {
+    SELECT CONCAT_WS(NULL, _latin1 0xFF, time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-163912 {
+    SELECT CONCAT_WS(NULL, _latin1 0xFF, '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-164187 {
+    SELECT CONCAT_WS("", NULL, 18446744073709551615);
+}
+expect {
+    18446744073709551615
+}
+
+test t-164259 {
+    SELECT CONCAT_WS("", NULL, cast('1' as json));
+}
+expect {
+    1
+}
+
+test t-164274 {
+    SELECT CONCAT_WS("", NULL, cast('["a"]' as json));
+}
+expect {
+    ["a"]
+}
+
+test t-164285 {
+    SELECT CONCAT_WS("", NULL, cast(date '2000-01-02' as json));
+}
+expect {
+    "2000-01-02"
+}
+
+test t-164499 {
+    SELECT CONCAT_WS("", "a", NULL / NULL);
+}
+expect {
+    a
+}
+
+test t-164564 {
+    SELECT CONCAT_WS("", "a", '1969-02-18');
+}
+expect {
+    a1969-02-18
+}
+
+test t-164679 {
+    SELECT CONCAT_WS("", "abc", time '31:34:58');
+}
+expect {
+    abc31:34:58
+}
+
+test t-164962 {
+    SELECT CONCAT_WS("", -1, '-1.5');
+}
+expect {
+    -1-1.5
+}
+
+test t-165094 {
+    SELECT CONCAT_WS("", -1, cast(date '2000-01-01' as json));
+}
+expect {
+    -1"2000-01-01"
+}
+
+test t-165108 {
+    SELECT CONCAT_WS("", 0123, 0.0e0);
+}
+expect {
+    1230
+}
+
+test t-165112 {
+    SELECT CONCAT_WS("", 0123, 1.1e0);
+}
+expect {
+    1231.1
+}
+
+test t-165121 {
+    SELECT CONCAT_WS("", 0123, -1.1);
+}
+expect {
+    123-1.1
+}
+
+test t-165154 {
+    SELECT CONCAT_WS("", 0123, 0xFF666F6F626172FF);
+}
+expect {
+    123�foobar�
+}
+
+test t-165296 {
+    SELECT CONCAT_WS("", 0xAACC, X'ff');
+}
+expect {
+    ���
+}
+
+test t-165364 {
+    SELECT CONCAT_WS("", 0xAACC, time'00:00:59.2132234');
+}
+expect {
+    ��00:00:59.213223
+}
+
+test t-165628 {
+    SELECT CONCAT_WS("", "中文测试", NULL * 1);
+}
+expect {
+    中文测试
+}
+
+test t-165816 {
+    SELECT CONCAT_WS("", "日本語テスト", time '5 10:34:58');
+}
+expect {
+    日本語テスト130:34:58
+}
+
+test t-165828 {
+    SELECT CONCAT_WS("", "日本語テスト", 20000101103458.1234);
+}
+expect {
+    日本語テスト20000101103458.1234
+}
+
+test t-165870 {
+    SELECT CONCAT_WS("", "日本語テスト", cast('null' as json));
+}
+expect {
+    日本語テストnull
+}
+
+test t-165890 {
+    SELECT CONCAT_WS("", "日本語テスト", cast(0xFF666F6F626172FF as json));
+}
+expect {
+    日本語テスト"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-165916 {
+    SELECT CONCAT_WS("", "한국어 시험", '\t1foo\t');
+}
+expect raw {
+한국어 시험	1foo	
+}
+
+test t-166024 {
+    SELECT CONCAT_WS("", "한국어 시험", '3001-02-19 00:00:00');
+}
+expect {
+    한국어 시험3001-02-19 00:00:00
+}
+
+test t-166032 {
+    SELECT CONCAT_WS("", "한국어 시험", cast('null' as json));
+}
+expect {
+    한국어 시험null
+}
+
+test t-166092 {
+    SELECT CONCAT_WS("", "😊😂🤢", 1.7);
+}
+expect {
+    😊😂🤢1.7
+}
+
+test t-166117 {
+    SELECT CONCAT_WS("", "😊😂🤢", NULL / 1);
+}
+expect {
+    😊😂🤢
+}
+
+test t-166181 {
+    SELECT CONCAT_WS("", "😊😂🤢", '2000-01-01 12:34:58');
+}
+expect {
+    😊😂🤢2000-01-01 12:34:58
+}
+
+test t-166194 {
+    SELECT CONCAT_WS("", "😊😂🤢", cast('null' as json));
+}
+expect {
+    😊😂🤢null
+}
+
+test t-166199 {
+    SELECT CONCAT_WS("", "😊😂🤢", cast(1.1 as json));
+}
+expect {
+    😊😂🤢1.1
+}
+
+test t-166317 {
+    SELECT CONCAT_WS("", '123', 103458);
+}
+expect {
+    123103458
+}
+
+test t-166457 {
+    SELECT CONCAT_WS("", 9223372036854775807, -18446744073709540000e0);
+}
+expect {
+    9223372036854775807-1.844674407370954e19
+}
+
+test t-166577 {
+    SELECT CONCAT_WS("", -9223372036854775808, 1.1);
+}
+expect {
+    -92233720368547758081.1
+}
+
+test t-166585 {
+    SELECT CONCAT_WS("", -9223372036854775808, '');
+}
+expect {
+    -9223372036854775808
+}
+
+test t-166621 {
+    SELECT CONCAT_WS("", -9223372036854775808, JSON_ARRAY());
+}
+expect {
+    -9223372036854775808[]
+}
+
+test t-166800 {
+    SELECT CONCAT_WS("", 999999999999999999999999, 20000101103458.1234);
+}
+expect {
+    99999999999999999999999920000101103458.1234
+}
+
+test t-166958 {
+    SELECT CONCAT_WS("", -999999999999999999999999, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -9999999999999999999999992000-01-01 10:34:58.123456
+}
+
+test t-167366 {
+    SELECT CONCAT_WS("", _utf8mb4 'abcABCÅå', cast(time '12:34:58' as json));
+}
+expect {
+    abcABCÅå"12:34:58.000000"
+}
+
+test t-167378 {
+    SELECT CONCAT_WS("", _latin1 0xFF, 1.5e0);
+}
+expect {
+    ÿ1.5
+}
+
+test t-167418 {
+    SELECT CONCAT_WS("", _latin1 0xFF, NULL + NULL);
+}
+expect {
+    ÿ
+}
+
+test t-167420 {
+    SELECT CONCAT_WS("", _latin1 0xFF, 1 - NULL);
+}
+expect {
+    ÿ
+}
+
+test t-167443 {
+    SELECT CONCAT_WS("", _latin1 0xFF, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    ÿ2000-01-01 10:34:58
+}
+
+test t-167786 {
+    SELECT CONCAT_WS("a", NULL, '20000101foo');
+}
+expect {
+    20000101foo
+}
+
+test t-167956 {
+    SELECT CONCAT_WS("a", "", time'00:00:59.2132234');
+}
+expect {
+    a00:00:59.213223
+}
+
+test t-168025 {
+    SELECT CONCAT_WS("a", "a", 1.0e0);
+}
+expect {
+    aa1
+}
+
+test t-168041 {
+    SELECT CONCAT_WS("a", "a", 'foobar');
+}
+expect {
+    aafoobar
+}
+
+test t-168100 {
+    SELECT CONCAT_WS("a", "a", 103458.123456);
+}
+expect {
+    aa103458.123456
+}
+
+test t-168124 {
+    SELECT CONCAT_WS("a", "a", '2000-01-01');
+}
+expect {
+    aa2000-01-01
+}
+
+test t-168154 {
+    SELECT CONCAT_WS("a", "a", cast('"bar"' as json));
+}
+expect {
+    aa"bar"
+}
+
+test t-168172 {
+    SELECT CONCAT_WS("a", "a", cast(date '2000-01-01' as json));
+}
+expect {
+    aa"2000-01-01"
+}
+
+test t-168241 {
+    SELECT CONCAT_WS("a", "abc", JSON_ARRAY());
+}
+expect {
+    abca[]
+}
+
+test t-168259 {
+    SELECT CONCAT_WS("a", "abc", 20000101103458.123456);
+}
+expect {
+    abca20000101103458.123456
+}
+
+test t-168301 {
+    SELECT CONCAT_WS("a", "abc", cast('true' as json));
+}
+expect {
+    abcatrue
+}
+
+test t-168471 {
+    SELECT CONCAT_WS("a", 1, cast('1' as json));
+}
+expect {
+    1a1
+}
+
+test t-168508 {
+    SELECT CONCAT_WS("a", -1, '\t1foo\t');
+}
+expect raw {
+-1a	1foo	
+}
+
+test t-168553 {
+    SELECT CONCAT_WS("a", -1, NULL - 1);
+}
+expect {
+    -1
+}
+
+test t-168700 {
+    SELECT CONCAT_WS("a", 0123, b'1001');
+}
+expect raw {
+123a	
+}
+
+test t-168764 {
+    SELECT CONCAT_WS("a", 0123, time'00:00:01.0000');
+}
+expect {
+    123a00:00:01.0000
+}
+
+test t-168890 {
+    SELECT CONCAT_WS("a", 0xAACC, time '10:04:58');
+}
+expect {
+    ��a10:04:58
+}
+
+test t-168897 {
+    SELECT CONCAT_WS("a", 0xAACC, time '32:34:58.5');
+}
+expect {
+    ��a32:34:58.5
+}
+
+test t-169043 {
+    SELECT CONCAT_WS("a", 3.1415926, 0x666F6F626172FF);
+}
+expect {
+    3.1415926afoobar�
+}
+
+test t-169063 {
+    SELECT CONCAT_WS("a", 3.1415926, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    3.1415926a2000-01-01 10:34:58
+}
+
+test t-169070 {
+    SELECT CONCAT_WS("a", 3.1415926, 20000101);
+}
+expect {
+    3.1415926a20000101
+}
+
+test t-169163 {
+    SELECT CONCAT_WS("a", "中文测试", -1.1e0);
+}
+expect {
+    中文测试a-1.1
+}
+
+test t-169216 {
+    SELECT CONCAT_WS("a", "中文测试", time '32:34:58');
+}
+expect {
+    中文测试a32:34:58
+}
+
+test t-169218 {
+    SELECT CONCAT_WS("a", "中文测试", time '5 10:34:58');
+}
+expect {
+    中文测试a130:34:58
+}
+
+test t-169299 {
+    SELECT CONCAT_WS("a", "中文测试", cast('["ab", "ef"]' as json));
+}
+expect {
+    中文测试a["ab", "ef"]
+}
+
+test t-169505 {
+    SELECT CONCAT_WS("a", "한국어 시험", 0xff);
+}
+expect {
+    한국어 시험a�
+}
+
+test t-169567 {
+    SELECT CONCAT_WS("a", "한국어 시험", '20000101103458.123456foo');
+}
+expect {
+    한국어 시험a20000101103458.123456foo
+}
+
+test t-169851 {
+    SELECT CONCAT_WS("a", '123', NULL - NULL);
+}
+expect {
+    123
+}
+
+test t-169955 {
+    SELECT CONCAT_WS("a", '123', cast(date '2000-01-02' as json));
+}
+expect {
+    123a"2000-01-02"
+}
+
+test t-170024 {
+    SELECT CONCAT_WS("a", 9223372036854775807, time '10:04:58');
+}
+expect {
+    9223372036854775807a10:04:58
+}
+
+test t-170239 {
+    SELECT CONCAT_WS("a", -9223372036854775808, cast(1 as json));
+}
+expect {
+    -9223372036854775808a1
+}
+
+test t-170240 {
+    SELECT CONCAT_WS("a", -9223372036854775808, cast(true as json));
+}
+expect {
+    -9223372036854775808atrue
+}
+
+test t-170435 {
+    SELECT CONCAT_WS("a", 999999999999999999999999, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    999999999999999999999999a\{"a": 1, "b": 2\}
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-170439 {
+    SELECT CONCAT_WS("a", 999999999999999999999999, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-170548 {
+    SELECT CONCAT_WS("a", -999999999999999999999999, time'00:00:59.2132234');
+}
+expect {
+    -999999999999999999999999a00:00:59.213223
+}
+
+test t-170647 {
+    SELECT CONCAT_WS("a", _binary 'Müller' , NULL);
+}
+expect {
+    Müller
+}
+
+test t-170863 {
+    SELECT CONCAT_WS("a", _utf8mb4 'abcABCÅå', '20000101103458.123456foo');
+}
+expect {
+    abcABCÅåa20000101103458.123456foo
+}
+
+test t-170879 {
+    SELECT CONCAT_WS("a", _utf8mb4 'abcABCÅå', '2000-01-01 12:34:58');
+}
+expect {
+    abcABCÅåa2000-01-01 12:34:58
+}
+
+test t-170990 {
+    SELECT CONCAT_WS("a", _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    ÿa-9223372036854775808
+}
+
+test t-171188 {
+    SELECT CONCAT_WS("abc", "Å å", '20000101foo');
+}
+expect {
+    Å åabc20000101foo
+}
+
+test t-171254 {
+    SELECT CONCAT_WS("abc", "Å å", cast(time '12:34:58' as json));
+}
+expect {
+    Å åabc"12:34:58.000000"
+}
+
+test t-171290 {
+    SELECT CONCAT_WS("abc", NULL, X'ff');
+}
+expect {
+    �
+}
+
+test t-171348 {
+    SELECT CONCAT_WS("abc", NULL, '20000101103458.1234foo');
+}
+expect {
+    20000101103458.1234foo
+}
+
+test t-171570 {
+    SELECT CONCAT_WS("abc", "", cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    abc\{"b": 2, "c": 1\}
+}
+
+test t-171884 {
+    SELECT CONCAT_WS("abc", "abc", cast(0xFF666F6F626172FF as json));
+}
+expect {
+    abcabc"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-171983 {
+    SELECT CONCAT_WS("abc", 1, 20000101103458);
+}
+expect {
+    1abc20000101103458
+}
+
+test t-172014 {
+    SELECT CONCAT_WS("abc", 1, '0000-02-29');
+}
+expect {
+    1abc0000-02-29
+}
+
+test t-172165 {
+    SELECT CONCAT_WS("abc", -1, time '-32:34:58');
+}
+expect {
+    -1abc-32:34:58
+}
+
+test t-172283 {
+    SELECT CONCAT_WS("abc", 0123, 0x666F6F626172FF);
+}
+expect {
+    123abcfoobar�
+}
+
+test t-172326 {
+    SELECT CONCAT_WS("abc", 0123, time '-31:34:58');
+}
+expect {
+    123abc-31:34:58
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-172367 {
+    SELECT CONCAT_WS("abc", 0123, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-172405 {
+    SELECT CONCAT_WS("abc", 0xAACC, 0.0);
+}
+expect {
+    ��abc0.0
+}
+
+test t-172626 {
+    SELECT CONCAT_WS("abc", 3.1415926, date '2000-01-01');
+}
+expect {
+    3.1415926abc2000-01-01
+}
+
+test t-172704 {
+    SELECT CONCAT_WS("abc", 3.1415926, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    3.1415926abc\{"b": 2, "c": 1\}
+}
+
+test t-172715 {
+    SELECT CONCAT_WS("abc", "中文测试", 1);
+}
+expect {
+    中文测试abc1
+}
+
+test t-172752 {
+    SELECT CONCAT_WS("abc", "中文测试", x'09');
+}
+expect raw {
+中文测试abc	
+}
+
+test t-172771 {
+    SELECT CONCAT_WS("abc", "中文测试", 9223372036854775807);
+}
+expect {
+    中文测试abc9223372036854775807
+}
+
+test t-172953 {
+    SELECT CONCAT_WS("abc", "日本語テスト", timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    日本語テストabc2000-01-01 10:34:58.978654
+}
+
+test t-172965 {
+    SELECT CONCAT_WS("abc", "日本語テスト", '103458');
+}
+expect {
+    日本語テストabc103458
+}
+
+test t-172996 {
+    SELECT CONCAT_WS("abc", "日本語テスト", cast('\{\}' as json));
+}
+expect {
+    日本語テストabc\{\}
+}
+
+test t-173002 {
+    SELECT CONCAT_WS("abc", "日本語テスト", cast(2 as json));
+}
+expect {
+    日本語テストabc2
+}
+
+test t-173075 {
+    SELECT CONCAT_WS("abc", "한국어 시험", 0x9);
+}
+expect raw {
+한국어 시험abc	
+}
+
+test t-173106 {
+    SELECT CONCAT_WS("abc", "한국어 시험", time '5 10:34:58');
+}
+expect {
+    한국어 시험abc130:34:58
+}
+
+test t-173137 {
+    SELECT CONCAT_WS("abc", "한국어 시험", time '-32:34:58');
+}
+expect {
+    한국어 시험abc-32:34:58
+}
+
+test t-173152 {
+    SELECT CONCAT_WS("abc", "한국어 시험", '3001-02-19 00:00:00');
+}
+expect {
+    한국어 시험abc3001-02-19 00:00:00
+}
+
+test t-173369 {
+    SELECT CONCAT_WS("abc", '123', ' 255 foo');
+}
+expect {
+    123abc 255 foo
+}
+
+test t-173465 {
+    SELECT CONCAT_WS("abc", '123', time '-101:34:58');
+}
+expect {
+    123abc-101:34:58
+}
+
+test t-173530 {
+    SELECT CONCAT_WS("abc", 9223372036854775807, '\t1foo\t');
+}
+expect raw {
+9223372036854775807abc	1foo	
+}
+
+test t-173576 {
+    SELECT CONCAT_WS("abc", 9223372036854775807, 1 - NULL);
+}
+expect {
+    9223372036854775807
+}
+
+test t-173595 {
+    SELECT CONCAT_WS("abc", 9223372036854775807, time '32:34:58.5');
+}
+expect {
+    9223372036854775807abc32:34:58.5
+}
+
+test t-173759 {
+    SELECT CONCAT_WS("abc", -9223372036854775808, time '5 10:34:58.9');
+}
+expect {
+    -9223372036854775808abc130:34:58.9
+}
+
+test t-173797 {
+    SELECT CONCAT_WS("abc", -9223372036854775808, '0000-01-03');
+}
+expect {
+    -9223372036854775808abc0000-01-03
+}
+
+test t-173806 {
+    SELECT CONCAT_WS("abc", -9223372036854775808, cast('\{\}' as json));
+}
+expect {
+    -9223372036854775808abc\{\}
+}
+
+test t-173814 {
+    SELECT CONCAT_WS("abc", -9223372036854775808, cast(-1.1 as json));
+}
+expect {
+    -9223372036854775808abc-1.1
+}
+
+test t-173994 {
+    SELECT CONCAT_WS("abc", 999999999999999999999999, cast('["a"]' as json));
+}
+expect {
+    999999999999999999999999abc["a"]
+}
+
+test t-174162 {
+    SELECT CONCAT_WS("abc", -999999999999999999999999, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    -999999999999999999999999abc\{"b": 2, "c": 1\}
+}
+
+test t-174323 {
+    SELECT CONCAT_WS("abc", _binary 'Müller' , cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    Müllerabc\{"a": 1, "b": 2\}
+}
+
+test t-174560 {
+    SELECT CONCAT_WS("abc", _latin1 0xFF, time '10:04:58');
+}
+expect {
+    ÿabc10:04:58
+}
+
+test t-174566 {
+    SELECT CONCAT_WS("abc", _latin1 0xFF, time '31:34:58.4');
+}
+expect {
+    ÿabc31:34:58.4
+}
+
+test t-174789 {
+    SELECT CONCAT_WS(1, "Å å", cast('1' as json));
+}
+expect {
+    Å å11
+}
+
+test t-174886 {
+    SELECT CONCAT_WS(1, NULL, time '32:34:58');
+}
+expect {
+    32:34:58
+}
+
+test t-174895 {
+    SELECT CONCAT_WS(1, NULL, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    2000-01-01 10:34:58
+}
+
+test t-175003 {
+    SELECT CONCAT_WS(1, "", -1.1);
+}
+expect {
+    1-1.1
+}
+
+test t-175057 {
+    SELECT CONCAT_WS(1, "", timestamp '2000-01-01 10:34:58');
+}
+expect {
+    12000-01-01 10:34:58
+}
+
+test t-175253 {
+    SELECT CONCAT_WS(1, "a", '2000-01-01 12:34:58');
+}
+expect {
+    a12000-01-01 12:34:58
+}
+
+test t-175261 {
+    SELECT CONCAT_WS(1, "a", cast(1 as json));
+}
+expect {
+    a11
+}
+
+test t-175271 {
+    SELECT CONCAT_WS(1, "a", cast(1.1 as json));
+}
+expect {
+    a11.1
+}
+
+test t-175278 {
+    SELECT CONCAT_WS(1, "a", cast('-1.1' as json));
+}
+expect {
+    a1-1.1
+}
+
+test t-175328 {
+    SELECT CONCAT_WS(1, "abc", -1.7);
+}
+expect {
+    abc1-1.7
+}
+
+test t-175519 {
+    SELECT CONCAT_WS(1, 1, NULL - 1);
+}
+expect {
+    1
+}
+
+test t-175540 {
+    SELECT CONCAT_WS(1, 1, time '130:34:58.6');
+}
+expect {
+    11130:34:58.6
+}
+
+test t-175559 {
+    SELECT CONCAT_WS(1, 1, '20000101103458foo');
+}
+expect {
+    1120000101103458foo
+}
+
+test t-175567 {
+    SELECT CONCAT_WS(1, 1, time '-32:34:58');
+}
+expect {
+    11-32:34:58
+}
+
+test t-175628 {
+    SELECT CONCAT_WS(1, 1, cast(time '12:34:58' as json));
+}
+expect {
+    11"12:34:58.000000"
+}
+
+test t-175632 {
+    SELECT CONCAT_WS(1, -1, 255);
+}
+expect {
+    -11255
+}
+
+test t-175644 {
+    SELECT CONCAT_WS(1, -1, -1.7e0);
+}
+expect {
+    -11-1.7
+}
+
+test t-175654 {
+    SELECT CONCAT_WS(1, -1, '-1.5');
+}
+expect {
+    -11-1.5
+}
+
+test t-175750 {
+    SELECT CONCAT_WS(1, -1, cast('\{\}' as json));
+}
+expect {
+    -11\{\}
+}
+
+test t-175918 {
+    SELECT CONCAT_WS(1, 0123, cast(2 as json));
+}
+expect {
+    12312
+}
+
+test t-175996 {
+    SELECT CONCAT_WS(1, 0xAACC, NULL * 1);
+}
+expect {
+    ��
+}
+
+test t-176057 {
+    SELECT CONCAT_WS(1, 0xAACC, time '-101:34:58');
+}
+expect {
+    ��1-101:34:58
+}
+
+test t-176178 {
+    SELECT CONCAT_WS(1, 3.1415926, JSON_OBJECT());
+}
+expect {
+    3.14159261\{\}
+}
+
+test t-176443 {
+    SELECT CONCAT_WS(1, "日本語テスト", ' 0 ');
+}
+expect raw {
+日本語テスト1 0 
+}
+
+test t-176542 {
+    SELECT CONCAT_WS(1, "日本語テスト", time'00:00:59.2132234');
+}
+expect {
+    日本語テスト100:00:59.213223
+}
+
+test t-176679 {
+    SELECT CONCAT_WS(1, "한국어 시험", timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    한국어 시험12000-01-01 10:34:58.978654
+}
+
+test t-176723 {
+    SELECT CONCAT_WS(1, "한국어 시험", cast('[]' as json));
+}
+expect {
+    한국어 시험1[]
+}
+
+test t-176770 {
+    SELECT CONCAT_WS(1, "😊😂🤢", '\t1foo\t');
+}
+expect raw {
+😊😂🤢1	1foo	
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-176903 {
+    SELECT CONCAT_WS(1, "😊😂🤢", cast('invalid' as json));
+}
+expect error {
+}
+
+test t-176922 {
+    SELECT CONCAT_WS(1, "😊😂🤢", cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    😊😂🤢1"2000-01-01 12:34:58.000000"
+}
+
+test t-176952 {
+    SELECT CONCAT_WS(1, '123', _utf8 'foobar');
+}
+expect {
+    1231foobar
+}
+
+test t-177050 {
+    SELECT CONCAT_WS(1, '123', cast('false' as json));
+}
+expect {
+    1231false
+}
+
+test t-177068 {
+    SELECT CONCAT_WS(1, '123', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1231"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-177114 {
+    SELECT CONCAT_WS(1, 9223372036854775807, _utf8 'foobar');
+}
+expect {
+    92233720368547758071foobar
+}
+
+test t-177211 {
+    SELECT CONCAT_WS(1, 9223372036854775807, cast('true' as json));
+}
+expect {
+    92233720368547758071true
+}
+
+test t-177248 {
+    SELECT CONCAT_WS(1, 9223372036854775807, cast(time '12:34:58' as json));
+}
+expect {
+    92233720368547758071"12:34:58.000000"
+}
+
+test t-177326 {
+    SELECT CONCAT_WS(1, -9223372036854775808, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -922337203685477580812000-01-01 10:34:58.123456
+}
+
+test t-177477 {
+    SELECT CONCAT_WS(1, 999999999999999999999999, time '31:34:58');
+}
+expect {
+    999999999999999999999999131:34:58
+}
+
+test t-177594 {
+    SELECT CONCAT_WS(1, -999999999999999999999999, 1.7);
+}
+expect {
+    -99999999999999999999999911.7
+}
+
+test t-177611 {
+    SELECT CONCAT_WS(1, -999999999999999999999999, 0x9);
+}
+expect raw {
+-9999999999999999999999991	
+}
+
+test t-177616 {
+    SELECT CONCAT_WS(1, -999999999999999999999999, NULL * 1);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-177635 {
+    SELECT CONCAT_WS(1, -999999999999999999999999, -18446744073709540000e0);
+}
+expect {
+    -9999999999999999999999991-1.844674407370954e19
+}
+
+test t-177744 {
+    SELECT CONCAT_WS(1, _binary 'Müller' , 0.0e0);
+}
+expect {
+    Müller10
+}
+
+test t-177762 {
+    SELECT CONCAT_WS(1, _binary 'Müller' , _utf8 'foobar');
+}
+expect {
+    Müller1foobar
+}
+
+test t-177772 {
+    SELECT CONCAT_WS(1, _binary 'Müller' , b'1001');
+}
+expect raw {
+Müller1	
+}
+
+test t-177835 {
+    SELECT CONCAT_WS(1, _binary 'Müller' , time '-32:34:58');
+}
+expect {
+    Müller1-32:34:58
+}
+
+test t-177882 {
+    SELECT CONCAT_WS(1, _binary 'Müller' , cast('["a"]' as json));
+}
+expect {
+    Müller1["a"]
+}
+
+test t-177938 {
+    SELECT CONCAT_WS(1, _utf8mb4 'abcABCÅå', true);
+}
+expect {
+    abcABCÅå11
+}
+
+test t-178103 {
+    SELECT CONCAT_WS(1, _latin1 0xFF, 1 * NULL);
+}
+expect {
+    ÿ
+}
+
+test t-178132 {
+    SELECT CONCAT_WS(1, _latin1 0xFF, time '130:34:58.6');
+}
+expect {
+    ÿ1130:34:58.6
+}
+
+test t-178196 {
+    SELECT CONCAT_WS(1, _latin1 0xFF, cast('18446744073709551615' as json));
+}
+expect {
+    ÿ118446744073709551615
+}
+
+test t-178297 {
+    SELECT CONCAT_WS(-1, "Å å", timestamp '2000-01-01 10:34:58');
+}
+expect {
+    Å å-12000-01-01 10:34:58
+}
+
+test t-178353 {
+    SELECT CONCAT_WS(-1, "Å å", cast('1' as json));
+}
+expect {
+    Å å-11
+}
+
+test t-178596 {
+    SELECT CONCAT_WS(-1, "", NULL + NULL);
+}
+expect {
+    
+}
+
+test t-178609 {
+    SELECT CONCAT_WS(-1, "", JSON_ARRAY());
+}
+expect {
+    -1[]
+}
+
+test t-178642 {
+    SELECT CONCAT_WS(-1, "", '103458.123456foo');
+}
+expect {
+    -1103458.123456foo
+}
+
+test t-178818 {
+    SELECT CONCAT_WS(-1, "a", '0000-02-29');
+}
+expect {
+    a-10000-02-29
+}
+
+test t-178826 {
+    SELECT CONCAT_WS(-1, "a", cast(true as json));
+}
+expect {
+    a-1true
+}
+
+test t-179095 {
+    SELECT CONCAT_WS(-1, 1, JSON_ARRAY());
+}
+expect {
+    1-1[]
+}
+
+test t-179102 {
+    SELECT CONCAT_WS(-1, 1, time '31:34:58.4');
+}
+expect {
+    1-131:34:58.4
+}
+
+test t-179139 {
+    SELECT CONCAT_WS(-1, 1, '5 10:34:58');
+}
+expect {
+    1-15 10:34:58
+}
+
+test t-179191 {
+    SELECT CONCAT_WS(-1, 1, cast(time '12:34:56' as json));
+}
+expect {
+    1-1"12:34:56.000000"
+}
+
+test t-179214 {
+    SELECT CONCAT_WS(-1, -1, 1.7);
+}
+expect {
+    -1-11.7
+}
+
+test t-179219 {
+    SELECT CONCAT_WS(-1, -1, 'foobar');
+}
+expect {
+    -1-1foobar
+}
+
+test t-179235 {
+    SELECT CONCAT_WS(-1, -1, false);
+}
+expect {
+    -1-10
+}
+
+test t-179417 {
+    SELECT CONCAT_WS(-1, 0123, -18446744073709540000e0);
+}
+expect {
+    123-1-1.844674407370954e19
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-179581 {
+    SELECT CONCAT_WS(-1, 0xAACC, JSON_ARRAY());
+}
+expect error {
+}
+
+test t-179584 {
+    SELECT CONCAT_WS(-1, 0xAACC, time '32:34:58');
+}
+expect {
+    ��-132:34:58
+}
+
+test t-179615 {
+    SELECT CONCAT_WS(-1, 0xAACC, time '-10:04:58');
+}
+expect {
+    ��-1-10:04:58
+}
+
+test t-179625 {
+    SELECT CONCAT_WS(-1, 0xAACC, '5 10:34:58');
+}
+expect {
+    ��-15 10:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-179639 {
+    SELECT CONCAT_WS(-1, 0xAACC, cast('[]' as json));
+}
+expect error {
+}
+
+test t-179749 {
+    SELECT CONCAT_WS(-1, 3.1415926, time '10:04:58.1');
+}
+expect {
+    3.1415926-110:04:58.1
+}
+
+test t-179841 {
+    SELECT CONCAT_WS(-1, 3.1415926, cast(time '5 12:34:58' as json));
+}
+expect {
+    3.1415926-1"04:34:58.000000"
+}
+
+test t-179930 {
+    SELECT CONCAT_WS(-1, "中文测试", '20000101');
+}
+expect {
+    中文测试-120000101
+}
+
+test t-180002 {
+    SELECT CONCAT_WS(-1, "中文测试", cast(time '12:34:58' as json));
+}
+expect {
+    中文测试-1"12:34:58.000000"
+}
+
+test t-180038 {
+    SELECT CONCAT_WS(-1, "日本語テスト", X'ff');
+}
+expect {
+    日本語テスト-1�
+}
+
+test t-180156 {
+    SELECT CONCAT_WS(-1, "日本語テスト", cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    日本語テスト-1\{"b": 2, "c": 1\}
+}
+
+test t-180188 {
+    SELECT CONCAT_WS(-1, "한국어 시험", -1.7);
+}
+expect {
+    한국어 시험-1-1.7
+}
+
+test t-180221 {
+    SELECT CONCAT_WS(-1, "한국어 시험", 0x666F6F626172FF);
+}
+expect {
+    한국어 시험-1foobar�
+}
+
+test t-180249 {
+    SELECT CONCAT_WS(-1, "한국어 시험", 103458);
+}
+expect {
+    한국어 시험-1103458
+}
+
+test t-180265 {
+    SELECT CONCAT_WS(-1, "한국어 시험", time '-32:34:58');
+}
+expect {
+    한국어 시험-1-32:34:58
+}
+
+test t-180279 {
+    SELECT CONCAT_WS(-1, "한국어 시험", '1970-01-01 00:00:01');
+}
+expect {
+    한국어 시험-11970-01-01 00:00:01
+}
+
+test t-180296 {
+    SELECT CONCAT_WS(-1, "한국어 시험", cast(18446744073709551615 as json));
+}
+expect {
+    한국어 시험-118446744073709551615
+}
+
+test t-180375 {
+    SELECT CONCAT_WS(-1, "😊😂🤢", NULL / NULL);
+}
+expect {
+    😊😂🤢
+}
+
+test t-180512 {
+    SELECT CONCAT_WS(-1, '123', -1.7);
+}
+expect {
+    123-1-1.7
+}
+
+test t-180527 {
+    SELECT CONCAT_WS(-1, '123', 0x9);
+}
+expect raw {
+123-1	
+}
+
+test t-180612 {
+    SELECT CONCAT_WS(-1, '123', cast('null' as json));
+}
+expect {
+    123-1null
+}
+
+test t-180617 {
+    SELECT CONCAT_WS(-1, '123', cast(1.1 as json));
+}
+expect {
+    123-11.1
+}
+
+test t-180627 {
+    SELECT CONCAT_WS(-1, '123', cast('"foo"' as json));
+}
+expect {
+    123-1"foo"
+}
+
+test t-180703 {
+    SELECT CONCAT_WS(-1, 9223372036854775807, NULL - 1);
+}
+expect {
+    9223372036854775807
+}
+
+test t-180788 {
+    SELECT CONCAT_WS(-1, 9223372036854775807, cast('18446744073709551615' as json));
+}
+expect {
+    9223372036854775807-118446744073709551615
+}
+
+test t-180810 {
+    SELECT CONCAT_WS(-1, 9223372036854775807, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    9223372036854775807-1"2000-01-01 12:34:58.000000"
+}
+
+test t-180837 {
+    SELECT CONCAT_WS(-1, -9223372036854775808, '1.5');
+}
+expect {
+    -9223372036854775808-11.5
+}
+
+test t-180845 {
+    SELECT CONCAT_WS(-1, -9223372036854775808, 0xff);
+}
+expect {
+    -9223372036854775808-1�
+}
+
+test t-180887 {
+    SELECT CONCAT_WS(-1, -9223372036854775808, time '5 10:34:58.9');
+}
+expect {
+    -9223372036854775808-1130:34:58.9
+}
+
+test t-180900 {
+    SELECT CONCAT_WS(-1, -9223372036854775808, '20000101103458.1234');
+}
+expect {
+    -9223372036854775808-120000101103458.1234
+}
+
+test t-180957 {
+    SELECT CONCAT_WS(-1, -9223372036854775808, cast(0x666F6F626172FF as json));
+}
+expect {
+    -9223372036854775808-1"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-180972 {
+    SELECT CONCAT_WS(-1, -9223372036854775808, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    -9223372036854775808-1"2000-01-01 12:34:58.000000"
+}
+
+test t-181010 {
+    SELECT CONCAT_WS(-1, 999999999999999999999999, X'ff');
+}
+expect {
+    999999999999999999999999-1�
+}
+
+test t-181090 {
+    SELECT CONCAT_WS(-1, 999999999999999999999999, '3001-02-19 00:00:00');
+}
+expect {
+    999999999999999999999999-13001-02-19 00:00:00
+}
+
+test t-181258 {
+    SELECT CONCAT_WS(-1, -999999999999999999999999, cast('\{\}' as json));
+}
+expect {
+    -999999999999999999999999-1\{\}
+}
+
+test t-181283 {
+    SELECT CONCAT_WS(-1, -999999999999999999999999, cast(0b001 as json));
+}
+expect {
+    -999999999999999999999999-1"base64:type15:AQ=="
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-181292 {
+    SELECT CONCAT_WS(-1, -999999999999999999999999, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-181356 {
+    SELECT CONCAT_WS(-1, _binary 'Müller' , 0xFF666F6F626172);
+}
+expect {
+    Müller-1�foobar
+}
+
+test t-181392 {
+    SELECT CONCAT_WS(-1, _binary 'Müller' , '20000101103458.1234foo');
+}
+expect {
+    Müller-120000101103458.1234foo
+}
+
+test t-181504 {
+    SELECT CONCAT_WS(-1, _utf8mb4 'abcABCÅå', NULL * 1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-181554 {
+    SELECT CONCAT_WS(-1, _utf8mb4 'abcABCÅå', '20000101103458.1234foo');
+}
+expect {
+    abcABCÅå-120000101103458.1234foo
+}
+
+test t-181574 {
+    SELECT CONCAT_WS(-1, _utf8mb4 'abcABCÅå', '1969-02-18');
+}
+expect {
+    abcABCÅå-11969-02-18
+}
+
+test t-181770 {
+    SELECT CONCAT_WS(-1, _latin1 0xFF, cast('["a"]' as json));
+}
+expect {
+    ÿ-1["a"]
+}
+
+test t-181812 {
+    SELECT CONCAT_WS(0123, "Å å", _utf8 'foobar');
+}
+expect {
+    Å å123foobar
+}
+
+test t-181923 {
+    SELECT CONCAT_WS(0123, "Å å", cast('"foo"' as json));
+}
+expect {
+    Å å123"foo"
+}
+
+test t-181954 {
+    SELECT CONCAT_WS(0123, NULL, '\t1foo\t');
+}
+expect raw {
+	1foo	
+}
+
+test t-181964 {
+    SELECT CONCAT_WS(0123, NULL, 0.000);
+}
+expect {
+    0.000
+}
+
+test t-182004 {
+    SELECT CONCAT_WS(0123, NULL, 0xFF666F6F626172);
+}
+expect {
+    �foobar
+}
+
+test t-182049 {
+    SELECT CONCAT_WS(0123, NULL, time'00:00:59.01011');
+}
+expect {
+    00:00:59.01011
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-182087 {
+    SELECT CONCAT_WS(0123, NULL, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-182111 {
+    SELECT CONCAT_WS(0123, "", 1);
+}
+expect {
+    1231
+}
+
+test t-182180 {
+    SELECT CONCAT_WS(0123, "", time '31:34:58.4');
+}
+expect {
+    12331:34:58.4
+}
+
+test t-182215 {
+    SELECT CONCAT_WS(0123, "", '10:04:58');
+}
+expect {
+    12310:04:58
+}
+
+test t-182220 {
+    SELECT CONCAT_WS(0123, "", '0000-02-29');
+}
+expect {
+    1230000-02-29
+}
+
+test t-182401 {
+    SELECT CONCAT_WS(0123, "a", cast(9223372036854775807 as json));
+}
+expect {
+    a1239223372036854775807
+}
+
+test t-182494 {
+    SELECT CONCAT_WS(0123, "abc", 18446744073709540000e0);
+}
+expect {
+    abc1231.844674407370954e19
+}
+
+test t-182537 {
+    SELECT CONCAT_WS(0123, "abc", time '-101:34:58');
+}
+expect {
+    abc123-101:34:58
+}
+
+test t-182633 {
+    SELECT CONCAT_WS(0123, 1, 0x9);
+}
+expect raw {
+1123	
+}
+
+test t-182669 {
+    SELECT CONCAT_WS(0123, 1, time '5 10:34:58.9');
+}
+expect {
+    1123130:34:58.9
+}
+
+test t-182677 {
+    SELECT CONCAT_WS(0123, 1, 20000101103458.123456);
+}
+expect {
+    112320000101103458.123456
+}
+
+test t-182841 {
+    SELECT CONCAT_WS(0123, -1, 103458);
+}
+expect {
+    -1123103458
+}
+
+test t-182846 {
+    SELECT CONCAT_WS(0123, -1, '20000101');
+}
+expect {
+    -112320000101
+}
+
+test t-182932 {
+    SELECT CONCAT_WS(0123, 0123, 1.1e0);
+}
+expect {
+    1231231.1
+}
+
+test t-182979 {
+    SELECT CONCAT_WS(0123, 0123, 18446744073709551615);
+}
+expect {
+    12312318446744073709551615
+}
+
+test t-182986 {
+    SELECT CONCAT_WS(0123, 0123, time '32:34:58');
+}
+expect {
+    12312332:34:58
+}
+
+test t-183025 {
+    SELECT CONCAT_WS(0123, 0123, '10:04:58');
+}
+expect {
+    12312310:04:58
+}
+
+test t-183062 {
+    SELECT CONCAT_WS(0123, 0123, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    123123"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-183156 {
+    SELECT CONCAT_WS(0123, 0xAACC, date '2000-01-01');
+}
+expect {
+    ��1232000-01-01
+}
+
+test t-183172 {
+    SELECT CONCAT_WS(0123, 0xAACC, '103458.123456');
+}
+expect {
+    ��123103458.123456
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-183204 {
+    SELECT CONCAT_WS(0123, 0xAACC, cast('null' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-183219 {
+    SELECT CONCAT_WS(0123, 0xAACC, cast('"foo"' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-183240 {
+    SELECT CONCAT_WS(0123, 0xAACC, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect error {
+}
+
+test t-183424 {
+    SELECT CONCAT_WS(0123, "中文测试", -1.5);
+}
+expect {
+    中文测试123-1.5
+}
+
+test t-183471 {
+    SELECT CONCAT_WS(0123, "中文测试", time '31:34:58');
+}
+expect {
+    中文测试12331:34:58
+}
+
+test t-183520 {
+    SELECT CONCAT_WS(0123, "中文测试", '3001-02-19 00:00:00');
+}
+expect {
+    中文测试1233001-02-19 00:00:00
+}
+
+test t-183809 {
+    SELECT CONCAT_WS(0123, "한국어 시험", 20000101103458);
+}
+expect {
+    한국어 시험12320000101103458
+}
+
+test t-183850 {
+    SELECT CONCAT_WS(0123, "한국어 시험", cast('\{\}' as json));
+}
+expect {
+    한국어 시험123\{\}
+}
+
+test t-183978 {
+    SELECT CONCAT_WS(0123, "😊😂🤢", '20000101103458.1234');
+}
+expect {
+    😊😂🤢12320000101103458.1234
+}
+
+test t-184022 {
+    SELECT CONCAT_WS(0123, "😊😂🤢", cast(18446744073709551615 as json));
+}
+expect {
+    😊😂🤢12318446744073709551615
+}
+
+test t-184196 {
+    SELECT CONCAT_WS(0123, '123', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    123123"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-184215 {
+    SELECT CONCAT_WS(0123, '123', cast(time '5 12:34:58' as json));
+}
+expect {
+    123123"04:34:58.000000"
+}
+
+test t-184422 {
+    SELECT CONCAT_WS(0123, -9223372036854775808, NULL * NULL);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-184555 {
+    SELECT CONCAT_WS(0123, 999999999999999999999999, 0.0);
+}
+expect {
+    9999999999999999999999991230.0
+}
+
+test t-184563 {
+    SELECT CONCAT_WS(0123, 999999999999999999999999, '1.5');
+}
+expect {
+    9999999999999999999999991231.5
+}
+
+test t-184623 {
+    SELECT CONCAT_WS(0123, 999999999999999999999999, 103458);
+}
+expect {
+    999999999999999999999999123103458
+}
+
+test t-184634 {
+    SELECT CONCAT_WS(0123, 999999999999999999999999, '20000101foo');
+}
+expect {
+    99999999999999999999999912320000101foo
+}
+
+test t-184789 {
+    SELECT CONCAT_WS(0123, -999999999999999999999999, '20000101103458.123456');
+}
+expect {
+    -99999999999999999999999912320000101103458.123456
+}
+
+test t-184797 {
+    SELECT CONCAT_WS(0123, -999999999999999999999999, '103458foo');
+}
+expect {
+    -999999999999999999999999123103458foo
+}
+
+test t-184878 {
+    SELECT CONCAT_WS(0123, _binary 'Müller' , -1.7e0);
+}
+expect {
+    Müller123-1.7
+}
+
+test t-185067 {
+    SELECT CONCAT_WS(0123, _utf8mb4 'abcABCÅå', false);
+}
+expect {
+    abcABCÅå1230
+}
+
+test t-185216 {
+    SELECT CONCAT_WS(0123, _latin1 0xFF, _binary 'foobar');
+}
+expect {
+    �123foobar
+}
+
+test t-185249 {
+    SELECT CONCAT_WS(0123, _latin1 0xFF, -18446744073709540000e0);
+}
+expect {
+    ÿ123-1.844674407370954e19
+}
+
+test t-185312 {
+    SELECT CONCAT_WS(0123, _latin1 0xFF, cast('false' as json));
+}
+expect {
+    ÿ123false
+}
+
+test t-185423 {
+    SELECT CONCAT_WS(0xAACC, "Å å", time '5 10:34:58.9');
+}
+expect {
+    Å å��130:34:58.9
+}
+
+test t-185439 {
+    SELECT CONCAT_WS(0xAACC, "Å å", '103458');
+}
+expect {
+    Å å��103458
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-185505 {
+    SELECT CONCAT_WS(0xAACC, "Å å", cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-185683 {
+    SELECT CONCAT_WS(0xAACC, "", 1.0e0);
+}
+expect {
+    ��1
+}
+
+test t-185693 {
+    SELECT CONCAT_WS(0xAACC, "", 1.1);
+}
+expect {
+    ��1.1
+}
+
+test t-185726 {
+    SELECT CONCAT_WS(0xAACC, "", 1 - NULL);
+}
+expect {
+    
+}
+
+test t-185945 {
+    SELECT CONCAT_WS(0xAACC, "a", '2000-01-01 12:34:58');
+}
+expect {
+    a��2000-01-01 12:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-185996 {
+    SELECT CONCAT_WS(0xAACC, "a", cast(time '12:34:58' as json));
+}
+expect error {
+}
+
+test t-186015 {
+    SELECT CONCAT_WS(0xAACC, "abc", 1.5);
+}
+expect {
+    abc��1.5
+}
+
+test t-186070 {
+    SELECT CONCAT_WS(0xAACC, "abc", time '130:34:58.6');
+}
+expect {
+    abc��130:34:58.6
+}
+
+test t-186073 {
+    SELECT CONCAT_WS(0xAACC, "abc", timestamp '2000-01-01 10:34:58');
+}
+expect {
+    abc��2000-01-01 10:34:58
+}
+
+test t-186183 {
+    SELECT CONCAT_WS(0xAACC, 1, '1.5');
+}
+expect {
+    1��1.5
+}
+
+test t-186331 {
+    SELECT CONCAT_WS(0xAACC, -1, 1.0e0);
+}
+expect {
+    -1��1
+}
+
+test t-186402 {
+    SELECT CONCAT_WS(0xAACC, -1, 20000101103458.1234);
+}
+expect {
+    -1��20000101103458.1234
+}
+
+test t-186411 {
+    SELECT CONCAT_WS(0xAACC, -1, '103458');
+}
+expect {
+    -1��103458
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-186463 {
+    SELECT CONCAT_WS(0xAACC, -1, cast(_binary '"bar"' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-186634 {
+    SELECT CONCAT_WS(0xAACC, 0123, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-186711 {
+    SELECT CONCAT_WS(0xAACC, 0xAACC, time '31:34:58');
+}
+expect {
+    �̪�31:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-186774 {
+    SELECT CONCAT_WS(0xAACC, 0xAACC, cast(-1.1 as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-186804 {
+    SELECT CONCAT_WS(0xAACC, 0xAACC, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect error {
+}
+
+test t-187058 {
+    SELECT CONCAT_WS(0xAACC, "中文测试", '20000101');
+}
+expect {
+    中文测试��20000101
+}
+
+test t-187182 {
+    SELECT CONCAT_WS(0xAACC, "日本語テスト", NULL + NULL);
+}
+expect {
+    日本語テスト
+}
+
+test t-187246 {
+    SELECT CONCAT_WS(0xAACC, "日本語テスト", '3001-02-19 00:00:00');
+}
+expect {
+    日本語テスト��3001-02-19 00:00:00
+}
+
+test t-187637 {
+    SELECT CONCAT_WS(0xAACC, '123', 1.1);
+}
+expect {
+    123��1.1
+}
+
+test t-187653 {
+    SELECT CONCAT_WS(0xAACC, '123', 0b1001);
+}
+expect raw {
+123��	
+}
+
+test t-187712 {
+    SELECT CONCAT_WS(0xAACC, '123', '20000101foo');
+}
+expect {
+    123��20000101foo
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-187740 {
+    SELECT CONCAT_WS(0xAACC, '123', cast('null' as json));
+}
+expect error {
+}
+
+test t-187835 {
+    SELECT CONCAT_WS(0xAACC, 9223372036854775807, 0x666F6F626172FF);
+}
+expect {
+    9223372036854775807��foobar�
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-188094 {
+    SELECT CONCAT_WS(0xAACC, -9223372036854775808, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-188188 {
+    SELECT CONCAT_WS(0xAACC, 999999999999999999999999, 103458.123456);
+}
+expect {
+    999999999999999999999999��103458.123456
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-188240 {
+    SELECT CONCAT_WS(0xAACC, 999999999999999999999999, cast('18446744073709551615' as json));
+}
+expect error {
+}
+
+test t-188317 {
+    SELECT CONCAT_WS(0xAACC, -999999999999999999999999, NULL - 1);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-188318 {
+    SELECT CONCAT_WS(0xAACC, -999999999999999999999999, 1 - NULL);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-188453 {
+    SELECT CONCAT_WS(0xAACC, _binary 'Müller' , 'foobar');
+}
+expect {
+    Müller��foobar
+}
+
+test t-188485 {
+    SELECT CONCAT_WS(0xAACC, _binary 'Müller' , 9223372036854775807);
+}
+expect {
+    Müller��9223372036854775807
+}
+
+test t-188608 {
+    SELECT CONCAT_WS(0xAACC, _utf8mb4 'abcABCÅå', -1.5);
+}
+expect {
+    abcABCÅå��-1.5
+}
+
+test t-188635 {
+    SELECT CONCAT_WS(0xAACC, _utf8mb4 'abcABCÅå', NULL / 1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-188762 {
+    SELECT CONCAT_WS(0xAACC, _latin1 0xFF, 1.5e0);
+}
+expect {
+    ���1.5
+}
+
+test t-188787 {
+    SELECT CONCAT_WS(0xAACC, _latin1 0xFF, 0b1001);
+}
+expect raw {
+���	
+}
+
+test t-188805 {
+    SELECT CONCAT_WS(0xAACC, _latin1 0xFF, NULL - NULL);
+}
+expect {
+    �
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-188893 {
+    SELECT CONCAT_WS(0xAACC, _latin1 0xFF, cast(_binary '"bar"' as json));
+}
+expect error {
+}
+
+test t-188958 {
+    SELECT CONCAT_WS(3.1415926, "Å å", NULL * NULL);
+}
+expect {
+    Å å
+}
+
+test t-189004 {
+    SELECT CONCAT_WS(3.1415926, "Å å", '103458.123456');
+}
+expect {
+    Å å3.1415926103458.123456
+}
+
+test t-189059 {
+    SELECT CONCAT_WS(3.1415926, "Å å", cast(0b001 as json));
+}
+expect {
+    Å å3.1415926"base64:type15:AQ=="
+}
+
+test t-189074 {
+    SELECT CONCAT_WS(3.1415926, "Å å", cast(time '12:34:58' as json));
+}
+expect {
+    Å å3.1415926"12:34:58.000000"
+}
+
+test t-189086 {
+    SELECT CONCAT_WS(3.1415926, NULL, 1.5e0);
+}
+expect {
+    1.5
+}
+
+test t-189129 {
+    SELECT CONCAT_WS(3.1415926, NULL, NULL - NULL);
+}
+expect {
+    
+}
+
+test t-189237 {
+    SELECT CONCAT_WS(3.1415926, NULL, cast(time '5 12:34:58' as json));
+}
+expect {
+    "04:34:58.000000"
+}
+
+test t-189246 {
+    SELECT CONCAT_WS(3.1415926, "", 0.0e0);
+}
+expect {
+    3.14159260
+}
+
+test t-189458 {
+    SELECT CONCAT_WS(3.1415926, "a", -9223372036854775808);
+}
+expect {
+    a3.1415926-9223372036854775808
+}
+
+test t-189461 {
+    SELECT CONCAT_WS(3.1415926, "a", -18446744073709540000e0);
+}
+expect {
+    a3.1415926-1.844674407370954e19
+}
+
+test t-189617 {
+    SELECT CONCAT_WS(3.1415926, "abc", 0x666F6F626172FF);
+}
+expect {
+    abc3.1415926foobar�
+}
+
+test t-189625 {
+    SELECT CONCAT_WS(3.1415926, "abc", JSON_ARRAY());
+}
+expect {
+    abc3.1415926[]
+}
+
+test t-189627 {
+    SELECT CONCAT_WS(3.1415926, "abc", time '31:34:58');
+}
+expect {
+    abc3.141592631:34:58
+}
+
+test t-189650 {
+    SELECT CONCAT_WS(3.1415926, "abc", '20000101');
+}
+expect {
+    abc3.141592620000101
+}
+
+test t-189682 {
+    SELECT CONCAT_WS(3.1415926, "abc", cast('\{\}' as json));
+}
+expect {
+    abc3.1415926\{\}
+}
+
+test t-189759 {
+    SELECT CONCAT_WS(3.1415926, 1, 0b1001);
+}
+expect raw {
+13.1415926	
+}
+
+test t-189769 {
+    SELECT CONCAT_WS(3.1415926, 1, NULL / 1);
+}
+expect {
+    1
+}
+
+test t-189940 {
+    SELECT CONCAT_WS(3.1415926, -1, 0xFF666F6F626172FF);
+}
+expect {
+    -13.1415926�foobar�
+}
+
+test t-189950 {
+    SELECT CONCAT_WS(3.1415926, -1, time '10:04:58');
+}
+expect {
+    -13.141592610:04:58
+}
+
+test t-190003 {
+    SELECT CONCAT_WS(3.1415926, -1, cast(1 as json));
+}
+expect {
+    -13.14159261
+}
+
+test t-190075 {
+    SELECT CONCAT_WS(3.1415926, 0123, '');
+}
+expect {
+    1233.1415926
+}
+
+test t-190177 {
+    SELECT CONCAT_WS(3.1415926, 0123, cast(9223372036854775807 as json));
+}
+expect {
+    1233.14159269223372036854775807
+}
+
+test t-190411 {
+    SELECT CONCAT_WS(3.1415926, 3.1415926, NULL);
+}
+expect {
+    3.1415926
+}
+
+test t-190477 {
+    SELECT CONCAT_WS(3.1415926, 3.1415926, '10:04:58');
+}
+expect {
+    3.14159263.141592610:04:58
+}
+
+test t-190512 {
+    SELECT CONCAT_WS(3.1415926, 3.1415926, cast(_binary' "foo"' as json));
+}
+expect {
+    3.14159263.1415926"base64:type15:ICJmb28i"
+}
+
+test t-190521 {
+    SELECT CONCAT_WS(3.1415926, 3.1415926, cast('["ab", "ef"]' as json));
+}
+expect {
+    3.14159263.1415926["ab", "ef"]
+}
+
+test t-190522 {
+    SELECT CONCAT_WS(3.1415926, 3.1415926, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    3.14159263.1415926\{"a": 1, "b": 2\}
+}
+
+test t-190552 {
+    SELECT CONCAT_WS(3.1415926, "中文测试", -1.5);
+}
+expect {
+    中文测试3.1415926-1.5
+}
+
+test t-190578 {
+    SELECT CONCAT_WS(3.1415926, "中文测试", NULL * NULL);
+}
+expect {
+    中文测试
+}
+
+test t-190665 {
+    SELECT CONCAT_WS(3.1415926, "中文测试", cast('1' as json));
+}
+expect {
+    中文测试3.14159261
+}
+
+test t-190730 {
+    SELECT CONCAT_WS(3.1415926, "日本語テスト", X'ff');
+}
+expect {
+    日本語テスト3.1415926�
+}
+
+test t-190770 {
+    SELECT CONCAT_WS(3.1415926, "日本語テスト", date '2000-01-01');
+}
+expect {
+    日本語テスト3.14159262000-01-01
+}
+
+test t-190859 {
+    SELECT CONCAT_WS(3.1415926, "한국어 시험", 1);
+}
+expect {
+    한국어 시험3.14159261
+}
+
+test t-190869 {
+    SELECT CONCAT_WS(3.1415926, "한국어 시험", -1.5e0);
+}
+expect {
+    한국어 시험3.1415926-1.5
+}
+
+test t-190874 {
+    SELECT CONCAT_WS(3.1415926, "한국어 시험", 0.000);
+}
+expect {
+    한국어 시험3.14159260.000
+}
+
+test t-191002 {
+    SELECT CONCAT_WS(3.1415926, "한국어 시험", cast(0b01 as json));
+}
+expect {
+    한국어 시험3.1415926"base64:type15:AQ=="
+}
+
+test t-191044 {
+    SELECT CONCAT_WS(3.1415926, "😊😂🤢", '-1.5');
+}
+expect {
+    😊😂🤢3.1415926-1.5
+}
+
+test t-191156 {
+    SELECT CONCAT_WS(3.1415926, "😊😂🤢", cast('18446744073709551615' as json));
+}
+expect {
+    😊😂🤢3.141592618446744073709551615
+}
+
+test t-191228 {
+    SELECT CONCAT_WS(3.1415926, '123', 1 / NULL);
+}
+expect {
+    123
+}
+
+test t-191378 {
+    SELECT CONCAT_WS(3.1415926, 9223372036854775807, X'ff');
+}
+expect {
+    92233720368547758073.1415926�
+}
+
+test t-191518 {
+    SELECT CONCAT_WS(3.1415926, -9223372036854775808, 1.1e0);
+}
+expect {
+    -92233720368547758083.14159261.1
+}
+
+test t-191737 {
+    SELECT CONCAT_WS(3.1415926, 999999999999999999999999, time '10:04:58.1');
+}
+expect {
+    9999999999999999999999993.141592610:04:58.1
+}
+
+test t-191784 {
+    SELECT CONCAT_WS(3.1415926, 999999999999999999999999, cast(0 as json));
+}
+expect {
+    9999999999999999999999993.14159260
+}
+
+test t-191883 {
+    SELECT CONCAT_WS(3.1415926, -999999999999999999999999, NULL - NULL);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-191886 {
+    SELECT CONCAT_WS(3.1415926, -999999999999999999999999, 0xFF666F6F626172);
+}
+expect {
+    -9999999999999999999999993.1415926�foobar
+}
+
+test t-192009 {
+    SELECT CONCAT_WS(3.1415926, _binary 'Müller' , 1.5);
+}
+expect {
+    Müller3.14159261.5
+}
+
+test t-192071 {
+    SELECT CONCAT_WS(3.1415926, _binary 'Müller' , 20000101103458);
+}
+expect {
+    Müller3.141592620000101103458
+}
+
+test t-192091 {
+    SELECT CONCAT_WS(3.1415926, _binary 'Müller' , time '-32:34:58');
+}
+expect {
+    Müller3.1415926-32:34:58
+}
+
+test t-192145 {
+    SELECT CONCAT_WS(3.1415926, _binary 'Müller' , cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    Müller3.1415926\{"b": 2, "c": 1\}
+}
+
+test t-192152 {
+    SELECT CONCAT_WS(3.1415926, _binary 'Müller' , cast(time '12:34:58' as json));
+}
+expect {
+    Müller3.1415926"12:34:58.000000"
+}
+
+test t-192261 {
+    SELECT CONCAT_WS(3.1415926, _utf8mb4 'abcABCÅå', '5 10:34:58');
+}
+expect {
+    abcABCÅå3.14159265 10:34:58
+}
+
+test t-192320 {
+    SELECT CONCAT_WS(3.1415926, _latin1 0xFF, ' 1 ');
+}
+expect raw {
+ÿ3.1415926 1 
+}
+
+test t-192353 {
+    SELECT CONCAT_WS(3.1415926, _latin1 0xFF, 0x9);
+}
+expect raw {
+�3.1415926	
+}
+
+test t-192462 {
+    SELECT CONCAT_WS(3.1415926, _latin1 0xFF, cast('["a"]' as json));
+}
+expect {
+    ÿ3.1415926["a"]
+}
+
+test t-192464 {
+    SELECT CONCAT_WS(3.1415926, _latin1 0xFF, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    ÿ3.1415926["ab", "cd", "ef"]
+}
+
+test t-192552 {
+    SELECT CONCAT_WS("中文测试", "Å å", date '2000-01-01');
+}
+expect {
+    Å å中文测试2000-01-01
+}
+
+test t-192621 {
+    SELECT CONCAT_WS("中文测试", "Å å", cast(0x666F6F626172FF as json));
+}
+expect {
+    Å å中文测试"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-192806 {
+    SELECT CONCAT_WS("中文测试", "", ' 1 ');
+}
+expect raw {
+中文测试 1 
+}
+
+test t-192931 {
+    SELECT CONCAT_WS("中文测试", "", cast(9223372036854775807 as json));
+}
+expect {
+    中文测试9223372036854775807
+}
+
+test t-192966 {
+    SELECT CONCAT_WS("中文测试", "a", 255);
+}
+expect {
+    a中文测试255
+}
+
+test t-193058 {
+    SELECT CONCAT_WS("中文测试", "a", '20000101foo');
+}
+expect {
+    a中文测试20000101foo
+}
+
+test t-193224 {
+    SELECT CONCAT_WS("中文测试", "abc", time '-31:34:58');
+}
+expect {
+    abc中文测试-31:34:58
+}
+
+test t-193235 {
+    SELECT CONCAT_WS("中文测试", "abc", '2000-01-01 12:34:58');
+}
+expect {
+    abc中文测试2000-01-01 12:34:58
+}
+
+test t-193270 {
+    SELECT CONCAT_WS("中文测试", "abc", cast(0b01 as json));
+}
+expect {
+    abc中文测试"base64:type15:AQ=="
+}
+
+test t-193291 {
+    SELECT CONCAT_WS("中文测试", 1, ' 0 ');
+}
+expect raw {
+1中文测试 0 
+}
+
+test t-193532 {
+    SELECT CONCAT_WS("中文测试", -1, 20000101);
+}
+expect {
+    -1中文测试20000101
+}
+
+test t-193601 {
+    SELECT CONCAT_WS("中文测试", -1, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    -1中文测试\{"a": 1, "b": 2\}
+}
+
+test t-193876 {
+    SELECT CONCAT_WS("中文测试", 0xAACC, time'00:00:59.2132234');
+}
+expect {
+    ��中文测试00:00:59.213223
+}
+
+test t-193880 {
+    SELECT CONCAT_WS("中文测试", 0xAACC, '101:34:58');
+}
+expect {
+    ��中文测试101:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-193906 {
+    SELECT CONCAT_WS("中文测试", 0xAACC, cast('2' as json));
+}
+expect error {
+}
+
+test t-194117 {
+    SELECT CONCAT_WS("中文测试", "中文测试", 1.1);
+}
+expect {
+    中文测试中文测试1.1
+}
+
+test t-194215 {
+    SELECT CONCAT_WS("中文测试", "中文测试", cast(1 as json));
+}
+expect {
+    中文测试中文测试1
+}
+
+test t-194471 {
+    SELECT CONCAT_WS("中文测试", "한국어 시험", 1 + NULL);
+}
+expect {
+    한국어 시험
+}
+
+test t-194524 {
+    SELECT CONCAT_WS("中文测试", "한국어 시험", time'00:00:59.2132234');
+}
+expect {
+    한국어 시험中文测试00:00:59.213223
+}
+
+test t-194555 {
+    SELECT CONCAT_WS("中文测试", "한국어 시험", cast('1.1' as json));
+}
+expect {
+    한국어 시험中文测试1.1
+}
+
+test t-194558 {
+    SELECT CONCAT_WS("中文测试", "한국어 시험", cast('18446744073709551615' as json));
+}
+expect {
+    한국어 시험中文测试18446744073709551615
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-194561 {
+    SELECT CONCAT_WS("中文测试", "한국어 시험", cast('invalid' as json));
+}
+expect error {
+}
+
+test t-194748 {
+    SELECT CONCAT_WS("中文测试", '123', 255);
+}
+expect {
+    123中文测试255
+}
+
+test t-194789 {
+    SELECT CONCAT_WS("中文测试", '123', 1 * NULL);
+}
+expect {
+    123
+}
+
+test t-194881 {
+    SELECT CONCAT_WS("中文测试", '123', cast('9223372036854775807' as json));
+}
+expect {
+    123中文测试9223372036854775807
+}
+
+test t-195074 {
+    SELECT CONCAT_WS("中文测试", -9223372036854775808, ' 1 ');
+}
+expect raw {
+-9223372036854775808中文测试 1 
+}
+
+test t-195114 {
+    SELECT CONCAT_WS("中文测试", -9223372036854775808, NULL * NULL);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-195125 {
+    SELECT CONCAT_WS("中文测试", -9223372036854775808, 0x666F6F626172FF);
+}
+expect {
+    -9223372036854775808中文测试foobar�
+}
+
+test t-195216 {
+    SELECT CONCAT_WS("中文测试", -9223372036854775808, cast('["a"]' as json));
+}
+expect {
+    -9223372036854775808中文测试["a"]
+}
+
+test t-195396 {
+    SELECT CONCAT_WS("中文测试", -999999999999999999999999, 255);
+}
+expect {
+    -999999999999999999999999中文测试255
+}
+
+test t-195665 {
+    SELECT CONCAT_WS("中文测试", _binary 'Müller' , '2000-01-01 12:34:58');
+}
+expect {
+    Müller中文测试2000-01-01 12:34:58
+}
+
+test t-195853 {
+    SELECT CONCAT_WS("中文测试", _utf8mb4 'abcABCÅå', cast('9223372036854775807' as json));
+}
+expect {
+    abcABCÅå中文测试9223372036854775807
+}
+
+test t-195855 {
+    SELECT CONCAT_WS("中文测试", _utf8mb4 'abcABCÅå', cast('"foo"' as json));
+}
+expect {
+    abcABCÅå中文测试"foo"
+}
+
+test t-195994 {
+    SELECT CONCAT_WS("中文测试", _latin1 0xFF, '3001-02-19 00:00:00');
+}
+expect {
+    ÿ中文测试3001-02-19 00:00:00
+}
+
+test t-195998 {
+    SELECT CONCAT_WS("中文测试", _latin1 0xFF, cast(true as json));
+}
+expect {
+    ÿ中文测试true
+}
+
+test t-196004 {
+    SELECT CONCAT_WS("中文测试", _latin1 0xFF, cast('false' as json));
+}
+expect {
+    ÿ中文测试false
+}
+
+test t-196014 {
+    SELECT CONCAT_WS("中文测试", _latin1 0xFF, cast('-1.1' as json));
+}
+expect {
+    ÿ中文测试-1.1
+}
+
+test t-196131 {
+    SELECT CONCAT_WS("日本語テスト", "Å å", '103458');
+}
+expect {
+    Å å日本語テスト103458
+}
+
+test t-196259 {
+    SELECT CONCAT_WS("日本語テスト", NULL, 0x666F6F626172FF);
+}
+expect {
+    foobar�
+}
+
+test t-196291 {
+    SELECT CONCAT_WS("日本語テスト", NULL, '20000101103458.123456');
+}
+expect {
+    20000101103458.123456
+}
+
+test t-196405 {
+    SELECT CONCAT_WS("日本語テスト", "", NULL);
+}
+expect {
+    
+}
+
+test t-196424 {
+    SELECT CONCAT_WS("日本語テスト", "", -9223372036854775808);
+}
+expect {
+    日本語テスト-9223372036854775808
+}
+
+test t-196546 {
+    SELECT CONCAT_WS("日本語テスト", "a", -1.5);
+}
+expect {
+    a日本語テスト-1.5
+}
+
+test t-196620 {
+    SELECT CONCAT_WS("日本語テスト", "a", '20000101103458.1234foo');
+}
+expect {
+    a日本語テスト20000101103458.1234foo
+}
+
+test t-196658 {
+    SELECT CONCAT_WS("日本語テスト", "a", cast(18446744073709551615 as json));
+}
+expect {
+    a日本語テスト18446744073709551615
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-196845 {
+    SELECT CONCAT_WS("日本語テスト", "abc", cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-196869 {
+    SELECT CONCAT_WS("日本語テスト", 1, 1.5);
+}
+expect {
+    1日本語テスト1.5
+}
+
+test t-196994 {
+    SELECT CONCAT_WS("日本語テスト", 1, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1日本語テスト"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-197021 {
+    SELECT CONCAT_WS("日本語テスト", -1, ' 255 foo');
+}
+expect {
+    -1日本語テスト 255 foo
+}
+
+test t-197117 {
+    SELECT CONCAT_WS("日本語テスト", -1, time '-101:34:58');
+}
+expect {
+    -1日本語テスト-101:34:58
+}
+
+test t-197200 {
+    SELECT CONCAT_WS("日本語テスト", 0123, '-1.5');
+}
+expect {
+    123日本語テスト-1.5
+}
+
+test t-197408 {
+    SELECT CONCAT_WS("日本語テスト", 0xAACC, time '31:34:58.4');
+}
+expect {
+    ��日本語テスト31:34:58.4
+}
+
+test t-197432 {
+    SELECT CONCAT_WS("日本語テスト", 0xAACC, '20000101foo');
+}
+expect {
+    ��日本語テスト20000101foo
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-197499 {
+    SELECT CONCAT_WS("日本語テスト", 0xAACC, cast(time '5 12:34:58' as json));
+}
+expect error {
+}
+
+test t-197629 {
+    SELECT CONCAT_WS("日本語テスト", 3.1415926, cast(9223372036854775807 as json));
+}
+expect {
+    3.1415926日本語テスト9223372036854775807
+}
+
+test t-197818 {
+    SELECT CONCAT_WS("日本語テスト", "中文测试", cast(date '2000-01-01' as json));
+}
+expect {
+    中文测试日本語テスト"2000-01-01"
+}
+
+test t-197820 {
+    SELECT CONCAT_WS("日本語テスト", "中文测试", cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    中文测试日本語テスト"2000-01-01 12:34:58.000000"
+}
+
+test t-197831 {
+    SELECT CONCAT_WS("日本語テスト", "日本語テスト", ' 255 foo');
+}
+expect {
+    日本語テスト日本語テスト 255 foo
+}
+
+test t-197930 {
+    SELECT CONCAT_WS("日本語テスト", "日本語テスト", '101:34:58');
+}
+expect {
+    日本語テスト日本語テスト101:34:58
+}
+
+test t-198205 {
+    SELECT CONCAT_WS("日本語テスト", "😊😂🤢", 9223372036854775807);
+}
+expect {
+    😊😂🤢日本語テスト9223372036854775807
+}
+
+test t-198263 {
+    SELECT CONCAT_WS("日本語テスト", "😊😂🤢", '3001-02-18 23:59:59');
+}
+expect {
+    😊😂🤢日本語テスト3001-02-18 23:59:59
+}
+
+test t-198536 {
+    SELECT CONCAT_WS("日本語テスト", 9223372036854775807, time '10:04:58');
+}
+expect {
+    9223372036854775807日本語テスト10:04:58
+}
+
+test t-198559 {
+    SELECT CONCAT_WS("日本語テスト", 9223372036854775807, '20000101103458.123456');
+}
+expect {
+    9223372036854775807日本語テスト20000101103458.123456
+}
+
+test t-198572 {
+    SELECT CONCAT_WS("日本語テスト", 9223372036854775807, time'00:00:01.0000');
+}
+expect {
+    9223372036854775807日本語テスト00:00:01.0000
+}
+
+test t-198576 {
+    SELECT CONCAT_WS("日本語テスト", 9223372036854775807, time '-5 10:34:58');
+}
+expect {
+    9223372036854775807日本語テスト-130:34:58
+}
+
+test t-198688 {
+    SELECT CONCAT_WS("日本語テスト", -9223372036854775808, 0xFF666F6F626172FF);
+}
+expect {
+    -9223372036854775808日本語テスト�foobar�
+}
+
+test t-198831 {
+    SELECT CONCAT_WS("日本語テスト", 999999999999999999999999, 0b1001);
+}
+expect raw {
+999999999999999999999999日本語テスト	
+}
+
+test t-198866 {
+    SELECT CONCAT_WS("日本語テスト", 999999999999999999999999, time '31:34:58.4');
+}
+expect {
+    999999999999999999999999日本語テスト31:34:58.4
+}
+
+test t-198918 {
+    SELECT CONCAT_WS("日本語テスト", 999999999999999999999999, cast('null' as json));
+}
+expect {
+    999999999999999999999999日本語テストnull
+}
+
+test t-198920 {
+    SELECT CONCAT_WS("日本語テスト", 999999999999999999999999, cast('false' as json));
+}
+expect {
+    999999999999999999999999日本語テストfalse
+}
+
+test t-199028 {
+    SELECT CONCAT_WS("日本語テスト", -999999999999999999999999, time '31:34:58.4');
+}
+expect {
+    -999999999999999999999999日本語テスト31:34:58.4
+}
+
+test t-199246 {
+    SELECT CONCAT_WS("日本語テスト", _binary 'Müller' , cast(2 as json));
+}
+expect {
+    Müller日本語テスト2
+}
+
+test t-199484 {
+    SELECT CONCAT_WS("日本語テスト", _latin1 0xFF, true);
+}
+expect {
+    ÿ日本語テスト1
+}
+
+test t-199573 {
+    SELECT CONCAT_WS("日本語テスト", _latin1 0xFF, cast(9223372036854775807 as json));
+}
+expect {
+    ÿ日本語テスト9223372036854775807
+}
+
+test t-199674 {
+    SELECT CONCAT_WS("한국어 시험", "Å å", time '5 10:34:58');
+}
+expect {
+    Å å한국어 시험130:34:58
+}
+
+test t-199881 {
+    SELECT CONCAT_WS("한국어 시험", NULL, '1970-01-01 00:00:01');
+}
+expect {
+    1970-01-01 00:00:01
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-199907 {
+    SELECT CONCAT_WS("한국어 시험", NULL, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-199948 {
+    SELECT CONCAT_WS("한국어 시험", "", -1.5);
+}
+expect {
+    한국어 시험-1.5
+}
+
+test t-199974 {
+    SELECT CONCAT_WS("한국어 시험", "", NULL * NULL);
+}
+expect {
+    
+}
+
+test t-200083 {
+    SELECT CONCAT_WS("한국어 시험", "", cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    한국어 시험\{"b": 2, "c": 1\}
+}
+
+test t-200221 {
+    SELECT CONCAT_WS("한국어 시험", "a", cast(9223372036854775807 as json));
+}
+expect {
+    a한국어 시험9223372036854775807
+}
+
+test t-200268 {
+    SELECT CONCAT_WS("한국어 시험", "abc", -1.7e0);
+}
+expect {
+    abc한국어 시험-1.7
+}
+
+test t-200460 {
+    SELECT CONCAT_WS("한국어 시험", 1, NULL * NULL);
+}
+expect {
+    1
+}
+
+test t-200495 {
+    SELECT CONCAT_WS("한국어 시험", 1, 20000101103458);
+}
+expect {
+    1한국어 시험20000101103458
+}
+
+test t-200520 {
+    SELECT CONCAT_WS("한국어 시험", 1, time '-5 10:34:58');
+}
+expect {
+    1한국어 시험-130:34:58
+}
+
+test t-200536 {
+    SELECT CONCAT_WS("한국어 시험", 1, cast('\{\}' as json));
+}
+expect {
+    1한국어 시험\{\}
+}
+
+test t-200551 {
+    SELECT CONCAT_WS("한국어 시험", 1, cast('9223372036854775807' as json));
+}
+expect {
+    1한국어 시험9223372036854775807
+}
+
+test t-200562 {
+    SELECT CONCAT_WS("한국어 시험", 1, cast('["a"]' as json));
+}
+expect {
+    1한국어 시험["a"]
+}
+
+test t-200577 {
+    SELECT CONCAT_WS("한국어 시험", 1, cast(time '5 12:34:58' as json));
+}
+expect {
+    1한국어 시험"04:34:58.000000"
+}
+
+test t-200582 {
+    SELECT CONCAT_WS("한국어 시험", -1, ' 1 ');
+}
+expect raw {
+-1한국어 시험 1 
+}
+
+test t-200624 {
+    SELECT CONCAT_WS("한국어 시험", -1, 1 / NULL);
+}
+expect {
+    -1
+}
+
+test t-200720 {
+    SELECT CONCAT_WS("한국어 시험", -1, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    -1한국어 시험"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-200836 {
+    SELECT CONCAT_WS("한국어 시험", 0123, '103458.123456foo');
+}
+expect {
+    123한국어 시험103458.123456foo
+}
+
+test t-200937 {
+    SELECT CONCAT_WS("한국어 시험", 0xAACC, 0b1001);
+}
+expect raw {
+��한국어 시험	
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-200965 {
+    SELECT CONCAT_WS("한국어 시험", 0xAACC, JSON_ARRAY());
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-201045 {
+    SELECT CONCAT_WS("한국어 시험", 0xAACC, cast(0x666F6F626172FF as json));
+}
+expect error {
+}
+
+test t-201098 {
+    SELECT CONCAT_WS("한국어 시험", 3.1415926, X'ff');
+}
+expect {
+    3.1415926한국어 시험�
+}
+
+test t-201195 {
+    SELECT CONCAT_WS("한국어 시험", 3.1415926, cast('1' as json));
+}
+expect {
+    3.1415926한국어 시험1
+}
+
+test t-201231 {
+    SELECT CONCAT_WS("한국어 시험", "中文测试", ' 255 ');
+}
+expect raw {
+中文测试한국어 시험 255 
+}
+
+test t-201344 {
+    SELECT CONCAT_WS("한국어 시험", "中文测试", cast(true as json));
+}
+expect {
+    中文测试한국어 시험true
+}
+
+test t-201367 {
+    SELECT CONCAT_WS("한국어 시험", "中文测试", cast(_binary '"bar"' as json));
+}
+expect {
+    中文测试한국어 시험"base64:type15:ImJhciI="
+}
+
+test t-201429 {
+    SELECT CONCAT_WS("한국어 시험", "日本語テスト", false);
+}
+expect {
+    日本語テスト한국어 시험0
+}
+
+test t-201515 {
+    SELECT CONCAT_WS("한국어 시험", "日本語テスト", cast(1.1 as json));
+}
+expect {
+    日本語テスト한국어 시험1.1
+}
+
+test t-201559 {
+    SELECT CONCAT_WS("한국어 시험", "한국어 시험", 1.0e0);
+}
+expect {
+    한국어 시험한국어 시험1
+}
+
+test t-201770 {
+    SELECT CONCAT_WS("한국어 시험", "😊😂🤢", -9223372036854775808);
+}
+expect {
+    😊😂🤢한국어 시험-9223372036854775808
+}
+
+test t-201811 {
+    SELECT CONCAT_WS("한국어 시험", "😊😂🤢", time '-32:34:58');
+}
+expect {
+    😊😂🤢한국어 시험-32:34:58
+}
+
+test t-201813 {
+    SELECT CONCAT_WS("한국어 시험", "😊😂🤢", time'00:00:59.01011');
+}
+expect {
+    😊😂🤢한국어 시험00:00:59.01011
+}
+
+test t-201912 {
+    SELECT CONCAT_WS("한국어 시험", '123', x'09');
+}
+expect raw {
+123한국어 시험	
+}
+
+test t-201930 {
+    SELECT CONCAT_WS("한국어 시험", '123', 0xFF666F6F626172);
+}
+expect {
+    123한국어 시험�foobar
+}
+
+test t-201980 {
+    SELECT CONCAT_WS("한국어 시험", '123', '101:34:58');
+}
+expect {
+    123한국어 시험101:34:58
+}
+
+test t-202101 {
+    SELECT CONCAT_WS("한국어 시험", 9223372036854775807, time '31:34:58');
+}
+expect {
+    9223372036854775807한국어 시험31:34:58
+}
+
+test t-202123 {
+    SELECT CONCAT_WS("한국어 시험", 9223372036854775807, '20000101103458.123456');
+}
+expect {
+    9223372036854775807한국어 시험20000101103458.123456
+}
+
+test t-202148 {
+    SELECT CONCAT_WS("한국어 시험", 9223372036854775807, '1969-02-18');
+}
+expect {
+    9223372036854775807한국어 시험1969-02-18
+}
+
+test t-202249 {
+    SELECT CONCAT_WS("한국어 시험", -9223372036854775808, NULL - 1);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-202348 {
+    SELECT CONCAT_WS("한국어 시험", -9223372036854775808, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -9223372036854775808한국어 시험\{"a": 1, "b": 2\}
+}
+
+test t-202377 {
+    SELECT CONCAT_WS("한국어 시험", 999999999999999999999999, 1.5);
+}
+expect {
+    999999999999999999999999한국어 시험1.5
+}
+
+test t-202402 {
+    SELECT CONCAT_WS("한국어 시험", 999999999999999999999999, NULL * 1);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-202409 {
+    SELECT CONCAT_WS("한국어 시험", 999999999999999999999999, 1 + NULL);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-202513 {
+    SELECT CONCAT_WS("한국어 시험", 999999999999999999999999, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    999999999999999999999999한국어 시험\{"b": 2, "c": 1\}
+}
+
+test t-202592 {
+    SELECT CONCAT_WS("한국어 시험", -999999999999999999999999, time '31:34:58.4');
+}
+expect {
+    -999999999999999999999999한국어 시험31:34:58.4
+}
+
+test t-202643 {
+    SELECT CONCAT_WS("한국어 시험", -999999999999999999999999, cast('[]' as json));
+}
+expect {
+    -999999999999999999999999한국어 시험[]
+}
+
+test t-202794 {
+    SELECT CONCAT_WS("한국어 시험", _binary 'Müller' , '0000-02-29');
+}
+expect {
+    Müller한국어 시험0000-02-29
+}
+
+test t-202816 {
+    SELECT CONCAT_WS("한국어 시험", _binary 'Müller' , cast('2' as json));
+}
+expect {
+    Müller한국어 시험2
+}
+
+test t-202869 {
+    SELECT CONCAT_WS("한국어 시험", _utf8mb4 'abcABCÅå', '1.5');
+}
+expect {
+    abcABCÅå한국어 시험1.5
+}
+
+test t-202917 {
+    SELECT CONCAT_WS("한국어 시험", _utf8mb4 'abcABCÅå', time '32:34:58.5');
+}
+expect {
+    abcABCÅå한국어 시험32:34:58.5
+}
+
+test t-203072 {
+    SELECT CONCAT_WS("한국어 시험", _latin1 0xFF, time '10:04:58');
+}
+expect {
+    ÿ한국어 시험10:04:58
+}
+
+test t-203451 {
+    SELECT CONCAT_WS("😊😂🤢", NULL, cast(false as json));
+}
+expect {
+    false
+}
+
+test t-203522 {
+    SELECT CONCAT_WS("😊😂🤢", "", _binary 'foobar');
+}
+expect {
+    😊😂🤢foobar
+}
+
+test t-203525 {
+    SELECT CONCAT_WS("😊😂🤢", "", 0xff);
+}
+expect {
+    😊😂🤢�
+}
+
+test t-203572 {
+    SELECT CONCAT_WS("😊😂🤢", "", timestamp '2024-12-30 10:34:58');
+}
+expect {
+    😊😂🤢2024-12-30 10:34:58
+}
+
+test t-203775 {
+    SELECT CONCAT_WS("😊😂🤢", "a", cast(false as json));
+}
+expect {
+    a😊😂🤢false
+}
+
+test t-203859 {
+    SELECT CONCAT_WS("😊😂🤢", "abc", false);
+}
+expect {
+    abc😊😂🤢0
+}
+
+test t-203871 {
+    SELECT CONCAT_WS("😊😂🤢", "abc", NULL - NULL);
+}
+expect {
+    abc
+}
+
+test t-203892 {
+    SELECT CONCAT_WS("😊😂🤢", "abc", date '2000-01-01');
+}
+expect {
+    abc😊😂🤢2000-01-01
+}
+
+test t-203916 {
+    SELECT CONCAT_WS("😊😂🤢", "abc", time '-31:34:58');
+}
+expect {
+    abc😊😂🤢-31:34:58
+}
+
+test t-204017 {
+    SELECT CONCAT_WS("😊😂🤢", 1, 0x9);
+}
+expect raw {
+1😊😂🤢	
+}
+
+test t-204059 {
+    SELECT CONCAT_WS("😊😂🤢", 1, 20000101103458);
+}
+expect {
+    1😊😂🤢20000101103458
+}
+
+test t-204060 {
+    SELECT CONCAT_WS("😊😂🤢", 1, 20000101103458.1234);
+}
+expect {
+    1😊😂🤢20000101103458.1234
+}
+
+test t-204112 {
+    SELECT CONCAT_WS("😊😂🤢", 1, cast('2' as json));
+}
+expect {
+    1😊😂🤢2
+}
+
+test t-204243 {
+    SELECT CONCAT_WS("😊😂🤢", -1, time'00:00:59.01011');
+}
+expect {
+    -1😊😂🤢00:00:59.01011
+}
+
+test t-204312 {
+    SELECT CONCAT_WS("😊😂🤢", 0123, 0.0e0);
+}
+expect {
+    123😊😂🤢0
+}
+
+test t-204416 {
+    SELECT CONCAT_WS("😊😂🤢", 0123, '1969-02-18');
+}
+expect {
+    123😊😂🤢1969-02-18
+}
+
+test t-204484 {
+    SELECT CONCAT_WS("😊😂🤢", 0xAACC, -1.5);
+}
+expect {
+    ��😊😂🤢-1.5
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-204585 {
+    SELECT CONCAT_WS("😊😂🤢", 0xAACC, cast(false as json));
+}
+expect error {
+}
+
+test t-204754 {
+    SELECT CONCAT_WS("😊😂🤢", 3.1415926, cast(2 as json));
+}
+expect {
+    3.1415926😊😂🤢2
+}
+
+test t-204759 {
+    SELECT CONCAT_WS("😊😂🤢", 3.1415926, cast('1' as json));
+}
+expect {
+    3.1415926😊😂🤢1
+}
+
+test t-204808 {
+    SELECT CONCAT_WS("😊😂🤢", "中文测试", -1.5);
+}
+expect {
+    中文测试😊😂🤢-1.5
+}
+
+test t-204872 {
+    SELECT CONCAT_WS("😊😂🤢", "中文测试", 20000101);
+}
+expect {
+    中文测试😊😂🤢20000101
+}
+
+test t-204887 {
+    SELECT CONCAT_WS("😊😂🤢", "中文测试", time '-10:04:58');
+}
+expect {
+    中文测试😊😂🤢-10:04:58
+}
+
+test t-204946 {
+    SELECT CONCAT_WS("😊😂🤢", "中文测试", cast(date '2000-01-01' as json));
+}
+expect {
+    中文测试😊😂🤢"2000-01-01"
+}
+
+test t-204964 {
+    SELECT CONCAT_WS("😊😂🤢", "日本語テスト", 1.1e0);
+}
+expect {
+    日本語テスト😊😂🤢1.1
+}
+
+test t-205026 {
+    SELECT CONCAT_WS("😊😂🤢", "日本語テスト", date '2000-01-01');
+}
+expect {
+    日本語テスト😊😂🤢2000-01-01
+}
+
+test t-205131 {
+    SELECT CONCAT_WS("😊😂🤢", "한국어 시험", 1.5);
+}
+expect {
+    한국어 시험😊😂🤢1.5
+}
+
+test t-205180 {
+    SELECT CONCAT_WS("😊😂🤢", "한국어 시험", time '32:34:58');
+}
+expect {
+    한국어 시험😊😂🤢32:34:58
+}
+
+test t-205225 {
+    SELECT CONCAT_WS("😊😂🤢", "한국어 시험", '0000-01-03');
+}
+expect {
+    한국어 시험😊😂🤢0000-01-03
+}
+
+test t-205369 {
+    SELECT CONCAT_WS("😊😂🤢", "😊😂🤢", '20000101103458.123456foo');
+}
+expect {
+    😊😂🤢😊😂🤢20000101103458.123456foo
+}
+
+test t-205543 {
+    SELECT CONCAT_WS("😊😂🤢", '123', '10:04:58');
+}
+expect {
+    123😊😂🤢10:04:58
+}
+
+test t-205607 {
+    SELECT CONCAT_WS("😊😂🤢", 9223372036854775807, ' 255 foo');
+}
+expect {
+    9223372036854775807😊😂🤢 255 foo
+}
+
+test t-205674 {
+    SELECT CONCAT_WS("😊😂🤢", 9223372036854775807, date '2000-01-01');
+}
+expect {
+    9223372036854775807😊😂🤢2000-01-01
+}
+
+test t-205774 {
+    SELECT CONCAT_WS("😊😂🤢", -9223372036854775808, 1.1e0);
+}
+expect {
+    -9223372036854775808😊😂🤢1.1
+}
+
+test t-206033 {
+    SELECT CONCAT_WS("😊😂🤢", 999999999999999999999999, '2000-01-01 12:34:58');
+}
+expect {
+    999999999999999999999999😊😂🤢2000-01-01 12:34:58
+}
+
+test t-206099 {
+    SELECT CONCAT_WS("😊😂🤢", -999999999999999999999999, -1.1e0);
+}
+expect {
+    -999999999999999999999999😊😂🤢-1.1
+}
+
+test t-206168 {
+    SELECT CONCAT_WS("😊😂🤢", -999999999999999999999999, 20000101);
+}
+expect {
+    -999999999999999999999999😊😂🤢20000101
+}
+
+test t-206178 {
+    SELECT CONCAT_WS("😊😂🤢", -999999999999999999999999, '20000101103458.1234foo');
+}
+expect {
+    -999999999999999999999999😊😂🤢20000101103458.1234foo
+}
+
+test t-206214 {
+    SELECT CONCAT_WS("😊😂🤢", -999999999999999999999999, cast(-1.1 as json));
+}
+expect {
+    -999999999999999999999999😊😂🤢-1.1
+}
+
+test t-206223 {
+    SELECT CONCAT_WS("😊😂🤢", -999999999999999999999999, cast('"foo"' as json));
+}
+expect {
+    -999999999999999999999999😊😂🤢"foo"
+}
+
+test t-206295 {
+    SELECT CONCAT_WS("😊😂🤢", _binary 'Müller' , NULL / NULL);
+}
+expect {
+    Müller
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-206402 {
+    SELECT CONCAT_WS("😊😂🤢", _binary 'Müller' , cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-206430 {
+    SELECT CONCAT_WS("😊😂🤢", _utf8mb4 'abcABCÅå', 1.7);
+}
+expect {
+    abcABCÅå😊😂🤢1.7
+}
+
+test t-206451 {
+    SELECT CONCAT_WS("😊😂🤢", _utf8mb4 'abcABCÅå', false);
+}
+expect {
+    abcABCÅå😊😂🤢0
+}
+
+test t-206510 {
+    SELECT CONCAT_WS("😊😂🤢", _utf8mb4 'abcABCÅå', time'00:00:01.0000');
+}
+expect {
+    abcABCÅå😊😂🤢00:00:01.0000
+}
+
+test t-206551 {
+    SELECT CONCAT_WS("😊😂🤢", _utf8mb4 'abcABCÅå', cast(_binary '"bar"' as json));
+}
+expect {
+    abcABCÅå😊😂🤢"base64:type15:ImJhciI="
+}
+
+test t-206632 {
+    SELECT CONCAT_WS("😊😂🤢", _latin1 0xFF, 18446744073709540000e0);
+}
+expect {
+    ÿ😊😂🤢1.844674407370954e19
+}
+
+test t-206800 {
+    SELECT CONCAT_WS('123', "Å å", time '32:34:58');
+}
+expect {
+    Å å12332:34:58
+}
+
+test t-206865 {
+    SELECT CONCAT_WS('123', "Å å", cast('1' as json));
+}
+expect {
+    Å å1231
+}
+
+test t-206973 {
+    SELECT CONCAT_WS('123', NULL, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    2000-01-01 10:34:58.978654
+}
+
+test t-207034 {
+    SELECT CONCAT_WS('123', NULL, cast('"bar"' as json));
+}
+expect {
+    "bar"
+}
+
+test t-207057 {
+    SELECT CONCAT_WS('123', NULL, cast(time '5 12:34:58' as json));
+}
+expect {
+    "04:34:58.000000"
+}
+
+test t-207273 {
+    SELECT CONCAT_WS('123', "a", NULL - NULL);
+}
+expect {
+    a
+}
+
+test t-207321 {
+    SELECT CONCAT_WS('123', "a", time'00:00:59.01011');
+}
+expect {
+    a12300:00:59.01011
+}
+
+test t-207489 {
+    SELECT CONCAT_WS('123', "abc", '5 10:34:58');
+}
+expect {
+    abc1235 10:34:58
+}
+
+test t-207511 {
+    SELECT CONCAT_WS('123', "abc", cast(9223372036854775807 as json));
+}
+expect {
+    abc1239223372036854775807
+}
+
+test t-207775 {
+    SELECT CONCAT_WS('123', -1, time '10:04:58.1');
+}
+expect {
+    -112310:04:58.1
+}
+
+test t-207789 {
+    SELECT CONCAT_WS('123', -1, 103458);
+}
+expect {
+    -1123103458
+}
+
+test t-207798 {
+    SELECT CONCAT_WS('123', -1, '20000101103458.1234foo');
+}
+expect {
+    -112320000101103458.1234foo
+}
+
+test t-207891 {
+    SELECT CONCAT_WS('123', 0123, '1.5');
+}
+expect {
+    1231231.5
+}
+
+test t-207943 {
+    SELECT CONCAT_WS('123', 0123, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    1231232000-01-01 10:34:58
+}
+
+test t-208086 {
+    SELECT CONCAT_WS('123', 0xAACC, 0xFF666F6F626172);
+}
+expect {
+    ��123�foobar
+}
+
+test t-208110 {
+    SELECT CONCAT_WS('123', 0xAACC, 20000101103458.1234);
+}
+expect {
+    ��12320000101103458.1234
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-208153 {
+    SELECT CONCAT_WS('123', 0xAACC, cast('true' as json));
+}
+expect error {
+}
+
+test t-208444 {
+    SELECT CONCAT_WS('123', "中文测试", '103458.123456');
+}
+expect {
+    中文测试123103458.123456
+}
+
+test t-208489 {
+    SELECT CONCAT_WS('123', "中文测试", cast('9223372036854775807' as json));
+}
+expect {
+    中文测试1239223372036854775807
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-208508 {
+    SELECT CONCAT_WS('123', "中文测试", cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-208690 {
+    SELECT CONCAT_WS('123', "한국어 시험", 1.1e0);
+}
+expect {
+    한국어 시험1231.1
+}
+
+test t-208730 {
+    SELECT CONCAT_WS('123', "한국어 시험", 1 - NULL);
+}
+expect {
+    한국어 시험
+}
+
+test t-208778 {
+    SELECT CONCAT_WS('123', "한국어 시험", time'00:00:01.0000');
+}
+expect {
+    한국어 시험12300:00:01.0000
+}
+
+test t-208823 {
+    SELECT CONCAT_WS('123', "한국어 시험", cast(0b001 as json));
+}
+expect {
+    한국어 시험123"base64:type15:AQ=="
+}
+
+test t-208919 {
+    SELECT CONCAT_WS('123', "😊😂🤢", 20000101103458);
+}
+expect {
+    😊😂🤢12320000101103458
+}
+
+test t-208973 {
+    SELECT CONCAT_WS('123', "😊😂🤢", cast('1.1' as json));
+}
+expect {
+    😊😂🤢1231.1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-208994 {
+    SELECT CONCAT_WS('123', "😊😂🤢", cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-209008 {
+    SELECT CONCAT_WS('123', '123', '\t1foo\t');
+}
+expect raw {
+123123	1foo	
+}
+
+test t-209120 {
+    SELECT CONCAT_WS('123', '123', cast(true as json));
+}
+expect {
+    123123true
+}
+
+test t-209273 {
+    SELECT CONCAT_WS('123', 9223372036854775807, '2000-01-01 12:34:58');
+}
+expect {
+    92233720368547758071232000-01-01 12:34:58
+}
+
+test t-209440 {
+    SELECT CONCAT_WS('123', -9223372036854775808, '3001-02-19 00:00:00');
+}
+expect {
+    -92233720368547758081233001-02-19 00:00:00
+}
+
+test t-209495 {
+    SELECT CONCAT_WS('123', 999999999999999999999999, ' 255 foo');
+}
+expect {
+    999999999999999999999999123 255 foo
+}
+
+test t-209770 {
+    SELECT CONCAT_WS('123', -999999999999999999999999, cast('\{\}' as json));
+}
+expect {
+    -999999999999999999999999123\{\}
+}
+
+test t-209856 {
+    SELECT CONCAT_WS('123', _binary 'Müller' , NULL * NULL);
+}
+expect {
+    Müller
+}
+
+test t-209876 {
+    SELECT CONCAT_WS('123', _binary 'Müller' , time '10:04:58');
+}
+expect {
+    Müller12310:04:58
+}
+
+test t-210045 {
+    SELECT CONCAT_WS('123', _utf8mb4 'abcABCÅå', time '32:34:58.5');
+}
+expect {
+    abcABCÅå12332:34:58.5
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-210128 {
+    SELECT CONCAT_WS('123', _utf8mb4 'abcABCÅå', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-210270 {
+    SELECT CONCAT_WS('123', _latin1 0xFF, cast('-1.1' as json));
+}
+expect {
+    ÿ123-1.1
+}
+
+test t-210346 {
+    SELECT CONCAT_WS(9223372036854775807, "Å å", NULL + 1);
+}
+expect {
+    Å å
+}
+
+test t-210383 {
+    SELECT CONCAT_WS(9223372036854775807, "Å å", '20000101103458');
+}
+expect {
+    Å å922337203685477580720000101103458
+}
+
+test t-210397 {
+    SELECT CONCAT_WS(9223372036854775807, "Å å", time '-32:34:58');
+}
+expect {
+    Å å9223372036854775807-32:34:58
+}
+
+test t-210446 {
+    SELECT CONCAT_WS(9223372036854775807, "Å å", cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    Å å9223372036854775807["ab", "cd", "ef"]
+}
+
+test t-210704 {
+    SELECT CONCAT_WS(9223372036854775807, "", 20000101);
+}
+expect {
+    922337203685477580720000101
+}
+
+test t-210732 {
+    SELECT CONCAT_WS(9223372036854775807, "", '0000-02-29');
+}
+expect {
+    92233720368547758070000-02-29
+}
+
+test t-210733 {
+    SELECT CONCAT_WS(9223372036854775807, "", '0000-01-03');
+}
+expect {
+    92233720368547758070000-01-03
+}
+
+test t-210807 {
+    SELECT CONCAT_WS(9223372036854775807, "a", '1.5');
+}
+expect {
+    a92233720368547758071.5
+}
+
+test t-210830 {
+    SELECT CONCAT_WS(9223372036854775807, "a", 1 / NULL);
+}
+expect {
+    a
+}
+
+test t-210846 {
+    SELECT CONCAT_WS(9223372036854775807, "a", JSON_OBJECT());
+}
+expect {
+    a9223372036854775807\{\}
+}
+
+test t-210865 {
+    SELECT CONCAT_WS(9223372036854775807, "a", 20000101103458.123456);
+}
+expect {
+    a922337203685477580720000101103458.123456
+}
+
+test t-210886 {
+    SELECT CONCAT_WS(9223372036854775807, "a", time'00:00:59.2132234');
+}
+expect {
+    a922337203685477580700:00:59.213223
+}
+
+test t-211103 {
+    SELECT CONCAT_WS(9223372036854775807, "abc", cast(date '2000-01-02' as json));
+}
+expect {
+    abc9223372036854775807"2000-01-02"
+}
+
+test t-211117 {
+    SELECT CONCAT_WS(9223372036854775807, 1, 1.0e0);
+}
+expect {
+    192233720368547758071
+}
+
+test t-211151 {
+    SELECT CONCAT_WS(9223372036854775807, 1, 1 * NULL);
+}
+expect {
+    1
+}
+
+test t-211284 {
+    SELECT CONCAT_WS(9223372036854775807, -1, -1.7e0);
+}
+expect {
+    -19223372036854775807-1.7
+}
+
+test t-211346 {
+    SELECT CONCAT_WS(9223372036854775807, -1, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -192233720368547758072000-01-01 10:34:58.123456
+}
+
+test t-211397 {
+    SELECT CONCAT_WS(9223372036854775807, -1, cast(1.1 as json));
+}
+expect {
+    -192233720368547758071.1
+}
+
+test t-211509 {
+    SELECT CONCAT_WS(9223372036854775807, 0123, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    12392233720368547758072000-01-01 10:34:58.978654
+}
+
+test t-211510 {
+    SELECT CONCAT_WS(9223372036854775807, 0123, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    12392233720368547758072024-12-30 10:34:58
+}
+
+test t-211610 {
+    SELECT CONCAT_WS(9223372036854775807, 0xAACC, 0.000);
+}
+expect {
+    ��92233720368547758070.000
+}
+
+test t-211693 {
+    SELECT CONCAT_WS(9223372036854775807, 0xAACC, time '-32:34:58');
+}
+expect {
+    ��9223372036854775807-32:34:58
+}
+
+test t-211893 {
+    SELECT CONCAT_WS(9223372036854775807, 3.1415926, cast('"foo"' as json));
+}
+expect {
+    3.14159269223372036854775807"foo"
+}
+
+test t-211899 {
+    SELECT CONCAT_WS(9223372036854775807, 3.1415926, cast(0x666F6F626172FF as json));
+}
+expect {
+    3.14159269223372036854775807"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-212008 {
+    SELECT CONCAT_WS(9223372036854775807, "中文测试", '103458.123456');
+}
+expect {
+    中文测试9223372036854775807103458.123456
+}
+
+test t-212019 {
+    SELECT CONCAT_WS(9223372036854775807, "中文测试", time'00:00:59.01011');
+}
+expect {
+    中文测试922337203685477580700:00:59.01011
+}
+
+test t-212054 {
+    SELECT CONCAT_WS(9223372036854775807, "中文测试", cast('18446744073709551615' as json));
+}
+expect {
+    中文测试922337203685477580718446744073709551615
+}
+
+test t-212213 {
+    SELECT CONCAT_WS(9223372036854775807, "日本語テスト", cast('1.1' as json));
+}
+expect {
+    日本語テスト92233720368547758071.1
+}
+
+test t-212237 {
+    SELECT CONCAT_WS(9223372036854775807, "日本語テスト", cast(date '2000-01-02' as json));
+}
+expect {
+    日本語テスト9223372036854775807"2000-01-02"
+}
+
+test t-212297 {
+    SELECT CONCAT_WS(9223372036854775807, "한국어 시험", 0x666F6F626172FF);
+}
+expect {
+    한국어 시험9223372036854775807foobar�
+}
+
+test t-212310 {
+    SELECT CONCAT_WS(9223372036854775807, "한국어 시험", time '5 10:34:58');
+}
+expect {
+    한국어 시험9223372036854775807130:34:58
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-212397 {
+    SELECT CONCAT_WS(9223372036854775807, "한국어 시험", cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-212429 {
+    SELECT CONCAT_WS(9223372036854775807, "😊😂🤢", 'foobar');
+}
+expect {
+    😊😂🤢9223372036854775807foobar
+}
+
+test t-212667 {
+    SELECT CONCAT_WS(9223372036854775807, '123', time'00:00:59.01011');
+}
+expect {
+    123922337203685477580700:00:59.01011
+}
+
+test t-212701 {
+    SELECT CONCAT_WS(9223372036854775807, '123', cast('9223372036854775807' as json));
+}
+expect {
+    12392233720368547758079223372036854775807
+}
+
+test t-212738 {
+    SELECT CONCAT_WS(9223372036854775807, 9223372036854775807, 1.5e0);
+}
+expect {
+    922337203685477580792233720368547758071.5
+}
+
+test t-212778 {
+    SELECT CONCAT_WS(9223372036854775807, 9223372036854775807, NULL + NULL);
+}
+expect {
+    9223372036854775807
+}
+
+test t-212984 {
+    SELECT CONCAT_WS(9223372036854775807, -9223372036854775808, '20000101foo');
+}
+expect {
+    -9223372036854775808922337203685477580720000101foo
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-213029 {
+    SELECT CONCAT_WS(9223372036854775807, -9223372036854775808, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-213141 {
+    SELECT CONCAT_WS(9223372036854775807, 999999999999999999999999, '103458');
+}
+expect {
+    9999999999999999999999999223372036854775807103458
+}
+
+test t-213186 {
+    SELECT CONCAT_WS(9223372036854775807, 999999999999999999999999, cast('-1.1' as json));
+}
+expect {
+    9999999999999999999999999223372036854775807-1.1
+}
+
+test t-213233 {
+    SELECT CONCAT_WS(9223372036854775807, -999999999999999999999999, 1.1);
+}
+expect {
+    -99999999999999999999999992233720368547758071.1
+}
+
+test t-213279 {
+    SELECT CONCAT_WS(9223372036854775807, -999999999999999999999999, time '31:34:58');
+}
+expect {
+    -999999999999999999999999922337203685477580731:34:58
+}
+
+test t-213381 {
+    SELECT CONCAT_WS(9223372036854775807, _binary 'Müller' , ' 255 ');
+}
+expect raw {
+Müller9223372036854775807 255 
+}
+
+test t-213554 {
+    SELECT CONCAT_WS(9223372036854775807, _utf8mb4 'abcABCÅå', 0.000);
+}
+expect {
+    abcABCÅå92233720368547758070.000
+}
+
+test t-213981 {
+    SELECT CONCAT_WS(-9223372036854775808, "Å å", cast(false as json));
+}
+expect {
+    Å å-9223372036854775808false
+}
+
+test t-214048 {
+    SELECT CONCAT_WS(-9223372036854775808, NULL, '-1.5');
+}
+expect {
+    -1.5
+}
+
+test t-214100 {
+    SELECT CONCAT_WS(-9223372036854775808, NULL, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    2000-01-01 10:34:58.123456
+}
+
+test t-214107 {
+    SELECT CONCAT_WS(-9223372036854775808, NULL, 103458);
+}
+expect {
+    103458
+}
+
+test t-214203 {
+    SELECT CONCAT_WS(-9223372036854775808, "", 1.5);
+}
+expect {
+    -92233720368547758081.5
+}
+
+test t-214207 {
+    SELECT CONCAT_WS(-9223372036854775808, "", -1.1);
+}
+expect {
+    -9223372036854775808-1.1
+}
+
+test t-214229 {
+    SELECT CONCAT_WS(-9223372036854775808, "", 1 * NULL);
+}
+expect {
+    
+}
+
+test t-214276 {
+    SELECT CONCAT_WS(-9223372036854775808, "", '103458.123456');
+}
+expect {
+    -9223372036854775808103458.123456
+}
+
+test t-214291 {
+    SELECT CONCAT_WS(-9223372036854775808, "", '10:04:58');
+}
+expect {
+    -922337203685477580810:04:58
+}
+
+test t-214339 {
+    SELECT CONCAT_WS(-9223372036854775808, "", cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -9223372036854775808\{"b": 2, "c": 1\}
+}
+
+test t-214460 {
+    SELECT CONCAT_WS(-9223372036854775808, "a", '1969-02-18');
+}
+expect {
+    a-92233720368547758081969-02-18
+}
+
+test t-214523 {
+    SELECT CONCAT_WS(-9223372036854775808, "abc", -1.1e0);
+}
+expect {
+    abc-9223372036854775808-1.1
+}
+
+test t-214605 {
+    SELECT CONCAT_WS(-9223372036854775808, "abc", '103458foo');
+}
+expect {
+    abc-9223372036854775808103458foo
+}
+
+test t-214773 {
+    SELECT CONCAT_WS(-9223372036854775808, 1, time'00:00:59.01011');
+}
+expect {
+    1-922337203685477580800:00:59.01011
+}
+
+test t-214829 {
+    SELECT CONCAT_WS(-9223372036854775808, 1, cast(date '2000-01-02' as json));
+}
+expect {
+    1-9223372036854775808"2000-01-02"
+}
+
+test t-214851 {
+    SELECT CONCAT_WS(-9223372036854775808, -1, 1.5);
+}
+expect {
+    -1-92233720368547758081.5
+}
+
+test t-214902 {
+    SELECT CONCAT_WS(-9223372036854775808, -1, time '5 10:34:58');
+}
+expect {
+    -1-9223372036854775808130:34:58
+}
+
+test t-214914 {
+    SELECT CONCAT_WS(-9223372036854775808, -1, 20000101103458.1234);
+}
+expect {
+    -1-922337203685477580820000101103458.1234
+}
+
+test t-214947 {
+    SELECT CONCAT_WS(-9223372036854775808, -1, '1970-01-01 00:00:01');
+}
+expect {
+    -1-92233720368547758081970-01-01 00:00:01
+}
+
+test t-215090 {
+    SELECT CONCAT_WS(-9223372036854775808, 0123, '20000101foo');
+}
+expect {
+    123-922337203685477580820000101foo
+}
+
+test t-215152 {
+    SELECT CONCAT_WS(-9223372036854775808, 0123, cast(date '2000-01-01' as json));
+}
+expect {
+    123-9223372036854775808"2000-01-01"
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-215288 {
+    SELECT CONCAT_WS(-9223372036854775808, 0xAACC, cast(18446744073709551615 as json));
+}
+expect error {
+}
+
+test t-215355 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, 0b1001);
+}
+expect raw {
+3.1415926-9223372036854775808	
+}
+
+test t-215374 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, 0xFF666F6F626172FF);
+}
+expect {
+    3.1415926-9223372036854775808�foobar�
+}
+
+test t-215383 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, JSON_ARRAY());
+}
+expect {
+    3.1415926-9223372036854775808[]
+}
+
+test t-215392 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, time '130:34:58.6');
+}
+expect {
+    3.1415926-9223372036854775808130:34:58.6
+}
+
+test t-215415 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, '103458foo');
+}
+expect {
+    3.1415926-9223372036854775808103458foo
+}
+
+test t-215433 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, '1970-01-01 00:00:01');
+}
+expect {
+    3.1415926-92233720368547758081970-01-01 00:00:01
+}
+
+test t-215439 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, cast(false as json));
+}
+expect {
+    3.1415926-9223372036854775808false
+}
+
+test t-215500 {
+    SELECT CONCAT_WS(-9223372036854775808, "中文测试", -1.5);
+}
+expect {
+    中文测试-9223372036854775808-1.5
+}
+
+test t-215553 {
+    SELECT CONCAT_WS(-9223372036854775808, "中文测试", time '32:34:58.5');
+}
+expect {
+    中文测试-922337203685477580832:34:58.5
+}
+
+test t-215575 {
+    SELECT CONCAT_WS(-9223372036854775808, "中文测试", '20000101103458.123456foo');
+}
+expect {
+    中文测试-922337203685477580820000101103458.123456foo
+}
+
+test t-215579 {
+    SELECT CONCAT_WS(-9223372036854775808, "中文测试", time '-10:04:58');
+}
+expect {
+    中文测试-9223372036854775808-10:04:58
+}
+
+test t-215687 {
+    SELECT CONCAT_WS(-9223372036854775808, "日本語テスト", 1 * NULL);
+}
+expect {
+    日本語テスト
+}
+
+test t-215709 {
+    SELECT CONCAT_WS(-9223372036854775808, "日本語テスト", time '31:34:58');
+}
+expect {
+    日本語テスト-922337203685477580831:34:58
+}
+
+test t-215752 {
+    SELECT CONCAT_WS(-9223372036854775808, "日本語テスト", '2000-01-01');
+}
+expect {
+    日本語テスト-92233720368547758082000-01-01
+}
+
+test t-215772 {
+    SELECT CONCAT_WS(-9223372036854775808, "日本語テスト", cast(-1.1 as json));
+}
+expect {
+    日本語テスト-9223372036854775808-1.1
+}
+
+test t-215797 {
+    SELECT CONCAT_WS(-9223372036854775808, "日本語テスト", cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    日本語テスト-9223372036854775808\{"b": 2, "c": 1\}
+}
+
+test t-215905 {
+    SELECT CONCAT_WS(-9223372036854775808, "한국어 시험", time '-32:34:58');
+}
+expect {
+    한국어 시험-9223372036854775808-32:34:58
+}
+
+test t-215907 {
+    SELECT CONCAT_WS(-9223372036854775808, "한국어 시험", time'00:00:59.01011');
+}
+expect {
+    한국어 시험-922337203685477580800:00:59.01011
+}
+
+test t-216415 {
+    SELECT CONCAT_WS(-9223372036854775808, 9223372036854775807, cast('true' as json));
+}
+expect {
+    9223372036854775807-9223372036854775808true
+}
+
+test t-216436 {
+    SELECT CONCAT_WS(-9223372036854775808, 9223372036854775807, cast(0b01 as json));
+}
+expect {
+    9223372036854775807-9223372036854775808"base64:type15:AQ=="
+}
+
+test t-216472 {
+    SELECT CONCAT_WS(-9223372036854775808, -9223372036854775808, -1.5);
+}
+expect {
+    -9223372036854775808-9223372036854775808-1.5
+}
+
+test t-216476 {
+    SELECT CONCAT_WS(-9223372036854775808, -9223372036854775808, -1.7);
+}
+expect {
+    -9223372036854775808-9223372036854775808-1.7
+}
+
+test t-216604 {
+    SELECT CONCAT_WS(-9223372036854775808, -9223372036854775808, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -9223372036854775808-9223372036854775808\{"a": 1, "b": 2\}
+}
+
+test t-216661 {
+    SELECT CONCAT_WS(-9223372036854775808, 999999999999999999999999, NULL / 1);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-216831 {
+    SELECT CONCAT_WS(-9223372036854775808, -999999999999999999999999, NULL - NULL);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-216861 {
+    SELECT CONCAT_WS(-9223372036854775808, -999999999999999999999999, 103458);
+}
+expect {
+    -999999999999999999999999-9223372036854775808103458
+}
+
+test t-216964 {
+    SELECT CONCAT_WS(-9223372036854775808, _binary 'Müller' , '-1.5');
+}
+expect {
+    Müller-9223372036854775808-1.5
+}
+
+test t-217200 {
+    SELECT CONCAT_WS(-9223372036854775808, _utf8mb4 'abcABCÅå', time '-31:34:58');
+}
+expect {
+    abcABCÅå-9223372036854775808-31:34:58
+}
+
+test t-217268 {
+    SELECT CONCAT_WS(-9223372036854775808, _latin1 0xFF, ' 1 ');
+}
+expect raw {
+ÿ-9223372036854775808 1 
+}
+
+test t-217320 {
+    SELECT CONCAT_WS(-9223372036854775808, _latin1 0xFF, 0xFF666F6F626172);
+}
+expect {
+    �-9223372036854775808�foobar
+}
+
+test t-217380 {
+    SELECT CONCAT_WS(-9223372036854775808, _latin1 0xFF, cast(0 as json));
+}
+expect {
+    ÿ-92233720368547758080
+}
+
+test t-217460 {
+    SELECT CONCAT_WS(999999999999999999999999, "Å å", X'ff');
+}
+expect {
+    Å å999999999999999999999999�
+}
+
+test t-217503 {
+    SELECT CONCAT_WS(999999999999999999999999, "Å å", timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    Å å9999999999999999999999992000-01-01 10:34:58.978654
+}
+
+test t-217520 {
+    SELECT CONCAT_WS(999999999999999999999999, "Å å", '20000101foo');
+}
+expect {
+    Å å99999999999999999999999920000101foo
+}
+
+test t-217633 {
+    SELECT CONCAT_WS(999999999999999999999999, NULL, NULL / 1);
+}
+expect {
+    
+}
+
+test t-217636 {
+    SELECT CONCAT_WS(999999999999999999999999, NULL, NULL + 1);
+}
+expect {
+    
+}
+
+test t-217641 {
+    SELECT CONCAT_WS(999999999999999999999999, NULL, NULL - NULL);
+}
+expect {
+    
+}
+
+test t-217668 {
+    SELECT CONCAT_WS(999999999999999999999999, NULL, 20000101103458.1234);
+}
+expect {
+    20000101103458.1234
+}
+
+test t-217720 {
+    SELECT CONCAT_WS(999999999999999999999999, NULL, cast('2' as json));
+}
+expect {
+    2
+}
+
+test t-217748 {
+    SELECT CONCAT_WS(999999999999999999999999, NULL, cast(time '12:34:58' as json));
+}
+expect {
+    "12:34:58.000000"
+}
+
+test t-217774 {
+    SELECT CONCAT_WS(999999999999999999999999, "", '-1.5');
+}
+expect {
+    999999999999999999999999-1.5
+}
+
+test t-217873 {
+    SELECT CONCAT_WS(999999999999999999999999, "", cast('true' as json));
+}
+expect {
+    999999999999999999999999true
+}
+
+test t-217906 {
+    SELECT CONCAT_WS(999999999999999999999999, "", cast(date '2000-01-01' as json));
+}
+expect {
+    999999999999999999999999"2000-01-01"
+}
+
+test t-218003 {
+    SELECT CONCAT_WS(999999999999999999999999, "a", '20000101103458foo');
+}
+expect {
+    a99999999999999999999999920000101103458foo
+}
+
+test t-218077 {
+    SELECT CONCAT_WS(999999999999999999999999, "abc", ' 0 ');
+}
+expect raw {
+abc999999999999999999999999 0 
+}
+
+test t-218152 {
+    SELECT CONCAT_WS(999999999999999999999999, "abc", timestamp '2024-12-30 10:34:58');
+}
+expect {
+    abc9999999999999999999999992024-12-30 10:34:58
+}
+
+test t-218197 {
+    SELECT CONCAT_WS(999999999999999999999999, "abc", cast('true' as json));
+}
+expect {
+    abc999999999999999999999999true
+}
+
+test t-218411 {
+    SELECT CONCAT_WS(999999999999999999999999, -1, -1.1e0);
+}
+expect {
+    -1999999999999999999999999-1.1
+}
+
+test t-218570 {
+    SELECT CONCAT_WS(999999999999999999999999, 0123, 1.5e0);
+}
+expect {
+    1239999999999999999999999991.5
+}
+
+test t-218671 {
+    SELECT CONCAT_WS(999999999999999999999999, 0123, '0000-01-03');
+}
+expect {
+    1239999999999999999999999990000-01-03
+}
+
+test t-218760 {
+    SELECT CONCAT_WS(999999999999999999999999, 0xAACC, x'09');
+}
+expect raw {
+��999999999999999999999999	
+}
+
+test t-218821 {
+    SELECT CONCAT_WS(999999999999999999999999, 0xAACC, time '-32:34:58');
+}
+expect {
+    ��999999999999999999999999-32:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-218849 {
+    SELECT CONCAT_WS(999999999999999999999999, 0xAACC, cast(1.1 as json));
+}
+expect error {
+}
+
+test t-219031 {
+    SELECT CONCAT_WS(999999999999999999999999, 3.1415926, cast('["ab"]' as json));
+}
+expect {
+    3.1415926999999999999999999999999["ab"]
+}
+
+test t-219077 {
+    SELECT CONCAT_WS(999999999999999999999999, "中文测试", 0xff);
+}
+expect {
+    中文测试999999999999999999999999�
+}
+
+test t-219084 {
+    SELECT CONCAT_WS(999999999999999999999999, "中文测试", x'09');
+}
+expect raw {
+中文测试999999999999999999999999	
+}
+
+test t-219293 {
+    SELECT CONCAT_WS(999999999999999999999999, "日本語テスト", '20000101103458');
+}
+expect {
+    日本語テスト99999999999999999999999920000101103458
+}
+
+test t-219309 {
+    SELECT CONCAT_WS(999999999999999999999999, "日本語テスト", time'00:00:59.01011');
+}
+expect {
+    日本語テスト99999999999999999999999900:00:59.01011
+}
+
+test t-219520 {
+    SELECT CONCAT_WS(999999999999999999999999, "한국어 시험", cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    한국어 시험999999999999999999999999\{"a": 1, "b": 2\}
+}
+
+test t-219568 {
+    SELECT CONCAT_WS(999999999999999999999999, "😊😂🤢", b'1001');
+}
+expect raw {
+😊😂🤢999999999999999999999999	
+}
+
+test t-219764 {
+    SELECT CONCAT_WS(999999999999999999999999, '123', time '31:34:58.4');
+}
+expect {
+    12399999999999999999999999931:34:58.4
+}
+
+test t-219866 {
+    SELECT CONCAT_WS(999999999999999999999999, 9223372036854775807, 1.5e0);
+}
+expect {
+    92233720368547758079999999999999999999999991.5
+}
+
+test t-219921 {
+    SELECT CONCAT_WS(999999999999999999999999, 9223372036854775807, time '31:34:58');
+}
+expect {
+    922337203685477580799999999999999999999999931:34:58
+}
+
+test t-219954 {
+    SELECT CONCAT_WS(999999999999999999999999, 9223372036854775807, time '-31:34:58');
+}
+expect {
+    9223372036854775807999999999999999999999999-31:34:58
+}
+
+test t-219976 {
+    SELECT CONCAT_WS(999999999999999999999999, 9223372036854775807, cast('\{\}' as json));
+}
+expect {
+    9223372036854775807999999999999999999999999\{\}
+}
+
+test t-220096 {
+    SELECT CONCAT_WS(999999999999999999999999, -9223372036854775808, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    -92233720368547758089999999999999999999999992024-12-30 10:34:58
+}
+
+test t-220098 {
+    SELECT CONCAT_WS(999999999999999999999999, -9223372036854775808, 20000101103458.1234);
+}
+expect {
+    -922337203685477580899999999999999999999999920000101103458.1234
+}
+
+test t-220125 {
+    SELECT CONCAT_WS(999999999999999999999999, -9223372036854775808, '5 10:34:58');
+}
+expect {
+    -92233720368547758089999999999999999999999995 10:34:58
+}
+
+test t-220344 {
+    SELECT CONCAT_WS(999999999999999999999999, -999999999999999999999999, 255);
+}
+expect {
+    -999999999999999999999999999999999999999999999999255
+}
+
+test t-220458 {
+    SELECT CONCAT_WS(999999999999999999999999, -999999999999999999999999, cast(0 as json));
+}
+expect {
+    -9999999999999999999999999999999999999999999999990
+}
+
+test t-220473 {
+    SELECT CONCAT_WS(999999999999999999999999, -999999999999999999999999, cast('1' as json));
+}
+expect {
+    -9999999999999999999999999999999999999999999999991
+}
+
+test t-220506 {
+    SELECT CONCAT_WS(999999999999999999999999, _binary 'Müller' , 255);
+}
+expect {
+    Müller999999999999999999999999255
+}
+
+test t-220607 {
+    SELECT CONCAT_WS(999999999999999999999999, _binary 'Müller' , time '-101:34:58');
+}
+expect {
+    Müller999999999999999999999999-101:34:58
+}
+
+test t-220653 {
+    SELECT CONCAT_WS(999999999999999999999999, _binary 'Müller' , cast('["ab", "ef"]' as json));
+}
+expect {
+    Müller999999999999999999999999["ab", "ef"]
+}
+
+test t-220663 {
+    SELECT CONCAT_WS(999999999999999999999999, _binary 'Müller' , cast(time '12:34:56' as json));
+}
+expect {
+    Müller999999999999999999999999"12:34:56.000000"
+}
+
+test t-220668 {
+    SELECT CONCAT_WS(999999999999999999999999, _utf8mb4 'abcABCÅå', 255);
+}
+expect {
+    abcABCÅå999999999999999999999999255
+}
+
+test t-220715 {
+    SELECT CONCAT_WS(999999999999999999999999, _utf8mb4 'abcABCÅå', 1 + NULL);
+}
+expect {
+    abcABCÅå
+}
+
+test t-220854 {
+    SELECT CONCAT_WS(999999999999999999999999, _latin1 0xFF, _utf8 'foobar');
+}
+expect {
+    ÿ999999999999999999999999foobar
+}
+
+test t-220938 {
+    SELECT CONCAT_WS(999999999999999999999999, _latin1 0xFF, '0000-02-29');
+}
+expect {
+    ÿ9999999999999999999999990000-02-29
+}
+
+test t-220949 {
+    SELECT CONCAT_WS(999999999999999999999999, _latin1 0xFF, cast('[]' as json));
+}
+expect {
+    ÿ999999999999999999999999[]
+}
+
+test t-220957 {
+    SELECT CONCAT_WS(999999999999999999999999, _latin1 0xFF, cast(9223372036854775807 as json));
+}
+expect {
+    ÿ9999999999999999999999999223372036854775807
+}
+
+test t-221018 {
+    SELECT CONCAT_WS(-999999999999999999999999, "Å å", _binary 'foobar');
+}
+expect {
+    Å å-999999999999999999999999foobar
+}
+
+test t-221292 {
+    SELECT CONCAT_WS(-999999999999999999999999, NULL, cast(_binary' "foo"' as json));
+}
+expect {
+    "base64:type15:ICJmb28i"
+}
+
+test t-221476 {
+    SELECT CONCAT_WS(-999999999999999999999999, "a", 0);
+}
+expect {
+    a-9999999999999999999999990
+}
+
+test t-221597 {
+    SELECT CONCAT_WS(-999999999999999999999999, "a", cast('[]' as json));
+}
+expect {
+    a-999999999999999999999999[]
+}
+
+test t-221690 {
+    SELECT CONCAT_WS(-999999999999999999999999, "abc", 1 - NULL);
+}
+expect {
+    abc
+}
+
+test t-221760 {
+    SELECT CONCAT_WS(-999999999999999999999999, "abc", cast('null' as json));
+}
+expect {
+    abc-999999999999999999999999null
+}
+
+test t-221764 {
+    SELECT CONCAT_WS(-999999999999999999999999, "abc", cast(2 as json));
+}
+expect {
+    abc-9999999999999999999999992
+}
+
+test t-221999 {
+    SELECT CONCAT_WS(-999999999999999999999999, -1, 0x9);
+}
+expect raw {
+-1-999999999999999999999999	
+}
+
+test t-222082 {
+    SELECT CONCAT_WS(-999999999999999999999999, -1, cast('\{\}' as json));
+}
+expect {
+    -1-999999999999999999999999\{\}
+}
+
+test t-222083 {
+    SELECT CONCAT_WS(-999999999999999999999999, -1, cast('[]' as json));
+}
+expect {
+    -1-999999999999999999999999[]
+}
+
+test t-222198 {
+    SELECT CONCAT_WS(-999999999999999999999999, 0123, date '2000-01-01');
+}
+expect {
+    123-9999999999999999999999992000-01-01
+}
+
+test t-222345 {
+    SELECT CONCAT_WS(-999999999999999999999999, 0xAACC, 18446744073709551615);
+}
+expect {
+    ��-99999999999999999999999918446744073709551615
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-222441 {
+    SELECT CONCAT_WS(-999999999999999999999999, 0xAACC, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-222460 {
+    SELECT CONCAT_WS(-999999999999999999999999, 3.1415926, 1.1e0);
+}
+expect {
+    3.1415926-9999999999999999999999991.1
+}
+
+test t-222547 {
+    SELECT CONCAT_WS(-999999999999999999999999, 3.1415926, time '-32:34:58');
+}
+expect {
+    3.1415926-999999999999999999999999-32:34:58
+}
+
+test t-222553 {
+    SELECT CONCAT_WS(-999999999999999999999999, 3.1415926, '10:04:58');
+}
+expect {
+    3.1415926-99999999999999999999999910:04:58
+}
+
+test t-222580 {
+    SELECT CONCAT_WS(-999999999999999999999999, 3.1415926, cast('2' as json));
+}
+expect {
+    3.1415926-9999999999999999999999992
+}
+
+test t-222600 {
+    SELECT CONCAT_WS(-999999999999999999999999, 3.1415926, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    3.1415926-999999999999999999999999\{"b": 2, "c": 1\}
+}
+
+test t-222708 {
+    SELECT CONCAT_WS(-999999999999999999999999, "中文测试", time '-31:34:58');
+}
+expect {
+    中文测试-999999999999999999999999-31:34:58
+}
+
+test t-222840 {
+    SELECT CONCAT_WS(-999999999999999999999999, "日本語テスト", time '5 10:34:58');
+}
+expect {
+    日本語テスト-999999999999999999999999130:34:58
+}
+
+test t-223039 {
+    SELECT CONCAT_WS(-999999999999999999999999, "한국어 시험", '10:04:58');
+}
+expect {
+    한국어 시험-99999999999999999999999910:04:58
+}
+
+test t-223056 {
+    SELECT CONCAT_WS(-999999999999999999999999, "한국어 시험", cast('null' as json));
+}
+expect {
+    한국어 시험-999999999999999999999999null
+}
+
+test t-223205 {
+    SELECT CONCAT_WS(-999999999999999999999999, "😊😂🤢", '2000-01-01 12:34:58');
+}
+expect {
+    😊😂🤢-9999999999999999999999992000-01-01 12:34:58
+}
+
+test t-223242 {
+    SELECT CONCAT_WS(-999999999999999999999999, "😊😂🤢", cast('["a"]' as json));
+}
+expect {
+    😊😂🤢-999999999999999999999999["a"]
+}
+
+test t-223407 {
+    SELECT CONCAT_WS(-999999999999999999999999, '123', cast('["ab", "ef"]' as json));
+}
+expect {
+    123-999999999999999999999999["ab", "ef"]
+}
+
+test t-223447 {
+    SELECT CONCAT_WS(-999999999999999999999999, 9223372036854775807, '');
+}
+expect {
+    9223372036854775807-999999999999999999999999
+}
+
+test t-223594 {
+    SELECT CONCAT_WS(-999999999999999999999999, -9223372036854775808, 1.1e0);
+}
+expect {
+    -9223372036854775808-9999999999999999999999991.1
+}
+
+test t-223679 {
+    SELECT CONCAT_WS(-999999999999999999999999, -9223372036854775808, time '-10:04:58');
+}
+expect {
+    -9223372036854775808-999999999999999999999999-10:04:58
+}
+
+test t-223696 {
+    SELECT CONCAT_WS(-999999999999999999999999, -9223372036854775808, '3001-02-19 00:00:00');
+}
+expect {
+    -9223372036854775808-9999999999999999999999993001-02-19 00:00:00
+}
+
+test t-223811 {
+    SELECT CONCAT_WS(-999999999999999999999999, 999999999999999999999999, time '130:34:58');
+}
+expect {
+    999999999999999999999999-999999999999999999999999130:34:58
+}
+
+test t-223823 {
+    SELECT CONCAT_WS(-999999999999999999999999, 999999999999999999999999, 20000101103458);
+}
+expect {
+    999999999999999999999999-99999999999999999999999920000101103458
+}
+
+test t-223831 {
+    SELECT CONCAT_WS(-999999999999999999999999, 999999999999999999999999, '20000101103458.123456');
+}
+expect {
+    999999999999999999999999-99999999999999999999999920000101103458.123456
+}
+
+test t-223859 {
+    SELECT CONCAT_WS(-999999999999999999999999, 999999999999999999999999, '3001-02-18 23:59:59');
+}
+expect {
+    999999999999999999999999-9999999999999999999999993001-02-18 23:59:59
+}
+
+test t-223890 {
+    SELECT CONCAT_WS(-999999999999999999999999, 999999999999999999999999, cast('["a"]' as json));
+}
+expect {
+    999999999999999999999999-999999999999999999999999["a"]
+}
+
+test t-223897 {
+    SELECT CONCAT_WS(-999999999999999999999999, 999999999999999999999999, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    999999999999999999999999-999999999999999999999999\{"b": 2, "c": 1\}
+}
+
+test t-224170 {
+    SELECT CONCAT_WS(-999999999999999999999999, _binary 'Müller' , time'00:00:59.2132234');
+}
+expect {
+    Müller-99999999999999999999999900:00:59.213223
+}
+
+test t-224201 {
+    SELECT CONCAT_WS(-999999999999999999999999, _binary 'Müller' , cast('1.1' as json));
+}
+expect {
+    Müller-9999999999999999999999991.1
+}
+
+test t-224284 {
+    SELECT CONCAT_WS(-999999999999999999999999, _utf8mb4 'abcABCÅå', 0xFF666F6F626172FF);
+}
+expect {
+    abcABCÅå-999999999999999999999999�foobar�
+}
+
+test t-224285 {
+    SELECT CONCAT_WS(-999999999999999999999999, _utf8mb4 'abcABCÅå', 0x666F6F626172FF);
+}
+expect {
+    abcABCÅå-999999999999999999999999foobar�
+}
+
+test t-224297 {
+    SELECT CONCAT_WS(-999999999999999999999999, _utf8mb4 'abcABCÅå', time '130:34:58');
+}
+expect {
+    abcABCÅå-999999999999999999999999130:34:58
+}
+
+test t-224312 {
+    SELECT CONCAT_WS(-999999999999999999999999, _utf8mb4 'abcABCÅå', 20000101);
+}
+expect {
+    abcABCÅå-99999999999999999999999920000101
+}
+
+test t-224360 {
+    SELECT CONCAT_WS(-999999999999999999999999, _utf8mb4 'abcABCÅå', cast(18446744073709551615 as json));
+}
+expect {
+    abcABCÅå-99999999999999999999999918446744073709551615
+}
+
+test t-224404 {
+    SELECT CONCAT_WS(-999999999999999999999999, _latin1 0xFF, 1.1e0);
+}
+expect {
+    ÿ-9999999999999999999999991.1
+}
+
+test t-224464 {
+    SELECT CONCAT_WS(-999999999999999999999999, _latin1 0xFF, time '130:34:58.6');
+}
+expect {
+    ÿ-999999999999999999999999130:34:58.6
+}
+
+test t-224504 {
+    SELECT CONCAT_WS(-999999999999999999999999, _latin1 0xFF, '1969-02-18');
+}
+expect {
+    ÿ-9999999999999999999999991969-02-18
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-224547 {
+    SELECT CONCAT_WS(-999999999999999999999999, _latin1 0xFF, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-224565 {
+    SELECT CONCAT_WS(_binary 'Müller' , "Å å", -1.5e0);
+}
+expect {
+    Å åMüller-1.5
+}
+
+test t-224623 {
+    SELECT CONCAT_WS(_binary 'Müller' , "Å å", time '10:04:58.1');
+}
+expect {
+    Å åMüller10:04:58.1
+}
+
+test t-224655 {
+    SELECT CONCAT_WS(_binary 'Müller' , "Å å", time'00:00:59.01011');
+}
+expect {
+    Å åMüller00:00:59.01011
+}
+
+test t-224686 {
+    SELECT CONCAT_WS(_binary 'Müller' , "Å å", cast('2' as json));
+}
+expect {
+    Å åMüller2
+}
+
+test t-224804 {
+    SELECT CONCAT_WS(_binary 'Müller' , NULL, '20000101');
+}
+expect {
+    20000101
+}
+
+test t-224859 {
+    SELECT CONCAT_WS(_binary 'Müller' , NULL, cast(0x666F6F626172FF as json));
+}
+expect {
+    "base64:type15:Zm9vYmFy/w=="
+}
+
+test t-224860 {
+    SELECT CONCAT_WS(_binary 'Müller' , NULL, cast(0b01 as json));
+}
+expect {
+    "base64:type15:AQ=="
+}
+
+test t-224864 {
+    SELECT CONCAT_WS(_binary 'Müller' , NULL, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    ["ab", "cd", "ef"]
+}
+
+test t-224893 {
+    SELECT CONCAT_WS(_binary 'Müller' , "", 0.0);
+}
+expect {
+    Müller0.0
+}
+
+test t-224990 {
+    SELECT CONCAT_WS(_binary 'Müller' , "", '1969-02-18');
+}
+expect {
+    Müller1969-02-18
+}
+
+test t-225002 {
+    SELECT CONCAT_WS(_binary 'Müller' , "", cast('false' as json));
+}
+expect {
+    Müllerfalse
+}
+
+test t-225172 {
+    SELECT CONCAT_WS(_binary 'Müller' , "a", cast('2' as json));
+}
+expect {
+    aMüller2
+}
+
+test t-225381 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, 1.5);
+}
+expect {
+    1Müller1.5
+}
+
+test t-225399 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, 0b1001);
+}
+expect raw {
+1Müller	
+}
+
+test t-225407 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, 1 * NULL);
+}
+expect {
+    1
+}
+
+test t-225413 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, 1 + NULL);
+}
+expect {
+    1
+}
+
+test t-225436 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, time '130:34:58.6');
+}
+expect {
+    1Müller130:34:58.6
+}
+
+test t-225458 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, '20000101foo');
+}
+expect {
+    1Müller20000101foo
+}
+
+test t-225487 {
+    SELECT CONCAT_WS(_binary 'Müller' , 1, cast('true' as json));
+}
+expect {
+    1Müllertrue
+}
+
+test t-225582 {
+    SELECT CONCAT_WS(_binary 'Müller' , -1, 0xFF666F6F626172);
+}
+expect {
+    -1Müller�foobar
+}
+
+test t-225638 {
+    SELECT CONCAT_WS(_binary 'Müller' , -1, '1969-02-18');
+}
+expect {
+    -1Müller1969-02-18
+}
+
+test t-225722 {
+    SELECT CONCAT_WS(_binary 'Müller' , 0123, X'ff');
+}
+expect {
+    123Müller�
+}
+
+test t-225728 {
+    SELECT CONCAT_WS(_binary 'Müller' , 0123, true);
+}
+expect {
+    123Müller1
+}
+
+test t-225793 {
+    SELECT CONCAT_WS(_binary 'Müller' , 0123, '10:04:58');
+}
+expect {
+    123Müller10:04:58
+}
+
+test t-225800 {
+    SELECT CONCAT_WS(_binary 'Müller' , 0123, '1969-02-18');
+}
+expect {
+    123Müller1969-02-18
+}
+
+test t-225852 {
+    SELECT CONCAT_WS(_binary 'Müller' , 0xAACC, 255);
+}
+expect {
+    ��Müller255
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-225968 {
+    SELECT CONCAT_WS(_binary 'Müller' , 0xAACC, cast(true as json));
+}
+expect error {
+}
+
+test t-226035 {
+    SELECT CONCAT_WS(_binary 'Müller' , 3.1415926, '1.5');
+}
+expect {
+    3.1415926Müller1.5
+}
+
+test t-226050 {
+    SELECT CONCAT_WS(_binary 'Müller' , 3.1415926, x'09');
+}
+expect raw {
+3.1415926Müller	
+}
+
+test t-226073 {
+    SELECT CONCAT_WS(_binary 'Müller' , 3.1415926, -18446744073709540000e0);
+}
+expect {
+    3.1415926Müller-1.844674407370954e19
+}
+
+test t-226089 {
+    SELECT CONCAT_WS(_binary 'Müller' , 3.1415926, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    3.1415926Müller2000-01-01 10:34:58.978654
+}
+
+test t-226109 {
+    SELECT CONCAT_WS(_binary 'Müller' , 3.1415926, time '-10:04:58');
+}
+expect {
+    3.1415926Müller-10:04:58
+}
+
+test t-226117 {
+    SELECT CONCAT_WS(_binary 'Müller' , 3.1415926, '10:04:58');
+}
+expect {
+    3.1415926Müller10:04:58
+}
+
+test t-226270 {
+    SELECT CONCAT_WS(_binary 'Müller' , "中文测试", '103458.123456foo');
+}
+expect {
+    中文测试Müller103458.123456foo
+}
+
+test t-226284 {
+    SELECT CONCAT_WS(_binary 'Müller' , "中文测试", '0000-02-29');
+}
+expect {
+    中文测试Müller0000-02-29
+}
+
+test t-226356 {
+    SELECT CONCAT_WS(_binary 'Müller' , "日本語テスト", 1.7);
+}
+expect {
+    日本語テストMüller1.7
+}
+
+test t-226364 {
+    SELECT CONCAT_WS(_binary 'Müller' , "日本語テスト", _binary 'foobar');
+}
+expect {
+    日本語テストMüllerfoobar
+}
+
+test t-226394 {
+    SELECT CONCAT_WS(_binary 'Müller' , "日本語テスト", -9223372036854775808);
+}
+expect {
+    日本語テストMüller-9223372036854775808
+}
+
+test t-226466 {
+    SELECT CONCAT_WS(_binary 'Müller' , "日本語テスト", cast(18446744073709551615 as json));
+}
+expect {
+    日本語テストMüller18446744073709551615
+}
+
+test t-226514 {
+    SELECT CONCAT_WS(_binary 'Müller' , "한국어 시험", 0.000);
+}
+expect {
+    한국어 시험Müller0.000
+}
+
+test t-226630 {
+    SELECT CONCAT_WS(_binary 'Müller' , "한국어 시험", cast('2' as json));
+}
+expect {
+    한국어 시험Müller2
+}
+
+test t-226649 {
+    SELECT CONCAT_WS(_binary 'Müller' , "한국어 시험", cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    한국어 시험Müller\{"a": 1, "b": 2\}
+}
+
+test t-226681 {
+    SELECT CONCAT_WS(_binary 'Müller' , "😊😂🤢", -1.1);
+}
+expect {
+    😊😂🤢Müller-1.1
+}
+
+test t-226719 {
+    SELECT CONCAT_WS(_binary 'Müller' , "😊😂🤢", 18446744073709551615);
+}
+expect {
+    😊😂🤢Müller18446744073709551615
+}
+
+test t-226779 {
+    SELECT CONCAT_WS(_binary 'Müller' , "😊😂🤢", cast(false as json));
+}
+expect {
+    😊😂🤢Müllerfalse
+}
+
+test t-226816 {
+    SELECT CONCAT_WS(_binary 'Müller' , "😊😂🤢", cast(date '2000-01-01' as json));
+}
+expect {
+    😊😂🤢Müller"2000-01-01"
+}
+
+test t-226889 {
+    SELECT CONCAT_WS(_binary 'Müller' , '123', time '130:34:58');
+}
+expect {
+    123Müller130:34:58
+}
+
+test t-226901 {
+    SELECT CONCAT_WS(_binary 'Müller' , '123', 20000101103458);
+}
+expect {
+    123Müller20000101103458
+}
+
+test t-227003 {
+    SELECT CONCAT_WS(_binary 'Müller' , 9223372036854775807, 1.1);
+}
+expect {
+    9223372036854775807Müller1.1
+}
+
+test t-227047 {
+    SELECT CONCAT_WS(_binary 'Müller' , 9223372036854775807, JSON_ARRAY());
+}
+expect {
+    9223372036854775807Müller[]
+}
+
+test t-227105 {
+    SELECT CONCAT_WS(_binary 'Müller' , 9223372036854775807, cast('[]' as json));
+}
+expect {
+    9223372036854775807Müller[]
+}
+
+test t-227124 {
+    SELECT CONCAT_WS(_binary 'Müller' , 9223372036854775807, cast(_binary' "foo"' as json));
+}
+expect {
+    9223372036854775807Müller"base64:type15:ICJmb28i"
+}
+
+test t-227164 {
+    SELECT CONCAT_WS(_binary 'Müller' , -9223372036854775808, -1.5);
+}
+expect {
+    -9223372036854775808Müller-1.5
+}
+
+test t-227182 {
+    SELECT CONCAT_WS(_binary 'Müller' , -9223372036854775808, b'1001');
+}
+expect raw {
+-9223372036854775808Müller	
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-227300 {
+    SELECT CONCAT_WS(_binary 'Müller' , -9223372036854775808, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-227417 {
+    SELECT CONCAT_WS(_binary 'Müller' , 999999999999999999999999, '2000-01-01 12:34:58');
+}
+expect {
+    999999999999999999999999Müller2000-01-01 12:34:58
+}
+
+test t-227546 {
+    SELECT CONCAT_WS(_binary 'Müller' , -999999999999999999999999, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -999999999999999999999999Müller2000-01-01 10:34:58.123456
+}
+
+test t-227569 {
+    SELECT CONCAT_WS(_binary 'Müller' , -999999999999999999999999, time '-32:34:58');
+}
+expect {
+    -999999999999999999999999Müller-32:34:58
+}
+
+test t-227605 {
+    SELECT CONCAT_WS(_binary 'Müller' , -999999999999999999999999, cast('9223372036854775807' as json));
+}
+expect {
+    -999999999999999999999999Müller9223372036854775807
+}
+
+test t-227719 {
+    SELECT CONCAT_WS(_binary 'Müller' , _binary 'Müller' , '20000101103458.123456');
+}
+expect {
+    MüllerMüller20000101103458.123456
+}
+
+test t-227797 {
+    SELECT CONCAT_WS(_binary 'Müller' , _utf8mb4 'abcABCÅå', ' 0 ');
+}
+expect raw {
+abcABCÅåMüller 0 
+}

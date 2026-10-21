@@ -1,0 +1,60 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/subquery/subquery_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    create table t2
+(
+    id3 bigint,
+    id4 bigint,
+    primary key (id3)
+) Engine = InnoDB;
+}
+
+setup s3 {
+    create table t2
+(
+    id3 bigint,
+    id4 bigint,
+    primary key (id3)
+) Engine = InnoDB;
+    insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+    insert into t2(id3, id4) values (1, 3), (2, 4);
+}
+
+@setup s1
+test l102 {
+    insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+}
+expect unordered {
+}
+
+@setup s2
+test l103 {
+    insert into t2(id3, id4) values (1, 3), (2, 4);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l105 {
+    select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1;
+}
+expect {
+    3
+    4
+}

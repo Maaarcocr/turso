@@ -1,0 +1,27 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    SET time_zone = '+00:00';
+}
+
+@setup s1
+test l121 {
+    select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month;
+}
+expect unordered {
+    2020-12-01
+}
+
+@setup s1
+test l122 {
+    select date_add(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY);
+}
+expect unordered {
+    2023-01-08 13:48:42
+}

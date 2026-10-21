@@ -1,0 +1,1134 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-34994 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), 1.7);
+}
+expect {
+    1
+}
+
+test t-34998 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), '-1.5');
+}
+expect {
+    1
+}
+
+test t-35017 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-35019 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-35023 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), 1 + NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-35029 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), 0x666F6F626172FF);
+}
+expect error {
+}
+
+test t-35038 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), time '10:04:58');
+}
+expect {
+    1
+}
+
+test t-35039 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), time '31:34:58');
+}
+expect {
+    1
+}
+
+test t-35052 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), timestamp '2024-12-30 10:34:58');
+}
+expect {
+    1
+}
+
+test t-35056 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), 20000101);
+}
+expect {
+    1
+}
+
+test t-35059 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), '20000101103458');
+}
+expect {
+    1
+}
+
+test t-35060 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), '20000101103458.1234');
+}
+expect {
+    1
+}
+
+test t-35070 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), '103458.123456foo');
+}
+expect {
+    1
+}
+
+test t-35080 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), '101:34:58');
+}
+expect {
+    1
+}
+
+test t-35084 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-35102 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-35115 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), cast(_binary '"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-35118 {
+    SELECT STRCMP(cast('\{"c": 1, "b": 2\}' as json), cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-35139 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), 1234);
+}
+expect {
+    1
+}
+
+test t-35158 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-35164 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-35173 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), ' 255 foo');
+}
+expect {
+    1
+}
+
+test t-35193 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), '');
+}
+expect {
+    1
+}
+
+test t-35202 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), b'1001');
+}
+expect {
+    1
+}
+
+test t-35224 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-35232 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), time '32:34:58');
+}
+expect {
+    1
+}
+
+test t-35247 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), 20000101103458.123456);
+}
+expect {
+    1
+}
+
+test t-35261 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), '103458foo');
+}
+expect {
+    1
+}
+
+test t-35281 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), '3001-02-18 23:59:59');
+}
+expect {
+    1
+}
+
+test t-35284 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), cast(true as json));
+}
+expect {
+    1
+}
+
+test t-35289 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), cast('true' as json));
+}
+expect {
+    1
+}
+
+test t-35302 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), cast('18446744073709551615' as json));
+}
+expect {
+    1
+}
+
+test t-35308 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-35313 {
+    SELECT STRCMP(cast('\{"b": 2, "c": 1\}' as json), cast('["ab"]' as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35329 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), 'FOOBAR');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35330 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), '1234');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35354 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35365 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), ' 255 foo');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35367 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), 1.0e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35371 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), -1.1e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35373 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), 0.0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35380 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), -1.7);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35410 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), 1 - NULL);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35415 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), 9223372036854775807);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35424 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), time '32:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35467 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), '2000-01-01 12:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35469 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), '0000-01-03');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35494 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), cast('18446744073709551615' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-35515 {
+    SELECT STRCMP(cast(' "b": 2\}' as json), cast(date '2000-01-02' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35542 {
+    SELECT STRCMP(cast('"a": 1' as json), _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35567 {
+    SELECT STRCMP(cast('"a": 1' as json), 1.5);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35573 {
+    SELECT STRCMP(cast('"a": 1' as json), '1.5');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35574 {
+    SELECT STRCMP(cast('"a": 1' as json), '-1.5');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35580 {
+    SELECT STRCMP(cast('"a": 1' as json), 0x1);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35606 {
+    SELECT STRCMP(cast('"a": 1' as json), 0xFF666F6F626172);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35625 {
+    SELECT STRCMP(cast('"a": 1' as json), timestamp '2000-01-01 10:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35630 {
+    SELECT STRCMP(cast('"a": 1' as json), 20000101103458.1234);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35664 {
+    SELECT STRCMP(cast('"a": 1' as json), '3001-02-19 00:00:00');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35668 {
+    SELECT STRCMP(cast('"a": 1' as json), cast(true as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35671 {
+    SELECT STRCMP(cast('"a": 1' as json), cast('[]' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35672 {
+    SELECT STRCMP(cast('"a": 1' as json), cast('null' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35695 {
+    SELECT STRCMP(cast('"a": 1' as json), cast(0b001 as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-35702 {
+    SELECT STRCMP(cast('"a": 1' as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-35747 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), ' 255 ');
+}
+expect {
+    1
+}
+
+test t-35764 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), -1.7);
+}
+expect {
+    -1
+}
+
+test t-35771 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), 0x0);
+}
+expect {
+    1
+}
+
+test t-35781 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-35790 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), NULL + 1);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-35796 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), 0xFF666F6F626172FF);
+}
+expect error {
+}
+
+test t-35804 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+test t-35805 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), JSON_ARRAY());
+}
+expect {
+    -1
+}
+
+test t-35826 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), 103458.123456);
+}
+expect {
+    -1
+}
+
+test t-35849 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-35852 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), '0000-02-29');
+}
+expect {
+    -1
+}
+
+test t-35857 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), '3001-02-18 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-35880 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), cast('"bar"' as json));
+}
+expect {
+    -1
+}
+
+test t-35884 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    -1
+}
+
+test t-35886 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), cast(0b01 as json));
+}
+expect {
+    -1
+}
+
+test t-35887 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), cast(0b001 as json));
+}
+expect {
+    -1
+}
+
+test t-35888 {
+    SELECT STRCMP(cast(date '2000-01-01' as json), cast('["a"]' as json));
+}
+expect {
+    -1
+}
+
+test t-35944 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), 1.5e0);
+}
+expect {
+    -1
+}
+
+test t-35955 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), -1.1);
+}
+expect {
+    -1
+}
+
+test t-35971 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), 0x9);
+}
+expect {
+    1
+}
+
+test t-35994 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), 18446744073709540000e0);
+}
+expect {
+    -1
+}
+
+test t-36000 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), time '32:34:58');
+}
+expect {
+    -1
+}
+
+test t-36001 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), time '130:34:58');
+}
+expect {
+    -1
+}
+
+test t-36003 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), time '10:04:58.1');
+}
+expect {
+    -1
+}
+
+test t-36010 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -1
+}
+
+test t-36022 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), '20000101');
+}
+expect {
+    -1
+}
+
+test t-36027 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-36041 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-36043 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), '2000-01-01 12:34:58');
+}
+expect {
+    -1
+}
+
+test t-36047 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), '1970-01-01 00:00:01');
+}
+expect {
+    -1
+}
+
+test t-36058 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), cast('false' as json));
+}
+expect {
+    -1
+}
+
+test t-36060 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), cast(2 as json));
+}
+expect {
+    -1
+}
+
+test t-36061 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), cast(1.1 as json));
+}
+expect {
+    -1
+}
+
+test t-36065 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), cast('1' as json));
+}
+expect {
+    -1
+}
+
+test t-36085 {
+    SELECT STRCMP(cast(date '2000-01-02' as json), cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    -1
+}
+
+test t-36108 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), '12%');
+}
+expect {
+    -1
+}
+
+test t-36121 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-36133 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), ' 255 foo');
+}
+expect {
+    1
+}
+
+test t-36159 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), X'01');
+}
+expect {
+    1
+}
+
+test t-36163 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), 0x9);
+}
+expect {
+    1
+}
+
+test t-36165 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-36168 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-36170 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), NULL * NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-36182 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), 0xFF666F6F626172);
+}
+expect error {
+}
+
+test t-36187 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), -18446744073709540000e0);
+}
+expect {
+    -1
+}
+
+test t-36201 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-36241 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), '3001-02-18 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-36242 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), cast(0 as json));
+}
+expect {
+    -1
+}
+
+test t-36245 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), cast(false as json));
+}
+expect {
+    -1
+}
+
+test t-36254 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), cast(-1.1 as json));
+}
+expect {
+    -1
+}
+
+test t-36270 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), cast(0b01 as json));
+}
+expect {
+    -1
+}
+
+test t-36276 {
+    SELECT STRCMP(cast(timestamp '2000-01-01 12:34:58' as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-36307 {
+    SELECT STRCMP(cast(time '12:34:56' as json), _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-36330 {
+    SELECT STRCMP(cast(time '12:34:56' as json), 1.1e0);
+}
+expect {
+    -1
+}
+
+test t-36339 {
+    SELECT STRCMP(cast(time '12:34:56' as json), -1.1);
+}
+expect {
+    -1
+}
+
+test t-36361 {
+    SELECT STRCMP(cast(time '12:34:56' as json), 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-36376 {
+    SELECT STRCMP(cast(time '12:34:56' as json), -9223372036854775808);
+}
+expect {
+    -1
+}
+
+test t-36380 {
+    SELECT STRCMP(cast(time '12:34:56' as json), JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+test t-36397 {
+    SELECT STRCMP(cast(time '12:34:56' as json), 20000101103458);
+}
+expect {
+    -1
+}
+
+test t-36402 {
+    SELECT STRCMP(cast(time '12:34:56' as json), 103458.123456);
+}
+expect {
+    -1
+}
+
+test t-36417 {
+    SELECT STRCMP(cast(time '12:34:56' as json), time '-32:34:58');
+}
+expect {
+    -1
+}
+
+test t-36422 {
+    SELECT STRCMP(cast(time '12:34:56' as json), time '-5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-36489 {
+    SELECT STRCMP(cast(time '12:34:58' as json), 'FOO%');
+}
+expect {
+    -1
+}
+
+test t-36501 {
+    SELECT STRCMP(cast(time '12:34:58' as json), _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-36520 {
+    SELECT STRCMP(cast(time '12:34:58' as json), 1.5e0);
+}
+expect {
+    -1
+}
+
+test t-36522 {
+    SELECT STRCMP(cast(time '12:34:58' as json), 1.1e0);
+}
+expect {
+    -1
+}
+
+test t-36525 {
+    SELECT STRCMP(cast(time '12:34:58' as json), 0.0);
+}
+expect {
+    -1
+}
+
+test t-36532 {
+    SELECT STRCMP(cast(time '12:34:58' as json), -1.7);
+}
+expect {
+    -1
+}
+
+test t-36540 {
+    SELECT STRCMP(cast(time '12:34:58' as json), 0x1);
+}
+expect {
+    1
+}
+
+test t-36560 {
+    SELECT STRCMP(cast(time '12:34:58' as json), NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-36574 {
+    SELECT STRCMP(cast(time '12:34:58' as json), time '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-36594 {
+    SELECT STRCMP(cast(time '12:34:58' as json), 103458.123456);
+}
+expect {
+    -1
+}
+
+test t-36597 {
+    SELECT STRCMP(cast(time '12:34:58' as json), '20000101103458.123456');
+}
+expect {
+    -1
+}
+
+test t-36617 {
+    SELECT STRCMP(cast(time '12:34:58' as json), '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-36624 {
+    SELECT STRCMP(cast(time '12:34:58' as json), '3001-02-19 00:00:00');
+}
+expect {
+    -1
+}
+
+test t-36652 {
+    SELECT STRCMP(cast(time '12:34:58' as json), cast(0xFF666F6F626172FF as json));
+}
+expect {
+    -1
+}
+
+test t-36653 {
+    SELECT STRCMP(cast(time '12:34:58' as json), cast(0x666F6F626172FF as json));
+}
+expect {
+    -1
+}
+
+test t-36694 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-36699 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-36717 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), 0.0);
+}
+expect {
+    -1
+}
+
+test t-36735 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), X'01');
+}
+expect {
+    1
+}
+
+test t-36754 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-36755 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-36760 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), -9223372036854775808);
+}
+expect {
+    -1
+}
+
+test t-36765 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), JSON_ARRAY());
+}
+expect {
+    -1
+}
+
+test t-36772 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), time '31:34:58.4');
+}
+expect {
+    -1
+}
+
+test t-36776 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), date '2000-01-01');
+}
+expect {
+    -1
+}
+
+test t-36792 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), '103458.123456');
+}
+expect {
+    -1
+}
+
+test t-36796 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), '20000101foo');
+}
+expect {
+    -1
+}
+
+test t-36798 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), '103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-36812 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), '0000-02-29');
+}
+expect {
+    -1
+}
+
+test t-36821 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast(false as json));
+}
+expect {
+    -1
+}
+
+test t-36829 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast(1.1 as json));
+}
+expect {
+    -1
+}
+
+test t-36830 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast(-1.1 as json));
+}
+expect {
+    -1
+}
+
+test t-36842 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast(_binary' "foo"' as json));
+}
+expect {
+    -1
+}
+
+test t-36843 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast(_binary '"bar"' as json));
+}
+expect {
+    -1
+}
+
+test t-36851 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast('["ab", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-36852 {
+    SELECT STRCMP(cast(time '5 12:34:58' as json), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}

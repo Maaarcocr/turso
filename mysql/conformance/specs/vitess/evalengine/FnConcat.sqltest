@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-28 {
+    SELECT CONCAT(0, '\t1foo\t');
+}
+expect raw {
+0	1foo	
+}
+
+test t-30 {
+    SELECT CONCAT(0, 0.0e0);
+}
+expect {
+    00
+}
+
+test t-74 {
+    SELECT CONCAT(0, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-85 {
+    SELECT CONCAT(0, JSON_ARRAY());
+}
+expect {
+    0[]
+}
+
+test t-86 {
+    SELECT CONCAT(0, time '10:04:58');
+}
+expect {
+    010:04:58
+}
+
+test t-101 {
+    SELECT CONCAT(0, 20000101103458);
+}
+expect {
+    020000101103458
+}
+
+test t-117 {
+    SELECT CONCAT(0, '103458foo');
+}
+expect {
+    0103458foo
+}
+
+test t-122 {
+    SELECT CONCAT(0, time'00:00:01.0000');
+}
+expect {
+    000:00:01.0000
+}
+
+test t-131 {
+    SELECT CONCAT(0, '2000-01-01 12:34:58');
+}
+expect {
+    02000-01-01 12:34:58
+}
+
+test t-133 {
+    SELECT CONCAT(0, '0000-01-03');
+}
+expect {
+    00000-01-03
+}
+
+test t-135 {
+    SELECT CONCAT(0, '1970-01-01 00:00:01');
+}
+expect {
+    01970-01-01 00:00:01
+}
+
+test t-137 {
+    SELECT CONCAT(0, '3001-02-18 23:59:59');
+}
+expect {
+    03001-02-18 23:59:59
+}
+
+test t-142 {
+    SELECT CONCAT(0, cast('\{\}' as json));
+}
+expect {
+    0\{\}
+}
+
+test t-146 {
+    SELECT CONCAT(0, cast('false' as json));
+}
+expect {
+    0false
+}
+
+test t-152 {
+    SELECT CONCAT(0, cast(18446744073709551615 as json));
+}
+expect {
+    018446744073709551615
+}
+
+test t-156 {
+    SELECT CONCAT(0, cast('-1.1' as json));
+}
+expect {
+    0-1.1
+}
+
+test t-159 {
+    SELECT CONCAT(0, cast('"foo"' as json));
+}
+expect {
+    0"foo"
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-161 {
+    SELECT CONCAT(0, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-177 {
+    SELECT CONCAT(0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-182 {
+    SELECT CONCAT(0, cast(time '12:34:58' as json));
+}
+expect {
+    0"12:34:58.000000"
+}
+
+test t-197 {
+    SELECT CONCAT(1, -1.1e0);
+}
+expect {
+    1-1.1
+}
+
+test t-205 {
+    SELECT CONCAT(1, -1.1);
+}
+expect {
+    1-1.1
+}
+
+test t-206 {
+    SELECT CONCAT(1, -1.7);
+}
+expect {
+    1-1.7
+}
+
+test t-229 {
+    SELECT CONCAT(1, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-232 {
+    SELECT CONCAT(1, NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-256 {
+    SELECT CONCAT(1, time '130:34:58.6');
+}
+expect {
+    1130:34:58.6
+}
+
+test t-294 {
+    SELECT CONCAT(1, '0000-02-29');
+}
+expect {
+    10000-02-29
+}
+
+test t-296 {
+    SELECT CONCAT(1, '1969-02-18');
+}
+expect {
+    11969-02-18
+}
+
+test t-302 {
+    SELECT CONCAT(1, cast(true as json));
+}
+expect {
+    1true
+}
+
+test t-307 {
+    SELECT CONCAT(1, cast('true' as json));
+}
+expect {
+    1true
+}
+
+test t-308 {
+    SELECT CONCAT(1, cast('false' as json));
+}
+expect {
+    1false
+}
+
+test t-351 {
+    SELECT CONCAT(255, ' 255 ');
+}
+expect raw {
+255 255 
+}
+
+test t-354 {
+    SELECT CONCAT(255, 0.0e0);
+}
+expect {
+    2550
+}
+
+test t-385 {
+    SELECT CONCAT(255, NULL);
+}
+expect {
+    NULL
+}
+
+test t-388 {
+    SELECT CONCAT(255, NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-403 {
+    SELECT CONCAT(255, 9223372036854775807);
+}
+expect {
+    2559223372036854775807
+}
+
+test t-410 {
+    SELECT CONCAT(255, time '10:04:58');
+}
+expect {
+    25510:04:58
+}
+
+test t-421 {
+    SELECT CONCAT(255, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    2552000-01-01 10:34:58
+}
+
+test t-425 {
+    SELECT CONCAT(255, 20000101103458);
+}
+expect {
+    25520000101103458
+}
+
+test t-430 {
+    SELECT CONCAT(255, 103458.123456);
+}
+expect {
+    255103458.123456
+}
+
+test t-455 {
+    SELECT CONCAT(255, '2000-01-01 12:34:58');
+}
+expect {
+    2552000-01-01 12:34:58
+}
+
+test t-462 {
+    SELECT CONCAT(255, cast(0 as json));
+}
+expect {
+    2550
+}
+
+test t-463 {
+    SELECT CONCAT(255, cast(1 as json));
+}
+expect {
+    2551
+}
+
+test t-487 {
+    SELECT CONCAT(255, cast(_binary '"bar"' as json));
+}
+expect {
+    255"base64:type15:ImJhciI="
+}
+
+test t-491 {
+    SELECT CONCAT(255, cast(0b001 as json));
+}
+expect {
+    255"base64:type15:AQ=="
+}
+
+test t-513 {
+    SELECT CONCAT(' 0 ', ' 255 ');
+}
+expect raw {
+ 0  255 
+}
+
+test t-520 {
+    SELECT CONCAT(' 0 ', 1.1e0);
+}
+expect raw {
+ 0 1.1
+}
+
+test t-523 {
+    SELECT CONCAT(' 0 ', 0.0);
+}
+expect raw {
+ 0 0.0
+}
+
+test t-525 {
+    SELECT CONCAT(' 0 ', 1.5);
+}
+expect raw {
+ 0 1.5
+}
+
+test t-533 {
+    SELECT CONCAT(' 0 ', 'foobar');
+}
+expect raw {
+ 0 foobar
+}
+
+test t-559 {
+    SELECT CONCAT(' 0 ', NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-561 {
+    SELECT CONCAT(' 0 ', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-570 {
+    SELECT CONCAT(' 0 ', JSON_OBJECT());
+}
+expect raw {
+ 0 \{\}
+}
+
+test t-576 {
+    SELECT CONCAT(' 0 ', time '5 10:34:58');
+}
+expect raw {
+ 0 130:34:58
+}
+
+test t-588 {
+    SELECT CONCAT(' 0 ', 20000101103458.1234);
+}
+expect raw {
+ 0 20000101103458.1234
+}
+
+test t-590 {
+    SELECT CONCAT(' 0 ', 20000101);
+}
+expect raw {
+ 0 20000101
+}
+
+test t-599 {
+    SELECT CONCAT(' 0 ', '20000101103458foo');
+}
+expect raw {
+ 0 20000101103458foo
+}
+
+test t-603 {
+    SELECT CONCAT(' 0 ', '103458foo');
+}
+expect raw {
+ 0 103458foo
+}
+
+test t-615 {
+    SELECT CONCAT(' 0 ', '5 10:34:58');
+}
+expect raw {
+ 0 5 10:34:58
+}
+
+test t-642 {
+    SELECT CONCAT(' 0 ', cast('-1.1' as json));
+}
+expect raw {
+ 0 -1.1
+}
+
+test t-651 {
+    SELECT CONCAT(' 0 ', cast(0x666F6F626172FF as json));
+}
+expect raw {
+ 0 "base64:type15:Zm9vYmFy/w=="
+}
+
+test t-674 {
+    SELECT CONCAT(' 1 ', ' 1 ');
+}
+expect raw {
+ 1  1 
+}
+
+test t-676 {
+    SELECT CONCAT(' 1 ', '\t1foo\t');
+}
+expect raw {
+ 1 	1foo	
+}
+
+test t-691 {
+    SELECT CONCAT(' 1 ', -1.1);
+}
+expect raw {
+ 1 -1.1
+}
+
+test t-697 {
+    SELECT CONCAT(' 1 ', '');
+}
+expect raw {
+ 1 
+}
+
+test t-714 {
+    SELECT CONCAT(' 1 ', NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-715 {
+    SELECT CONCAT(' 1 ', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-718 {
+    SELECT CONCAT(' 1 ', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-746 {
+    SELECT CONCAT(' 1 ', timestamp '2000-01-01 10:34:58.123456');
+}
+expect raw {
+ 1 2000-01-01 10:34:58.123456
+}
+
+test t-756 {
+    SELECT CONCAT(' 1 ', '20000101103458.1234');
+}
+expect raw {
+ 1 20000101103458.1234
+}
+
+test t-765 {
+    SELECT CONCAT(' 1 ', '103458foo');
+}
+expect raw {
+ 1 103458foo
+}
+
+test t-767 {
+    SELECT CONCAT(' 1 ', time '-10:04:58');
+}
+expect raw {
+ 1 -10:04:58
+}
+
+test t-769 {
+    SELECT CONCAT(' 1 ', time '-32:34:58');
+}
+expect raw {
+ 1 -32:34:58
+}
+
+test t-776 {
+    SELECT CONCAT(' 1 ', '101:34:58');
+}
+expect raw {
+ 1 101:34:58
+}
+
+test t-783 {
+    SELECT CONCAT(' 1 ', '1970-01-01 00:00:01');
+}
+expect raw {
+ 1 1970-01-01 00:00:01
+}
+
+test t-797 {
+    SELECT CONCAT(' 1 ', cast(1.1 as json));
+}
+expect raw {
+ 1 1.1
+}
+
+test t-799 {
+    SELECT CONCAT(' 1 ', cast(9223372036854775807 as json));
+}
+expect raw {
+ 1 9223372036854775807
+}
+
+test t-801 {
+    SELECT CONCAT(' 1 ', cast('1' as json));
+}
+expect raw {
+ 1 1
+}
+
+test t-823 {
+    SELECT CONCAT(' 1 ', cast('\{"b": 2, "c": 1\}' as json));
+}
+expect raw {
+ 1 \{"b": 2, "c": 1\}
+}
+
+test t-859 {
+    SELECT CONCAT(' 255 ', '');
+}
+expect raw {
+ 255 
+}
+
+test t-893 {
+    SELECT CONCAT(' 255 ', -18446744073709540000e0);
+}
+expect raw {
+ 255 -1.844674407370954e19
+}
+
+test t-908 {
+    SELECT CONCAT(' 255 ', timestamp '2000-01-01 10:34:58.123456');
+}
+expect raw {
+ 255 2000-01-01 10:34:58.123456
+}
+
+test t-920 {
+    SELECT CONCAT(' 255 ', '20000101');
+}
+expect raw {
+ 255 20000101
+}
+
+test t-925 {
+    SELECT CONCAT(' 255 ', '20000101103458.123456foo');
+}
+expect raw {
+ 255 20000101103458.123456foo
+}
+
+test t-937 {
+    SELECT CONCAT(' 255 ', '10:04:58');
+}
+expect raw {
+ 255 10:04:58
+}
+
+test t-942 {
+    SELECT CONCAT(' 255 ', '0000-02-29');
+}
+expect raw {
+ 255 0000-02-29
+}
+
+test t-964 {
+    SELECT CONCAT(' 255 ', cast('2' as json));
+}
+expect raw {
+ 255 2
+}
+
+test t-965 {
+    SELECT CONCAT(' 255 ', cast('1.1' as json));
+}
+expect raw {
+ 255 1.1
+}
+
+test t-969 {
+    SELECT CONCAT(' 255 ', cast('"foo"' as json));
+}
+expect raw {
+ 255 "foo"
+}
+
+test t-991 {
+    SELECT CONCAT(' 255 ', cast(time '12:34:56' as json));
+}
+expect raw {
+ 255 "12:34:56.000000"
+}
+
+test t-998 {
+    SELECT CONCAT('\t1foo\t', ' 1 ');
+}
+expect raw {
+	1foo	 1 
+}
+
+test t-999 {
+    SELECT CONCAT('\t1foo\t', ' 255 ');
+}
+expect raw {
+	1foo	 255 
+}
+
+test t-1002 {
+    SELECT CONCAT('\t1foo\t', 0.0e0);
+}
+expect raw {
+	1foo	0
+}
+
+test t-1004 {
+    SELECT CONCAT('\t1foo\t', 1.5e0);
+}
+expect raw {
+	1foo	1.5
+}
+
+test t-1006 {
+    SELECT CONCAT('\t1foo\t', 1.1e0);
+}
+expect raw {
+	1foo	1.1
+}
+
+test t-1015 {
+    SELECT CONCAT('\t1foo\t', -1.1);
+}
+expect raw {
+	1foo	-1.1
+}
+
+test t-1016 {
+    SELECT CONCAT('\t1foo\t', -1.7);
+}
+expect raw {
+	1foo	-1.7
+}
+
+test t-1035 {
+    SELECT CONCAT('\t1foo\t', false);
+}
+expect raw {
+	1foo	0
+}
+
+test t-1053 {
+    SELECT CONCAT('\t1foo\t', 18446744073709551615);
+}
+expect raw {
+	1foo	18446744073709551615
+}
+
+test t-1075 {
+    SELECT CONCAT('\t1foo\t', 20000101103458.123456);
+}
+expect raw {
+	1foo	20000101103458.123456
+}
+
+test t-1078 {
+    SELECT CONCAT('\t1foo\t', 103458.123456);
+}
+expect raw {
+	1foo	103458.123456
+}
+
+test t-1092 {
+    SELECT CONCAT('\t1foo\t', time '-31:34:58');
+}
+expect raw {
+	1foo	-31:34:58
+}
+
+test t-1100 {
+    SELECT CONCAT('\t1foo\t', '101:34:58');
+}
+expect raw {
+	1foo	101:34:58
+}
+
+test t-1113 {
+    SELECT CONCAT('\t1foo\t', cast(false as json));
+}
+expect raw {
+	1foo	false
+}
+
+test t-1125 {
+    SELECT CONCAT('\t1foo\t', cast('1' as json));
+}
+expect raw {
+	1foo	1
+}
+
+test t-1127 {
+    SELECT CONCAT('\t1foo\t', cast('1.1' as json));
+}
+expect raw {
+	1foo	1.1
+}
+
+test t-1137 {
+    SELECT CONCAT('\t1foo\t', cast(0x666F6F626172FF as json));
+}
+expect raw {
+	1foo	"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-1138 {
+    SELECT CONCAT('\t1foo\t', cast(0b01 as json));
+}
+expect raw {
+	1foo	"base64:type15:AQ=="
+}
+
+test t-1146 {
+    SELECT CONCAT('\t1foo\t', cast('\{"c": 1, "b": 2\}' as json));
+}
+expect raw {
+	1foo	\{"b": 2, "c": 1\}
+}
+
+test t-1168 {
+    SELECT CONCAT(' 255 foo', 1.1e0);
+}
+expect raw {
+ 255 foo1.1
+}
+
+test t-1193 {
+    SELECT CONCAT(' 255 foo', 0x9);
+}
+expect raw {
+ 255 foo	
+}
+
+test t-1220 {
+    SELECT CONCAT(' 255 foo', time '10:04:58');
+}
+expect raw {
+ 255 foo10:04:58
+}
+
+test t-1250 {
+    SELECT CONCAT(' 255 foo', '20000101foo');
+}
+expect raw {
+ 255 foo20000101foo
+}
+
+test t-1255 {
+    SELECT CONCAT(' 255 foo', time '-32:34:58');
+}
+expect raw {
+ 255 foo-32:34:58
+}
+
+test t-1268 {
+    SELECT CONCAT(' 255 foo', '1969-02-18');
+}
+expect raw {
+ 255 foo1969-02-18
+}
+
+test t-1288 {
+    SELECT CONCAT(' 255 foo', cast('2' as json));
+}
+expect raw {
+ 255 foo2
+}
+
+test t-1291 {
+    SELECT CONCAT(' 255 foo', cast('9223372036854775807' as json));
+}
+expect raw {
+ 255 foo9223372036854775807
+}
+
+test t-1306 {
+    SELECT CONCAT(' 255 foo', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect raw {
+ 255 foo\{"a": 1, "b": 2\}
+}
+
+test t-1314 {
+    SELECT CONCAT(' 255 foo', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect raw {
+ 255 foo"2000-01-01 12:34:58.000000"
+}
+
+test t-1319 {
+    SELECT CONCAT(0.0e0, 1);
+}
+expect {
+    01
+}
+
+test t-1322 {
+    SELECT CONCAT(0.0e0, ' 1 ');
+}
+expect raw {
+0 1 
+}
+
+test t-1333 {
+    SELECT CONCAT(0.0e0, 0.0);
+}
+expect {
+    00.0
+}
+
+test t-1338 {
+    SELECT CONCAT(0.0e0, 1.7);
+}
+expect {
+    01.7
+}
+
+test t-1340 {
+    SELECT CONCAT(0.0e0, -1.7);
+}
+expect {
+    0-1.7
+}
+
+test t-1343 {
+    SELECT CONCAT(0.0e0, 'foobar');
+}
+expect {
+    0foobar
+}
+
+test t-1356 {
+    SELECT CONCAT(0.0e0, x'09');
+}
+expect raw {
+0	
+}
+
+test t-1365 {
+    SELECT CONCAT(0.0e0, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-1366 {
+    SELECT CONCAT(0.0e0, NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-1394 {
+    SELECT CONCAT(0.0e0, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    02000-01-01 10:34:58.123456
+}
+
+test t-1405 {
+    SELECT CONCAT(0.0e0, '20000101103458.123456');
+}
+expect {
+    020000101103458.123456
+}
+
+test t-1419 {
+    SELECT CONCAT(0.0e0, time'00:00:59.01011');
+}
+expect {
+    000:00:59.01011
+}
+
+test t-1428 {
+    SELECT CONCAT(0.0e0, '0000-02-29');
+}
+expect {
+    00000-02-29
+}
+
+test t-1430 {
+    SELECT CONCAT(0.0e0, '1969-02-18');
+}
+expect {
+    01969-02-18
+}
+
+test t-1440 {
+    SELECT CONCAT(0.0e0, cast('null' as json));
+}
+expect {
+    0null
+}
+
+test t-1465 {
+    SELECT CONCAT(0.0e0, cast('["ab"]' as json));
+}
+expect {
+    0["ab"]
+}
+
+test t-1481 {
+    SELECT CONCAT(1.0e0, 1);
+}
+expect {
+    11
+}
+
+test t-1485 {
+    SELECT CONCAT(1.0e0, ' 255 ');
+}
+expect raw {
+1 255 
+}
+
+test t-1523 {
+    SELECT CONCAT(1.0e0, 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-1564 {
+    SELECT CONCAT(1.0e0, 103458.123456);
+}
+expect {
+    1103458.123456
+}
+
+test t-1571 {
+    SELECT CONCAT(1.0e0, '20000101103458foo');
+}
+expect {
+    120000101103458foo
+}
+
+test t-1574 {
+    SELECT CONCAT(1.0e0, '20000101foo');
+}
+expect {
+    120000101foo
+}
+
+test t-1578 {
+    SELECT CONCAT(1.0e0, time '-31:34:58');
+}
+expect {
+    1-31:34:58
+}
+
+test t-1588 {
+    SELECT CONCAT(1.0e0, '2000-01-01');
+}
+expect {
+    12000-01-01
+}
+
+test t-1597 {
+    SELECT CONCAT(1.0e0, cast(1 as json));
+}
+expect {
+    11
+}
+
+test t-1622 {
+    SELECT CONCAT(1.0e0, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-1623 {
+    SELECT CONCAT(1.0e0, cast(0x666F6F626172FF as json));
+}
+expect {
+    1"base64:type15:Zm9vYmFy/w=="
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-1634 {
+    SELECT CONCAT(1.0e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-1642 {
+    SELECT CONCAT(1.5e0, 0);
+}
+expect {
+    1.50
+}
+
+test t-1650 {
+    SELECT CONCAT(1.5e0, 0.0e0);
+}
+expect {
+    1.50
+}
+
+test t-1670 {
+    SELECT CONCAT(1.5e0, _binary 'foobar');
+}
+expect {
+    1.5foobar
+}
+
+test t-1688 {
+    SELECT CONCAT(1.5e0, 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-1692 {
+    SELECT CONCAT(1.5e0, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-1696 {
+    SELECT CONCAT(1.5e0, 0xFF666F6F626172FF);
+}
+expect {
+    1.5�foobar�
+}
+
+test t-1710 {
+    SELECT CONCAT(1.5e0, time '5 10:34:58');
+}
+expect {
+    1.5130:34:58
+}
+
+test t-1717 {
+    SELECT CONCAT(1.5e0, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    1.52000-01-01 10:34:58
+}
+
+test t-1719 {
+    SELECT CONCAT(1.5e0, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    1.52000-01-01 10:34:58.978654
+}
+
+test t-1725 {
+    SELECT CONCAT(1.5e0, 103458);
+}
+expect {
+    1.5103458
+}
+
+test t-1727 {
+    SELECT CONCAT(1.5e0, '20000101103458');
+}
+expect {
+    1.520000101103458
+}
+
+test t-1731 {
+    SELECT CONCAT(1.5e0, '103458');
+}
+expect {
+    1.5103458
+}
+
+test t-1735 {
+    SELECT CONCAT(1.5e0, '20000101103458.123456foo');
+}
+expect {
+    1.520000101103458.123456foo
+}
+
+test t-1746 {
+    SELECT CONCAT(1.5e0, time '-5 10:34:58');
+}
+expect {
+    1.5-130:34:58
+}
+
+test t-1749 {
+    SELECT CONCAT(1.5e0, '5 10:34:58');
+}
+expect {
+    1.55 10:34:58
+}
+
+test t-1755 {
+    SELECT CONCAT(1.5e0, '1970-01-01 00:00:01');
+}
+expect {
+    1.51970-01-01 00:00:01
+}
+
+test t-1759 {
+    SELECT CONCAT(1.5e0, cast(1 as json));
+}
+expect {
+    1.51
+}
+
+test t-1794 {
+    SELECT CONCAT(1.5e0, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    1.5\{"b": 2, "c": 1\}
+}
+
+test t-1798 {
+    SELECT CONCAT(1.5e0, cast(date '2000-01-01' as json));
+}
+expect {
+    1.5"2000-01-01"
+}
+
+test t-1806 {
+    SELECT CONCAT(-1.5e0, 255);
+}
+expect {
+    -1.5255
+}
+
+test t-1815 {
+    SELECT CONCAT(-1.5e0, -1.5e0);
+}
+expect {
+    -1.5-1.5
+}
+
+test t-1843 {
+    SELECT CONCAT(-1.5e0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1849 {
+    SELECT CONCAT(-1.5e0, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-1853 {
+    SELECT CONCAT(-1.5e0, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-1856 {
+    SELECT CONCAT(-1.5e0, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-1869 {
+    SELECT CONCAT(-1.5e0, time '31:34:58');
+}
+expect {
+    -1.531:34:58
+}
+
+test t-1879 {
+    SELECT CONCAT(-1.5e0, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    -1.52000-01-01 10:34:58
+}
+
+test t-1887 {
+    SELECT CONCAT(-1.5e0, 103458);
+}
+expect {
+    -1.5103458
+}
+
+test t-1917 {
+    SELECT CONCAT(-1.5e0, '1970-01-01 00:00:01');
+}
+expect {
+    -1.51970-01-01 00:00:01
+}
+
+test t-1918 {
+    SELECT CONCAT(-1.5e0, '3001-02-19 00:00:00');
+}
+expect {
+    -1.53001-02-19 00:00:00
+}
+
+test t-1932 {
+    SELECT CONCAT(-1.5e0, cast(-1.1 as json));
+}
+expect {
+    -1.5-1.1
+}
+
+test t-1946 {
+    SELECT CONCAT(-1.5e0, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    -1.5"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-1957 {
+    SELECT CONCAT(-1.5e0, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1.5\{"b": 2, "c": 1\}
+}
+
+test t-1962 {
+    SELECT CONCAT(-1.5e0, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    -1.5"2000-01-01 12:34:58.000000"
+}
+
+test t-1976 {
+    SELECT CONCAT(1.1e0, 1.5e0);
+}
+expect {
+    1.11.5
+}
+
+test t-2003 {
+    SELECT CONCAT(1.1e0, 0x9);
+}
+expect raw {
+1.1	
+}
+
+test t-2007 {
+    SELECT CONCAT(1.1e0, false);
+}
+expect {
+    1.10
+}
+
+test t-2021 {
+    SELECT CONCAT(1.1e0, 0x666F6F626172FF);
+}
+expect {
+    1.1foobar�
+}
+
+test t-2028 {
+    SELECT CONCAT(1.1e0, JSON_OBJECT());
+}
+expect {
+    1.1\{\}
+}
+
+test t-2029 {
+    SELECT CONCAT(1.1e0, JSON_ARRAY());
+}
+expect {
+    1.1[]
+}
+
+test t-2039 {
+    SELECT CONCAT(1.1e0, time '5 10:34:58.9');
+}
+expect {
+    1.1130:34:58.9
+}
+
+test t-2050 {
+    SELECT CONCAT(1.1e0, 103458.123456);
+}
+expect {
+    1.1103458.123456
+}
+
+test t-2051 {
+    SELECT CONCAT(1.1e0, '20000101103458');
+}
+expect {
+    1.120000101103458
+}
+
+test t-2053 {
+    SELECT CONCAT(1.1e0, '20000101103458.123456');
+}
+expect {
+    1.120000101103458.123456
+}
+
+test t-2060 {
+    SELECT CONCAT(1.1e0, '20000101foo');
+}
+expect {
+    1.120000101foo
+}
+
+test t-2085 {
+    SELECT CONCAT(1.1e0, cast(false as json));
+}
+expect {
+    1.1false
+}
+
+test t-2124 {
+    SELECT CONCAT(1.1e0, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    1.1"2000-01-01 12:34:58.000000"
+}
+
+test t-2126 {
+    SELECT CONCAT(1.1e0, cast(time '12:34:58' as json));
+}
+expect {
+    1.1"12:34:58.000000"
+}
+
+test t-2130 {
+    SELECT CONCAT(-1.1e0, 255);
+}
+expect {
+    -1.1255
+}
+
+test t-2136 {
+    SELECT CONCAT(-1.1e0, 0.0e0);
+}
+expect {
+    -1.10
+}
+
+test t-2148 {
+    SELECT CONCAT(-1.1e0, 1.7);
+}
+expect {
+    -1.11.7
+}
+
+test t-2203 {
+    SELECT CONCAT(-1.1e0, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    -1.12000-01-01 10:34:58
+}
+
+test t-2204 {
+    SELECT CONCAT(-1.1e0, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -1.12000-01-01 10:34:58.123456
+}
+
+test t-2231 {
+    SELECT CONCAT(-1.1e0, time '-101:34:58');
+}
+expect {
+    -1.1-101:34:58
+}
+
+test t-2234 {
+    SELECT CONCAT(-1.1e0, '101:34:58');
+}
+expect {
+    -1.1101:34:58
+}
+
+test t-2247 {
+    SELECT CONCAT(-1.1e0, cast(false as json));
+}
+expect {
+    -1.1false
+}
+
+test t-2256 {
+    SELECT CONCAT(-1.1e0, cast(-1.1 as json));
+}
+expect {
+    -1.1-1.1
+}
+
+test t-2266 {
+    SELECT CONCAT(-1.1e0, cast('"bar"' as json));
+}
+expect {
+    -1.1"bar"
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-2283 {
+    SELECT CONCAT(-1.1e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-2311 {
+    SELECT CONCAT(-1.7e0, -1.1);
+}
+expect {
+    -1.7-1.1
+}
+
+test t-2331 {
+    SELECT CONCAT(-1.7e0, false);
+}
+expect {
+    -1.70
+}
+
+test t-2360 {
+    SELECT CONCAT(-1.7e0, time '31:34:58.4');
+}
+expect {
+    -1.731:34:58.4
+}
+
+test t-2361 {
+    SELECT CONCAT(-1.7e0, time '32:34:58.5');
+}
+expect {
+    -1.732:34:58.5
+}
+
+test t-2363 {
+    SELECT CONCAT(-1.7e0, time '5 10:34:58.9');
+}
+expect {
+    -1.7130:34:58.9
+}
+
+test t-2379 {
+    SELECT CONCAT(-1.7e0, '103458');
+}
+expect {
+    -1.7103458
+}
+
+test t-2394 {
+    SELECT CONCAT(-1.7e0, time '-5 10:34:58');
+}
+expect {
+    -1.7-130:34:58
+}
+
+test t-2407 {
+    SELECT CONCAT(-1.7e0, cast(1 as json));
+}
+expect {
+    -1.71
+}
+
+test t-2414 {
+    SELECT CONCAT(-1.7e0, cast('false' as json));
+}
+expect {
+    -1.7false
+}
+
+test t-2419 {
+    SELECT CONCAT(-1.7e0, cast(9223372036854775807 as json));
+}
+expect {
+    -1.79223372036854775807
+}
+
+test t-2427 {
+    SELECT CONCAT(-1.7e0, cast('"foo"' as json));
+}
+expect {
+    -1.7"foo"
+}
+
+test t-2450 {
+    SELECT CONCAT(-1.7e0, cast(time '12:34:58' as json));
+}
+expect {
+    -1.7"12:34:58.000000"
+}
+
+test t-2464 {
+    SELECT CONCAT(0.0, 1.1e0);
+}
+expect {
+    0.01.1
+}
+
+test t-2487 {
+    SELECT CONCAT(0.0, 0b1001);
+}
+expect raw {
+0.0	
+}
+
+test t-2509 {
+    SELECT CONCAT(0.0, 9223372036854775807);
+}
+expect {
+    0.09223372036854775807
+}
+
+test t-2528 {
+    SELECT CONCAT(0.0, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    0.02000-01-01 10:34:58.123456
+}
+
+test t-2541 {
+    SELECT CONCAT(0.0, '103458');
+}
+expect {
+    0.0103458
+}
+
+test t-2542 {
+    SELECT CONCAT(0.0, '103458.123456');
+}
+expect {
+    0.0103458.123456
+}
+
+test t-2545 {
+    SELECT CONCAT(0.0, '20000101103458.123456foo');
+}
+expect {
+    0.020000101103458.123456foo
+}
+
+test t-2559 {
+    SELECT CONCAT(0.0, '5 10:34:58');
+}
+expect {
+    0.05 10:34:58
+}
+
+test t-2565 {
+    SELECT CONCAT(0.0, '1970-01-01 00:00:01');
+}
+expect {
+    0.01970-01-01 00:00:01
+}
+
+test t-2567 {
+    SELECT CONCAT(0.0, '3001-02-18 23:59:59');
+}
+expect {
+    0.03001-02-18 23:59:59
+}
+
+test t-2569 {
+    SELECT CONCAT(0.0, cast(1 as json));
+}
+expect {
+    0.01
+}
+
+test t-2582 {
+    SELECT CONCAT(0.0, cast(18446744073709551615 as json));
+}
+expect {
+    0.018446744073709551615
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-2607 {
+    SELECT CONCAT(0.0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-2610 {
+    SELECT CONCAT(0.0, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    0.0"2000-01-01 12:34:58.000000"
+}
+
+test t-2621 {
+    SELECT CONCAT(0.000, ' 255 foo');
+}
+expect {
+    0.000 255 foo
+}
+
+test t-2628 {
+    SELECT CONCAT(0.000, -1.7e0);
+}
+expect {
+    0.000-1.7
+}
+
+test t-2639 {
+    SELECT CONCAT(0.000, 'foobar');
+}
+expect {
+    0.000foobar
+}
+
+test t-2648 {
+    SELECT CONCAT(0.000, X'ff');
+}
+expect {
+    0.000�
+}
+
+test t-2659 {
+    SELECT CONCAT(0.000, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-2678 {
+    SELECT CONCAT(0.000, time '10:04:58');
+}
+expect {
+    0.00010:04:58
+}
+
+test t-2696 {
+    SELECT CONCAT(0.000, 20000101);
+}
+expect {
+    0.00020000101
+}
+
+test t-2701 {
+    SELECT CONCAT(0.000, '20000101103458.123456');
+}
+expect {
+    0.00020000101103458.123456
+}
+
+test t-2703 {
+    SELECT CONCAT(0.000, '103458');
+}
+expect {
+    0.000103458
+}
+
+test t-2735 {
+    SELECT CONCAT(0.000, cast('[]' as json));
+}
+expect {
+    0.000[]
+}
+
+test t-2756 {
+    SELECT CONCAT(0.000, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    0.000"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-2762 {
+    SELECT CONCAT(0.000, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    0.000["ab", "cd", "ef"]
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-2769 {
+    SELECT CONCAT(0.000, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-2773 {
+    SELECT CONCAT(0.000, cast(time '12:34:56' as json));
+}
+expect {
+    0.000"12:34:56.000000"
+}
+
+test t-2776 {
+    SELECT CONCAT(1.5, 0);
+}
+expect {
+    1.50
+}
+
+test t-2779 {
+    SELECT CONCAT(1.5, ' 0 ');
+}
+expect raw {
+1.5 0 
+}
+
+test t-2787 {
+    SELECT CONCAT(1.5, -1.5e0);
+}
+expect {
+    1.5-1.5
+}
+
+test t-2794 {
+    SELECT CONCAT(1.5, -1.5);
+}
+expect {
+    1.5-1.5
+}
+
+test t-2798 {
+    SELECT CONCAT(1.5, -1.7);
+}
+expect {
+    1.5-1.7
+}
+
+test t-2800 {
+    SELECT CONCAT(1.5, '-1.5');
+}
+expect {
+    1.5-1.5
+}
+
+test t-2804 {
+    SELECT CONCAT(1.5, _binary 'foobar');
+}
+expect {
+    1.5foobar
+}
+
+test t-2843 {
+    SELECT CONCAT(1.5, time '130:34:58');
+}
+expect {
+    1.5130:34:58
+}
+
+test t-2853 {
+    SELECT CONCAT(1.5, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    1.52000-01-01 10:34:58.978654
+}
+
+test t-2864 {
+    SELECT CONCAT(1.5, '20000101');
+}
+expect {
+    1.520000101
+}
+
+test t-2875 {
+    SELECT CONCAT(1.5, time '-32:34:58');
+}
+expect {
+    1.5-32:34:58
+}
+
+test t-2877 {
+    SELECT CONCAT(1.5, time'00:00:59.01011');
+}
+expect {
+    1.500:00:59.01011
+}
+
+test t-2886 {
+    SELECT CONCAT(1.5, '0000-02-29');
+}
+expect {
+    1.50000-02-29
+}
+
+test t-2888 {
+    SELECT CONCAT(1.5, '1969-02-18');
+}
+expect {
+    1.51969-02-18
+}
+
+test t-2893 {
+    SELECT CONCAT(1.5, cast(1 as json));
+}
+expect {
+    1.51
+}
+
+test t-2904 {
+    SELECT CONCAT(1.5, cast(-1.1 as json));
+}
+expect {
+    1.5-1.1
+}
+
+test t-2906 {
+    SELECT CONCAT(1.5, cast(18446744073709551615 as json));
+}
+expect {
+    1.518446744073709551615
+}
+
+test t-2922 {
+    SELECT CONCAT(1.5, cast('["a"]' as json));
+}
+expect {
+    1.5["a"]
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-2931 {
+    SELECT CONCAT(1.5, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-2933 {
+    SELECT CONCAT(1.5, cast(date '2000-01-02' as json));
+}
+expect {
+    1.5"2000-01-02"
+}
+
+test t-2942 {
+    SELECT CONCAT(-1.5, ' 1 ');
+}
+expect raw {
+-1.5 1 
+}
+
+test t-2943 {
+    SELECT CONCAT(-1.5, ' 255 ');
+}
+expect raw {
+-1.5 255 
+}
+
+test t-2948 {
+    SELECT CONCAT(-1.5, 1.5e0);
+}
+expect {
+    -1.51.5
+}
+
+test t-2953 {
+    SELECT CONCAT(-1.5, 0.0);
+}
+expect {
+    -1.50.0
+}
+
+test t-2955 {
+    SELECT CONCAT(-1.5, 1.5);
+}
+expect {
+    -1.51.5
+}
+
+test t-2982 {
+    SELECT CONCAT(-1.5, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-2993 {
+    SELECT CONCAT(-1.5, 0x666F6F626172FF);
+}
+expect {
+    -1.5foobar�
+}
+
+test t-2995 {
+    SELECT CONCAT(-1.5, 9223372036854775807);
+}
+expect {
+    -1.59223372036854775807
+}
+
+test t-3002 {
+    SELECT CONCAT(-1.5, time '10:04:58');
+}
+expect {
+    -1.510:04:58
+}
+
+test t-3033 {
+    SELECT CONCAT(-1.5, '103458foo');
+}
+expect {
+    -1.5103458foo
+}
+
+test t-3041 {
+    SELECT CONCAT(-1.5, time '-101:34:58');
+}
+expect {
+    -1.5-101:34:58
+}
+
+test t-3042 {
+    SELECT CONCAT(-1.5, time '-5 10:34:58');
+}
+expect {
+    -1.5-130:34:58
+}
+
+test t-3072 {
+    SELECT CONCAT(-1.5, cast('-1.1' as json));
+}
+expect {
+    -1.5-1.1
+}
+
+test t-3078 {
+    SELECT CONCAT(-1.5, cast(_binary' "foo"' as json));
+}
+expect {
+    -1.5"base64:type15:ICJmb28i"
+}
+
+test t-3110 {
+    SELECT CONCAT(1.1, 1.5e0);
+}
+expect {
+    1.11.5
+}
+
+test t-3116 {
+    SELECT CONCAT(1.1, 0.000);
+}
+expect {
+    1.10.000
+}
+
+test t-3128 {
+    SELECT CONCAT(1.1, _binary 'foobar');
+}
+expect {
+    1.1foobar
+}
+
+test t-3143 {
+    SELECT CONCAT(1.1, 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-3153 {
+    SELECT CONCAT(1.1, NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-3180 {
+    SELECT CONCAT(1.1, 20000101103458.1234);
+}
+expect {
+    1.120000101103458.1234
+}
+
+test t-3214 {
+    SELECT CONCAT(1.1, '3001-02-19 00:00:00');
+}
+expect {
+    1.13001-02-19 00:00:00
+}
+
+test t-3248 {
+    SELECT CONCAT(1.1, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    1.1["ab", "cd", "ef"]
+}
+
+test t-3257 {
+    SELECT CONCAT(1.1, cast(date '2000-01-02' as json));
+}
+expect {
+    1.1"2000-01-02"
+}
+
+test t-3265 {
+    SELECT CONCAT(1.7, ' 0 ');
+}
+expect raw {
+1.7 0 
+}
+
+test t-3270 {
+    SELECT CONCAT(1.7, 0.0e0);
+}
+expect {
+    1.70
+}
+
+test t-3279 {
+    SELECT CONCAT(1.7, 1.5);
+}
+expect {
+    1.71.5
+}
+
+test t-3288 {
+    SELECT CONCAT(1.7, _utf8 'foobar');
+}
+expect {
+    1.7foobar
+}
+
+test t-3289 {
+    SELECT CONCAT(1.7, '');
+}
+expect {
+    1.7
+}
+
+test t-3293 {
+    SELECT CONCAT(1.7, 0xff);
+}
+expect {
+    1.7�
+}
+
+test t-3297 {
+    SELECT CONCAT(1.7, 0b1001);
+}
+expect raw {
+1.7	
+}
+
+test t-3304 {
+    SELECT CONCAT(1.7, NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-3311 {
+    SELECT CONCAT(1.7, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-3321 {
+    SELECT CONCAT(1.7, 18446744073709551615);
+}
+expect {
+    1.718446744073709551615
+}
+
+test t-3332 {
+    SELECT CONCAT(1.7, time '31:34:58.4');
+}
+expect {
+    1.731:34:58.4
+}
+
+test t-3341 {
+    SELECT CONCAT(1.7, 20000101103458);
+}
+expect {
+    1.720000101103458
+}
+
+test t-3366 {
+    SELECT CONCAT(1.7, time '-5 10:34:58');
+}
+expect {
+    1.7-130:34:58
+}
+
+test t-3373 {
+    SELECT CONCAT(1.7, '0000-01-03');
+}
+expect {
+    1.70000-01-03
+}
+
+test t-3381 {
+    SELECT CONCAT(1.7, cast(false as json));
+}
+expect {
+    1.7false
+}
+
+test t-3390 {
+    SELECT CONCAT(1.7, cast(-1.1 as json));
+}
+expect {
+    1.7-1.1
+}
+
+test t-3393 {
+    SELECT CONCAT(1.7, cast('1' as json));
+}
+expect {
+    1.71
+}
+
+test t-3403 {
+    SELECT CONCAT(1.7, cast(_binary '"bar"' as json));
+}
+expect {
+    1.7"base64:type15:ImJhciI="
+}
+
+test t-3405 {
+    SELECT CONCAT(1.7, cast(0x666F6F626172FF as json));
+}
+expect {
+    1.7"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-3411 {
+    SELECT CONCAT(1.7, cast('["ab", "ef"]' as json));
+}
+expect {
+    1.7["ab", "ef"]
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-3417 {
+    SELECT CONCAT(1.7, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-3427 {
+    SELECT CONCAT(-1.1, ' 0 ');
+}
+expect raw {
+-1.1 0 
+}
+
+test t-3445 {
+    SELECT CONCAT(-1.1, -1.1);
+}
+expect {
+    -1.1-1.1
+}
+
+test t-3450 {
+    SELECT CONCAT(-1.1, _utf8 'foobar');
+}
+expect {
+    -1.1foobar
+}
+
+test t-3471 {
+    SELECT CONCAT(-1.1, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-3478 {
+    SELECT CONCAT(-1.1, 0xFF666F6F626172FF);
+}
+expect {
+    -1.1�foobar�
+}
+
+test t-3482 {
+    SELECT CONCAT(-1.1, -9223372036854775808);
+}
+expect {
+    -1.1-9223372036854775808
+}
+
+test t-3489 {
+    SELECT CONCAT(-1.1, time '31:34:58');
+}
+expect {
+    -1.131:34:58
+}
+
+test t-3490 {
+    SELECT CONCAT(-1.1, time '32:34:58');
+}
+expect {
+    -1.132:34:58
+}
+
+test t-3502 {
+    SELECT CONCAT(-1.1, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    -1.12024-12-30 10:34:58
+}
+
+test t-3511 {
+    SELECT CONCAT(-1.1, '20000101103458.123456');
+}
+expect {
+    -1.120000101103458.123456
+}
+
+test t-3512 {
+    SELECT CONCAT(-1.1, '20000101');
+}
+expect {
+    -1.120000101
+}
+
+test t-3526 {
+    SELECT CONCAT(-1.1, time'00:00:59.2132234');
+}
+expect {
+    -1.100:00:59.213223
+}
+
+test t-3527 {
+    SELECT CONCAT(-1.1, time '-101:34:58');
+}
+expect {
+    -1.1-101:34:58
+}
+
+test t-3529 {
+    SELECT CONCAT(-1.1, '10:04:58');
+}
+expect {
+    -1.110:04:58
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-3563 {
+    SELECT CONCAT(-1.1, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-3564 {
+    SELECT CONCAT(-1.1, cast(_binary' "foo"' as json));
+}
+expect {
+    -1.1"base64:type15:ICJmb28i"
+}
+
+test t-3568 {
+    SELECT CONCAT(-1.1, cast(0b01 as json));
+}
+expect {
+    -1.1"base64:type15:AQ=="
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-3578 {
+    SELECT CONCAT(-1.1, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-3579 {
+    SELECT CONCAT(-1.1, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-3581 {
+    SELECT CONCAT(-1.1, cast(date '2000-01-02' as json));
+}
+expect {
+    -1.1"2000-01-02"
+}
+
+test t-3600 {
+    SELECT CONCAT(-1.7, -1.7e0);
+}
+expect {
+    -1.7-1.7
+}
+
+test t-3603 {
+    SELECT CONCAT(-1.7, 1.5);
+}
+expect {
+    -1.71.5
+}
+
+test t-3640 {
+    SELECT CONCAT(-1.7, 0xFF666F6F626172FF);
+}
+expect {
+    -1.7�foobar�
+}
+
+test t-3644 {
+    SELECT CONCAT(-1.7, -9223372036854775808);
+}
+expect {
+    -1.7-9223372036854775808
+}
+
+test t-3656 {
+    SELECT CONCAT(-1.7, time '31:34:58.4');
+}
+expect {
+    -1.731:34:58.4
+}
+
+test t-3672 {
+    SELECT CONCAT(-1.7, '20000101103458.1234');
+}
+expect {
+    -1.720000101103458.1234
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-3741 {
+    SELECT CONCAT(-1.7, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-3746 {
+    SELECT CONCAT(-1.7, cast(time '12:34:58' as json));
+}
+expect {
+    -1.7"12:34:58.000000"
+}
+
+test t-3750 {
+    SELECT CONCAT('1.5', 255);
+}
+expect {
+    1.5255
+}
+
+test t-3761 {
+    SELECT CONCAT('1.5', -1.1e0);
+}
+expect {
+    1.5-1.1
+}
+
+test t-3764 {
+    SELECT CONCAT('1.5', 0.000);
+}
+expect {
+    1.50.000
+}
+
+test t-3802 {
+    SELECT CONCAT('1.5', 0xFF666F6F626172FF);
+}
+expect {
+    1.5�foobar�
+}
+
+test t-3806 {
+    SELECT CONCAT('1.5', -9223372036854775808);
+}
+expect {
+    1.5-9223372036854775808
+}
+
+test t-3808 {
+    SELECT CONCAT('1.5', 18446744073709540000e0);
+}
+expect {
+    1.51.844674407370954e19
+}
+
+test t-3854 {
+    SELECT CONCAT('1.5', '101:34:58');
+}
+expect {
+    1.5101:34:58
+}
+
+test t-3909 {
+    SELECT CONCAT('1.5', cast(time '5 12:34:58' as json));
+}
+expect {
+    1.5"04:34:58.000000"
+}
+
+test t-3916 {
+    SELECT CONCAT('-1.5', '\t1foo\t');
+}
+expect raw {
+-1.5	1foo	
+}
+
+test t-3919 {
+    SELECT CONCAT('-1.5', 1.0e0);
+}
+expect {
+    -1.51
+}
+
+test t-3924 {
+    SELECT CONCAT('-1.5', -1.7e0);
+}
+expect {
+    -1.5-1.7
+}
+
+test t-3937 {
+    SELECT CONCAT('-1.5', '');
+}
+expect {
+    -1.5
+}
+
+test t-3958 {
+    SELECT CONCAT('-1.5', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-3975 {
+    SELECT CONCAT('-1.5', time '31:34:58');
+}
+expect {
+    -1.531:34:58
+}
+
+test t-3994 {
+    SELECT CONCAT('-1.5', 103458.123456);
+}
+expect {
+    -1.5103458.123456
+}
+
+test t-4012 {
+    SELECT CONCAT('-1.5', time'00:00:59.2132234');
+}
+expect {
+    -1.500:00:59.213223
+}
+
+test t-4015 {
+    SELECT CONCAT('-1.5', '10:04:58');
+}
+expect {
+    -1.510:04:58
+}
+
+test t-4037 {
+    SELECT CONCAT('-1.5', cast(1.1 as json));
+}
+expect {
+    -1.51.1
+}
+
+test t-4058 {
+    SELECT CONCAT('-1.5', cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    -1.5["ab", "cd", "ef"]
+}
+
+test t-4063 {
+    SELECT CONCAT('-1.5', cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1.5\{"b": 2, "c": 1\}
+}
+
+test t-4076 {
+    SELECT CONCAT('foobar', ' 1 ');
+}
+expect raw {
+foobar 1 
+}
+
+test t-4078 {
+    SELECT CONCAT('foobar', '\t1foo\t');
+}
+expect raw {
+foobar	1foo	
+}
+
+test t-4084 {
+    SELECT CONCAT('foobar', 1.1e0);
+}
+expect {
+    foobar1.1
+}
+
+test t-4090 {
+    SELECT CONCAT('foobar', -1.5);
+}
+expect {
+    foobar-1.5
+}
+
+test t-4095 {
+    SELECT CONCAT('foobar', '1.5');
+}
+expect {
+    foobar1.5
+}
+
+test t-4117 {
+    SELECT CONCAT('foobar', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-4122 {
+    SELECT CONCAT('foobar', NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-4125 {
+    SELECT CONCAT('foobar', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-4126 {
+    SELECT CONCAT('foobar', 0xFF666F6F626172FF);
+}
+expect {
+    foobar�foobar�
+}
+
+test t-4147 {
+    SELECT CONCAT('foobar', timestamp '2000-01-01 10:34:58');
+}
+expect {
+    foobar2000-01-01 10:34:58
+}
+
+test t-4148 {
+    SELECT CONCAT('foobar', timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    foobar2000-01-01 10:34:58.123456
+}
+
+test t-4214 {
+    SELECT CONCAT('foobar', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    foobar"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-4247 {
+    SELECT CONCAT(_utf8 'foobar', -1.1e0);
+}
+expect {
+    foobar-1.1
+}
+
+test t-4298 {
+    SELECT CONCAT(_utf8 'foobar', time '10:04:58');
+}
+expect {
+    foobar10:04:58
+}
+
+test t-4308 {
+    SELECT CONCAT(_utf8 'foobar', date '2000-01-01');
+}
+expect {
+    foobar2000-01-01
+}
+
+test t-4336 {
+    SELECT CONCAT(_utf8 'foobar', time'00:00:59.2132234');
+}
+expect {
+    foobar00:00:59.213223
+}
+
+test t-4342 {
+    SELECT CONCAT(_utf8 'foobar', '2000-01-01');
+}
+expect {
+    foobar2000-01-01
+}
+
+test t-4347 {
+    SELECT CONCAT(_utf8 'foobar', '1970-01-01 00:00:01');
+}
+expect {
+    foobar1970-01-01 00:00:01
+}
+
+test t-4363 {
+    SELECT CONCAT(_utf8 'foobar', cast(9223372036854775807 as json));
+}
+expect {
+    foobar9223372036854775807
+}
+
+test t-4396 {
+    SELECT CONCAT('', 0);
+}
+expect {
+    0
+}
+
+test t-4405 {
+    SELECT CONCAT('', 1.0e0);
+}
+expect {
+    1
+}
+
+test t-4413 {
+    SELECT CONCAT('', 1.5);
+}
+expect {
+    1.5
+}
+
+test t-4438 {
+    SELECT CONCAT('', NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-4445 {
+    SELECT CONCAT('', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-4447 {
+    SELECT CONCAT('', NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-4452 {
+    SELECT CONCAT('', 0xFF666F6F626172);
+}
+expect {
+    �foobar
+}
+
+test t-4456 {
+    SELECT CONCAT('', 18446744073709540000e0);
+}
+expect {
+    1.844674407370954e19
+}
+
+test t-4460 {
+    SELECT CONCAT('', time '10:04:58');
+}
+expect {
+    10:04:58
+}
+
+test t-4486 {
+    SELECT CONCAT('', '103458.123456');
+}
+expect {
+    103458.123456
+}
+
+test t-4490 {
+    SELECT CONCAT('', '20000101foo');
+}
+expect {
+    20000101foo
+}
+
+test t-4502 {
+    SELECT CONCAT('', '101:34:58');
+}
+expect {
+    101:34:58
+}
+
+test t-4536 {
+    SELECT CONCAT('', cast(_binary' "foo"' as json));
+}
+expect {
+    "base64:type15:ICJmb28i"
+}
+
+test t-4554 {
+    SELECT CONCAT('', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    "2000-01-01 12:34:58.000000"
+}
+
+test t-4562 {
+    SELECT CONCAT(_binary 'foobar', ' 1 ');
+}
+expect raw {
+foobar 1 
+}
+
+test t-4570 {
+    SELECT CONCAT(_binary 'foobar', 1.1e0);
+}
+expect {
+    foobar1.1
+}
+
+test t-4581 {
+    SELECT CONCAT(_binary 'foobar', '1.5');
+}
+expect {
+    foobar1.5
+}
+
+test t-4592 {
+    SELECT CONCAT(_binary 'foobar', X'ff');
+}
+expect {
+    foobar�
+}
+
+test t-4621 {
+    SELECT CONCAT(_binary 'foobar', JSON_ARRAY());
+}
+expect {
+    foobar[]
+}
+
+test t-4627 {
+    SELECT CONCAT(_binary 'foobar', time '10:04:58.1');
+}
+expect {
+    foobar10:04:58.1
+}
+
+test t-4645 {
+    SELECT CONCAT(_binary 'foobar', '20000101103458.123456');
+}
+expect {
+    foobar20000101103458.123456
+}
+
+test t-4685 {
+    SELECT CONCAT(_binary 'foobar', cast(1.1 as json));
+}
+expect {
+    foobar1.1
+}
+
+test t-4694 {
+    SELECT CONCAT(_binary 'foobar', cast('18446744073709551615' as json));
+}
+expect {
+    foobar18446744073709551615
+}
+
+test t-4710 {
+    SELECT CONCAT(_binary 'foobar', cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    foobar\{"b": 2, "c": 1\}
+}
+
+test t-4714 {
+    SELECT CONCAT(_binary 'foobar', cast(date '2000-01-01' as json));
+}
+expect {
+    foobar"2000-01-01"
+}
+
+test t-4925 {
+    SELECT CONCAT(0x1, 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-4935 {
+    SELECT CONCAT(0x1, NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-5051 {
+    SELECT CONCAT(0xff, ' 255 foo');
+}
+expect {
+    � 255 foo
+}
+
+test t-5057 {
+    SELECT CONCAT(0xff, -1.1e0);
+}
+expect {
+    �-1.1
+}
+
+test t-5069 {
+    SELECT CONCAT(0xff, 'foobar');
+}
+expect {
+    �foobar
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5107 {
+    SELECT CONCAT(0xff, JSON_ARRAY());
+}
+expect error {
+}
+
+test t-5113 {
+    SELECT CONCAT(0xff, time '10:04:58.1');
+}
+expect {
+    �10:04:58.1
+}
+
+test t-5119 {
+    SELECT CONCAT(0xff, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    �2000-01-01 10:34:58
+}
+
+test t-5122 {
+    SELECT CONCAT(0xff, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    �2024-12-30 10:34:58
+}
+
+test t-5129 {
+    SELECT CONCAT(0xff, '20000101103458');
+}
+expect {
+    �20000101103458
+}
+
+test t-5148 {
+    SELECT CONCAT(0xff, time '-5 10:34:58');
+}
+expect {
+    �-130:34:58
+}
+
+test t-5150 {
+    SELECT CONCAT(0xff, '101:34:58');
+}
+expect {
+    �101:34:58
+}
+
+test t-5151 {
+    SELECT CONCAT(0xff, '5 10:34:58');
+}
+expect {
+    �5 10:34:58
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5164 {
+    SELECT CONCAT(0xff, cast('\{\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5173 {
+    SELECT CONCAT(0xff, cast(9223372036854775807 as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5176 {
+    SELECT CONCAT(0xff, cast('2' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5186 {
+    SELECT CONCAT(0xff, cast(0xFF666F6F626172FF as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5196 {
+    SELECT CONCAT(0xff, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5198 {
+    SELECT CONCAT(0xff, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-5420 {
+    SELECT CONCAT(X'01', 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-5531 {
+    SELECT CONCAT(X'ff', 1);
+}
+expect {
+    �1
+}
+
+test t-5537 {
+    SELECT CONCAT(X'ff', ' 255 foo');
+}
+expect {
+    � 255 foo
+}
+
+test t-5557 {
+    SELECT CONCAT(X'ff', '');
+}
+expect {
+    �
+}
+
+test t-5568 {
+    SELECT CONCAT(X'ff', x'09');
+}
+expect raw {
+�	
+}
+
+test t-5570 {
+    SELECT CONCAT(X'ff', true);
+}
+expect {
+    �1
+}
+
+test t-5616 {
+    SELECT CONCAT(X'ff', '20000101103458.1234');
+}
+expect {
+    �20000101103458.1234
+}
+
+test t-5621 {
+    SELECT CONCAT(X'ff', '20000101103458foo');
+}
+expect {
+    �20000101103458foo
+}
+
+test t-5634 {
+    SELECT CONCAT(X'ff', time '-5 10:34:58');
+}
+expect {
+    �-130:34:58
+}
+
+test t-5644 {
+    SELECT CONCAT(X'ff', '3001-02-19 00:00:00');
+}
+expect {
+    �3001-02-19 00:00:00
+}
+
+test t-5645 {
+    SELECT CONCAT(X'ff', '3001-02-18 23:59:59');
+}
+expect {
+    �3001-02-18 23:59:59
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5646 {
+    SELECT CONCAT(X'ff', cast(0 as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5648 {
+    SELECT CONCAT(X'ff', cast(true as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5653 {
+    SELECT CONCAT(X'ff', cast('true' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5677 {
+    SELECT CONCAT(X'ff', cast('["ab"]' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5684 {
+    SELECT CONCAT(X'ff', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-5751 {
+    SELECT CONCAT(0b1001, 18446744073709551615);
+}
+expect raw {
+	18446744073709551615
+}
+
+test t-5757 {
+    SELECT CONCAT(0b1001, time '31:34:58');
+}
+expect raw {
+	31:34:58
+}
+
+test t-5776 {
+    SELECT CONCAT(0b1001, 103458.123456);
+}
+expect raw {
+	103458.123456
+}
+
+test t-5778 {
+    SELECT CONCAT(0b1001, '20000101103458.1234');
+}
+expect raw {
+	20000101103458.1234
+}
+
+test t-5788 {
+    SELECT CONCAT(0b1001, '103458.123456foo');
+}
+expect raw {
+	103458.123456foo
+}
+
+test t-5803 {
+    SELECT CONCAT(0b1001, '0000-01-03');
+}
+expect raw {
+	0000-01-03
+}
+
+test t-5816 {
+    SELECT CONCAT(0b1001, cast('false' as json));
+}
+expect raw {
+	false
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-5831 {
+    SELECT CONCAT(0b1001, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-5856 {
+    SELECT CONCAT(b'1001', 255);
+}
+expect raw {
+	255
+}
+
+test t-5868 {
+    SELECT CONCAT(b'1001', -1.7e0);
+}
+expect raw {
+	-1.7
+}
+
+test t-5905 {
+    SELECT CONCAT(b'1001', NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-5906 {
+    SELECT CONCAT(b'1001', 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-5912 {
+    SELECT CONCAT(b'1001', -9223372036854775808);
+}
+expect raw {
+	-9223372036854775808
+}
+
+test t-5925 {
+    SELECT CONCAT(b'1001', time '32:34:58.5');
+}
+expect raw {
+	32:34:58.5
+}
+
+test t-5931 {
+    SELECT CONCAT(b'1001', timestamp '2000-01-01 10:34:58.978654');
+}
+expect raw {
+	2000-01-01 10:34:58.978654
+}
+
+test t-5933 {
+    SELECT CONCAT(b'1001', 20000101103458);
+}
+expect raw {
+	20000101103458
+}
+
+test t-5945 {
+    SELECT CONCAT(b'1001', '20000101103458foo');
+}
+expect raw {
+	20000101103458foo
+}
+
+test t-5960 {
+    SELECT CONCAT(b'1001', '101:34:58');
+}
+expect raw {
+	101:34:58
+}
+
+test t-5977 {
+    SELECT CONCAT(b'1001', cast('true' as json));
+}
+expect raw {
+	true
+}
+
+test t-5982 {
+    SELECT CONCAT(b'1001', cast(-1.1 as json));
+}
+expect raw {
+	-1.1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-5993 {
+    SELECT CONCAT(b'1001', cast('invalid' as json));
+}
+expect error {
+}
+
+test t-6006 {
+    SELECT CONCAT(b'1001', cast('\{"c": 1, "b": 2\}' as json));
+}
+expect raw {
+	\{"b": 2, "c": 1\}
+}
+
+test t-6011 {
+    SELECT CONCAT(b'1001', cast(date '2000-01-02' as json));
+}
+expect raw {
+	"2000-01-02"
+}
+
+test t-6016 {
+    SELECT CONCAT(0x9, 0);
+}
+expect raw {
+	0
+}
+
+test t-6026 {
+    SELECT CONCAT(0x9, 1.5e0);
+}
+expect raw {
+	1.5
+}
+
+test t-6050 {
+    SELECT CONCAT(0x9, X'ff');
+}
+expect raw {
+	�
+}
+
+test t-6056 {
+    SELECT CONCAT(0x9, true);
+}
+expect raw {
+	1
+}
+
+test t-6080 {
+    SELECT CONCAT(0x9, time '10:04:58');
+}
+expect raw {
+	10:04:58
+}
+
+test t-6089 {
+    SELECT CONCAT(0x9, time '5 10:34:58.9');
+}
+expect raw {
+	130:34:58.9
+}
+
+test t-6099 {
+    SELECT CONCAT(0x9, 103458);
+}
+expect raw {
+	103458
+}
+
+test t-6105 {
+    SELECT CONCAT(0x9, '103458');
+}
+expect raw {
+	103458
+}
+
+test t-6139 {
+    SELECT CONCAT(0x9, cast('true' as json));
+}
+expect raw {
+	true
+}
+
+test t-6161 {
+    SELECT CONCAT(0x9, cast(0b001 as json));
+}
+expect raw {
+	"base64:type15:AQ=="
+}
+
+test t-6192 {
+    SELECT CONCAT(x'09', -1.7e0);
+}
+expect raw {
+	-1.7
+}
+
+test t-6217 {
+    SELECT CONCAT(x'09', NULL);
+}
+expect {
+    NULL
+}
+
+test t-6218 {
+    SELECT CONCAT(x'09', true);
+}
+expect raw {
+	1
+}
+
+test t-6220 {
+    SELECT CONCAT(x'09', NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-6267 {
+    SELECT CONCAT(x'09', '103458');
+}
+expect raw {
+	103458
+}
+
+test t-6288 {
+    SELECT CONCAT(x'09', '0000-02-29');
+}
+expect raw {
+	0000-02-29
+}
+
+test t-6308 {
+    SELECT CONCAT(x'09', cast(18446744073709551615 as json));
+}
+expect raw {
+	18446744073709551615
+}
+
+test t-6312 {
+    SELECT CONCAT(x'09', cast('-1.1' as json));
+}
+expect raw {
+	-1.1
+}
+
+test t-6318 {
+    SELECT CONCAT(x'09', cast(_binary' "foo"' as json));
+}
+expect raw {
+	"base64:type15:ICJmb28i"
+}
+
+test t-6328 {
+    SELECT CONCAT(x'09', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect raw {
+	\{"a": 1, "b": 2\}
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-6333 {
+    SELECT CONCAT(x'09', cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-6336 {
+    SELECT CONCAT(x'09', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect raw {
+	"2000-01-01 12:34:58.000000"
+}
+
+test t-6354 {
+    SELECT CONCAT(NULL, -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-6356 {
+    SELECT CONCAT(NULL, 0.000);
+}
+expect {
+    NULL
+}
+
+test t-6357 {
+    SELECT CONCAT(NULL, 1.5);
+}
+expect {
+    NULL
+}
+
+test t-6360 {
+    SELECT CONCAT(NULL, 1.7);
+}
+expect {
+    NULL
+}
+
+test t-6380 {
+    SELECT CONCAT(NULL, true);
+}
+expect {
+    NULL
+}
+
+test t-6381 {
+    SELECT CONCAT(NULL, false);
+}
+expect {
+    NULL
+}
+
+test t-6383 {
+    SELECT CONCAT(NULL, 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-6390 {
+    SELECT CONCAT(NULL, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-6400 {
+    SELECT CONCAT(NULL, 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-6412 {
+    SELECT CONCAT(NULL, time '130:34:58.6');
+}
+expect {
+    NULL
+}
+
+test t-6429 {
+    SELECT CONCAT(NULL, '103458');
+}
+expect {
+    NULL
+}
+
+test t-6430 {
+    SELECT CONCAT(NULL, '103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-6442 {
+    SELECT CONCAT(NULL, time'00:00:59.2132234');
+}
+expect {
+    NULL
+}
+
+test t-6454 {
+    SELECT CONCAT(NULL, '3001-02-19 00:00:00');
+}
+expect {
+    NULL
+}
+
+test t-6458 {
+    SELECT CONCAT(NULL, cast(true as json));
+}
+expect {
+    NULL
+}
+
+test t-6507 {
+    SELECT CONCAT(true, ' 255 ');
+}
+expect raw {
+1 255 
+}
+
+test t-6513 {
+    SELECT CONCAT(true, -1.5e0);
+}
+expect {
+    1-1.5
+}
+
+test t-6528 {
+    SELECT CONCAT(true, _utf8 'foobar');
+}
+expect {
+    1foobar
+}
+
+test t-6539 {
+    SELECT CONCAT(true, 0x9);
+}
+expect raw {
+1	
+}
+
+test t-6555 {
+    SELECT CONCAT(true, NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-6563 {
+    SELECT CONCAT(true, -18446744073709540000e0);
+}
+expect {
+    1-1.844674407370954e19
+}
+
+test t-6565 {
+    SELECT CONCAT(true, JSON_ARRAY());
+}
+expect {
+    1[]
+}
+
+test t-6581 {
+    SELECT CONCAT(true, 20000101103458);
+}
+expect {
+    120000101103458
+}
+
+test t-6604 {
+    SELECT CONCAT(true, time'00:00:59.2132234');
+}
+expect {
+    100:00:59.213223
+}
+
+test t-6620 {
+    SELECT CONCAT(true, cast(true as json));
+}
+expect {
+    1true
+}
+
+test t-6621 {
+    SELECT CONCAT(true, cast(false as json));
+}
+expect {
+    1false
+}
+
+test t-6629 {
+    SELECT CONCAT(true, cast(1.1 as json));
+}
+expect {
+    11.1
+}
+
+test t-6632 {
+    SELECT CONCAT(true, cast(18446744073709551615 as json));
+}
+expect {
+    118446744073709551615
+}
+
+test t-6671 {
+    SELECT CONCAT(false, ' 255 foo');
+}
+expect {
+    0 255 foo
+}
+
+test t-6684 {
+    SELECT CONCAT(false, 1.7);
+}
+expect {
+    01.7
+}
+
+test t-6686 {
+    SELECT CONCAT(false, -1.7);
+}
+expect {
+    0-1.7
+}
+
+test t-6705 {
+    SELECT CONCAT(false, false);
+}
+expect {
+    00
+}
+
+test t-6720 {
+    SELECT CONCAT(false, 0xFF666F6F626172);
+}
+expect {
+    0�foobar
+}
+
+test t-6734 {
+    SELECT CONCAT(false, time '31:34:58.4');
+}
+expect {
+    031:34:58.4
+}
+
+test t-6751 {
+    SELECT CONCAT(false, '20000101103458.123456');
+}
+expect {
+    020000101103458.123456
+}
+
+test t-6755 {
+    SELECT CONCAT(false, '20000101103458foo');
+}
+expect {
+    020000101103458foo
+}
+
+test t-6786 {
+    SELECT CONCAT(false, cast('null' as json));
+}
+expect {
+    0null
+}
+
+test t-6800 {
+    SELECT CONCAT(false, cast('18446744073709551615' as json));
+}
+expect {
+    018446744073709551615
+}
+
+test t-6804 {
+    SELECT CONCAT(false, cast(_binary' "foo"' as json));
+}
+expect {
+    0"base64:type15:ICJmb28i"
+}
+
+test t-6807 {
+    SELECT CONCAT(false, cast(0x666F6F626172FF as json));
+}
+expect {
+    0"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-6814 {
+    SELECT CONCAT(false, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    0\{"a": 1, "b": 2\}
+}
+
+test t-6831 {
+    SELECT CONCAT(NULL * 1, ' 255 ');
+}
+expect {
+    NULL
+}
+
+test t-6844 {
+    SELECT CONCAT(NULL * 1, -1.5);
+}
+expect {
+    NULL
+}
+
+test t-6858 {
+    SELECT CONCAT(NULL * 1, X'00');
+}
+expect {
+    NULL
+}
+
+test t-6952 {
+    SELECT CONCAT(NULL * 1, cast(2 as json));
+}
+expect {
+    NULL
+}
+
+test t-6953 {
+    SELECT CONCAT(NULL * 1, cast(1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-6985 {
+    SELECT CONCAT(NULL * 1, cast(time '12:34:56' as json));
+}
+expect {
+    NULL
+}
+
+test t-7033 {
+    SELECT CONCAT(1 * NULL, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-7043 {
+    SELECT CONCAT(1 * NULL, 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-7056 {
+    SELECT CONCAT(1 * NULL, time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-7086 {
+    SELECT CONCAT(1 * NULL, time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-7087 {
+    SELECT CONCAT(1 * NULL, time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-7123 {
+    SELECT CONCAT(1 * NULL, cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-7146 {
+    SELECT CONCAT(1 * NULL, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-7152 {
+    SELECT CONCAT(NULL * NULL, 255);
+}
+expect {
+    NULL
+}
+
+test t-7154 {
+    SELECT CONCAT(NULL * NULL, ' 1 ');
+}
+expect {
+    NULL
+}
+
+test t-7158 {
+    SELECT CONCAT(NULL * NULL, 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-7162 {
+    SELECT CONCAT(NULL * NULL, 1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-7172 {
+    SELECT CONCAT(NULL * NULL, -1.7);
+}
+expect {
+    NULL
+}
+
+test t-7179 {
+    SELECT CONCAT(NULL * NULL, 0x0);
+}
+expect {
+    NULL
+}
+
+test t-7187 {
+    SELECT CONCAT(NULL * NULL, 0x9);
+}
+expect {
+    NULL
+}
+
+test t-7199 {
+    SELECT CONCAT(NULL * NULL, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-7200 {
+    SELECT CONCAT(NULL * NULL, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-7201 {
+    SELECT CONCAT(NULL * NULL, NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-7231 {
+    SELECT CONCAT(NULL * NULL, 20000101103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-7261 {
+    SELECT CONCAT(NULL * NULL, '0000-01-03');
+}
+expect {
+    NULL
+}
+
+test t-7262 {
+    SELECT CONCAT(NULL * NULL, '1969-02-18');
+}
+expect {
+    NULL
+}
+
+test t-7304 {
+    SELECT CONCAT(NULL * NULL, cast(' "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-7306 {
+    SELECT CONCAT(NULL * NULL, cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-7332 {
+    SELECT CONCAT(NULL / 1, 1.7);
+}
+expect {
+    NULL
+}
+
+test t-7352 {
+    SELECT CONCAT(NULL / 1, true);
+}
+expect {
+    NULL
+}
+
+test t-7362 {
+    SELECT CONCAT(NULL / 1, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-7413 {
+    SELECT CONCAT(NULL / 1, time'00:00:59.01011');
+}
+expect {
+    NULL
+}
+
+test t-7421 {
+    SELECT CONCAT(NULL / 1, '2000-01-01 12:34:58');
+}
+expect {
+    NULL
+}
+
+test t-7462 {
+    SELECT CONCAT(NULL / 1, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-7472 {
+    SELECT CONCAT(NULL / 1, cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-7516 {
+    SELECT CONCAT(1 / NULL, NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-7518 {
+    SELECT CONCAT(1 / NULL, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-7533 {
+    SELECT CONCAT(1 / NULL, 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-7545 {
+    SELECT CONCAT(1 / NULL, time '32:34:58.5');
+}
+expect {
+    NULL
+}
+
+test t-7546 {
+    SELECT CONCAT(1 / NULL, time '130:34:58.6');
+}
+expect {
+    NULL
+}
+
+test t-7554 {
+    SELECT CONCAT(1 / NULL, 20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-7574 {
+    SELECT CONCAT(1 / NULL, time'00:00:01.0000');
+}
+expect {
+    NULL
+}
+
+test t-7587 {
+    SELECT CONCAT(1 / NULL, '1970-01-01 00:00:01');
+}
+expect {
+    NULL
+}
+
+test t-7597 {
+    SELECT CONCAT(1 / NULL, cast('true' as json));
+}
+expect {
+    NULL
+}
+
+test t-7614 {
+    SELECT CONCAT(1 / NULL, cast(_binary' "foo"' as json));
+}
+expect {
+    NULL
+}
+
+test t-7616 {
+    SELECT CONCAT(1 / NULL, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-7623 {
+    SELECT CONCAT(1 / NULL, cast('["ab", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-7657 {
+    SELECT CONCAT(NULL / NULL, -1.1);
+}
+expect {
+    NULL
+}
+
+test t-7670 {
+    SELECT CONCAT(NULL / NULL, X'ff');
+}
+expect {
+    NULL
+}
+
+test t-7671 {
+    SELECT CONCAT(NULL / NULL, 0b1001);
+}
+expect {
+    NULL
+}
+
+test t-7681 {
+    SELECT CONCAT(NULL / NULL, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-7687 {
+    SELECT CONCAT(NULL / NULL, NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-7695 {
+    SELECT CONCAT(NULL / NULL, 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-7698 {
+    SELECT CONCAT(NULL / NULL, JSON_OBJECT());
+}
+expect {
+    NULL
+}
+
+test t-7721 {
+    SELECT CONCAT(NULL / NULL, '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-7729 {
+    SELECT CONCAT(NULL / NULL, '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-7735 {
+    SELECT CONCAT(NULL / NULL, time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-7739 {
+    SELECT CONCAT(NULL / NULL, time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-7751 {
+    SELECT CONCAT(NULL / NULL, '3001-02-18 23:59:59');
+}
+expect {
+    NULL
+}
+
+test t-7756 {
+    SELECT CONCAT(NULL / NULL, cast('\{\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-7796 {
+    SELECT CONCAT(NULL / NULL, cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-7798 {
+    SELECT CONCAT(NULL + 1, 0);
+}
+expect {
+    NULL
+}
+
+test t-7802 {
+    SELECT CONCAT(NULL + 1, ' 1 ');
+}
+expect {
+    NULL
+}
+
+test t-7804 {
+    SELECT CONCAT(NULL + 1, '\t1foo\t');
+}
+expect {
+    NULL
+}
+
+test t-7811 {
+    SELECT CONCAT(NULL + 1, -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-7814 {
+    SELECT CONCAT(NULL + 1, 0.000);
+}
+expect {
+    NULL
+}
+
+test t-7825 {
+    SELECT CONCAT(NULL + 1, '');
+}
+expect {
+    NULL
+}
+
+test t-7838 {
+    SELECT CONCAT(NULL + 1, true);
+}
+expect {
+    NULL
+}
+
+test t-7869 {
+    SELECT CONCAT(NULL + 1, time '32:34:58.5');
+}
+expect {
+    NULL
+}
+
+test t-7877 {
+    SELECT CONCAT(NULL + 1, 20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-7884 {
+    SELECT CONCAT(NULL + 1, '20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-7890 {
+    SELECT CONCAT(NULL + 1, '20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-7891 {
+    SELECT CONCAT(NULL + 1, '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-7930 {
+    SELECT CONCAT(NULL + 1, cast('2' as json));
+}
+expect {
+    NULL
+}
+
+test t-7945 {
+    SELECT CONCAT(NULL + 1, cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-7954 {
+    SELECT CONCAT(NULL + 1, cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-7960 {
+    SELECT CONCAT(1 + NULL, 0);
+}
+expect {
+    NULL
+}
+
+test t-7968 {
+    SELECT CONCAT(1 + NULL, 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-7970 {
+    SELECT CONCAT(1 + NULL, 1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-7973 {
+    SELECT CONCAT(1 + NULL, -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-7976 {
+    SELECT CONCAT(1 + NULL, 0.000);
+}
+expect {
+    NULL
+}
+
+test t-7979 {
+    SELECT CONCAT(1 + NULL, 1.1);
+}
+expect {
+    NULL
+}
+
+test t-7998 {
+    SELECT CONCAT(1 + NULL, x'09');
+}
+expect {
+    NULL
+}
+
+test t-8003 {
+    SELECT CONCAT(1 + NULL, 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-8015 {
+    SELECT CONCAT(1 + NULL, 0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-8019 {
+    SELECT CONCAT(1 + NULL, 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-8020 {
+    SELECT CONCAT(1 + NULL, 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-8029 {
+    SELECT CONCAT(1 + NULL, time '10:04:58.1');
+}
+expect {
+    NULL
+}
+
+test t-8044 {
+    SELECT CONCAT(1 + NULL, 103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-8048 {
+    SELECT CONCAT(1 + NULL, '20000101');
+}
+expect {
+    NULL
+}
+
+test t-8091 {
+    SELECT CONCAT(1 + NULL, cast('1' as json));
+}
+expect {
+    NULL
+}
+
+test t-8093 {
+    SELECT CONCAT(1 + NULL, cast('1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-8096 {
+    SELECT CONCAT(1 + NULL, cast('18446744073709551615' as json));
+}
+expect {
+    NULL
+}
+
+test t-8123 {
+    SELECT CONCAT(NULL + NULL, 1);
+}
+expect {
+    NULL
+}
+
+test t-8130 {
+    SELECT CONCAT(NULL + NULL, 0.0e0);
+}
+expect {
+    NULL
+}
+
+test t-8137 {
+    SELECT CONCAT(NULL + NULL, 0.0);
+}
+expect {
+    NULL
+}
+
+test t-8143 {
+    SELECT CONCAT(NULL + NULL, -1.1);
+}
+expect {
+    NULL
+}
+
+test t-8167 {
+    SELECT CONCAT(NULL + NULL, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-8173 {
+    SELECT CONCAT(NULL + NULL, NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-8186 {
+    SELECT CONCAT(NULL + NULL, time '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-8195 {
+    SELECT CONCAT(NULL + NULL, time '5 10:34:58.9');
+}
+expect {
+    NULL
+}
+
+test t-8200 {
+    SELECT CONCAT(NULL + NULL, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8204 {
+    SELECT CONCAT(NULL + NULL, 20000101);
+}
+expect {
+    NULL
+}
+
+test t-8205 {
+    SELECT CONCAT(NULL + NULL, 103458);
+}
+expect {
+    NULL
+}
+
+test t-8213 {
+    SELECT CONCAT(NULL + NULL, '20000101103458foo');
+}
+expect {
+    NULL
+}
+
+test t-8216 {
+    SELECT CONCAT(NULL + NULL, '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-8218 {
+    SELECT CONCAT(NULL + NULL, '103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-8221 {
+    SELECT CONCAT(NULL + NULL, time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8228 {
+    SELECT CONCAT(NULL + NULL, '101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8253 {
+    SELECT CONCAT(NULL + NULL, cast('1' as json));
+}
+expect {
+    NULL
+}
+
+test t-8255 {
+    SELECT CONCAT(NULL + NULL, cast('1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-8268 {
+    SELECT CONCAT(NULL + NULL, cast('["a"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-8269 {
+    SELECT CONCAT(NULL + NULL, cast('["ab"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-8283 {
+    SELECT CONCAT(NULL + NULL, cast(time '5 12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-8287 {
+    SELECT CONCAT(NULL - 1, ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-8290 {
+    SELECT CONCAT(NULL - 1, '\t1foo\t');
+}
+expect {
+    NULL
+}
+
+test t-8305 {
+    SELECT CONCAT(NULL - 1, -1.1);
+}
+expect {
+    NULL
+}
+
+test t-8306 {
+    SELECT CONCAT(NULL - 1, -1.7);
+}
+expect {
+    NULL
+}
+
+test t-8313 {
+    SELECT CONCAT(NULL - 1, 0x0);
+}
+expect {
+    NULL
+}
+
+test t-8317 {
+    SELECT CONCAT(NULL - 1, X'01');
+}
+expect {
+    NULL
+}
+
+test t-8321 {
+    SELECT CONCAT(NULL - 1, 0x9);
+}
+expect {
+    NULL
+}
+
+test t-8328 {
+    SELECT CONCAT(NULL - 1, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-8344 {
+    SELECT CONCAT(NULL - 1, 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-8352 {
+    SELECT CONCAT(NULL - 1, time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8368 {
+    SELECT CONCAT(NULL - 1, 103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-8378 {
+    SELECT CONCAT(NULL - 1, '20000101foo');
+}
+expect {
+    NULL
+}
+
+test t-8398 {
+    SELECT CONCAT(NULL - 1, '3001-02-19 00:00:00');
+}
+expect {
+    NULL
+}
+
+test t-8422 {
+    SELECT CONCAT(NULL - 1, cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-8428 {
+    SELECT CONCAT(NULL - 1, cast(0b01 as json));
+}
+expect {
+    NULL
+}
+
+test t-8449 {
+    SELECT CONCAT(1 - NULL, ' 0 ');
+}
+expect {
+    NULL
+}
+
+test t-8466 {
+    SELECT CONCAT(1 - NULL, 1.7);
+}
+expect {
+    NULL
+}
+
+test t-8493 {
+    SELECT CONCAT(1 - NULL, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-8509 {
+    SELECT CONCAT(1 - NULL, JSON_ARRAY());
+}
+expect {
+    NULL
+}
+
+test t-8513 {
+    SELECT CONCAT(1 - NULL, time '130:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8514 {
+    SELECT CONCAT(1 - NULL, time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8563 {
+    SELECT CONCAT(1 - NULL, cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-8578 {
+    SELECT CONCAT(1 - NULL, cast('2' as json));
+}
+expect {
+    NULL
+}
+
+test t-8588 {
+    SELECT CONCAT(1 - NULL, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-8589 {
+    SELECT CONCAT(1 - NULL, cast(0x666F6F626172FF as json));
+}
+expect {
+    NULL
+}
+
+test t-8594 {
+    SELECT CONCAT(1 - NULL, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    NULL
+}
+
+test t-8612 {
+    SELECT CONCAT(NULL - NULL, ' 1 ');
+}
+expect {
+    NULL
+}
+
+test t-8625 {
+    SELECT CONCAT(NULL - NULL, 1.5);
+}
+expect {
+    NULL
+}
+
+test t-8632 {
+    SELECT CONCAT(NULL - NULL, '-1.5');
+}
+expect {
+    NULL
+}
+
+test t-8645 {
+    SELECT CONCAT(NULL - NULL, 0x9);
+}
+expect {
+    NULL
+}
+
+test t-8660 {
+    SELECT CONCAT(NULL - NULL, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-8670 {
+    SELECT CONCAT(NULL - NULL, JSON_OBJECT());
+}
+expect {
+    NULL
+}
+
+test t-8673 {
+    SELECT CONCAT(NULL - NULL, time '31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8674 {
+    SELECT CONCAT(NULL - NULL, time '32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-8693 {
+    SELECT CONCAT(NULL - NULL, '20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-8703 {
+    SELECT CONCAT(NULL - NULL, '103458foo');
+}
+expect {
+    NULL
+}
+
+test t-8725 {
+    SELECT CONCAT(NULL - NULL, cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-8740 {
+    SELECT CONCAT(NULL - NULL, cast('2' as json));
+}
+expect {
+    NULL
+}
+
+test t-8746 {
+    SELECT CONCAT(NULL - NULL, cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-8768 {
+    SELECT CONCAT(NULL - NULL, cast(time '12:34:58' as json));
+}
+expect {
+    NULL
+}
+
+test t-8781 {
+    SELECT CONCAT(0xFF666F6F626172FF, -1.5e0);
+}
+expect {
+    �foobar�-1.5
+}
+
+test t-8794 {
+    SELECT CONCAT(0xFF666F6F626172FF, '-1.5');
+}
+expect {
+    �foobar�-1.5
+}
+
+test t-8806 {
+    SELECT CONCAT(0xFF666F6F626172FF, b'1001');
+}
+expect raw {
+�foobar�	
+}
+
+test t-8807 {
+    SELECT CONCAT(0xFF666F6F626172FF, 0x9);
+}
+expect raw {
+�foobar�	
+}
+
+test t-8817 {
+    SELECT CONCAT(0xFF666F6F626172FF, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-8839 {
+    SELECT CONCAT(0xFF666F6F626172FF, time '10:04:58.1');
+}
+expect {
+    �foobar�10:04:58.1
+}
+
+test t-8841 {
+    SELECT CONCAT(0xFF666F6F626172FF, time '32:34:58.5');
+}
+expect {
+    �foobar�32:34:58.5
+}
+
+test t-8852 {
+    SELECT CONCAT(0xFF666F6F626172FF, 20000101);
+}
+expect {
+    �foobar�20000101
+}
+
+test t-8870 {
+    SELECT CONCAT(0xFF666F6F626172FF, time'00:00:01.0000');
+}
+expect {
+    �foobar�00:00:01.0000
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-8900 {
+    SELECT CONCAT(0xFF666F6F626172FF, cast(18446744073709551615 as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-8902 {
+    SELECT CONCAT(0xFF666F6F626172FF, cast('2' as json));
+}
+expect error {
+}
+
+test t-8970 {
+    SELECT CONCAT(0x666F6F626172FF, x'09');
+}
+expect raw {
+foobar�	
+}
+
+test t-9006 {
+    SELECT CONCAT(0x666F6F626172FF, date '2000-01-01');
+}
+expect {
+    foobar�2000-01-01
+}
+
+test t-9008 {
+    SELECT CONCAT(0x666F6F626172FF, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    foobar�2000-01-01 10:34:58.123456
+}
+
+test t-9010 {
+    SELECT CONCAT(0x666F6F626172FF, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    foobar�2024-12-30 10:34:58
+}
+
+test t-9012 {
+    SELECT CONCAT(0x666F6F626172FF, 20000101103458.1234);
+}
+expect {
+    foobar�20000101103458.1234
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-9060 {
+    SELECT CONCAT(0x666F6F626172FF, cast(-1.1 as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-9066 {
+    SELECT CONCAT(0x666F6F626172FF, cast('-1.1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-9075 {
+    SELECT CONCAT(0x666F6F626172FF, cast(0x666F6F626172FF as json));
+}
+expect error {
+}
+
+test t-9100 {
+    SELECT CONCAT(0xFF666F6F626172, '\t1foo\t');
+}
+expect raw {
+�foobar	1foo	
+}
+
+test t-9105 {
+    SELECT CONCAT(0xFF666F6F626172, -1.5e0);
+}
+expect {
+    �foobar-1.5
+}
+
+test t-9128 {
+    SELECT CONCAT(0xFF666F6F626172, X'ff');
+}
+expect {
+    �foobar�
+}
+
+test t-9131 {
+    SELECT CONCAT(0xFF666F6F626172, 0x9);
+}
+expect raw {
+�foobar	
+}
+
+test t-9134 {
+    SELECT CONCAT(0xFF666F6F626172, true);
+}
+expect {
+    �foobar1
+}
+
+test t-9139 {
+    SELECT CONCAT(0xFF666F6F626172, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-9170 {
+    SELECT CONCAT(0xFF666F6F626172, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    �foobar2000-01-01 10:34:58.123456
+}
+
+test t-9202 {
+    SELECT CONCAT(0xFF666F6F626172, '2000-01-01');
+}
+expect {
+    �foobar2000-01-01
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-9229 {
+    SELECT CONCAT(0xFF666F6F626172, cast('9223372036854775807' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-9232 {
+    SELECT CONCAT(0xFF666F6F626172, cast('"bar"' as json));
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-9244 {
+    SELECT CONCAT(0xFF666F6F626172, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-9264 {
+    SELECT CONCAT(9223372036854775807, 0.0e0);
+}
+expect {
+    92233720368547758070
+}
+
+test t-9265 {
+    SELECT CONCAT(9223372036854775807, 1.0e0);
+}
+expect {
+    92233720368547758071
+}
+
+test t-9281 {
+    SELECT CONCAT(9223372036854775807, 'foobar');
+}
+expect {
+    9223372036854775807foobar
+}
+
+test t-9294 {
+    SELECT CONCAT(9223372036854775807, x'09');
+}
+expect raw {
+9223372036854775807	
+}
+
+test t-9300 {
+    SELECT CONCAT(9223372036854775807, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-9336 {
+    SELECT CONCAT(9223372036854775807, 20000101103458.1234);
+}
+expect {
+    922337203685477580720000101103458.1234
+}
+
+test t-9340 {
+    SELECT CONCAT(9223372036854775807, 103458.123456);
+}
+expect {
+    9223372036854775807103458.123456
+}
+
+test t-9343 {
+    SELECT CONCAT(9223372036854775807, '20000101103458.123456');
+}
+expect {
+    922337203685477580720000101103458.123456
+}
+
+test t-9373 {
+    SELECT CONCAT(9223372036854775807, cast(1 as json));
+}
+expect {
+    92233720368547758071
+}
+
+test t-9397 {
+    SELECT CONCAT(9223372036854775807, cast(_binary '"bar"' as json));
+}
+expect {
+    9223372036854775807"base64:type15:ImJhciI="
+}
+
+test t-9409 {
+    SELECT CONCAT(9223372036854775807, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    9223372036854775807\{"b": 2, "c": 1\}
+}
+
+test t-9413 {
+    SELECT CONCAT(9223372036854775807, cast(date '2000-01-02' as json));
+}
+expect {
+    9223372036854775807"2000-01-02"
+}
+
+test t-9416 {
+    SELECT CONCAT(9223372036854775807, cast(time '12:34:58' as json));
+}
+expect {
+    9223372036854775807"12:34:58.000000"
+}
+
+test t-9436 {
+    SELECT CONCAT(-9223372036854775808, -1.5);
+}
+expect {
+    -9223372036854775808-1.5
+}
+
+test t-9456 {
+    SELECT CONCAT(-9223372036854775808, x'09');
+}
+expect raw {
+-9223372036854775808	
+}
+
+test t-9457 {
+    SELECT CONCAT(-9223372036854775808, NULL);
+}
+expect {
+    NULL
+}
+
+test t-9487 {
+    SELECT CONCAT(-9223372036854775808, time '10:04:58.1');
+}
+expect {
+    -922337203685477580810:04:58.1
+}
+
+test t-9494 {
+    SELECT CONCAT(-9223372036854775808, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -92233720368547758082000-01-01 10:34:58.123456
+}
+
+test t-9495 {
+    SELECT CONCAT(-9223372036854775808, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    -92233720368547758082000-01-01 10:34:58.978654
+}
+
+test t-9524 {
+    SELECT CONCAT(-9223372036854775808, '101:34:58');
+}
+expect {
+    -9223372036854775808101:34:58
+}
+
+test t-9546 {
+    SELECT CONCAT(-9223372036854775808, cast(-1.1 as json));
+}
+expect {
+    -9223372036854775808-1.1
+}
+
+test t-9564 {
+    SELECT CONCAT(-9223372036854775808, cast('["a"]' as json));
+}
+expect {
+    -9223372036854775808["a"]
+}
+
+test t-9595 {
+    SELECT CONCAT(18446744073709551615, 0.0);
+}
+expect {
+    184467440737095516150.0
+}
+
+test t-9597 {
+    SELECT CONCAT(18446744073709551615, 1.5);
+}
+expect {
+    184467440737095516151.5
+}
+
+test t-9598 {
+    SELECT CONCAT(18446744073709551615, -1.5);
+}
+expect {
+    18446744073709551615-1.5
+}
+
+test t-9625 {
+    SELECT CONCAT(18446744073709551615, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-9632 {
+    SELECT CONCAT(18446744073709551615, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-9650 {
+    SELECT CONCAT(18446744073709551615, time '31:34:58.4');
+}
+expect {
+    1844674407370955161531:34:58.4
+}
+
+test t-9672 {
+    SELECT CONCAT(18446744073709551615, '20000101103458.1234foo');
+}
+expect {
+    1844674407370955161520000101103458.1234foo
+}
+
+test t-9708 {
+    SELECT CONCAT(18446744073709551615, cast(-1.1 as json));
+}
+expect {
+    18446744073709551615-1.1
+}
+
+test t-9710 {
+    SELECT CONCAT(18446744073709551615, cast(18446744073709551615 as json));
+}
+expect {
+    1844674407370955161518446744073709551615
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-9719 {
+    SELECT CONCAT(18446744073709551615, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-9738 {
+    SELECT CONCAT(18446744073709551615, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    18446744073709551615"2000-01-01 12:34:58.000000"
+}
+
+test t-9769 {
+    SELECT CONCAT(18446744073709540000e0, '');
+}
+expect {
+    1.844674407370954e19
+}
+
+test t-9778 {
+    SELECT CONCAT(18446744073709540000e0, b'1001');
+}
+expect raw {
+1.844674407370954e19	
+}
+
+test t-9789 {
+    SELECT CONCAT(18446744073709540000e0, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-9806 {
+    SELECT CONCAT(18446744073709540000e0, time '10:04:58');
+}
+expect {
+    1.844674407370954e1910:04:58
+}
+
+test t-9821 {
+    SELECT CONCAT(18446744073709540000e0, 20000101103458);
+}
+expect {
+    1.844674407370954e1920000101103458
+}
+
+test t-9832 {
+    SELECT CONCAT(18446744073709540000e0, '103458.123456');
+}
+expect {
+    1.844674407370954e19103458.123456
+}
+
+test t-9848 {
+    SELECT CONCAT(18446744073709540000e0, '101:34:58');
+}
+expect {
+    1.844674407370954e19101:34:58
+}
+
+test t-9879 {
+    SELECT CONCAT(18446744073709540000e0, cast('"foo"' as json));
+}
+expect {
+    1.844674407370954e19"foo"
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-9881 {
+    SELECT CONCAT(18446744073709540000e0, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-9893 {
+    SELECT CONCAT(18446744073709540000e0, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    1.844674407370954e19\{"a": 1, "b": 2\}
+}
+
+test t-9895 {
+    SELECT CONCAT(18446744073709540000e0, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    1.844674407370954e19\{"b": 2, "c": 1\}
+}
+
+test t-9913 {
+    SELECT CONCAT(-18446744073709540000e0, 1.0e0);
+}
+expect {
+    -1.844674407370954e191
+}
+
+test t-9914 {
+    SELECT CONCAT(-18446744073709540000e0, 1.5e0);
+}
+expect {
+    -1.844674407370954e191.5
+}
+
+test t-9928 {
+    SELECT CONCAT(-18446744073709540000e0, '-1.5');
+}
+expect {
+    -1.844674407370954e19-1.5
+}
+
+test t-9932 {
+    SELECT CONCAT(-18446744073709540000e0, _binary 'foobar');
+}
+expect {
+    -1.844674407370954e19foobar
+}
+
+test t-9943 {
+    SELECT CONCAT(-18446744073709540000e0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-9949 {
+    SELECT CONCAT(-18446744073709540000e0, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-9973 {
+    SELECT CONCAT(-18446744073709540000e0, time '10:04:58.1');
+}
+expect {
+    -1.844674407370954e1910:04:58.1
+}
+
+test t-9995 {
+    SELECT CONCAT(-18446744073709540000e0, '20000101103458foo');
+}
+expect {
+    -1.844674407370954e1920000101103458foo
+}
+
+test t-10007 {
+    SELECT CONCAT(-18446744073709540000e0, time '-101:34:58');
+}
+expect {
+    -1.844674407370954e19-101:34:58
+}
+
+test t-10008 {
+    SELECT CONCAT(-18446744073709540000e0, time '-5 10:34:58');
+}
+expect {
+    -1.844674407370954e19-130:34:58
+}
+
+test t-10028 {
+    SELECT CONCAT(-18446744073709540000e0, cast('false' as json));
+}
+expect {
+    -1.844674407370954e19false
+}
+
+test t-10031 {
+    SELECT CONCAT(-18446744073709540000e0, cast(1.1 as json));
+}
+expect {
+    -1.844674407370954e191.1
+}
+
+test t-10033 {
+    SELECT CONCAT(-18446744073709540000e0, cast(9223372036854775807 as json));
+}
+expect {
+    -1.844674407370954e199223372036854775807
+}
+
+test t-10037 {
+    SELECT CONCAT(-18446744073709540000e0, cast('1.1' as json));
+}
+expect {
+    -1.844674407370954e191.1
+}
+
+test t-10049 {
+    SELECT CONCAT(-18446744073709540000e0, cast(0b001 as json));
+}
+expect {
+    -1.844674407370954e19"base64:type15:AQ=="
+}
+
+test t-10067 {
+    SELECT CONCAT(JSON_OBJECT(), 1);
+}
+expect {
+    \{\}1
+}
+
+test t-10074 {
+    SELECT CONCAT(JSON_OBJECT(), 0.0e0);
+}
+expect {
+    \{\}0
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-10121 {
+    SELECT CONCAT(JSON_OBJECT(), 0x666F6F626172FF);
+}
+expect error {
+}
+
+test t-10140 {
+    SELECT CONCAT(JSON_OBJECT(), date '2000-01-01');
+}
+expect {
+    \{\}2000-01-01
+}
+
+test t-10141 {
+    SELECT CONCAT(JSON_OBJECT(), timestamp '2000-01-01 10:34:58');
+}
+expect {
+    \{\}2000-01-01 10:34:58
+}
+
+test t-10157 {
+    SELECT CONCAT(JSON_OBJECT(), '20000101103458foo');
+}
+expect {
+    \{\}20000101103458foo
+}
+
+test t-10160 {
+    SELECT CONCAT(JSON_OBJECT(), '20000101foo');
+}
+expect {
+    \{\}20000101foo
+}
+
+test t-10164 {
+    SELECT CONCAT(JSON_OBJECT(), time '-31:34:58');
+}
+expect {
+    \{\}-31:34:58
+}
+
+test t-10198 {
+    SELECT CONCAT(JSON_OBJECT(), cast('2' as json));
+}
+expect {
+    \{\}2
+}
+
+test t-10212 {
+    SELECT CONCAT(JSON_OBJECT(), cast('["a"]' as json));
+}
+expect {
+    \{\}["a"]
+}
+
+test t-10216 {
+    SELECT CONCAT(JSON_OBJECT(), cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    \{\}\{"a": 1, "b": 2\}
+}
+
+test t-10240 {
+    SELECT CONCAT(JSON_ARRAY(), 1.1e0);
+}
+expect {
+    []1.1
+}
+
+test t-10244 {
+    SELECT CONCAT(JSON_ARRAY(), 0.000);
+}
+expect {
+    []0.000
+}
+
+test t-10251 {
+    SELECT CONCAT(JSON_ARRAY(), '1.5');
+}
+expect {
+    []1.5
+}
+
+test t-10277 {
+    SELECT CONCAT(JSON_ARRAY(), 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-10296 {
+    SELECT CONCAT(JSON_ARRAY(), time '5 10:34:58');
+}
+expect {
+    []130:34:58
+}
+
+test t-10300 {
+    SELECT CONCAT(JSON_ARRAY(), time '130:34:58.6');
+}
+expect {
+    []130:34:58.6
+}
+
+test t-10308 {
+    SELECT CONCAT(JSON_ARRAY(), 20000101103458.1234);
+}
+expect {
+    []20000101103458.1234
+}
+
+test t-10323 {
+    SELECT CONCAT(JSON_ARRAY(), '103458foo');
+}
+expect {
+    []103458foo
+}
+
+test t-10325 {
+    SELECT CONCAT(JSON_ARRAY(), time '-10:04:58');
+}
+expect {
+    []-10:04:58
+}
+
+test t-10328 {
+    SELECT CONCAT(JSON_ARRAY(), time'00:00:01.0000');
+}
+expect {
+    []00:00:01.0000
+}
+
+test t-10350 {
+    SELECT CONCAT(JSON_ARRAY(), cast('null' as json));
+}
+expect {
+    []null
+}
+
+test t-10356 {
+    SELECT CONCAT(JSON_ARRAY(), cast(-1.1 as json));
+}
+expect {
+    []-1.1
+}
+
+test t-10363 {
+    SELECT CONCAT(JSON_ARRAY(), cast('9223372036854775807' as json));
+}
+expect {
+    []9223372036854775807
+}
+
+test t-10377 {
+    SELECT CONCAT(JSON_ARRAY(), cast('["ab", "ef"]' as json));
+}
+expect {
+    []["ab", "ef"]
+}
+
+test t-10381 {
+    SELECT CONCAT(JSON_ARRAY(), cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    []\{"b": 2, "c": 1\}
+}
+
+test t-10397 {
+    SELECT CONCAT(time '10:04:58', ' 255 foo');
+}
+expect {
+    10:04:58 255 foo
+}
+
+test t-10404 {
+    SELECT CONCAT(time '10:04:58', -1.7e0);
+}
+expect {
+    10:04:58-1.7
+}
+
+test t-10417 {
+    SELECT CONCAT(time '10:04:58', '');
+}
+expect {
+    10:04:58
+}
+
+test t-10430 {
+    SELECT CONCAT(time '10:04:58', true);
+}
+expect {
+    10:04:581
+}
+
+test t-10434 {
+    SELECT CONCAT(time '10:04:58', NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-10440 {
+    SELECT CONCAT(time '10:04:58', NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-10477 {
+    SELECT CONCAT(time '10:04:58', '20000101103458.123456');
+}
+expect {
+    10:04:5820000101103458.123456
+}
+
+test t-10479 {
+    SELECT CONCAT(time '10:04:58', '103458');
+}
+expect {
+    10:04:58103458
+}
+
+test t-10483 {
+    SELECT CONCAT(time '10:04:58', '20000101103458.123456foo');
+}
+expect {
+    10:04:5820000101103458.123456foo
+}
+
+test t-10495 {
+    SELECT CONCAT(time '10:04:58', '10:04:58');
+}
+expect {
+    10:04:5810:04:58
+}
+
+test t-10502 {
+    SELECT CONCAT(time '10:04:58', '1969-02-18');
+}
+expect {
+    10:04:581969-02-18
+}
+
+test t-10505 {
+    SELECT CONCAT(time '10:04:58', '3001-02-18 23:59:59');
+}
+expect {
+    10:04:583001-02-18 23:59:59
+}
+
+test t-10526 {
+    SELECT CONCAT(time '10:04:58', cast('18446744073709551615' as json));
+}
+expect {
+    10:04:5818446744073709551615
+}
+
+test t-10528 {
+    SELECT CONCAT(time '10:04:58', cast('"bar"' as json));
+}
+expect {
+    10:04:58"bar"
+}
+
+test t-10540 {
+    SELECT CONCAT(time '10:04:58', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    10:04:58\{"a": 1, "b": 2\}
+}
+
+test t-10543 {
+    SELECT CONCAT(time '10:04:58', cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    10:04:58\{"b": 2, "c": 1\}
+}
+
+test t-10556 {
+    SELECT CONCAT(time '31:34:58', ' 1 ');
+}
+expect raw {
+31:34:58 1 
+}
+
+test t-10561 {
+    SELECT CONCAT(time '31:34:58', 1.0e0);
+}
+expect {
+    31:34:581
+}
+
+test t-10562 {
+    SELECT CONCAT(time '31:34:58', 1.5e0);
+}
+expect {
+    31:34:581.5
+}
+
+test t-10570 {
+    SELECT CONCAT(time '31:34:58', -1.5);
+}
+expect {
+    31:34:58-1.5
+}
+
+test t-10583 {
+    SELECT CONCAT(time '31:34:58', 0xff);
+}
+expect {
+    31:34:58�
+}
+
+test t-10593 {
+    SELECT CONCAT(time '31:34:58', false);
+}
+expect {
+    31:34:580
+}
+
+test t-10611 {
+    SELECT CONCAT(time '31:34:58', 18446744073709551615);
+}
+expect {
+    31:34:5818446744073709551615
+}
+
+test t-10615 {
+    SELECT CONCAT(time '31:34:58', JSON_ARRAY());
+}
+expect {
+    31:34:58[]
+}
+
+test t-10619 {
+    SELECT CONCAT(time '31:34:58', time '130:34:58');
+}
+expect {
+    31:34:58130:34:58
+}
+
+test t-10630 {
+    SELECT CONCAT(time '31:34:58', timestamp '2024-12-30 10:34:58');
+}
+expect {
+    31:34:582024-12-30 10:34:58
+}
+
+test t-10639 {
+    SELECT CONCAT(time '31:34:58', '20000101103458.123456');
+}
+expect {
+    31:34:5820000101103458.123456
+}
+
+test t-10642 {
+    SELECT CONCAT(time '31:34:58', '103458.123456');
+}
+expect {
+    31:34:58103458.123456
+}
+
+test t-10654 {
+    SELECT CONCAT(time '31:34:58', time'00:00:59.2132234');
+}
+expect {
+    31:34:5800:00:59.213223
+}
+
+test t-10657 {
+    SELECT CONCAT(time '31:34:58', '10:04:58');
+}
+expect {
+    31:34:5810:04:58
+}
+
+test t-10669 {
+    SELECT CONCAT(time '31:34:58', cast(1 as json));
+}
+expect {
+    31:34:581
+}
+
+test t-10676 {
+    SELECT CONCAT(time '31:34:58', cast('false' as json));
+}
+expect {
+    31:34:58false
+}
+
+test t-10684 {
+    SELECT CONCAT(time '31:34:58', cast('2' as json));
+}
+expect {
+    31:34:582
+}
+
+test t-10688 {
+    SELECT CONCAT(time '31:34:58', cast('18446744073709551615' as json));
+}
+expect {
+    31:34:5818446744073709551615
+}
+
+test t-10694 {
+    SELECT CONCAT(time '31:34:58', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    31:34:58"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-10695 {
+    SELECT CONCAT(time '31:34:58', cast(0x666F6F626172FF as json));
+}
+expect {
+    31:34:58"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-10696 {
+    SELECT CONCAT(time '31:34:58', cast(0b01 as json));
+}
+expect {
+    31:34:58"base64:type15:AQ=="
+}
+
+test t-10720 {
+    SELECT CONCAT(time '32:34:58', '\t1foo\t');
+}
+expect raw {
+32:34:58	1foo	
+}
+
+test t-10740 {
+    SELECT CONCAT(time '32:34:58', _utf8 'foobar');
+}
+expect {
+    32:34:58foobar
+}
+
+test t-10749 {
+    SELECT CONCAT(time '32:34:58', 0b1001);
+}
+expect raw {
+32:34:58	
+}
+
+test t-10755 {
+    SELECT CONCAT(time '32:34:58', false);
+}
+expect {
+    32:34:580
+}
+
+test t-10759 {
+    SELECT CONCAT(time '32:34:58', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-10779 {
+    SELECT CONCAT(time '32:34:58', time '31:34:58');
+}
+expect {
+    32:34:5831:34:58
+}
+
+test t-10802 {
+    SELECT CONCAT(time '32:34:58', '20000101');
+}
+expect {
+    32:34:5820000101
+}
+
+test t-10835 {
+    SELECT CONCAT(time '32:34:58', cast('[]' as json));
+}
+expect {
+    32:34:58[]
+}
+
+test t-10862 {
+    SELECT CONCAT(time '32:34:58', cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    32:34:58["ab", "cd", "ef"]
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-10868 {
+    SELECT CONCAT(time '32:34:58', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-10879 {
+    SELECT CONCAT(time '130:34:58', ' 0 ');
+}
+expect raw {
+130:34:58 0 
+}
+
+test t-10887 {
+    SELECT CONCAT(time '130:34:58', -1.5e0);
+}
+expect {
+    130:34:58-1.5
+}
+
+test t-10903 {
+    SELECT CONCAT(time '130:34:58', '');
+}
+expect {
+    130:34:58
+}
+
+test t-10907 {
+    SELECT CONCAT(time '130:34:58', 0xff);
+}
+expect {
+    130:34:58�
+}
+
+test t-10918 {
+    SELECT CONCAT(time '130:34:58', NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-10921 {
+    SELECT CONCAT(time '130:34:58', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-10929 {
+    SELECT CONCAT(time '130:34:58', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-10945 {
+    SELECT CONCAT(time '130:34:58', time '10:04:58.1');
+}
+expect {
+    130:34:5810:04:58.1
+}
+
+test t-10965 {
+    SELECT CONCAT(time '130:34:58', '103458');
+}
+expect {
+    130:34:58103458
+}
+
+test t-10983 {
+    SELECT CONCAT(time '130:34:58', '5 10:34:58');
+}
+expect {
+    130:34:585 10:34:58
+}
+
+test t-10985 {
+    SELECT CONCAT(time '130:34:58', '2000-01-01 12:34:58');
+}
+expect {
+    130:34:582000-01-01 12:34:58
+}
+
+test t-10991 {
+    SELECT CONCAT(time '130:34:58', '3001-02-18 23:59:59');
+}
+expect {
+    130:34:583001-02-18 23:59:59
+}
+
+test t-10995 {
+    SELECT CONCAT(time '130:34:58', cast(false as json));
+}
+expect {
+    130:34:58false
+}
+
+test t-10997 {
+    SELECT CONCAT(time '130:34:58', cast('[]' as json));
+}
+expect {
+    130:34:58[]
+}
+
+test t-11008 {
+    SELECT CONCAT(time '130:34:58', cast('2' as json));
+}
+expect {
+    130:34:582
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-11031 {
+    SELECT CONCAT(time '130:34:58', cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-11069 {
+    SELECT CONCAT(time '5 10:34:58', 0xff);
+}
+expect {
+    130:34:58�
+}
+
+test t-11085 {
+    SELECT CONCAT(time '5 10:34:58', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-11110 {
+    SELECT CONCAT(time '5 10:34:58', time '130:34:58.6');
+}
+expect {
+    130:34:58130:34:58.6
+}
+
+test t-11124 {
+    SELECT CONCAT(time '5 10:34:58', '20000101103458.1234');
+}
+expect {
+    130:34:5820000101103458.1234
+}
+
+test t-11140 {
+    SELECT CONCAT(time '5 10:34:58', time'00:00:59.2132234');
+}
+expect {
+    130:34:5800:00:59.213223
+}
+
+test t-11143 {
+    SELECT CONCAT(time '5 10:34:58', '10:04:58');
+}
+expect {
+    130:34:5810:04:58
+}
+
+test t-11144 {
+    SELECT CONCAT(time '5 10:34:58', '101:34:58');
+}
+expect {
+    130:34:58101:34:58
+}
+
+test t-11150 {
+    SELECT CONCAT(time '5 10:34:58', '1969-02-18');
+}
+expect {
+    130:34:581969-02-18
+}
+
+test t-11159 {
+    SELECT CONCAT(time '5 10:34:58', cast('[]' as json));
+}
+expect {
+    130:34:58[]
+}
+
+test t-11162 {
+    SELECT CONCAT(time '5 10:34:58', cast('false' as json));
+}
+expect {
+    130:34:58false
+}
+
+test t-11165 {
+    SELECT CONCAT(time '5 10:34:58', cast(1.1 as json));
+}
+expect {
+    130:34:581.1
+}
+
+test t-11181 {
+    SELECT CONCAT(time '5 10:34:58', cast(0x666F6F626172FF as json));
+}
+expect {
+    130:34:58"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-11182 {
+    SELECT CONCAT(time '5 10:34:58', cast(0b01 as json));
+}
+expect {
+    130:34:58"base64:type15:AQ=="
+}
+
+test t-11183 {
+    SELECT CONCAT(time '5 10:34:58', cast(0b001 as json));
+}
+expect {
+    130:34:58"base64:type15:AQ=="
+}
+
+test t-11185 {
+    SELECT CONCAT(time '5 10:34:58', cast('["ab"]' as json));
+}
+expect {
+    130:34:58["ab"]
+}
+
+test t-11187 {
+    SELECT CONCAT(time '5 10:34:58', cast('["ab", "ef"]' as json));
+}
+expect {
+    130:34:58["ab", "ef"]
+}
+
+test t-11190 {
+    SELECT CONCAT(time '5 10:34:58', cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    130:34:58\{"b": 2, "c": 1\}
+}
+
+test t-11197 {
+    SELECT CONCAT(time '5 10:34:58', cast(time '12:34:56' as json));
+}
+expect {
+    130:34:58"12:34:56.000000"
+}
+
+test t-11201 {
+    SELECT CONCAT(time '10:04:58.1', 1);
+}
+expect {
+    10:04:58.11
+}
+
+test t-11235 {
+    SELECT CONCAT(time '10:04:58.1', 0b1001);
+}
+expect raw {
+10:04:58.1	
+}
+
+test t-11248 {
+    SELECT CONCAT(time '10:04:58.1', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-11264 {
+    SELECT CONCAT(time '10:04:58.1', time '10:04:58');
+}
+expect {
+    10:04:58.110:04:58
+}
+
+test t-11289 {
+    SELECT CONCAT(time '10:04:58.1', '103458');
+}
+expect {
+    10:04:58.1103458
+}
+
+test t-11296 {
+    SELECT CONCAT(time '10:04:58.1', '103458.123456foo');
+}
+expect {
+    10:04:58.1103458.123456foo
+}
+
+test t-11300 {
+    SELECT CONCAT(time '10:04:58.1', time'00:00:01.0000');
+}
+expect {
+    10:04:58.100:00:01.0000
+}
+
+test t-11321 {
+    SELECT CONCAT(time '10:04:58.1', cast('[]' as json));
+}
+expect {
+    10:04:58.1[]
+}
+
+test t-11326 {
+    SELECT CONCAT(time '10:04:58.1', cast(2 as json));
+}
+expect {
+    10:04:58.12
+}
+
+test t-11378 {
+    SELECT CONCAT(time '31:34:58.4', 0.000);
+}
+expect {
+    31:34:58.40.000
+}
+
+test t-11390 {
+    SELECT CONCAT(time '31:34:58.4', _binary 'foobar');
+}
+expect {
+    31:34:58.4foobar
+}
+
+test t-11399 {
+    SELECT CONCAT(time '31:34:58.4', 0x9);
+}
+expect raw {
+31:34:58.4	
+}
+
+test t-11413 {
+    SELECT CONCAT(time '31:34:58.4', NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-11423 {
+    SELECT CONCAT(time '31:34:58.4', -18446744073709540000e0);
+}
+expect {
+    31:34:58.4-1.844674407370954e19
+}
+
+test t-11450 {
+    SELECT CONCAT(time '31:34:58.4', '20000101');
+}
+expect {
+    31:34:58.420000101
+}
+
+test t-11456 {
+    SELECT CONCAT(time '31:34:58.4', '20000101foo');
+}
+expect {
+    31:34:58.420000101foo
+}
+
+test t-11476 {
+    SELECT CONCAT(time '31:34:58.4', '3001-02-19 00:00:00');
+}
+expect {
+    31:34:58.43001-02-19 00:00:00
+}
+
+test t-11483 {
+    SELECT CONCAT(time '31:34:58.4', cast('[]' as json));
+}
+expect {
+    31:34:58.4[]
+}
+
+test t-11497 {
+    SELECT CONCAT(time '31:34:58.4', cast('9223372036854775807' as json));
+}
+expect {
+    31:34:58.49223372036854775807
+}
+
+test t-11502 {
+    SELECT CONCAT(time '31:34:58.4', cast(_binary' "foo"' as json));
+}
+expect {
+    31:34:58.4"base64:type15:ICJmb28i"
+}
+
+test t-11527 {
+    SELECT CONCAT(time '32:34:58.5', ' 0 ');
+}
+expect raw {
+32:34:58.5 0 
+}
+
+test t-11546 {
+    SELECT CONCAT(time '32:34:58.5', -1.7);
+}
+expect {
+    32:34:58.5-1.7
+}
+
+test t-11555 {
+    SELECT CONCAT(time '32:34:58.5', 0xff);
+}
+expect {
+    32:34:58.5�
+}
+
+test t-11559 {
+    SELECT CONCAT(time '32:34:58.5', 0b1001);
+}
+expect raw {
+32:34:58.5	
+}
+
+test t-11574 {
+    SELECT CONCAT(time '32:34:58.5', NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-11577 {
+    SELECT CONCAT(time '32:34:58.5', NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-11596 {
+    SELECT CONCAT(time '32:34:58.5', time '130:34:58.6');
+}
+expect {
+    32:34:58.5130:34:58.6
+}
+
+test t-11626 {
+    SELECT CONCAT(time '32:34:58.5', time'00:00:59.2132234');
+}
+expect {
+    32:34:58.500:00:59.213223
+}
+
+test t-11637 {
+    SELECT CONCAT(time '32:34:58.5', '1970-01-01 00:00:01');
+}
+expect {
+    32:34:58.51970-01-01 00:00:01
+}
+
+test t-11644 {
+    SELECT CONCAT(time '32:34:58.5', cast('\{\}' as json));
+}
+expect {
+    32:34:58.5\{\}
+}
+
+test t-11645 {
+    SELECT CONCAT(time '32:34:58.5', cast('[]' as json));
+}
+expect {
+    32:34:58.5[]
+}
+
+test t-11651 {
+    SELECT CONCAT(time '32:34:58.5', cast(1.1 as json));
+}
+expect {
+    32:34:58.51.1
+}
+
+test t-11652 {
+    SELECT CONCAT(time '32:34:58.5', cast(-1.1 as json));
+}
+expect {
+    32:34:58.5-1.1
+}
+
+test t-11666 {
+    SELECT CONCAT(time '32:34:58.5', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    32:34:58.5"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-11673 {
+    SELECT CONCAT(time '32:34:58.5', cast('["ab", "ef"]' as json));
+}
+expect {
+    32:34:58.5["ab", "ef"]
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-11679 {
+    SELECT CONCAT(time '32:34:58.5', cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-11682 {
+    SELECT CONCAT(time '32:34:58.5', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    32:34:58.5"2000-01-01 12:34:58.000000"
+}
+
+test t-11683 {
+    SELECT CONCAT(time '32:34:58.5', cast(time '12:34:56' as json));
+}
+expect {
+    32:34:58.5"12:34:56.000000"
+}
+
+test t-11686 {
+    SELECT CONCAT(time '130:34:58.6', 0);
+}
+expect {
+    130:34:58.60
+}
+
+test t-11696 {
+    SELECT CONCAT(time '130:34:58.6', 1.5e0);
+}
+expect {
+    130:34:58.61.5
+}
+
+test t-11733 {
+    SELECT CONCAT(time '130:34:58.6', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-11779 {
+    SELECT CONCAT(time '130:34:58.6', '20000101103458.123456foo');
+}
+expect {
+    130:34:58.620000101103458.123456foo
+}
+
+test t-11785 {
+    SELECT CONCAT(time '130:34:58.6', time '-32:34:58');
+}
+expect {
+    130:34:58.6-32:34:58
+}
+
+test t-11791 {
+    SELECT CONCAT(time '130:34:58.6', '10:04:58');
+}
+expect {
+    130:34:58.610:04:58
+}
+
+test t-11810 {
+    SELECT CONCAT(time '130:34:58.6', cast('false' as json));
+}
+expect {
+    130:34:58.6false
+}
+
+test t-11862 {
+    SELECT CONCAT(time '5 10:34:58.9', -1.7e0);
+}
+expect {
+    130:34:58.9-1.7
+}
+
+test t-11866 {
+    SELECT CONCAT(time '5 10:34:58.9', -1.5);
+}
+expect {
+    130:34:58.9-1.5
+}
+
+test t-11888 {
+    SELECT CONCAT(time '5 10:34:58.9', true);
+}
+expect {
+    130:34:58.91
+}
+
+test t-11891 {
+    SELECT CONCAT(time '5 10:34:58.9', 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-11902 {
+    SELECT CONCAT(time '5 10:34:58.9', 0xFF666F6F626172FF);
+}
+expect {
+    130:34:58.9�foobar�
+}
+
+test t-11913 {
+    SELECT CONCAT(time '5 10:34:58.9', time '31:34:58');
+}
+expect {
+    130:34:58.931:34:58
+}
+
+test t-11919 {
+    SELECT CONCAT(time '5 10:34:58.9', time '32:34:58.5');
+}
+expect {
+    130:34:58.932:34:58.5
+}
+
+test t-11947 {
+    SELECT CONCAT(time '5 10:34:58.9', time '-32:34:58');
+}
+expect {
+    130:34:58.9-32:34:58
+}
+
+test t-11965 {
+    SELECT CONCAT(time '5 10:34:58.9', cast(1 as json));
+}
+expect {
+    130:34:58.91
+}
+
+test t-11971 {
+    SELECT CONCAT(time '5 10:34:58.9', cast('true' as json));
+}
+expect {
+    130:34:58.9true
+}
+
+test t-12017 {
+    SELECT CONCAT(date '2000-01-01', ' 255 foo');
+}
+expect {
+    2000-01-01 255 foo
+}
+
+test t-12028 {
+    SELECT CONCAT(date '2000-01-01', -1.5);
+}
+expect {
+    2000-01-01-1.5
+}
+
+test t-12029 {
+    SELECT CONCAT(date '2000-01-01', 1.1);
+}
+expect {
+    2000-01-011.1
+}
+
+test t-12046 {
+    SELECT CONCAT(date '2000-01-01', b'1001');
+}
+expect raw {
+2000-01-01	
+}
+
+test t-12048 {
+    SELECT CONCAT(date '2000-01-01', x'09');
+}
+expect raw {
+2000-01-01	
+}
+
+test t-12052 {
+    SELECT CONCAT(date '2000-01-01', NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-12071 {
+    SELECT CONCAT(date '2000-01-01', -18446744073709540000e0);
+}
+expect {
+    2000-01-01-1.844674407370954e19
+}
+
+test t-12091 {
+    SELECT CONCAT(date '2000-01-01', 20000101103458.123456);
+}
+expect {
+    2000-01-0120000101103458.123456
+}
+
+test t-12110 {
+    SELECT CONCAT(date '2000-01-01', time'00:00:01.0000');
+}
+expect {
+    2000-01-0100:00:01.0000
+}
+
+test t-12117 {
+    SELECT CONCAT(date '2000-01-01', '5 10:34:58');
+}
+expect {
+    2000-01-015 10:34:58
+}
+
+test t-12120 {
+    SELECT CONCAT(date '2000-01-01', '0000-02-29');
+}
+expect {
+    2000-01-010000-02-29
+}
+
+test t-12131 {
+    SELECT CONCAT(date '2000-01-01', cast('[]' as json));
+}
+expect {
+    2000-01-01[]
+}
+
+test t-12138 {
+    SELECT CONCAT(date '2000-01-01', cast(-1.1 as json));
+}
+expect {
+    2000-01-01-1.1
+}
+
+test t-12154 {
+    SELECT CONCAT(date '2000-01-01', cast(0b01 as json));
+}
+expect {
+    2000-01-01"base64:type15:AQ=="
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-12165 {
+    SELECT CONCAT(date '2000-01-01', cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-12174 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', 255);
+}
+expect {
+    2000-01-01 10:34:58255
+}
+
+test t-12199 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', '');
+}
+expect {
+    2000-01-01 10:34:58
+}
+
+test t-12203 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', 0xff);
+}
+expect {
+    2000-01-01 10:34:58�
+}
+
+test t-12206 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', X'ff');
+}
+expect {
+    2000-01-01 10:34:58�
+}
+
+test t-12214 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-12244 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', time '130:34:58.6');
+}
+expect {
+    2000-01-01 10:34:58130:34:58.6
+}
+
+test t-12266 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', '20000101foo');
+}
+expect {
+    2000-01-01 10:34:5820000101foo
+}
+
+test t-12267 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', '103458foo');
+}
+expect {
+    2000-01-01 10:34:58103458foo
+}
+
+test t-12272 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', time'00:00:01.0000');
+}
+expect {
+    2000-01-01 10:34:5800:00:01.0000
+}
+
+test t-12277 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', '10:04:58');
+}
+expect {
+    2000-01-01 10:34:5810:04:58
+}
+
+test t-12279 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', '5 10:34:58');
+}
+expect {
+    2000-01-01 10:34:585 10:34:58
+}
+
+test t-12306 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', cast('-1.1' as json));
+}
+expect {
+    2000-01-01 10:34:58-1.1
+}
+
+test t-12310 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', cast('"bar"' as json));
+}
+expect {
+    2000-01-01 10:34:58"bar"
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-12311 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', cast('invalid' as json));
+}
+expect error {
+}
+
+test t-12315 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58', cast(0x666F6F626172FF as json));
+}
+expect {
+    2000-01-01 10:34:58"base64:type15:Zm9vYmFy/w=="
+}
+
+test t-12348 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', -1.7e0);
+}
+expect {
+    2000-01-01 10:34:58.123456-1.7
+}
+
+test t-12355 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', -1.1);
+}
+expect {
+    2000-01-01 10:34:58.123456-1.1
+}
+
+test t-12369 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', 0b1001);
+}
+expect raw {
+2000-01-01 10:34:58.123456	
+}
+
+test t-12398 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', time '10:04:58');
+}
+expect {
+    2000-01-01 10:34:58.12345610:04:58
+}
+
+test t-12418 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', 103458.123456);
+}
+expect {
+    2000-01-01 10:34:58.123456103458.123456
+}
+
+test t-12429 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', '103458foo');
+}
+expect {
+    2000-01-01 10:34:58.123456103458foo
+}
+
+test t-12449 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', '3001-02-18 23:59:59');
+}
+expect {
+    2000-01-01 10:34:58.1234563001-02-18 23:59:59
+}
+
+test t-12457 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', cast('true' as json));
+}
+expect {
+    2000-01-01 10:34:58.123456true
+}
+
+test t-12479 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.123456', cast(0b001 as json));
+}
+expect {
+    2000-01-01 10:34:58.123456"base64:type15:AQ=="
+}
+
+test t-12498 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', 255);
+}
+expect {
+    2000-01-01 10:34:58.978654255
+}
+
+test t-12502 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', '\t1foo\t');
+}
+expect raw {
+2000-01-01 10:34:58.978654	1foo	
+}
+
+test t-12532 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', b'1001');
+}
+expect raw {
+2000-01-01 10:34:58.978654	
+}
+
+test t-12540 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-12543 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-12567 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', time '32:34:58.5');
+}
+expect {
+    2000-01-01 10:34:58.97865432:34:58.5
+}
+
+test t-12606 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', '0000-02-29');
+}
+expect {
+    2000-01-01 10:34:58.9786540000-02-29
+}
+
+test t-12623 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', cast(1.1 as json));
+}
+expect {
+    2000-01-01 10:34:58.9786541.1
+}
+
+test t-12632 {
+    SELECT CONCAT(timestamp '2000-01-01 10:34:58.978654', cast('18446744073709551615' as json));
+}
+expect {
+    2000-01-01 10:34:58.97865418446744073709551615
+}
+
+test t-12667 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', 1.0e0);
+}
+expect {
+    2024-12-30 10:34:581
+}
+
+test t-12669 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', -1.5e0);
+}
+expect {
+    2024-12-30 10:34:58-1.5
+}
+
+test t-12692 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', X'ff');
+}
+expect {
+    2024-12-30 10:34:58�
+}
+
+test t-12705 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-12736 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', timestamp '2024-12-30 10:34:58');
+}
+expect {
+    2024-12-30 10:34:582024-12-30 10:34:58
+}
+
+test t-12746 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', '20000101');
+}
+expect {
+    2024-12-30 10:34:5820000101
+}
+
+test t-12769 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', '0000-01-03');
+}
+expect {
+    2024-12-30 10:34:580000-01-03
+}
+
+test t-12776 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', cast(true as json));
+}
+expect {
+    2024-12-30 10:34:58true
+}
+
+test t-12794 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', cast('18446744073709551615' as json));
+}
+expect {
+    2024-12-30 10:34:5818446744073709551615
+}
+
+test t-12819 {
+    SELECT CONCAT(timestamp '2024-12-30 10:34:58', cast(time '5 12:34:58' as json));
+}
+expect {
+    2024-12-30 10:34:58"04:34:58.000000"
+}
+
+test t-12831 {
+    SELECT CONCAT(20000101103458, -1.5e0);
+}
+expect {
+    20000101103458-1.5
+}
+
+test t-12836 {
+    SELECT CONCAT(20000101103458, 0.000);
+}
+expect {
+    200001011034580.000
+}
+
+test t-12839 {
+    SELECT CONCAT(20000101103458, 1.1);
+}
+expect {
+    200001011034581.1
+}
+
+test t-12842 {
+    SELECT CONCAT(20000101103458, -1.7);
+}
+expect {
+    20000101103458-1.7
+}
+
+test t-12878 {
+    SELECT CONCAT(20000101103458, -9223372036854775808);
+}
+expect {
+    20000101103458-9223372036854775808
+}
+
+test t-12893 {
+    SELECT CONCAT(20000101103458, time '5 10:34:58.9');
+}
+expect {
+    20000101103458130:34:58.9
+}
+
+test t-12908 {
+    SELECT CONCAT(20000101103458, '20000101');
+}
+expect {
+    2000010110345820000101
+}
+
+test t-12916 {
+    SELECT CONCAT(20000101103458, '103458.123456foo');
+}
+expect {
+    20000101103458103458.123456foo
+}
+
+test t-12933 {
+    SELECT CONCAT(20000101103458, '1970-01-01 00:00:01');
+}
+expect {
+    200001011034581970-01-01 00:00:01
+}
+
+test t-12946 {
+    SELECT CONCAT(20000101103458, cast(2 as json));
+}
+expect {
+    200001011034582
+}
+
+test t-12947 {
+    SELECT CONCAT(20000101103458, cast(1.1 as json));
+}
+expect {
+    200001011034581.1
+}
+
+test t-12948 {
+    SELECT CONCAT(20000101103458, cast(-1.1 as json));
+}
+expect {
+    20000101103458-1.1
+}
+
+test t-12960 {
+    SELECT CONCAT(20000101103458, cast(_binary' "foo"' as json));
+}
+expect {
+    20000101103458"base64:type15:ICJmb28i"
+}
+
+test t-12967 {
+    SELECT CONCAT(20000101103458, cast('["ab"]' as json));
+}
+expect {
+    20000101103458["ab"]
+}

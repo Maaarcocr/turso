@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-37 {
+    SELECT CONCAT_WS(0, "Å å", 9223372036854775807);
+}
+expect {
+    Å å09223372036854775807
+}
+
+test t-83 {
+    SELECT CONCAT_WS(0, "", 999999999999999999999999);
+}
+expect {
+    0999999999999999999999999
+}
+
+test t-290 {
+    SELECT CONCAT_WS(0, "한국어 시험", "abc");
+}
+expect {
+    한국어 시험0abc
+}
+
+test t-332 {
+    SELECT CONCAT_WS(0, '123', "");
+}
+expect {
+    1230
+}
+
+test t-684 {
+    SELECT CONCAT_WS(1, 0xAACC, "");
+}
+expect {
+    ��1
+}
+
+test t-822 {
+    SELECT CONCAT_WS(1, '123', 0xAACC);
+}
+expect {
+    1231��
+}
+
+test t-823 {
+    SELECT CONCAT_WS(1, '123', 3.1415926);
+}
+expect {
+    12313.1415926
+}
+
+test t-855 {
+    SELECT CONCAT_WS(1, 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    92233720368547758071Müller
+}
+
+test t-878 {
+    SELECT CONCAT_WS(1, -9223372036854775808, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -92233720368547758081abcABCÅå
+}
+
+test t-968 {
+    SELECT CONCAT_WS(1, _latin1 0xFF, "Å å");
+}
+expect {
+    ÿ1Å å
+}
+
+test t-976 {
+    SELECT CONCAT_WS(1, _latin1 0xFF, 0xAACC);
+}
+expect {
+    �1��
+}
+
+test t-990 {
+    SELECT CONCAT_WS(255, "Å å", "Å å");
+}
+expect {
+    Å å255Å å
+}
+
+test t-1112 {
+    SELECT CONCAT_WS(255, 1, "한국어 시험");
+}
+expect {
+    1255한국어 시험
+}
+
+test t-1131 {
+    SELECT CONCAT_WS(255, -1, 3.1415926);
+}
+expect {
+    -12553.1415926
+}
+
+test t-1145 {
+    SELECT CONCAT_WS(255, 0123, NULL);
+}
+expect {
+    123
+}
+
+test t-1158 {
+    SELECT CONCAT_WS(255, 0123, '123');
+}
+expect {
+    123255123
+}
+
+test t-1178 {
+    SELECT CONCAT_WS(255, 0xAACC, "한국어 시험");
+}
+expect {
+    ��255한국어 시험
+}
+
+test t-1180 {
+    SELECT CONCAT_WS(255, 0xAACC, '123');
+}
+expect {
+    ��255123
+}
+
+test t-1333 {
+    SELECT CONCAT_WS(255, 9223372036854775807, "😊😂🤢");
+}
+expect {
+    9223372036854775807255😊😂🤢
+}
+
+test t-1496 {
+    SELECT CONCAT_WS(' 0 ', NULL, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-1563 {
+    SELECT CONCAT_WS(' 0 ', "abc", NULL);
+}
+expect {
+    abc
+}
+
+test t-1625 {
+    SELECT CONCAT_WS(' 0 ', -1, _binary 'Müller' );
+}
+expect {
+    -1 0 Müller
+}
+
+test t-1712 {
+    SELECT CONCAT_WS(' 0 ', "中文测试", -999999999999999999999999);
+}
+expect {
+    中文测试 0 -999999999999999999999999
+}
+
+test t-1739 {
+    SELECT CONCAT_WS(' 0 ', "한국어 시험", NULL);
+}
+expect {
+    한국어 시험
+}
+
+test t-1749 {
+    SELECT CONCAT_WS(' 0 ', "한국어 시험", "日本語テスト");
+}
+expect {
+    한국어 시험 0 日本語テスト
+}
+
+test t-1797 {
+    SELECT CONCAT_WS(' 0 ', '123', 9223372036854775807);
+}
+expect {
+    123 0 9223372036854775807
+}
+
+test t-1810 {
+    SELECT CONCAT_WS(' 0 ', 9223372036854775807, -1);
+}
+expect {
+    9223372036854775807 0 -1
+}
+
+test t-1848 {
+    SELECT CONCAT_WS(' 0 ', 999999999999999999999999, "Å å");
+}
+expect {
+    999999999999999999999999 0 Å å
+}
+
+test t-1876 {
+    SELECT CONCAT_WS(' 0 ', -999999999999999999999999, -1);
+}
+expect {
+    -999999999999999999999999 0 -1
+}
+
+test t-1878 {
+    SELECT CONCAT_WS(' 0 ', -999999999999999999999999, 0xAACC);
+}
+expect {
+    -999999999999999999999999 0 ��
+}
+
+test t-2035 {
+    SELECT CONCAT_WS(' 1 ', "a", "日本語テスト");
+}
+expect {
+    a 1 日本語テスト
+}
+
+test t-2068 {
+    SELECT CONCAT_WS(' 1 ', 1, "Å å");
+}
+expect {
+    1 1 Å å
+}
+
+test t-2247 {
+    SELECT CONCAT_WS(' 1 ', "😊😂🤢", "a");
+}
+expect {
+    😊😂🤢 1 a
+}
+
+test t-2493 {
+    SELECT CONCAT_WS(' 255 ', "", 0123);
+}
+expect raw {
+ 255 123
+}
+
+test t-2518 {
+    SELECT CONCAT_WS(' 255 ', "a", "中文测试");
+}
+expect {
+    a 255 中文测试
+}
+
+test t-2620 {
+    SELECT CONCAT_WS(' 255 ', 0xAACC, "");
+}
+expect raw {
+�� 255 
+}
+
+test t-2664 {
+    SELECT CONCAT_WS(' 255 ', "中文测试", "");
+}
+expect raw {
+中文测试 255 
+}
+
+test t-2799 {
+    SELECT CONCAT_WS(' 255 ', -9223372036854775808, 1);
+}
+expect {
+    -9223372036854775808 255 1
+}
+
+test t-2832 {
+    SELECT CONCAT_WS(' 255 ', 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    999999999999999999999999 255 -9223372036854775808
+}
+
+test t-2917 {
+    SELECT CONCAT_WS(' 255 ', _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    ÿ 255 😊😂🤢
+}
+
+test t-2949 {
+    SELECT CONCAT_WS('\t1foo\t', NULL, NULL);
+}
+expect {
+    
+}
+
+test t-3347 {
+    SELECT CONCAT_WS('\t1foo\t', _binary 'Müller' , "a");
+}
+expect {
+    Müller	1foo	a
+}
+
+test t-3451 {
+    SELECT CONCAT_WS(' 255 foo', NULL, _binary 'Müller' );
+}
+expect {
+    Müller
+}
+
+test t-3488 {
+    SELECT CONCAT_WS(' 255 foo', "a", "한국어 시험");
+}
+expect {
+    a 255 foo한국어 시험
+}
+
+test t-3558 {
+    SELECT CONCAT_WS(' 255 foo', -1, -9223372036854775808);
+}
+expect {
+    -1 255 foo-9223372036854775808
+}
+
+test t-3582 {
+    SELECT CONCAT_WS(' 255 foo', 0123, -999999999999999999999999);
+}
+expect {
+    123 255 foo-999999999999999999999999
+}
+
+test t-3601 {
+    SELECT CONCAT_WS(' 255 foo', 0xAACC, 9223372036854775807);
+}
+expect {
+    �� 255 foo9223372036854775807
+}
+
+test t-3668 {
+    SELECT CONCAT_WS(' 255 foo', "日本語テスト", -9223372036854775808);
+}
+expect {
+    日本語テスト 255 foo-9223372036854775808
+}
+
+test t-3796 {
+    SELECT CONCAT_WS(' 255 foo', 999999999999999999999999, "한국어 시험");
+}
+expect {
+    999999999999999999999999 255 foo한국어 시험
+}
+
+test t-3812 {
+    SELECT CONCAT_WS(' 255 foo', -999999999999999999999999, -1);
+}
+expect {
+    -999999999999999999999999 255 foo-1
+}
+
+test t-3813 {
+    SELECT CONCAT_WS(' 255 foo', -999999999999999999999999, 0123);
+}
+expect {
+    -999999999999999999999999 255 foo123
+}
+
+test t-3847 {
+    SELECT CONCAT_WS(' 255 foo', _binary 'Müller' , _binary 'Müller' );
+}
+expect {
+    Müller 255 fooMüller
+}
+
+test t-3872 {
+    SELECT CONCAT_WS(' 255 foo', _latin1 0xFF, "Å å");
+}
+expect {
+    ÿ 255 fooÅ å
+}
+
+test t-3951 {
+    SELECT CONCAT_WS(0.0e0, "", "😊😂🤢");
+}
+expect {
+    0😊😂🤢
+}
+
+test t-4007 {
+    SELECT CONCAT_WS(0.0e0, 1, "a");
+}
+expect {
+    10a
+}
+
+test t-4030 {
+    SELECT CONCAT_WS(0.0e0, -1, "abc");
+}
+expect {
+    -10abc
+}
+
+test t-4139 {
+    SELECT CONCAT_WS(0.0e0, "日本語テスト", "a");
+}
+expect {
+    日本語テスト0a
+}
+
+test t-4179 {
+    SELECT CONCAT_WS(0.0e0, "한국어 시험", _latin1 0xFF);
+}
+expect {
+    한국어 시험0ÿ
+}
+
+test t-4243 {
+    SELECT CONCAT_WS(0.0e0, 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    92233720368547758070Müller
+}
+
+test t-4310 {
+    SELECT CONCAT_WS(0.0e0, -999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -9999999999999999999999990abcABCÅå
+}
+
+test t-4339 {
+    SELECT CONCAT_WS(0.0e0, _utf8mb4 'abcABCÅå', 1);
+}
+expect {
+    abcABCÅå01
+}
+
+test t-4632 {
+    SELECT CONCAT_WS(1.0e0, "日本語テスト", "한국어 시험");
+}
+expect {
+    日本語テスト1한국어 시험
+}
+
+test t-4717 {
+    SELECT CONCAT_WS(1.0e0, 9223372036854775807, 3.1415926);
+}
+expect {
+    922337203685477580713.1415926
+}
+
+test t-4895 {
+    SELECT CONCAT_WS(1.5e0, NULL, "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-5055 {
+    SELECT CONCAT_WS(1.5e0, 0xAACC, 999999999999999999999999);
+}
+expect {
+    ��1.5999999999999999999999999
+}
+
+test t-5136 {
+    SELECT CONCAT_WS(1.5e0, "한국어 시험", "中文测试");
+}
+expect {
+    한국어 시험1.5中文测试
+}
+
+test t-5150 {
+    SELECT CONCAT_WS(1.5e0, "😊😂🤢", "");
+}
+expect {
+    😊😂🤢1.5
+}
+
+test t-5281 {
+    SELECT CONCAT_WS(1.5e0, _binary 'Müller' , NULL);
+}
+expect {
+    Müller
+}
+
+test t-5343 {
+    SELECT CONCAT_WS(1.5e0, _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    �1.5Müller
+}
+
+test t-5371 {
+    SELECT CONCAT_WS(-1.5e0, NULL, "a");
+}
+expect {
+    a
+}
+
+test t-5506 {
+    SELECT CONCAT_WS(-1.5e0, 0123, -1);
+}
+expect {
+    123-1.5-1
+}
+
+test t-5554 {
+    SELECT CONCAT_WS(-1.5e0, 3.1415926, "中文测试");
+}
+expect {
+    3.1415926-1.5中文测试
+}
+
+test t-5596 {
+    SELECT CONCAT_WS(-1.5e0, "日本語テスト", 0xAACC);
+}
+expect {
+    日本語テスト-1.5��
+}
+
+test t-5744 {
+    SELECT CONCAT_WS(-1.5e0, -999999999999999999999999, "");
+}
+expect {
+    -999999999999999999999999-1.5
+}
+
+test t-5776 {
+    SELECT CONCAT_WS(-1.5e0, _binary 'Müller' , "한국어 시험");
+}
+expect {
+    Müller-1.5한국어 시험
+}
+
+test t-6025 {
+    SELECT CONCAT_WS(1.1e0, 0xAACC, _binary 'Müller' );
+}
+expect {
+    ��1.1Müller
+}
+
+test t-6142 {
+    SELECT CONCAT_WS(1.1e0, '123', "abc");
+}
+expect {
+    1231.1abc
+}
+
+test t-6195 {
+    SELECT CONCAT_WS(1.1e0, -9223372036854775808, "😊😂🤢");
+}
+expect {
+    -92233720368547758081.1😊😂🤢
+}
+
+test t-6202 {
+    SELECT CONCAT_WS(1.1e0, -9223372036854775808, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -92233720368547758081.1abcABCÅå
+}
+
+test t-6221 {
+    SELECT CONCAT_WS(1.1e0, 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    9999999999999999999999991.1999999999999999999999999
+}
+
+test t-6345 {
+    SELECT CONCAT_WS(-1.1e0, NULL, 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-6399 {
+    SELECT CONCAT_WS(-1.1e0, "a", _binary 'Müller' );
+}
+expect {
+    a-1.1Müller
+}
+
+test t-6438 {
+    SELECT CONCAT_WS(-1.1e0, 1, '123');
+}
+expect {
+    1-1.1123
+}
+
+test t-6490 {
+    SELECT CONCAT_WS(-1.1e0, 0xAACC, "Å å");
+}
+expect {
+    ��-1.1Å å
+}
+
+test t-6586 {
+    SELECT CONCAT_WS(-1.1e0, "한국어 시험", 0xAACC);
+}
+expect {
+    한국어 시험-1.1��
+}
+
+test t-6587 {
+    SELECT CONCAT_WS(-1.1e0, "한국어 시험", 3.1415926);
+}
+expect {
+    한국어 시험-1.13.1415926
+}
+
+test t-6698 {
+    SELECT CONCAT_WS(-1.1e0, 999999999999999999999999, "中文测试");
+}
+expect {
+    999999999999999999999999-1.1中文测试
+}
+
+test t-6767 {
+    SELECT CONCAT_WS(-1.1e0, _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    abcABCÅå-1.1😊😂🤢
+}
+
+test t-6826 {
+    SELECT CONCAT_WS(-1.7e0, NULL, -1);
+}
+expect {
+    -1
+}
+
+test t-6851 {
+    SELECT CONCAT_WS(-1.7e0, "", 3.1415926);
+}
+expect {
+    -1.73.1415926
+}
+
+test t-6854 {
+    SELECT CONCAT_WS(-1.7e0, "", "한국어 시험");
+}
+expect {
+    -1.7한국어 시험
+}
+
+test t-6890 {
+    SELECT CONCAT_WS(-1.7e0, "abc", "abc");
+}
+expect {
+    abc-1.7abc
+}
+
+test t-6891 {
+    SELECT CONCAT_WS(-1.7e0, "abc", 1);
+}
+expect {
+    abc-1.71
+}
+
+test t-6960 {
+    SELECT CONCAT_WS(-1.7e0, 0123, 0xAACC);
+}
+expect {
+    123-1.7��
+}
+
+test t-7083 {
+    SELECT CONCAT_WS(-1.7e0, "한국어 시험", _latin1 0xFF);
+}
+expect {
+    한국어 시험-1.7ÿ
+}
+
+test t-7108 {
+    SELECT CONCAT_WS(-1.7e0, '123', "");
+}
+expect {
+    123-1.7
+}
+
+test t-7277 {
+    SELECT CONCAT_WS(-1.7e0, _latin1 0xFF, 999999999999999999999999);
+}
+expect {
+    ÿ-1.7999999999999999999999999
+}
+
+test t-7325 {
+    SELECT CONCAT_WS(0.0, NULL, _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-7337 {
+    SELECT CONCAT_WS(0.0, "", "日本語テスト");
+}
+expect {
+    0.0日本語テスト
+}
+
+test t-7577 {
+    SELECT CONCAT_WS(0.0, "😊😂🤢", 3.1415926);
+}
+expect {
+    😊😂🤢0.03.1415926
+}
+
+test t-7636 {
+    SELECT CONCAT_WS(0.0, -9223372036854775808, "");
+}
+expect {
+    -92233720368547758080.0
+}
+
+test t-7653 {
+    SELECT CONCAT_WS(0.0, -9223372036854775808, _binary 'Müller' );
+}
+expect {
+    -92233720368547758080.0Müller
+}
+
+test t-7660 {
+    SELECT CONCAT_WS(0.0, 999999999999999999999999, "abc");
+}
+expect {
+    9999999999999999999999990.0abc
+}
+
+test t-7715 {
+    SELECT CONCAT_WS(0.0, _binary 'Müller' , 9223372036854775807);
+}
+expect {
+    Müller0.09223372036854775807
+}
+
+test t-7779 {
+    SELECT CONCAT_WS(0.000, "Å å", "😊😂🤢");
+}
+expect {
+    Å å0.000😊😂🤢
+}
+
+test t-7793 {
+    SELECT CONCAT_WS(0.000, NULL, 1);
+}
+expect {
+    1
+}
+
+test t-7905 {
+    SELECT CONCAT_WS(0.000, -1, 0123);
+}
+expect {
+    -10.000123
+}
+
+test t-7948 {
+    SELECT CONCAT_WS(0.000, 0xAACC, -1);
+}
+expect {
+    ��0.000-1
+}
+
+test t-8088 {
+    SELECT CONCAT_WS(0.000, '123', '123');
+}
+expect {
+    1230.000123
+}
+
+test t-8105 {
+    SELECT CONCAT_WS(0.000, 9223372036854775807, 3.1415926);
+}
+expect {
+    92233720368547758070.0003.1415926
+}
+
+test t-8289 {
+    SELECT CONCAT_WS(1.5, NULL, 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-8411 {
+    SELECT CONCAT_WS(1.5, 0123, 0123);
+}
+expect {
+    1231.5123
+}
+
+test t-8451 {
+    SELECT CONCAT_WS(1.5, 3.1415926, "a");
+}
+expect {
+    3.14159261.5a
+}
+
+test t-8550 {
+    SELECT CONCAT_WS(1.5, "😊😂🤢", '123');
+}
+expect {
+    😊😂🤢1.5123
+}
+
+test t-8567 {
+    SELECT CONCAT_WS(1.5, '123', 3.1415926);
+}
+expect {
+    1231.53.1415926
+}
+
+test t-8578 {
+    SELECT CONCAT_WS(1.5, '123', _utf8mb4 'abcABCÅå');
+}
+expect {
+    1231.5abcABCÅå
+}
+
+test t-8764 {
+    SELECT CONCAT_WS(-1.5, NULL, 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-8774 {
+    SELECT CONCAT_WS(-1.5, NULL, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-8820 {
+    SELECT CONCAT_WS(-1.5, "a", _utf8mb4 'abcABCÅå');
+}
+expect {
+    a-1.5abcABCÅå
+}
+
+test t-9003 {
+    SELECT CONCAT_WS(-1.5, "한국어 시험", 1);
+}
+expect {
+    한국어 시험-1.51
+}
+
+test t-9008 {
+    SELECT CONCAT_WS(-1.5, "한국어 시험", "中文测试");
+}
+expect {
+    한국어 시험-1.5中文测试
+}
+
+test t-9059 {
+    SELECT CONCAT_WS(-1.5, '123', 999999999999999999999999);
+}
+expect {
+    123-1.5999999999999999999999999
+}
+
+test t-9134 {
+    SELECT CONCAT_WS(-1.5, -999999999999999999999999, "abc");
+}
+expect {
+    -999999999999999999999999-1.5abc
+}
+
+test t-9480 {
+    SELECT CONCAT_WS(1.1, "日本語テスト", _utf8mb4 'abcABCÅå');
+}
+expect {
+    日本語テスト1.1abcABCÅå
+}
+
+test t-9582 {
+    SELECT CONCAT_WS(1.1, -9223372036854775808, "한국어 시험");
+}
+expect {
+    -92233720368547758081.1한국어 시험
+}
+
+test t-9646 {
+    SELECT CONCAT_WS(1.1, _binary 'Müller' , "中文测试");
+}
+expect {
+    Müller1.1中文测试
+}
+
+test t-9723 {
+    SELECT CONCAT_WS(1.7, "Å å", _latin1 0xFF);
+}
+expect {
+    Å å1.7ÿ
+}
+
+test t-9724 {
+    SELECT CONCAT_WS(1.7, NULL, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-9770 {
+    SELECT CONCAT_WS(1.7, "a", "");
+}
+expect {
+    a1.7
+}
+
+test t-9773 {
+    SELECT CONCAT_WS(1.7, "a", 1);
+}
+expect {
+    a1.71
+}
+
+test t-9842 {
+    SELECT CONCAT_WS(1.7, -1, 0xAACC);
+}
+expect {
+    -11.7��
+}
+
+test t-9864 {
+    SELECT CONCAT_WS(1.7, 0123, 0xAACC);
+}
+expect {
+    1231.7��
+}
+
+test t-9992 {
+    SELECT CONCAT_WS(1.7, "😊😂🤢", "abc");
+}
+expect {
+    😊😂🤢1.7abc
+}
+
+test t-10224 {
+    SELECT CONCAT_WS(-1.1, NULL, -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-10258 {
+    SELECT CONCAT_WS(-1.1, "a", -1);
+}
+expect {
+    a-1.1-1
+}
+
+test t-10289 {
+    SELECT CONCAT_WS(-1.1, "abc", 9223372036854775807);
+}
+expect {
+    abc-1.19223372036854775807
+}
+
+test t-10494 {
+    SELECT CONCAT_WS(-1.1, '123', "Å å");
+}
+expect {
+    123-1.1Å å
+}
+
+test t-10573 {
+    SELECT CONCAT_WS(-1.1, 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    999999999999999999999999-1.1😊😂🤢
+}
+
+test t-10588 {
+    SELECT CONCAT_WS(-1.1, -999999999999999999999999, -1);
+}
+expect {
+    -999999999999999999999999-1.1-1
+}
+
+test t-10686 {
+    SELECT CONCAT_WS(-1.7, "Å å", -9223372036854775808);
+}
+expect {
+    Å å-1.7-9223372036854775808
+}
+
+test t-10886 {
+    SELECT CONCAT_WS(-1.7, 3.1415926, -999999999999999999999999);
+}
+expect {
+    3.1415926-1.7-999999999999999999999999
+}
+
+test t-11061 {
+    SELECT CONCAT_WS(-1.7, 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    999999999999999999999999-1.7999999999999999999999999
+}
+
+test t-11160 {
+    SELECT CONCAT_WS('1.5', "Å å", -1);
+}
+expect {
+    Å å1.5-1
+}
+
+test t-11248 {
+    SELECT CONCAT_WS('1.5', "abc", -1);
+}
+expect {
+    abc1.5-1
+}
+
+test t-11258 {
+    SELECT CONCAT_WS('1.5', "abc", -9223372036854775808);
+}
+expect {
+    abc1.5-9223372036854775808
+}
+
+test t-11507 {
+    SELECT CONCAT_WS('1.5', -9223372036854775808, NULL);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-11586 {
+    SELECT CONCAT_WS('1.5', _binary 'Müller' , '123');
+}
+expect {
+    Müller1.5123
+}
+
+test t-11657 {
+    SELECT CONCAT_WS('-1.5', "Å å", _binary 'Müller' );
+}
+expect {
+    Å å-1.5Müller
+}
+
+test t-11662 {
+    SELECT CONCAT_WS('-1.5', NULL, "");
+}
+expect {
+    
+}
+
+test t-11681 {
+    SELECT CONCAT_WS('-1.5', NULL, _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-11691 {
+    SELECT CONCAT_WS('-1.5', "", 3.1415926);
+}
+expect {
+    -1.53.1415926
+}
+
+test t-11788 {
+    SELECT CONCAT_WS('-1.5', -1, -999999999999999999999999);
+}
+expect {
+    -1-1.5-999999999999999999999999
+}
+
+test t-12002 {
+    SELECT CONCAT_WS('-1.5', -9223372036854775808, "한국어 시험");
+}
+expect {
+    -9223372036854775808-1.5한국어 시험
+}
+
+test t-12365 {
+    SELECT CONCAT_WS('foobar', "日本語テスト", NULL);
+}
+expect {
+    日本語テスト
+}
+
+test t-12443 {
+    SELECT CONCAT_WS('foobar', '123', "😊😂🤢");
+}
+expect {
+    123foobar😊😂🤢
+}
+
+test t-12456 {
+    SELECT CONCAT_WS('foobar', 9223372036854775807, "abc");
+}
+expect {
+    9223372036854775807foobarabc
+}
+
+test t-12462 {
+    SELECT CONCAT_WS('foobar', 9223372036854775807, "中文测试");
+}
+expect {
+    9223372036854775807foobar中文测试
+}
+
+test t-12587 {
+    SELECT CONCAT_WS('foobar', _latin1 0xFF, "a");
+}
+expect {
+    ÿfoobara
+}
+
+test t-12640 {
+    SELECT CONCAT_WS(_utf8 'foobar', NULL, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-12843 {
+    SELECT CONCAT_WS(_utf8 'foobar', "中文测试", 999999999999999999999999);
+}
+expect {
+    中文测试foobar999999999999999999999999
+}
+
+test t-12925 {
+    SELECT CONCAT_WS(_utf8 'foobar', '123', "日本語テスト");
+}
+expect {
+    123foobar日本語テスト
+}
+
+test t-12953 {
+    SELECT CONCAT_WS(_utf8 'foobar', 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    9223372036854775807foobar999999999999999999999999
+}
+
+test t-13004 {
+    SELECT CONCAT_WS(_utf8 'foobar', -999999999999999999999999, "");
+}
+expect {
+    -999999999999999999999999foobar
+}
+
+test t-13011 {
+    SELECT CONCAT_WS(_utf8 'foobar', -999999999999999999999999, 3.1415926);
+}
+expect {
+    -999999999999999999999999foobar3.1415926
+}
+
+test t-13192 {
+    SELECT CONCAT_WS('', "abc", '123');
+}
+expect {
+    abc123
+}
+
+test t-13252 {
+    SELECT CONCAT_WS('', 0123, 0xAACC);
+}
+expect {
+    123��
+}
+
+test t-13286 {
+    SELECT CONCAT_WS('', 0xAACC, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ��abcABCÅå
+}
+
+test t-13312 {
+    SELECT CONCAT_WS('', "中文测试", "");
+}
+expect {
+    中文测试
+}
+
+test t-13410 {
+    SELECT CONCAT_WS('', '123', "한국어 시험");
+}
+expect {
+    123한국어 시험
+}
+
+test t-13770 {
+    SELECT CONCAT_WS(_binary 'foobar', 0xAACC, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ��foobarabcABCÅå
+}
+
+test t-13824 {
+    SELECT CONCAT_WS(_binary 'foobar', "日本語テスト", 0xAACC);
+}
+expect {
+    日本語テストfoobar��
+}
+
+test t-14042 {
+    SELECT CONCAT_WS(_binary 'foobar', _latin1 0xFF, -1);
+}
+expect {
+    �foobar-1
+}
+
+test t-14719 {
+    SELECT CONCAT_WS(0x1, 0xAACC, NULL);
+}
+expect {
+    ��
+}
+
+test t-15029 {
+    SELECT CONCAT_WS(0xff, "Å å", "a");
+}
+expect {
+    Å å�a
+}
+
+test t-15078 {
+    SELECT CONCAT_WS(0xff, "", 0xAACC);
+}
+expect {
+    ���
+}
+
+test t-15126 {
+    SELECT CONCAT_WS(0xff, "abc", "한국어 시험");
+}
+expect {
+    abc�한국어 시험
+}
+
+test t-15213 {
+    SELECT CONCAT_WS(0xff, 0xAACC, "日本語テスト");
+}
+expect {
+    ���日本語テスト
+}
+
+test t-15226 {
+    SELECT CONCAT_WS(0xff, 3.1415926, "");
+}
+expect {
+    3.1415926�
+}
+
+test t-15363 {
+    SELECT CONCAT_WS(0xff, 9223372036854775807, 0123);
+}
+expect {
+    9223372036854775807�123
+}
+
+test t-15378 {
+    SELECT CONCAT_WS(0xff, -9223372036854775808, "Å å");
+}
+expect {
+    -9223372036854775808�Å å
+}
+
+test t-15448 {
+    SELECT CONCAT_WS(0xff, _binary 'Müller' , "abc");
+}
+expect {
+    Müller�abc
+}
+
+test t-16515 {
+    SELECT CONCAT_WS(X'ff', NULL, 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-16546 {
+    SELECT CONCAT_WS(X'ff', "a", "");
+}
+expect {
+    a�
+}
+
+test t-16712 {
+    SELECT CONCAT_WS(X'ff', "中文测试", '123');
+}
+expect {
+    中文测试�123
+}
+
+test t-16779 {
+    SELECT CONCAT_WS(X'ff', "😊😂🤢", 9223372036854775807);
+}
+expect {
+    😊😂🤢�9223372036854775807
+}
+
+test t-16835 {
+    SELECT CONCAT_WS(X'ff', -9223372036854775808, 1);
+}
+expect {
+    -9223372036854775808�1
+}
+
+test t-16868 {
+    SELECT CONCAT_WS(X'ff', 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    999999999999999999999999�-9223372036854775808
+}
+
+test t-17019 {
+    SELECT CONCAT_WS(0b1001, "", "😊😂🤢");
+}
+expect raw {
+	😊😂🤢
+}
+
+test t-17299 {
+    SELECT CONCAT_WS(0b1001, 9223372036854775807, 0123);
+}
+expect {
+    9223372036854775807	123
+}
+
+test t-17332 {
+    SELECT CONCAT_WS(0b1001, -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    -9223372036854775808	-999999999999999999999999
+}
+
+test t-17352 {
+    SELECT CONCAT_WS(0b1001, 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    999999999999999999999999	-9223372036854775808
+}
+
+test t-17360 {
+    SELECT CONCAT_WS(0b1001, -999999999999999999999999, "");
+}
+expect raw {
+-999999999999999999999999	
+}
+
+test t-17413 {
+    SELECT CONCAT_WS(0b1001, _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    abcABCÅå	日本語テスト
+}
+
+test t-17538 {
+    SELECT CONCAT_WS(b'1001', "abc", "abc");
+}
+expect {
+    abc	abc
+}
+
+test t-17579 {
+    SELECT CONCAT_WS(b'1001', -1, NULL);
+}
+expect {
+    -1
+}
+
+test t-17597 {
+    SELECT CONCAT_WS(b'1001', -1, _binary 'Müller' );
+}
+expect {
+    -1	Müller
+}
+
+test t-17663 {
+    SELECT CONCAT_WS(b'1001', 3.1415926, _binary 'Müller' );
+}
+expect {
+    3.1415926	Müller
+}
+
+test t-17705 {
+    SELECT CONCAT_WS(b'1001', "日本語テスト", 999999999999999999999999);
+}
+expect {
+    日本語テスト	999999999999999999999999
+}
+
+test t-17720 {
+    SELECT CONCAT_WS(b'1001', "한국어 시험", "中文测试");
+}
+expect {
+    한국어 시험	中文测试
+}
+
+test t-17781 {
+    SELECT CONCAT_WS(b'1001', 9223372036854775807, 1);
+}
+expect {
+    9223372036854775807	1
+}
+
+test t-17787 {
+    SELECT CONCAT_WS(b'1001', 9223372036854775807, "日本語テスト");
+}
+expect {
+    9223372036854775807	日本語テスト
+}
+
+test t-17807 {
+    SELECT CONCAT_WS(b'1001', -9223372036854775808, 3.1415926);
+}
+expect {
+    -9223372036854775808	3.1415926
+}
+
+test t-17812 {
+    SELECT CONCAT_WS(b'1001', -9223372036854775808, '123');
+}
+expect {
+    -9223372036854775808	123
+}
+
+test t-17823 {
+    SELECT CONCAT_WS(b'1001', 999999999999999999999999, "a");
+}
+expect {
+    999999999999999999999999	a
+}
+
+test t-17851 {
+    SELECT CONCAT_WS(b'1001', -999999999999999999999999, 3.1415926);
+}
+expect {
+    -999999999999999999999999	3.1415926
+}
+
+test t-17921 {
+    SELECT CONCAT_WS(b'1001', _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    �	😊😂🤢
+}
+
+test t-17934 {
+    SELECT CONCAT_WS(0x9, "Å å", "abc");
+}
+expect {
+    Å å	abc
+}
+
+test t-17953 {
+    SELECT CONCAT_WS(0x9, NULL, NULL);
+}
+expect {
+    
+}
+
+test t-17964 {
+    SELECT CONCAT_WS(0x9, NULL, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-18237 {
+    SELECT CONCAT_WS(0x9, "😊😂🤢", _latin1 0xFF);
+}
+expect {
+    😊😂🤢	�
+}
+
+test t-18271 {
+    SELECT CONCAT_WS(0x9, 9223372036854775807, "日本語テスト");
+}
+expect {
+    9223372036854775807	日本語テスト
+}
+
+test t-18749 {
+    SELECT CONCAT_WS(x'09', 9223372036854775807, 1);
+}
+expect {
+    9223372036854775807	1
+}
+
+test t-18780 {
+    SELECT CONCAT_WS(x'09', -9223372036854775808, '123');
+}
+expect {
+    -9223372036854775808	123
+}
+
+test t-18788 {
+    SELECT CONCAT_WS(x'09', 999999999999999999999999, "Å å");
+}
+expect {
+    999999999999999999999999	Å å
+}
+
+test t-18960 {
+    SELECT CONCAT_WS(NULL, "", -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-19299 {
+    SELECT CONCAT_WS(NULL, -999999999999999999999999, 1);
+}
+expect {
+    NULL
+}
+
+test t-19329 {
+    SELECT CONCAT_WS(NULL, _binary 'Müller' , "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-19380 {
+    SELECT CONCAT_WS(NULL, _latin1 0xFF, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-19520 {
+    SELECT CONCAT_WS(true, -1, -1);
+}
+expect {
+    -11-1
+}
+
+test t-19562 {
+    SELECT CONCAT_WS(true, 0xAACC, "abc");
+}
+expect {
+    ��1abc
+}
+
+test t-19589 {
+    SELECT CONCAT_WS(true, 3.1415926, 3.1415926);
+}
+expect {
+    3.141592613.1415926
+}
+
+test t-19590 {
+    SELECT CONCAT_WS(true, 3.1415926, "中文测试");
+}
+expect {
+    3.14159261中文测试
+}
+
+test t-19621 {
+    SELECT CONCAT_WS(true, "中文测试", _binary 'Müller' );
+}
+expect {
+    中文测试1Müller
+}
+
+test t-19870 {
+    SELECT CONCAT_WS(false, "Å å", "abc");
+}
+expect {
+    Å å0abc
+}
+
+test t-19977 {
+    SELECT CONCAT_WS(false, 1, NULL);
+}
+expect {
+    1
+}
+
+test t-19994 {
+    SELECT CONCAT_WS(false, 1, -999999999999999999999999);
+}
+expect {
+    10-999999999999999999999999
+}
+
+test t-19999 {
+    SELECT CONCAT_WS(false, -1, NULL);
+}
+expect {
+    -1
+}
+
+test t-20026 {
+    SELECT CONCAT_WS(false, 0123, -1);
+}
+expect {
+    1230-1
+}
+
+test t-20040 {
+    SELECT CONCAT_WS(false, 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1230abcABCÅå
+}
+
+test t-20113 {
+    SELECT CONCAT_WS(false, "日本語テスト", 1);
+}
+expect {
+    日本語テスト01
+}
+
+test t-20119 {
+    SELECT CONCAT_WS(false, "日本語テスト", "日本語テスト");
+}
+expect {
+    日本語テスト0日本語テスト
+}
+
+test t-20178 {
+    SELECT CONCAT_WS(false, '123', "abc");
+}
+expect {
+    1230abc
+}
+
+test t-20277 {
+    SELECT CONCAT_WS(false, -999999999999999999999999, 9223372036854775807);
+}
+expect {
+    -99999999999999999999999909223372036854775807
+}
+
+test t-20367 {
+    SELECT CONCAT_WS(NULL * 1, "Å å", 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-20423 {
+    SELECT CONCAT_WS(NULL * 1, "a", 0123);
+}
+expect {
+    NULL
+}
+
+test t-20444 {
+    SELECT CONCAT_WS(NULL * 1, "abc", -1);
+}
+expect {
+    NULL
+}
+
+test t-20591 {
+    SELECT CONCAT_WS(NULL * 1, "中文测试", _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-20696 {
+    SELECT CONCAT_WS(NULL * 1, 9223372036854775807, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-20799 {
+    SELECT CONCAT_WS(NULL * 1, _utf8mb4 'abcABCÅå', 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-20810 {
+    SELECT CONCAT_WS(NULL * 1, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-21082 {
+    SELECT CONCAT_WS(1 * NULL, "日本語テスト", -1);
+}
+expect {
+    NULL
+}
+
+test t-21104 {
+    SELECT CONCAT_WS(1 * NULL, "한국어 시험", -1);
+}
+expect {
+    NULL
+}
+
+test t-21212 {
+    SELECT CONCAT_WS(1 * NULL, 999999999999999999999999, "abc");
+}
+expect {
+    NULL
+}
+
+test t-21305 {
+    SELECT CONCAT_WS(1 * NULL, _latin1 0xFF, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-21326 {
+    SELECT CONCAT_WS(NULL * NULL, "Å å", 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-21356 {
+    SELECT CONCAT_WS(NULL * NULL, NULL, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-21369 {
+    SELECT CONCAT_WS(NULL * NULL, "", 0123);
+}
+expect {
+    NULL
+}
+
+test t-21451 {
+    SELECT CONCAT_WS(NULL * NULL, -1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-21452 {
+    SELECT CONCAT_WS(NULL * NULL, -1, "");
+}
+expect {
+    NULL
+}
+
+test t-21453 {
+    SELECT CONCAT_WS(NULL * NULL, -1, "a");
+}
+expect {
+    NULL
+}
+
+test t-21461 {
+    SELECT CONCAT_WS(NULL * NULL, -1, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-21475 {
+    SELECT CONCAT_WS(NULL * NULL, 0123, "a");
+}
+expect {
+    NULL
+}
+
+test t-21494 {
+    SELECT CONCAT_WS(NULL * NULL, 0xAACC, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-21607 {
+    SELECT CONCAT_WS(NULL * NULL, "😊😂🤢", "a");
+}
+expect {
+    NULL
+}
+
+test t-21793 {
+    SELECT CONCAT_WS(NULL * NULL, _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-21816 {
+    SELECT CONCAT_WS(NULL / 1, "Å å", '123');
+}
+expect {
+    NULL
+}
+
+test t-21950 {
+    SELECT CONCAT_WS(NULL / 1, -1, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-21962 {
+    SELECT CONCAT_WS(NULL / 1, 0123, -1);
+}
+expect {
+    NULL
+}
+
+test t-22003 {
+    SELECT CONCAT_WS(NULL / 1, 3.1415926, "a");
+}
+expect {
+    NULL
+}
+
+test t-22057 {
+    SELECT CONCAT_WS(NULL / 1, "日本語テスト", "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-22106 {
+    SELECT CONCAT_WS(NULL / 1, "😊😂🤢", -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-22279 {
+    SELECT CONCAT_WS(NULL / 1, _latin1 0xFF, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-22291 {
+    SELECT CONCAT_WS(1 / NULL, "Å å", 1);
+}
+expect {
+    NULL
+}
+
+test t-22436 {
+    SELECT CONCAT_WS(1 / NULL, -1, -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-22440 {
+    SELECT CONCAT_WS(1 / NULL, 0123, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-22464 {
+    SELECT CONCAT_WS(1 / NULL, 0xAACC, "");
+}
+expect {
+    NULL
+}
+
+test t-22519 {
+    SELECT CONCAT_WS(1 / NULL, "中文测试", "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-22601 {
+    SELECT CONCAT_WS(1 / NULL, '123', 0123);
+}
+expect {
+    NULL
+}
+
+test t-22621 {
+    SELECT CONCAT_WS(1 / NULL, 9223372036854775807, 1);
+}
+expect {
+    NULL
+}
+
+test t-22667 {
+    SELECT CONCAT_WS(1 / NULL, 999999999999999999999999, 0123);
+}
+expect {
+    NULL
+}
+
+test t-22716 {
+    SELECT CONCAT_WS(1 / NULL, _binary 'Müller' , "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-22765 {
+    SELECT CONCAT_WS(1 / NULL, _latin1 0xFF, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-22774 {
+    SELECT CONCAT_WS(NULL / NULL, "Å å", "abc");
+}
+expect {
+    NULL
+}
+
+test t-22789 {
+    SELECT CONCAT_WS(NULL / NULL, "Å å", _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-22835 {
+    SELECT CONCAT_WS(NULL / NULL, "", _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-22921 {
+    SELECT CONCAT_WS(NULL / NULL, -1, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-22951 {
+    SELECT CONCAT_WS(NULL / NULL, 0xAACC, 1);
+}
+expect {
+    NULL
+}
+
+test t-22954 {
+    SELECT CONCAT_WS(NULL / NULL, 0xAACC, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-23139 {
+    SELECT CONCAT_WS(NULL / NULL, -9223372036854775808, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-23145 {
+    SELECT CONCAT_WS(NULL / NULL, 999999999999999999999999, NULL);
+}
+expect {
+    NULL
+}
+
+test t-23217 {
+    SELECT CONCAT_WS(NULL / NULL, _utf8mb4 'abcABCÅå', 0123);
+}
+expect {
+    NULL
+}
+
+test t-23231 {
+    SELECT CONCAT_WS(NULL / NULL, _utf8mb4 'abcABCÅå', _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-23296 {
+    SELECT CONCAT_WS(NULL + 1, NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-23401 {
+    SELECT CONCAT_WS(NULL + 1, -1, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-23445 {
+    SELECT CONCAT_WS(NULL + 1, 0xAACC, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-23472 {
+    SELECT CONCAT_WS(NULL + 1, 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-23733 {
+    SELECT CONCAT_WS(NULL + 1, _latin1 0xFF, 999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-24027 {
+    SELECT CONCAT_WS(1 + NULL, "😊😂🤢", "a");
+}
+expect {
+    NULL
+}
+
+test t-24134 {
+    SELECT CONCAT_WS(1 + NULL, -999999999999999999999999, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-24198 {
+    SELECT CONCAT_WS(1 + NULL, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-24254 {
+    SELECT CONCAT_WS(NULL + NULL, NULL, "中文测试");
+}
+expect {
+    NULL
+}
+
+test t-24369 {
+    SELECT CONCAT_WS(NULL + NULL, -1, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-24423 {
+    SELECT CONCAT_WS(NULL + NULL, 3.1415926, "a");
+}
+expect {
+    NULL
+}
+
+test t-24426 {
+    SELECT CONCAT_WS(NULL + NULL, 3.1415926, -1);
+}
+expect {
+    NULL
+}
+
+test t-24469 {
+    SELECT CONCAT_WS(NULL + NULL, "日本語テスト", 1);
+}
+expect {
+    NULL
+}
+
+test t-24476 {
+    SELECT CONCAT_WS(NULL + NULL, "日本語テスト", "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-24501 {
+    SELECT CONCAT_WS(NULL + NULL, "한국어 시험", 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-24614 {
+    SELECT CONCAT_WS(NULL + NULL, 999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    NULL
+}
+
+test t-24831 {
+    SELECT CONCAT_WS(NULL - 1, 1, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-24883 {
+    SELECT CONCAT_WS(NULL - 1, 0xAACC, NULL);
+}
+expect {
+    NULL
+}
+
+test t-24888 {
+    SELECT CONCAT_WS(NULL - 1, 0xAACC, -1);
+}
+expect {
+    NULL
+}
+
+test t-24915 {
+    SELECT CONCAT_WS(NULL - 1, 3.1415926, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-25007 {
+    SELECT CONCAT_WS(NULL - 1, "😊😂🤢", 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-25027 {
+    SELECT CONCAT_WS(NULL - 1, '123', "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-25035 {
+    SELECT CONCAT_WS(NULL - 1, '123', _latin1 0xFF);
+}
+expect {
+    NULL
+}
+
+test t-25125 {
+    SELECT CONCAT_WS(NULL - 1, _binary 'Müller' , NULL);
+}
+expect {
+    NULL
+}
+
+test t-25126 {
+    SELECT CONCAT_WS(NULL - 1, _binary 'Müller' , "");
+}
+expect {
+    NULL
+}
+
+test t-25181 {
+    SELECT CONCAT_WS(NULL - 1, _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-25279 {
+    SELECT CONCAT_WS(1 - NULL, "abc", NULL);
+}
+expect {
+    NULL
+}
+
+test t-25337 {
+    SELECT CONCAT_WS(1 - NULL, -1, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-25418 {
+    SELECT CONCAT_WS(1 - NULL, "中文测试", 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-25502 {
+    SELECT CONCAT_WS(1 - NULL, '123', "abc");
+}
+expect {
+    NULL
+}
+
+test t-25550 {
+    SELECT CONCAT_WS(1 - NULL, -9223372036854775808, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-25597 {
+    SELECT CONCAT_WS(1 - NULL, -999999999999999999999999, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-25634 {
+    SELECT CONCAT_WS(1 - NULL, _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    NULL
+}
+
+test t-25681 {
+    SELECT CONCAT_WS(NULL - NULL, "Å å", 0123);
+}
+expect {
+    NULL
+}
+
+test t-25689 {
+    SELECT CONCAT_WS(NULL - NULL, "Å å", 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-25793 {
+    SELECT CONCAT_WS(NULL - NULL, 1, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-25806 {
+    SELECT CONCAT_WS(NULL - NULL, -1, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-25898 {
+    SELECT CONCAT_WS(NULL - NULL, "中文测试", "abc");
+}
+expect {
+    NULL
+}
+
+test t-25900 {
+    SELECT CONCAT_WS(NULL - NULL, "中文测试", -1);
+}
+expect {
+    NULL
+}
+
+test t-26064 {
+    SELECT CONCAT_WS(NULL - NULL, 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-26111 {
+    SELECT CONCAT_WS(NULL - NULL, _binary 'Müller' , _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-26232 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, "a", 0xAACC);
+}
+expect {
+    a�foobar���
+}
+
+test t-26270 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, 1, "");
+}
+expect {
+    1�foobar�
+}
+
+test t-26276 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, 1, 0xAACC);
+}
+expect {
+    1�foobar���
+}
+
+test t-26310 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1�foobar�abcABCÅå
+}
+
+test t-26420 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, "日本語テスト", _utf8mb4 'abcABCÅå');
+}
+expect {
+    日本語テスト�foobar�abcABCÅå
+}
+
+test t-26562 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, -999999999999999999999999, 0xAACC);
+}
+expect {
+    -999999999999999999999999�foobar���
+}
+
+test t-26633 {
+    SELECT CONCAT_WS(0xFF666F6F626172FF, _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    ��foobar�😊😂🤢
+}
+
+test t-26682 {
+    SELECT CONCAT_WS(0x666F6F626172FF, NULL, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-26725 {
+    SELECT CONCAT_WS(0x666F6F626172FF, "a", 999999999999999999999999);
+}
+expect {
+    afoobar�999999999999999999999999
+}
+
+test t-26726 {
+    SELECT CONCAT_WS(0x666F6F626172FF, "a", -999999999999999999999999);
+}
+expect {
+    afoobar�-999999999999999999999999
+}
+
+test t-26803 {
+    SELECT CONCAT_WS(0x666F6F626172FF, 0123, 0123);
+}
+expect {
+    123foobar�123
+}
+
+test t-26874 {
+    SELECT CONCAT_WS(0x666F6F626172FF, "中文测试", "한국어 시험");
+}
+expect {
+    中文测试foobar�한국어 시험
+}
+
+test t-26914 {
+    SELECT CONCAT_WS(0x666F6F626172FF, "한국어 시험", 0xAACC);
+}
+expect {
+    한국어 시험foobar���
+}
+
+test t-27039 {
+    SELECT CONCAT_WS(0x666F6F626172FF, -999999999999999999999999, NULL);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-27111 {
+    SELECT CONCAT_WS(0x666F6F626172FF, _latin1 0xFF, 0123);
+}
+expect {
+    �foobar�123
+}
+
+test t-27203 {
+    SELECT CONCAT_WS(0xFF666F6F626172, "a", "日本語テスト");
+}
+expect {
+    a�foobar日本語テスト
+}
+
+test t-27281 {
+    SELECT CONCAT_WS(0xFF666F6F626172, 0123, NULL);
+}
+expect {
+    123
+}
+
+test t-27300 {
+    SELECT CONCAT_WS(0xFF666F6F626172, 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    123�foobarabcABCÅå
+}
+
+test t-27325 {
+    SELECT CONCAT_WS(0xFF666F6F626172, 3.1415926, NULL);
+}
+expect {
+    3.1415926
+}
+
+test t-27327 {
+    SELECT CONCAT_WS(0xFF666F6F626172, 3.1415926, "a");
+}
+expect {
+    3.1415926�foobara
+}
+
+test t-27596 {
+    SELECT CONCAT_WS(0xFF666F6F626172, _latin1 0xFF, 0xAACC);
+}
+expect {
+    ��foobar��
+}
+
+test t-27609 {
+    SELECT CONCAT_WS(0xFF666F6F626172, _latin1 0xFF, _latin1 0xFF);
+}
+expect {
+    ��foobar�
+}
+
+test t-27694 {
+    SELECT CONCAT_WS(9223372036854775807, "a", -999999999999999999999999);
+}
+expect {
+    a9223372036854775807-999999999999999999999999
+}
+
+test t-27740 {
+    SELECT CONCAT_WS(9223372036854775807, 1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    19223372036854775807abcABCÅå
+}
+
+test t-27811 {
+    SELECT CONCAT_WS(9223372036854775807, 3.1415926, "a");
+}
+expect {
+    3.14159269223372036854775807a
+}
+
+test t-27880 {
+    SELECT CONCAT_WS(9223372036854775807, "한국어 시험", -1);
+}
+expect {
+    한국어 시험9223372036854775807-1
+}
+
+test t-27899 {
+    SELECT CONCAT_WS(9223372036854775807, "😊😂🤢", "a");
+}
+expect {
+    😊😂🤢9223372036854775807a
+}
+
+test t-27907 {
+    SELECT CONCAT_WS(9223372036854775807, "😊😂🤢", "日本語テスト");
+}
+expect {
+    😊😂🤢9223372036854775807日本語テスト
+}
+
+test t-27917 {
+    SELECT CONCAT_WS(9223372036854775807, "😊😂🤢", _latin1 0xFF);
+}
+expect {
+    😊😂🤢9223372036854775807ÿ
+}
+
+test t-27931 {
+    SELECT CONCAT_WS(9223372036854775807, '123', "😊😂🤢");
+}
+expect {
+    1239223372036854775807😊😂🤢
+}
+
+test t-27936 {
+    SELECT CONCAT_WS(9223372036854775807, '123', -999999999999999999999999);
+}
+expect {
+    1239223372036854775807-999999999999999999999999
+}
+
+test t-27963 {
+    SELECT CONCAT_WS(9223372036854775807, -9223372036854775808, NULL);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-28125 {
+    SELECT CONCAT_WS(-9223372036854775808, NULL, 3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-28186 {
+    SELECT CONCAT_WS(-9223372036854775808, "abc", "abc");
+}
+expect {
+    abc-9223372036854775808abc
+}
+
+test t-28310 {
+    SELECT CONCAT_WS(-9223372036854775808, 3.1415926, -999999999999999999999999);
+}
+expect {
+    3.1415926-9223372036854775808-999999999999999999999999
+}
+
+test t-28318 {
+    SELECT CONCAT_WS(-9223372036854775808, "中文测试", "abc");
+}
+expect {
+    中文测试-9223372036854775808abc
+}
+
+test t-28415 {
+    SELECT CONCAT_WS(-9223372036854775808, '123', "😊😂🤢");
+}
+expect {
+    123-9223372036854775808😊😂🤢
+}
+
+test t-28655 {
+    SELECT CONCAT_WS(18446744073709551615, "a", "日本語テスト");
+}
+expect {
+    a18446744073709551615日本語テスト
+}
+
+test t-28711 {
+    SELECT CONCAT_WS(18446744073709551615, -1, NULL);
+}
+expect {
+    -1
+}
+
+test t-28725 {
+    SELECT CONCAT_WS(18446744073709551615, -1, 9223372036854775807);
+}
+expect {
+    -1184467440737095516159223372036854775807
+}
+
+test t-28787 {
+    SELECT CONCAT_WS(18446744073709551615, 3.1415926, "日本語テスト");
+}
+expect {
+    3.141592618446744073709551615日本語テスト
+}
+
+test t-28905 {
+    SELECT CONCAT_WS(18446744073709551615, '123', _binary 'Müller' );
+}
+expect {
+    12318446744073709551615Müller
+}
+
+test t-29036 {
+    SELECT CONCAT_WS(18446744073709551615, _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    abcABCÅå18446744073709551615-999999999999999999999999
+}
+
+test t-29223 {
+    SELECT CONCAT_WS(18446744073709540000e0, 0123, 0123);
+}
+expect {
+    1231.844674407370954e19123
+}
+
+test t-29232 {
+    SELECT CONCAT_WS(18446744073709540000e0, 0123, -9223372036854775808);
+}
+expect {
+    1231.844674407370954e19-9223372036854775808
+}
+
+test t-29582 {
+    SELECT CONCAT_WS(-18446744073709540000e0, NULL, '123');
+}
+expect {
+    123
+}
+
+test t-29590 {
+    SELECT CONCAT_WS(-18446744073709540000e0, "", "Å å");
+}
+expect {
+    -1.844674407370954e19Å å
+}
+
+test t-29790 {
+    SELECT CONCAT_WS(-18446744073709540000e0, "日本語テスト", "");
+}
+expect {
+    日本語テスト-1.844674407370954e19
+}
+
+test t-29791 {
+    SELECT CONCAT_WS(-18446744073709540000e0, "日本語テスト", "a");
+}
+expect {
+    日本語テスト-1.844674407370954e19a
+}
+
+test t-29796 {
+    SELECT CONCAT_WS(-18446744073709540000e0, "日本語テスト", 0xAACC);
+}
+expect {
+    日本語テスト-1.844674407370954e19��
+}
+
+test t-29838 {
+    SELECT CONCAT_WS(-18446744073709540000e0, "😊😂🤢", -1);
+}
+expect {
+    😊😂🤢-1.844674407370954e19-1
+}
+
+test t-29894 {
+    SELECT CONCAT_WS(-18446744073709540000e0, 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    9223372036854775807-1.844674407370954e19-999999999999999999999999
+}
+
+test t-29901 {
+    SELECT CONCAT_WS(-18446744073709540000e0, -9223372036854775808, "a");
+}
+expect {
+    -9223372036854775808-1.844674407370954e19a
+}
+
+test t-29950 {
+    SELECT CONCAT_WS(-18446744073709540000e0, -999999999999999999999999, 0xAACC);
+}
+expect {
+    -999999999999999999999999-1.844674407370954e19��
+}
+
+test t-30024 {
+    SELECT CONCAT_WS(-18446744073709540000e0, _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    ÿ-1.844674407370954e19-9223372036854775808
+}
+
+test t-30101 {
+    SELECT CONCAT_WS(JSON_OBJECT(), "a", 1);
+}
+expect {
+    a\{\}1
+}
+
+test t-30384 {
+    SELECT CONCAT_WS(JSON_OBJECT(), -9223372036854775808, "");
+}
+expect {
+    -9223372036854775808\{\}
+}
+
+test t-30394 {
+    SELECT CONCAT_WS(JSON_OBJECT(), -9223372036854775808, "한국어 시험");
+}
+expect {
+    -9223372036854775808\{\}한국어 시험
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-30412 {
+    SELECT CONCAT_WS(JSON_OBJECT(), 999999999999999999999999, 0xAACC);
+}
+expect error {
+}
+
+test t-30451 {
+    SELECT CONCAT_WS(JSON_OBJECT(), _binary 'Müller' , "a");
+}
+expect {
+    Müller\{\}a
+}
+
+test t-30503 {
+    SELECT CONCAT_WS(JSON_OBJECT(), _latin1 0xFF, "日本語テスト");
+}
+expect {
+    ÿ\{\}日本語テスト
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-30676 {
+    SELECT CONCAT_WS(JSON_ARRAY(), 0123, 0xAACC);
+}
+expect error {
+}
+
+test t-30686 {
+    SELECT CONCAT_WS(JSON_ARRAY(), 0123, -999999999999999999999999);
+}
+expect {
+    123[]-999999999999999999999999
+}
+
+test t-30851 {
+    SELECT CONCAT_WS(JSON_ARRAY(), 9223372036854775807, 0123);
+}
+expect {
+    9223372036854775807[]123
+}
+
+test t-30879 {
+    SELECT CONCAT_WS(JSON_ARRAY(), -9223372036854775808, "😊😂🤢");
+}
+expect {
+    -9223372036854775808[]😊😂🤢
+}
+
+test t-30958 {
+    SELECT CONCAT_WS(JSON_ARRAY(), _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    abcABCÅå[]abc
+}
+
+test t-31024 {
+    SELECT CONCAT_WS(time '10:04:58', NULL, "abc");
+}
+expect {
+    abc
+}
+
+test t-31063 {
+    SELECT CONCAT_WS(time '10:04:58', "", _latin1 0xFF);
+}
+expect {
+    10:04:58ÿ
+}
+
+test t-31088 {
+    SELECT CONCAT_WS(time '10:04:58', "abc", "");
+}
+expect {
+    abc10:04:58
+}
+
+test t-31291 {
+    SELECT CONCAT_WS(time '10:04:58', "😊😂🤢", 0123);
+}
+expect {
+    😊😂🤢10:04:58123
+}
+
+test t-31354 {
+    SELECT CONCAT_WS(time '10:04:58', -9223372036854775808, "abc");
+}
+expect {
+    -922337203685477580810:04:58abc
+}
+
+test t-31356 {
+    SELECT CONCAT_WS(time '10:04:58', -9223372036854775808, -1);
+}
+expect {
+    -922337203685477580810:04:58-1
+}
+
+test t-31407 {
+    SELECT CONCAT_WS(time '10:04:58', -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    -99999999999999999999999910:04:58😊😂🤢
+}
+
+test t-31598 {
+    SELECT CONCAT_WS(time '31:34:58', 1, -1);
+}
+expect {
+    131:34:58-1
+}
+
+test t-31634 {
+    SELECT CONCAT_WS(time '31:34:58', -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -131:34:58abcABCÅå
+}
+
+test t-31689 {
+    SELECT CONCAT_WS(time '31:34:58', 3.1415926, 3.1415926);
+}
+expect {
+    3.141592631:34:583.1415926
+}
+
+test t-31714 {
+    SELECT CONCAT_WS(time '31:34:58', "中文测试", "한국어 시험");
+}
+expect {
+    中文测试31:34:58한국어 시험
+}
+
+test t-31861 {
+    SELECT CONCAT_WS(time '31:34:58', 999999999999999999999999, 1);
+}
+expect {
+    99999999999999999999999931:34:581
+}
+
+test t-31883 {
+    SELECT CONCAT_WS(time '31:34:58', -999999999999999999999999, 1);
+}
+expect {
+    -99999999999999999999999931:34:581
+}
+
+test t-31933 {
+    SELECT CONCAT_WS(time '31:34:58', _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    abcABCÅå31:34:58日本語テスト
+}
+
+test t-31963 {
+    SELECT CONCAT_WS(time '31:34:58', _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    �31:34:58Müller
+}
+
+test t-31993 {
+    SELECT CONCAT_WS(time '32:34:58', NULL, 1);
+}
+expect {
+    1
+}
+
+test t-32044 {
+    SELECT CONCAT_WS(time '32:34:58', "a", "한국어 시험");
+}
+expect {
+    a32:34:58한국어 시험
+}
+
+test t-32055 {
+    SELECT CONCAT_WS(time '32:34:58', "abc", NULL);
+}
+expect {
+    abc
+}
+
+test t-32099 {
+    SELECT CONCAT_WS(time '32:34:58', -1, NULL);
+}
+expect {
+    -1
+}
+
+test t-32100 {
+    SELECT CONCAT_WS(time '32:34:58', -1, "");
+}
+expect {
+    -132:34:58
+}
+
+test t-32455 {
+    SELECT CONCAT_WS(time '130:34:58', "Å å", 1);
+}
+expect {
+    Å å130:34:581
+}
+
+test t-32552 {
+    SELECT CONCAT_WS(time '130:34:58', "abc", '123');
+}
+expect {
+    abc130:34:58123
+}
+
+test t-32584 {
+    SELECT CONCAT_WS(time '130:34:58', -1, "");
+}
+expect {
+    -1130:34:58
+}
+
+test t-32599 {
+    SELECT CONCAT_WS(time '130:34:58', -1, 999999999999999999999999);
+}
+expect {
+    -1130:34:58999999999999999999999999
+}
+
+test t-32619 {
+    SELECT CONCAT_WS(time '130:34:58', 0123, 9223372036854775807);
+}
+expect {
+    123130:34:589223372036854775807
+}
+
+test t-32628 {
+    SELECT CONCAT_WS(time '130:34:58', 0xAACC, "");
+}
+expect {
+    ��130:34:58
+}
+
+test t-32678 {
+    SELECT CONCAT_WS(time '130:34:58', "中文测试", 0xAACC);
+}
+expect {
+    中文测试130:34:58��
+}
+
+test t-32771 {
+    SELECT CONCAT_WS(time '130:34:58', '123', "😊😂🤢");
+}
+expect {
+    123130:34:58😊😂🤢
+}
+
+test t-32774 {
+    SELECT CONCAT_WS(time '130:34:58', '123', -9223372036854775808);
+}
+expect {
+    123130:34:58-9223372036854775808
+}
+
+test t-32913 {
+    SELECT CONCAT_WS(time '130:34:58', _latin1 0xFF, NULL);
+}
+expect {
+    ÿ
+}
+
+test t-33066 {
+    SELECT CONCAT_WS(time '5 10:34:58', -1, "Å å");
+}
+expect {
+    -1130:34:58Å å
+}
+
+test t-33075 {
+    SELECT CONCAT_WS(time '5 10:34:58', -1, 3.1415926);
+}
+expect {
+    -1130:34:583.1415926
+}
+
+test t-33178 {
+    SELECT CONCAT_WS(time '5 10:34:58', "日本語テスト", "");
+}
+expect {
+    日本語テスト130:34:58
+}
+
+test t-33282 {
+    SELECT CONCAT_WS(time '5 10:34:58', 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    9223372036854775807130:34:58-999999999999999999999999
+}
+
+test t-33337 {
+    SELECT CONCAT_WS(time '5 10:34:58', -999999999999999999999999, 0123);
+}
+expect {
+    -999999999999999999999999130:34:58123
+}
+
+test t-33583 {
+    SELECT CONCAT_WS(time '10:04:58.1', 0123, "日本語テスト");
+}
+expect {
+    12310:04:58.1日本語テスト
+}
+
+test t-33611 {
+    SELECT CONCAT_WS(time '10:04:58.1', 0xAACC, 999999999999999999999999);
+}
+expect {
+    ��10:04:58.1999999999999999999999999
+}
+
+test t-33721 {
+    SELECT CONCAT_WS(time '10:04:58.1', "😊😂🤢", 999999999999999999999999);
+}
+expect {
+    😊😂🤢10:04:58.1999999999999999999999999
+}
+
+test t-33947 {
+    SELECT CONCAT_WS(time '31:34:58.4', "", NULL);
+}
+expect {
+    
+}
+
+test t-33950 {
+    SELECT CONCAT_WS(time '31:34:58.4', "", "abc");
+}
+expect {
+    31:34:58.4abc
+}
+
+test t-33962 {
+    SELECT CONCAT_WS(time '31:34:58.4', "", -9223372036854775808);
+}
+expect {
+    31:34:58.4-9223372036854775808
+}
+
+test t-33963 {
+    SELECT CONCAT_WS(time '31:34:58.4', "", 999999999999999999999999);
+}
+expect {
+    31:34:58.4999999999999999999999999
+}
+
+test t-34005 {
+    SELECT CONCAT_WS(time '31:34:58.4', "abc", 9223372036854775807);
+}
+expect {
+    abc31:34:58.49223372036854775807
+}
+
+test t-34085 {
+    SELECT CONCAT_WS(time '31:34:58.4', 0xAACC, 0123);
+}
+expect {
+    ��31:34:58.4123
+}
+
+test t-34095 {
+    SELECT CONCAT_WS(time '31:34:58.4', 0xAACC, 999999999999999999999999);
+}
+expect {
+    ��31:34:58.4999999999999999999999999
+}
+
+test t-34160 {
+    SELECT CONCAT_WS(time '31:34:58.4', "日本語テスト", -9223372036854775808);
+}
+expect {
+    日本語テスト31:34:58.4-9223372036854775808
+}
+
+test t-34315 {
+    SELECT CONCAT_WS(time '31:34:58.4', -999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    -99999999999999999999999931:34:58.4999999999999999999999999
+}
+
+test t-34451 {
+    SELECT CONCAT_WS(time '32:34:58.5', "", _latin1 0xFF);
+}
+expect {
+    32:34:58.5ÿ
+}
+
+test t-34484 {
+    SELECT CONCAT_WS(time '32:34:58.5', "abc", "中文测试");
+}
+expect {
+    abc32:34:58.5中文测试
+}
+
+test t-34520 {
+    SELECT CONCAT_WS(time '32:34:58.5', -1, "");
+}
+expect {
+    -132:34:58.5
+}
+
+test t-34639 {
+    SELECT CONCAT_WS(time '32:34:58.5', "日本語テスト", "日本語テスト");
+}
+expect {
+    日本語テスト32:34:58.5日本語テスト
+}
+
+test t-34814 {
+    SELECT CONCAT_WS(time '32:34:58.5', _binary 'Müller' , "中文测试");
+}
+expect {
+    Müller32:34:58.5中文测试
+}
+
+test t-34815 {
+    SELECT CONCAT_WS(time '32:34:58.5', _binary 'Müller' , "日本語テスト");
+}
+expect {
+    Müller32:34:58.5日本語テスト
+}
+
+test t-34916 {
+    SELECT CONCAT_WS(time '130:34:58.6', "", "");
+}
+expect {
+    130:34:58.6
+}
+
+test t-34976 {
+    SELECT CONCAT_WS(time '130:34:58.6', "abc", -999999999999999999999999);
+}
+expect {
+    abc130:34:58.6-999999999999999999999999
+}
+
+test t-34981 {
+    SELECT CONCAT_WS(time '130:34:58.6', 1, NULL);
+}
+expect {
+    1
+}
+
+test t-35022 {
+    SELECT CONCAT_WS(time '130:34:58.6', -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1130:34:58.6abcABCÅå
+}
+
+test t-35341 {
+    SELECT CONCAT_WS(time '130:34:58.6', _latin1 0xFF, 3.1415926);
+}
+expect {
+    ÿ130:34:58.63.1415926
+}
+
+test t-35552 {
+    SELECT CONCAT_WS(time '5 10:34:58.9', 3.1415926, "Å å");
+}
+expect {
+    3.1415926130:34:58.9Å å
+}
+
+test t-35649 {
+    SELECT CONCAT_WS(time '5 10:34:58.9', "😊😂🤢", 3.1415926);
+}
+expect {
+    😊😂🤢130:34:58.93.1415926
+}
+
+test t-35712 {
+    SELECT CONCAT_WS(time '5 10:34:58.9', -9223372036854775808, -1);
+}
+expect {
+    -9223372036854775808130:34:58.9-1
+}
+
+test t-35816 {
+    SELECT CONCAT_WS(time '5 10:34:58.9', _latin1 0xFF, "Å å");
+}
+expect {
+    ÿ130:34:58.9Å å
+}
+
+test t-35906 {
+    SELECT CONCAT_WS(date '2000-01-01', "a", "");
+}
+expect {
+    a2000-01-01
+}
+
+test t-35939 {
+    SELECT CONCAT_WS(date '2000-01-01', "abc", "😊😂🤢");
+}
+expect {
+    abc2000-01-01😊😂🤢
+}
+
+test t-35947 {
+    SELECT CONCAT_WS(date '2000-01-01', "abc", _latin1 0xFF);
+}
+expect {
+    abc2000-01-01ÿ
+}
+
+test t-35970 {
+    SELECT CONCAT_WS(date '2000-01-01', -1, "Å å");
+}
+expect {
+    -12000-01-01Å å
+}
+
+test t-36043 {
+    SELECT CONCAT_WS(date '2000-01-01', 3.1415926, 0123);
+}
+expect {
+    3.14159262000-01-01123
+}
+
+test t-36078 {
+    SELECT CONCAT_WS(date '2000-01-01', "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    中文测试2000-01-01abcABCÅå
+}
+
+test t-36239 {
+    SELECT CONCAT_WS(date '2000-01-01', -999999999999999999999999, 1);
+}
+expect {
+    -9999999999999999999999992000-01-011
+}
+
+test t-36264 {
+    SELECT CONCAT_WS(date '2000-01-01', _binary 'Müller' , 0xAACC);
+}
+expect {
+    Müller2000-01-01��
+}
+
+test t-36319 {
+    SELECT CONCAT_WS(date '2000-01-01', _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    �2000-01-01Müller
+}
+
+test t-36343 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', "Å å", _latin1 0xFF);
+}
+expect {
+    Å å2000-01-01 10:34:58ÿ
+}
+
+test t-36377 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', "", "日本語テスト");
+}
+expect {
+    2000-01-01 10:34:58日本語テスト
+}
+
+test t-36425 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', "abc", 9223372036854775807);
+}
+expect {
+    abc2000-01-01 10:34:589223372036854775807
+}
+
+test t-36436 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', 1, "abc");
+}
+expect {
+    12000-01-01 10:34:58abc
+}
+
+test t-36612 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', "😊😂🤢", "abc");
+}
+expect {
+    😊😂🤢2000-01-01 10:34:58abc
+}
+
+test t-36684 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', -9223372036854775808, "中文测试");
+}
+expect {
+    -92233720368547758082000-01-01 10:34:58中文测试
+}
+
+test t-36770 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58', _utf8mb4 'abcABCÅå', 0xAACC);
+}
+expect {
+    abcABCÅå2000-01-01 10:34:58��
+}
+
+test t-36955 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58.123456', -1, 999999999999999999999999);
+}
+expect {
+    -12000-01-01 10:34:58.123456999999999999999999999999
+}
+
+test t-36962 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58.123456', 0123, "");
+}
+expect {
+    1232000-01-01 10:34:58.123456
+}
+
+test t-37062 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58.123456', "日本語テスト", '123');
+}
+expect {
+    日本語テスト2000-01-01 10:34:58.123456123
+}
+
+test t-37069 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58.123456', "日本語テスト", _latin1 0xFF);
+}
+expect {
+    日本語テスト2000-01-01 10:34:58.123456ÿ
+}
+
+test t-37410 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58.978654', 1, "中文测试");
+}
+expect {
+    12000-01-01 10:34:58.978654中文测试
+}
+
+test t-37530 {
+    SELECT CONCAT_WS(timestamp '2000-01-01 10:34:58.978654', "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    中文测试2000-01-01 10:34:58.978654abcABCÅå
+}
+
+test t-37800 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', NULL, "abc");
+}
+expect {
+    abc
+}
+
+test t-37833 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', "", 9223372036854775807);
+}
+expect {
+    2024-12-30 10:34:589223372036854775807
+}
+
+test t-37859 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', "a", _binary 'Müller' );
+}
+expect {
+    a2024-12-30 10:34:58Müller
+}
+
+test t-37879 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', "abc", 999999999999999999999999);
+}
+expect {
+    abc2024-12-30 10:34:58999999999999999999999999
+}
+
+test t-38037 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', "日本語テスト", _latin1 0xFF);
+}
+expect {
+    日本語テスト2024-12-30 10:34:58ÿ
+}
+
+test t-38126 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', -9223372036854775808, "Å å");
+}
+expect {
+    -92233720368547758082024-12-30 10:34:58Å å
+}
+
+test t-38202 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', _binary 'Müller' , "中文测试");
+}
+expect {
+    Müller2024-12-30 10:34:58中文测试
+}
+
+test t-38256 {
+    SELECT CONCAT_WS(timestamp '2024-12-30 10:34:58', _latin1 0xFF, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ2024-12-30 10:34:58abcABCÅå
+}
+
+test t-38311 {
+    SELECT CONCAT_WS(20000101103458, "", 3.1415926);
+}
+expect {
+    200001011034583.1415926
+}
+
+test t-38331 {
+    SELECT CONCAT_WS(20000101103458, "a", 0123);
+}
+expect {
+    a20000101103458123
+}
+
+test t-38450 {
+    SELECT CONCAT_WS(20000101103458, 0xAACC, -9223372036854775808);
+}
+expect {
+    ��20000101103458-9223372036854775808
+}
+
+test t-38484 {
+    SELECT CONCAT_WS(20000101103458, "中文测试", -1);
+}
+expect {
+    中文测试20000101103458-1
+}
+
+test t-38499 {
+    SELECT CONCAT_WS(20000101103458, "中文测试", _latin1 0xFF);
+}
+expect {
+    中文测试20000101103458ÿ
+}
+
+test t-38524 {
+    SELECT CONCAT_WS(20000101103458, "한국어 시험", "");
+}
+expect {
+    한국어 시험20000101103458
+}
+
+test t-38673 {
+    SELECT CONCAT_WS(20000101103458, -999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    -99999999999999999999999920000101103458Müller
+}
+
+test t-38697 {
+    SELECT CONCAT_WS(20000101103458, _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    Müller20000101103458�
+}
+
+test t-38763 {
+    SELECT CONCAT_WS(20000101103458.1234, "Å å", _latin1 0xFF);
+}
+expect {
+    Å å20000101103458.1234ÿ
+}
+
+test t-38811 {
+    SELECT CONCAT_WS(20000101103458.1234, "a", "a");
+}
+expect {
+    a20000101103458.1234a
+}
+
+test t-38862 {
+    SELECT CONCAT_WS(20000101103458.1234, 1, "中文测试");
+}
+expect {
+    120000101103458.1234中文测试
+}
+
+test t-38934 {
+    SELECT CONCAT_WS(20000101103458.1234, 0xAACC, -9223372036854775808);
+}
+expect {
+    ��20000101103458.1234-9223372036854775808
+}
+
+test t-38947 {
+    SELECT CONCAT_WS(20000101103458.1234, 3.1415926, 0123);
+}
+expect {
+    3.141592620000101103458.1234123
+}
+
+test t-39119 {
+    SELECT CONCAT_WS(20000101103458.1234, 999999999999999999999999, "a");
+}
+expect {
+    99999999999999999999999920000101103458.1234a
+}
+
+test t-39181 {
+    SELECT CONCAT_WS(20000101103458.1234, _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    Müller20000101103458.1234�
+}
+
+test t-39193 {
+    SELECT CONCAT_WS(20000101103458.1234, _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    abcABCÅå20000101103458.1234日本語テスト
+}
+
+test t-39213 {
+    SELECT CONCAT_WS(20000101103458.1234, _latin1 0xFF, 3.1415926);
+}
+expect {
+    ÿ20000101103458.12343.1415926
+}
+
+test t-39337 {
+    SELECT CONCAT_WS(20000101103458.123456, 1, NULL);
+}
+expect {
+    1
+}
+
+test t-39485 {
+    SELECT CONCAT_WS(20000101103458.123456, "日本語テスト", 999999999999999999999999);
+}
+expect {
+    日本語テスト20000101103458.123456999999999999999999999999
+}
+
+test t-39650 {
+    SELECT CONCAT_WS(20000101103458.123456, _binary 'Müller' , -1);
+}
+expect {
+    Müller20000101103458.123456-1
+}
+
+test t-39678 {
+    SELECT CONCAT_WS(20000101103458.123456, _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    abcABCÅå20000101103458.123456한국어 시험
+}
+
+test t-39691 {
+    SELECT CONCAT_WS(20000101103458.123456, _latin1 0xFF, "a");
+}
+expect {
+    ÿ20000101103458.123456a
+}
+
+test t-39704 {
+    SELECT CONCAT_WS(20000101103458.123456, _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    ÿ20000101103458.123456-9223372036854775808
+}
+
+test t-39865 {
+    SELECT CONCAT_WS(20000101, 0123, NULL);
+}
+expect {
+    123
+}
+
+test t-39943 {
+    SELECT CONCAT_WS(20000101, "中文测试", "😊😂🤢");
+}
+expect {
+    中文测试20000101😊😂🤢
+}
+
+test t-39964 {
+    SELECT CONCAT_WS(20000101, "日本語テスト", "한국어 시험");
+}
+expect {
+    日本語テスト20000101한국어 시험
+}
+
+test t-40002 {
+    SELECT CONCAT_WS(20000101, "😊😂🤢", -1);
+}
+expect {
+    😊😂🤢20000101-1
+}
+
+test t-40481 {
+    SELECT CONCAT_WS(103458, "😊😂🤢", NULL);
+}
+expect {
+    😊😂🤢
+}
+
+test t-40546 {
+    SELECT CONCAT_WS(103458, -9223372036854775808, "Å å");
+}
+expect {
+    -9223372036854775808103458Å å
+}
+
+test t-40562 {
+    SELECT CONCAT_WS(103458, -9223372036854775808, -9223372036854775808);
+}
+expect {
+    -9223372036854775808103458-9223372036854775808
+}
+
+test t-40568 {
+    SELECT CONCAT_WS(103458, 999999999999999999999999, "Å å");
+}
+expect {
+    999999999999999999999999103458Å å
+}
+
+test t-40590 {
+    SELECT CONCAT_WS(103458, -999999999999999999999999, "Å å");
+}
+expect {
+    -999999999999999999999999103458Å å
+}
+
+test t-40605 {
+    SELECT CONCAT_WS(103458, -999999999999999999999999, 9223372036854775807);
+}
+expect {
+    -9999999999999999999999991034589223372036854775807
+}
+
+test t-40647 {
+    SELECT CONCAT_WS(103458, _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    abcABCÅå103458😊😂🤢
+}
+
+test t-40796 {
+    SELECT CONCAT_WS(103458.123456, 1, 0xAACC);
+}
+expect {
+    1103458.123456��
+}
+
+test t-40817 {
+    SELECT CONCAT_WS(103458.123456, -1, 0123);
+}
+expect {
+    -1103458.123456123
+}
+
+test t-40854 {
+    SELECT CONCAT_WS(103458.123456, 0xAACC, "Å å");
+}
+expect {
+    ��103458.123456Å å
+}
+
+test t-40862 {
+    SELECT CONCAT_WS(103458.123456, 0xAACC, 0xAACC);
+}
+expect {
+    ��103458.123456��
+}
+
+test t-40879 {
+    SELECT CONCAT_WS(103458.123456, 3.1415926, "a");
+}
+expect {
+    3.1415926103458.123456a
+}
+
+test t-41001 {
+    SELECT CONCAT_WS(103458.123456, '123', 9223372036854775807);
+}
+expect {
+    123103458.1234569223372036854775807
+}
+
+test t-41005 {
+    SELECT CONCAT_WS(103458.123456, '123', _binary 'Müller' );
+}
+expect {
+    123103458.123456Müller
+}
+
+test t-41019 {
+    SELECT CONCAT_WS(103458.123456, 9223372036854775807, "日本語テスト");
+}
+expect {
+    9223372036854775807103458.123456日本語テスト
+}
+
+test t-41020 {
+    SELECT CONCAT_WS(103458.123456, 9223372036854775807, "한국어 시험");
+}
+expect {
+    9223372036854775807103458.123456한국어 시험
+}
+
+test t-41024 {
+    SELECT CONCAT_WS(103458.123456, 9223372036854775807, -9223372036854775808);
+}
+expect {
+    9223372036854775807103458.123456-9223372036854775808
+}
+
+test t-41117 {
+    SELECT CONCAT_WS(103458.123456, _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    Müller103458.123456�
+}
+
+test t-41214 {
+    SELECT CONCAT_WS('20000101103458', "", 0xAACC);
+}
+expect {
+    20000101103458��
+}
+
+test t-41253 {
+    SELECT CONCAT_WS('20000101103458', "abc", "a");
+}
+expect {
+    abc20000101103458a
+}
+
+test t-41316 {
+    SELECT CONCAT_WS('20000101103458', 0123, "Å å");
+}
+expect {
+    12320000101103458Å å
+}
+
+test t-41334 {
+    SELECT CONCAT_WS('20000101103458', 0123, -999999999999999999999999);
+}
+expect {
+    12320000101103458-999999999999999999999999
+}
+
+test t-41354 {
+    SELECT CONCAT_WS('20000101103458', 0xAACC, -9223372036854775808);
+}
+expect {
+    ��20000101103458-9223372036854775808
+}
+
+test t-41465 {
+    SELECT CONCAT_WS('20000101103458', "😊😂🤢", 999999999999999999999999);
+}
+expect {
+    😊😂🤢20000101103458999999999999999999999999
+}
+
+test t-41475 {
+    SELECT CONCAT_WS('20000101103458', '123', 1);
+}
+expect {
+    123200001011034581
+}
+
+test t-41597 {
+    SELECT CONCAT_WS('20000101103458', _binary 'Müller' , 999999999999999999999999);
+}
+expect {
+    Müller20000101103458999999999999999999999999
+}
+
+test t-41600 {
+    SELECT CONCAT_WS('20000101103458', _binary 'Müller' , _utf8mb4 'abcABCÅå');
+}
+expect {
+    Müller20000101103458abcABCÅå
+}
+
+test t-41682 {
+    SELECT CONCAT_WS('20000101103458.1234', NULL, '123');
+}
+expect {
+    123
+}
+
+test t-41876 {
+    SELECT CONCAT_WS('20000101103458.1234', "中文测试", "中文测试");
+}
+expect {
+    中文测试20000101103458.1234中文测试
+}
+
+test t-42033 {
+    SELECT CONCAT_WS('20000101103458.1234', 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    99999999999999999999999920000101103458.1234😊😂🤢
+}
+
+test t-42286 {
+    SELECT CONCAT_WS('20000101103458.123456', 0123, "");
+}
+expect {
+    12320000101103458.123456
+}
+
+test t-42370 {
+    SELECT CONCAT_WS('20000101103458.123456', "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    中文测试20000101103458.123456abcABCÅå
+}
+
+test t-42507 {
+    SELECT CONCAT_WS('20000101103458.123456', 999999999999999999999999, "a");
+}
+expect {
+    99999999999999999999999920000101103458.123456a
+}
+
+test t-42544 {
+    SELECT CONCAT_WS('20000101103458.123456', -999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    -99999999999999999999999920000101103458.123456-999999999999999999999999
+}
+
+test t-42633 {
+    SELECT CONCAT_WS('20000101', "Å å", _binary 'Müller' );
+}
+expect {
+    Å å20000101Müller
+}
+
+test t-42654 {
+    SELECT CONCAT_WS('20000101', NULL, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-42716 {
+    SELECT CONCAT_WS('20000101', "abc", '123');
+}
+expect {
+    abc20000101123
+}
+
+test t-42719 {
+    SELECT CONCAT_WS('20000101', "abc", 999999999999999999999999);
+}
+expect {
+    abc20000101999999999999999999999999
+}
+
+test t-42835 {
+    SELECT CONCAT_WS('20000101', "中文测试", NULL);
+}
+expect {
+    中文测试
+}
+
+test t-42960 {
+    SELECT CONCAT_WS('20000101', 9223372036854775807, -9223372036854775808);
+}
+expect {
+    922337203685477580720000101-9223372036854775808
+}
+
+test t-43043 {
+    SELECT CONCAT_WS('20000101', _binary 'Müller' , "日本語テスト");
+}
+expect {
+    Müller20000101日本語テスト
+}
+
+test t-43066 {
+    SELECT CONCAT_WS('20000101', _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    abcABCÅå20000101한국어 시험
+}
+
+test t-43082 {
+    SELECT CONCAT_WS('20000101', _latin1 0xFF, -1);
+}
+expect {
+    ÿ20000101-1
+}
+
+test t-43090 {
+    SELECT CONCAT_WS('20000101', _latin1 0xFF, '123');
+}
+expect {
+    ÿ20000101123
+}
+
+test t-43239 {
+    SELECT CONCAT_WS('103458', -1, 3.1415926);
+}
+expect {
+    -11034583.1415926
+}
+
+test t-43273 {
+    SELECT CONCAT_WS('103458', 0123, _latin1 0xFF);
+}
+expect {
+    123103458ÿ
+}
+
+test t-43596 {
+    SELECT CONCAT_WS('103458.123456', "Å å", '123');
+}
+expect {
+    Å å103458.123456123
+}
+
+test t-43699 {
+    SELECT CONCAT_WS('103458.123456', 1, 0123);
+}
+expect {
+    1103458.123456123
+}
+
+test t-43718 {
+    SELECT CONCAT_WS('103458.123456', -1, "abc");
+}
+expect {
+    -1103458.123456abc
+}
+
+test t-43850 {
+    SELECT CONCAT_WS('103458.123456', "한국어 시험", "abc");
+}
+expect {
+    한국어 시험103458.123456abc
+}
+
+test t-43962 {
+    SELECT CONCAT_WS('103458.123456', 999999999999999999999999, -1);
+}
+expect {
+    999999999999999999999999103458.123456-1
+}
+
+test t-44062 {
+    SELECT CONCAT_WS('103458.123456', _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    ÿ103458.123456-999999999999999999999999
+}
+
+test t-44153 {
+    SELECT CONCAT_WS('20000101103458foo', "a", _latin1 0xFF);
+}
+expect {
+    a20000101103458fooÿ
+}
+
+test t-44252 {
+    SELECT CONCAT_WS('20000101103458foo', 0xAACC, "中文测试");
+}
+expect {
+    ��20000101103458foo中文测试
+}
+
+test t-44313 {
+    SELECT CONCAT_WS('20000101103458foo', "日本語テスト", 1);
+}
+expect {
+    日本語テスト20000101103458foo1
+}
+
+test t-44354 {
+    SELECT CONCAT_WS('20000101103458foo', "😊😂🤢", "");
+}
+expect {
+    😊😂🤢20000101103458foo
+}
+
+test t-44387 {
+    SELECT CONCAT_WS('20000101103458foo', '123', "😊😂🤢");
+}
+expect {
+    12320000101103458foo😊😂🤢
+}
+
+test t-44498 {
+    SELECT CONCAT_WS('20000101103458foo', _binary 'Müller' , '123');
+}
+expect {
+    Müller20000101103458foo123
+}
+
+test t-44606 {
+    SELECT CONCAT_WS('20000101103458.1234foo', "", "한국어 시험");
+}
+expect {
+    20000101103458.1234foo한국어 시험
+}
+
+test t-44663 {
+    SELECT CONCAT_WS('20000101103458.1234foo', 1, "a");
+}
+expect {
+    120000101103458.1234fooa
+}
+
+test t-44790 {
+    SELECT CONCAT_WS('20000101103458.1234foo', "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    中文测试20000101103458.1234fooabcABCÅå
+}
+
+test t-44825 {
+    SELECT CONCAT_WS('20000101103458.1234foo', "한국어 시험", "日本語テスト");
+}
+expect {
+    한국어 시험20000101103458.1234foo日本語テスト
+}
+
+test t-45087 {
+    SELECT CONCAT_WS('20000101103458.123456foo', "", 3.1415926);
+}
+expect {
+    20000101103458.123456foo3.1415926
+}
+
+test t-45104 {
+    SELECT CONCAT_WS('20000101103458.123456foo', "a", "abc");
+}
+expect {
+    a20000101103458.123456fooabc
+}
+
+test t-45145 {
+    SELECT CONCAT_WS('20000101103458.123456foo', 1, NULL);
+}
+expect {
+    1
+}
+
+test t-45165 {
+    SELECT CONCAT_WS('20000101103458.123456foo', 1, _latin1 0xFF);
+}
+expect {
+    120000101103458.123456fooÿ
+}
+
+test t-45192 {
+    SELECT CONCAT_WS('20000101103458.123456foo', 0123, "abc");
+}
+expect {
+    12320000101103458.123456fooabc
+}
+
+test t-45311 {
+    SELECT CONCAT_WS('20000101103458.123456foo', "한국어 시험", "😊😂🤢");
+}
+expect {
+    한국어 시험20000101103458.123456foo😊😂🤢
+}
+
+test t-45483 {
+    SELECT CONCAT_WS('20000101103458.123456foo', _utf8mb4 'abcABCÅå', 3.1415926);
+}
+expect {
+    abcABCÅå20000101103458.123456foo3.1415926
+}
+
+test t-45502 {
+    SELECT CONCAT_WS('20000101103458.123456foo', _latin1 0xFF, -1);
+}
+expect {
+    ÿ20000101103458.123456foo-1
+}
+
+test t-45665 {
+    SELECT CONCAT_WS('20000101foo', -1, 9223372036854775807);
+}
+expect {
+    -120000101foo9223372036854775807
+}
+
+test t-45718 {
+    SELECT CONCAT_WS('20000101foo', 3.1415926, "");
+}
+expect {
+    3.141592620000101foo
+}
+
+test t-45773 {
+    SELECT CONCAT_WS('20000101foo', "日本語テスト", "😊😂🤢");
+}
+expect {
+    日本語テスト20000101foo😊😂🤢
+}
+
+test t-45787 {
+    SELECT CONCAT_WS('20000101foo', "한국어 시험", 1);
+}
+expect {
+    한국어 시험20000101foo1
+}
+
+test t-45932 {
+    SELECT CONCAT_WS('20000101foo', -999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    -99999999999999999999999920000101foo-999999999999999999999999
+}
+
+test t-46005 {
+    SELECT CONCAT_WS('103458foo', "Å å", "a");
+}
+expect {
+    Å å103458fooa
+}
+
+test t-46026 {
+    SELECT CONCAT_WS('103458foo', NULL, "");
+}
+expect {
+    
+}
+
+test t-46104 {
+    SELECT CONCAT_WS('103458foo', "abc", '123');
+}
+expect {
+    abc103458foo123
+}
+
+test t-46131 {
+    SELECT CONCAT_WS('103458foo', 1, _binary 'Müller' );
+}
+expect {
+    1103458fooMüller
+}
+
+test t-46139 {
+    SELECT CONCAT_WS('103458foo', -1, 1);
+}
+expect {
+    -1103458foo1
+}
+
+test t-46209 {
+    SELECT CONCAT_WS('103458foo', 3.1415926, 3.1415926);
+}
+expect {
+    3.1415926103458foo3.1415926
+}
+
+test t-46281 {
+    SELECT CONCAT_WS('103458foo', "한국어 시험", 9223372036854775807);
+}
+expect {
+    한국어 시험103458foo9223372036854775807
+}
+
+test t-46298 {
+    SELECT CONCAT_WS('103458foo', "😊😂🤢", "中文测试");
+}
+expect {
+    😊😂🤢103458foo中文测试
+}
+
+test t-46299 {
+    SELECT CONCAT_WS('103458foo', "😊😂🤢", "日本語テスト");
+}
+expect {
+    😊😂🤢103458foo日本語テスト
+}
+
+test t-46361 {
+    SELECT CONCAT_WS('103458foo', -9223372036854775808, 0123);
+}
+expect {
+    -9223372036854775808103458foo123
+}
+
+test t-46553 {
+    SELECT CONCAT_WS('103458.123456foo', "a", NULL);
+}
+expect {
+    a
+}
+
+test t-46557 {
+    SELECT CONCAT_WS('103458.123456foo', "a", 1);
+}
+expect {
+    a103458.123456foo1
+}
+
+test t-46893 {
+    SELECT CONCAT_WS('103458.123456foo', -999999999999999999999999, "日本語テスト");
+}
+expect {
+    -999999999999999999999999103458.123456foo日本語テスト
+}
+
+test t-46898 {
+    SELECT CONCAT_WS('103458.123456foo', -999999999999999999999999, -9223372036854775808);
+}
+expect {
+    -999999999999999999999999103458.123456foo-9223372036854775808
+}
+
+test t-46929 {
+    SELECT CONCAT_WS('103458.123456foo', _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    abcABCÅå103458.123456fooa
+}
+
+test t-46931 {
+    SELECT CONCAT_WS('103458.123456foo', _utf8mb4 'abcABCÅå', 1);
+}
+expect {
+    abcABCÅå103458.123456foo1
+}
+
+test t-46973 {
+    SELECT CONCAT_WS(time '-10:04:58', "Å å", "a");
+}
+expect {
+    Å å-10:04:58a
+}
+
+test t-47016 {
+    SELECT CONCAT_WS(time '-10:04:58', "", "");
+}
+expect {
+    -10:04:58
+}
+
+test t-47102 {
+    SELECT CONCAT_WS(time '-10:04:58', -1, "Å å");
+}
+expect {
+    -1-10:04:58Å å
+}
+
+test t-47113 {
+    SELECT CONCAT_WS(time '-10:04:58', -1, "日本語テスト");
+}
+expect {
+    -1-10:04:58日本語テスト
+}
+
+test t-47122 {
+    SELECT CONCAT_WS(time '-10:04:58', -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1-10:04:58abcABCÅå
+}
+
+test t-47138 {
+    SELECT CONCAT_WS(time '-10:04:58', 0123, '123');
+}
+expect {
+    123-10:04:58123
+}
+
+test t-47219 {
+    SELECT CONCAT_WS(time '-10:04:58', "日本語テスト", 0123);
+}
+expect {
+    日本語テスト-10:04:58123
+}
+
+test t-47227 {
+    SELECT CONCAT_WS(time '-10:04:58', "日本語テスト", 9223372036854775807);
+}
+expect {
+    日本語テスト-10:04:589223372036854775807
+}
+
+test t-47236 {
+    SELECT CONCAT_WS(time '-10:04:58', "한국어 시험", "");
+}
+expect {
+    한국어 시험-10:04:58
+}
+
+test t-47259 {
+    SELECT CONCAT_WS(time '-10:04:58', "😊😂🤢", "a");
+}
+expect {
+    😊😂🤢-10:04:58a
+}
+
+test t-47321 {
+    SELECT CONCAT_WS(time '-10:04:58', 9223372036854775807, _latin1 0xFF);
+}
+expect {
+    9223372036854775807-10:04:58ÿ
+}
+
+test t-47672 {
+    SELECT CONCAT_WS(time '-31:34:58', 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    3.1415926-31:34:58abcABCÅå
+}
+
+test t-47686 {
+    SELECT CONCAT_WS(time '-31:34:58', "中文测试", "한국어 시험");
+}
+expect {
+    中文测试-31:34:58한국어 시험
+}
+
+test t-47742 {
+    SELECT CONCAT_WS(time '-31:34:58', "😊😂🤢", "");
+}
+expect {
+    😊😂🤢-31:34:58
+}
+
+test t-47967 {
+    SELECT CONCAT_WS(time '-32:34:58', NULL, 0123);
+}
+expect {
+    123
+}
+
+test t-47972 {
+    SELECT CONCAT_WS(time '-32:34:58', NULL, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-48020 {
+    SELECT CONCAT_WS(time '-32:34:58', "a", -9223372036854775808);
+}
+expect {
+    a-32:34:58-9223372036854775808
+}
+
+test t-48074 {
+    SELECT CONCAT_WS(time '-32:34:58', -1, "abc");
+}
+expect {
+    -1-32:34:58abc
+}
+
+test t-48131 {
+    SELECT CONCAT_WS(time '-32:34:58', 0xAACC, 999999999999999999999999);
+}
+expect {
+    ��-32:34:58999999999999999999999999
+}
+
+test t-48269 {
+    SELECT CONCAT_WS(time '-32:34:58', 9223372036854775807, NULL);
+}
+expect {
+    9223372036854775807
+}
+
+test t-48272 {
+    SELECT CONCAT_WS(time '-32:34:58', 9223372036854775807, "abc");
+}
+expect {
+    9223372036854775807-32:34:58abc
+}
+
+test t-48339 {
+    SELECT CONCAT_WS(time '-32:34:58', -999999999999999999999999, 1);
+}
+expect {
+    -999999999999999999999999-32:34:581
+}
+
+test t-48376 {
+    SELECT CONCAT_WS(time '-32:34:58', _binary 'Müller' , _utf8mb4 'abcABCÅå');
+}
+expect {
+    Müller-32:34:58abcABCÅå
+}
+
+test t-48384 {
+    SELECT CONCAT_WS(time '-32:34:58', _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    abcABCÅå-32:34:58-1
+}
+
+test t-48519 {
+    SELECT CONCAT_WS(time'00:00:01.0000', "abc", 3.1415926);
+}
+expect {
+    abc00:00:01.00003.1415926
+}
+
+test t-48534 {
+    SELECT CONCAT_WS(time'00:00:01.0000', 1, "");
+}
+expect {
+    100:00:01.0000
+}
+
+test t-48537 {
+    SELECT CONCAT_WS(time'00:00:01.0000', 1, 1);
+}
+expect {
+    100:00:01.00001
+}
+
+test t-48611 {
+    SELECT CONCAT_WS(time'00:00:01.0000', 0xAACC, "😊😂🤢");
+}
+expect {
+    ��00:00:01.0000😊😂🤢
+}
+
+test t-48706 {
+    SELECT CONCAT_WS(time'00:00:01.0000', "한국어 시험", _utf8mb4 'abcABCÅå');
+}
+expect {
+    한국어 시험00:00:01.0000abcABCÅå
+}
+
+test t-48905 {
+    SELECT CONCAT_WS(time'00:00:01.0000', _latin1 0xFF, _latin1 0xFF);
+}
+expect {
+    ÿ00:00:01.0000ÿ
+}
+
+test t-49058 {
+    SELECT CONCAT_WS(time'00:00:59.01011', -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -100:00:59.01011abcABCÅå
+}
+
+test t-49083 {
+    SELECT CONCAT_WS(time'00:00:59.01011', 0xAACC, NULL);
+}
+expect {
+    ��
+}
+
+test t-49172 {
+    SELECT CONCAT_WS(time'00:00:59.01011', "한국어 시험", "");
+}
+expect {
+    한국어 시험00:00:59.01011
+}
+
+test t-49216 {
+    SELECT CONCAT_WS(time'00:00:59.01011', '123', "");
+}
+expect {
+    12300:00:59.01011
+}
+
+test t-49230 {
+    SELECT CONCAT_WS(time'00:00:59.01011', '123', -9223372036854775808);
+}
+expect {
+    12300:00:59.01011-9223372036854775808
+}
+
+test t-49279 {
+    SELECT CONCAT_WS(time'00:00:59.01011', -9223372036854775808, _latin1 0xFF);
+}
+expect {
+    -922337203685477580800:00:59.01011ÿ
+}
+
+test t-49332 {
+    SELECT CONCAT_WS(time'00:00:59.01011', _binary 'Müller' , 0xAACC);
+}
+expect {
+    Müller00:00:59.01011��
+}
+
+test t-49344 {
+    SELECT CONCAT_WS(time'00:00:59.01011', _binary 'Müller' , _utf8mb4 'abcABCÅå');
+}
+expect {
+    Müller00:00:59.01011abcABCÅå
+}
+
+test t-49443 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', "", 3.1415926);
+}
+expect {
+    00:00:59.2132233.1415926
+}
+
+test t-49658 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', "한국어 시험", "abc");
+}
+expect {
+    한국어 시험00:00:59.213223abc
+}
+
+test t-49663 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', "한국어 시험", 3.1415926);
+}
+expect {
+    한국어 시험00:00:59.2132233.1415926
+}
+
+test t-49697 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', "😊😂🤢", _latin1 0xFF);
+}
+expect {
+    😊😂🤢00:00:59.213223ÿ
+}
+
+test t-49723 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', 9223372036854775807, "a");
+}
+expect {
+    922337203685477580700:00:59.213223a
+}
+
+test t-49748 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', -9223372036854775808, -1);
+}
+expect {
+    -922337203685477580800:00:59.213223-1
+}
+
+test t-49772 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', 999999999999999999999999, 0xAACC);
+}
+expect {
+    99999999999999999999999900:00:59.213223��
+}
+
+test t-49793 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', -999999999999999999999999, 0123);
+}
+expect {
+    -99999999999999999999999900:00:59.213223123
+}
+
+test t-49802 {
+    SELECT CONCAT_WS(time'00:00:59.2132234', -999999999999999999999999, -9223372036854775808);
+}
+expect {
+    -99999999999999999999999900:00:59.213223-9223372036854775808
+}
+
+test t-49964 {
+    SELECT CONCAT_WS(time '-101:34:58', "abc", "");
+}
+expect {
+    abc-101:34:58
+}
+
+test t-50051 {
+    SELECT CONCAT_WS(time '-101:34:58', 0xAACC, NULL);
+}
+expect {
+    ��
+}
+
+test t-50120 {
+    SELECT CONCAT_WS(time '-101:34:58', "日本語テスト", "abc");
+}
+expect {
+    日本語テスト-101:34:58abc
+}
+
+test t-50131 {
+    SELECT CONCAT_WS(time '-101:34:58', "日本語テスト", 9223372036854775807);
+}
+expect {
+    日本語テスト-101:34:589223372036854775807
+}
+
+test t-50167 {
+    SELECT CONCAT_WS(time '-101:34:58', "😊😂🤢", 0123);
+}
+expect {
+    😊😂🤢-101:34:58123
+}
+
+test t-50170 {
+    SELECT CONCAT_WS(time '-101:34:58', "😊😂🤢", "中文测试");
+}
+expect {
+    😊😂🤢-101:34:58中文测试
+}
+
+test t-50288 {
+    SELECT CONCAT_WS(time '-101:34:58', -999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999-101:34:58-999999999999999999999999
+}
+
+test t-50319 {
+    SELECT CONCAT_WS(time '-101:34:58', _utf8mb4 'abcABCÅå', 1);
+}
+expect {
+    abcABCÅå-101:34:581
+}
+
+test t-50324 {
+    SELECT CONCAT_WS(time '-101:34:58', _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect {
+    abcABCÅå-101:34:58中文测试
+}
+
+test t-50439 {
+    SELECT CONCAT_WS(time '-5 10:34:58', "a", 9223372036854775807);
+}
+expect {
+    a-130:34:589223372036854775807
+}
+
+test t-50511 {
+    SELECT CONCAT_WS(time '-5 10:34:58', -1, _latin1 0xFF);
+}
+expect {
+    -1-130:34:58ÿ
+}
+
+test t-50618 {
+    SELECT CONCAT_WS(time '-5 10:34:58', "日本語テスト", -999999999999999999999999);
+}
+expect {
+    日本語テスト-130:34:58-999999999999999999999999
+}
+
+test t-50653 {
+    SELECT CONCAT_WS(time '-5 10:34:58', "😊😂🤢", 3.1415926);
+}
+expect {
+    😊😂🤢-130:34:583.1415926
+}
+
+test t-50737 {
+    SELECT CONCAT_WS(time '-5 10:34:58', 999999999999999999999999, 1);
+}
+expect {
+    999999999999999999999999-130:34:581
+}
+
+test t-50797 {
+    SELECT CONCAT_WS(time '-5 10:34:58', _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    Müller-130:34:58�
+}
+
+test t-50820 {
+    SELECT CONCAT_WS(time '-5 10:34:58', _latin1 0xFF, "Å å");
+}
+expect {
+    ÿ-130:34:58Å å
+}
+
+test t-50853 {
+    SELECT CONCAT_WS('10:04:58', "Å å", "日本語テスト");
+}
+expect {
+    Å å10:04:58日本語テスト
+}
+
+test t-51021 {
+    SELECT CONCAT_WS('10:04:58', 0xAACC, "a");
+}
+expect {
+    ��10:04:58a
+}
+
+test t-51094 {
+    SELECT CONCAT_WS('10:04:58', "日本語テスト", "中文测试");
+}
+expect {
+    日本語テスト10:04:58中文测试
+}
+
+test t-51201 {
+    SELECT CONCAT_WS('10:04:58', -9223372036854775808, 0123);
+}
+expect {
+    -922337203685477580810:04:58123
+}
+
+test t-51207 {
+    SELECT CONCAT_WS('10:04:58', -9223372036854775808, "😊😂🤢");
+}
+expect {
+    -922337203685477580810:04:58😊😂🤢
+}
+
+test t-51289 {
+    SELECT CONCAT_WS('10:04:58', _utf8mb4 'abcABCÅå', 0123);
+}
+expect {
+    abcABCÅå10:04:58123
+}
+
+test t-51391 {
+    SELECT CONCAT_WS('101:34:58', "", _latin1 0xFF);
+}
+expect {
+    101:34:58ÿ
+}
+
+test t-51579 {
+    SELECT CONCAT_WS('101:34:58', "日本語テスト", "日本語テスト");
+}
+expect {
+    日本語テスト101:34:58日本語テスト
+}
+
+test t-51620 {
+    SELECT CONCAT_WS('101:34:58', "😊😂🤢", 0xAACC);
+}
+expect {
+    😊😂🤢101:34:58��
+}
+
+test t-51627 {
+    SELECT CONCAT_WS('101:34:58', "😊😂🤢", 9223372036854775807);
+}
+expect {
+    😊😂🤢101:34:589223372036854775807
+}
+
+test t-51686 {
+    SELECT CONCAT_WS('101:34:58', -9223372036854775808, 0xAACC);
+}
+expect {
+    -9223372036854775808101:34:58��
+}
+
+test t-51752 {
+    SELECT CONCAT_WS('101:34:58', _binary 'Müller' , 0xAACC);
+}
+expect {
+    Müller101:34:58��
+}
+
+test t-51767 {
+    SELECT CONCAT_WS('101:34:58', _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    abcABCÅå
+}
+
+test t-51768 {
+    SELECT CONCAT_WS('101:34:58', _utf8mb4 'abcABCÅå', "");
+}
+expect {
+    abcABCÅå101:34:58
+}
+
+test t-51782 {
+    SELECT CONCAT_WS('101:34:58', _utf8mb4 'abcABCÅå', -9223372036854775808);
+}
+expect {
+    abcABCÅå101:34:58-9223372036854775808
+}
+
+test t-51898 {
+    SELECT CONCAT_WS('5 10:34:58', "abc", "Å å");
+}
+expect {
+    abc5 10:34:58Å å
+}
+
+test t-51918 {
+    SELECT CONCAT_WS('5 10:34:58', "abc", _utf8mb4 'abcABCÅå');
+}
+expect {
+    abc5 10:34:58abcABCÅå
+}
+
+test t-52019 {
+    SELECT CONCAT_WS('5 10:34:58', 3.1415926, "日本語テスト");
+}
+expect {
+    3.14159265 10:34:58日本語テスト
+}
+
+test t-52029 {
+    SELECT CONCAT_WS('5 10:34:58', 3.1415926, _latin1 0xFF);
+}
+expect {
+    3.14159265 10:34:58ÿ
+}
+
+test t-52106 {
+    SELECT CONCAT_WS('5 10:34:58', "😊😂🤢", "中文测试");
+}
+expect {
+    😊😂🤢5 10:34:58中文测试
+}
+
+test t-52125 {
+    SELECT CONCAT_WS('5 10:34:58', '123', 0123);
+}
+expect {
+    1235 10:34:58123
+}
+
+test t-52280 {
+    SELECT CONCAT_WS('5 10:34:58', _latin1 0xFF, 0xAACC);
+}
+expect {
+    �5 10:34:58��
+}
+
+test t-52426 {
+    SELECT CONCAT_WS('2000-01-01', -1, "Å å");
+}
+expect {
+    -12000-01-01Å å
+}
+
+test t-52472 {
+    SELECT CONCAT_WS('2000-01-01', 0xAACC, "");
+}
+expect {
+    ��2000-01-01
+}
+
+test t-52480 {
+    SELECT CONCAT_WS('2000-01-01', 0xAACC, "中文测试");
+}
+expect {
+    ��2000-01-01中文测试
+}
+
+test t-52519 {
+    SELECT CONCAT_WS('2000-01-01', "中文测试", 1);
+}
+expect {
+    中文测试2000-01-011
+}
+
+test t-52565 {
+    SELECT CONCAT_WS('2000-01-01', "한국어 시험", 0123);
+}
+expect {
+    한국어 시험2000-01-01123
+}
+
+test t-52814 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', NULL, '123');
+}
+expect {
+    123
+}
+
+test t-52860 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', "a", -9223372036854775808);
+}
+expect {
+    a2000-01-01 12:34:58-9223372036854775808
+}
+
+test t-52981 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', 3.1415926, 1);
+}
+expect {
+    3.14159262000-01-01 12:34:581
+}
+
+test t-52999 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', "中文测试", NULL);
+}
+expect {
+    中文测试
+}
+
+test t-53070 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', "😊😂🤢", -1);
+}
+expect {
+    😊😂🤢2000-01-01 12:34:58-1
+}
+
+test t-53094 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', '123', 0xAACC);
+}
+expect {
+    1232000-01-01 12:34:58��
+}
+
+test t-53107 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', '123', _latin1 0xFF);
+}
+expect {
+    1232000-01-01 12:34:58ÿ
+}
+
+test t-53195 {
+    SELECT CONCAT_WS('2000-01-01 12:34:58', -999999999999999999999999, _latin1 0xFF);
+}
+expect {
+    -9999999999999999999999992000-01-01 12:34:58ÿ
+}
+
+test t-53287 {
+    SELECT CONCAT_WS('0000-02-29', NULL, "a");
+}
+expect {
+    a
+}
+
+test t-53291 {
+    SELECT CONCAT_WS('0000-02-29', NULL, 0123);
+}
+expect {
+    123
+}
+
+test t-53367 {
+    SELECT CONCAT_WS('0000-02-29', "abc", 999999999999999999999999);
+}
+expect {
+    abc0000-02-29999999999999999999999999
+}
+
+test t-53436 {
+    SELECT CONCAT_WS('0000-02-29', 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1230000-02-29abcABCÅå
+}
+
+test t-53579 {
+    SELECT CONCAT_WS('0000-02-29', '123', 3.1415926);
+}
+expect {
+    1230000-02-293.1415926
+}
+
+test t-53640 {
+    SELECT CONCAT_WS('0000-02-29', 999999999999999999999999, "abc");
+}
+expect {
+    9999999999999999999999990000-02-29abc
+}
+
+test t-53645 {
+    SELECT CONCAT_WS('0000-02-29', 999999999999999999999999, 3.1415926);
+}
+expect {
+    9999999999999999999999990000-02-293.1415926
+}
+
+test t-53675 {
+    SELECT CONCAT_WS('0000-02-29', -999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    -9999999999999999999999990000-02-29999999999999999999999999
+}
+
+test t-53764 {
+    SELECT CONCAT_WS('0000-01-03', "Å å", -999999999999999999999999);
+}
+expect {
+    Å å0000-01-03-999999999999999999999999
+}
+
+test t-53937 {
+    SELECT CONCAT_WS('0000-01-03', 0xAACC, 9223372036854775807);
+}
+expect {
+    ��0000-01-039223372036854775807
+}
+
+test t-54147 {
+    SELECT CONCAT_WS('0000-01-03', -999999999999999999999999, 1);
+}
+expect {
+    -9999999999999999999999990000-01-031
+}
+
+test t-54268 {
+    SELECT CONCAT_WS('1969-02-18', NULL, -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-54273 {
+    SELECT CONCAT_WS('1969-02-18', NULL, _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-54370 {
+    SELECT CONCAT_WS('1969-02-18', -1, 0xAACC);
+}
+expect {
+    -11969-02-18��
+}
+
+test t-54511 {
+    SELECT CONCAT_WS('1969-02-18', "한국어 시험", 999999999999999999999999);
+}
+expect {
+    한국어 시험1969-02-18999999999999999999999999
+}
+
+test t-54615 {
+    SELECT CONCAT_WS('1969-02-18', 999999999999999999999999, "日本語テスト");
+}
+expect {
+    9999999999999999999999991969-02-18日本語テスト
+}
+
+test t-54634 {
+    SELECT CONCAT_WS('1969-02-18', -999999999999999999999999, 0xAACC);
+}
+expect {
+    -9999999999999999999999991969-02-18��
+}
+
+test t-54683 {
+    SELECT CONCAT_WS('1969-02-18', _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    abcABCÅå1969-02-18😊😂🤢
+}
+
+test t-54700 {
+    SELECT CONCAT_WS('1969-02-18', _latin1 0xFF, 0xAACC);
+}
+expect {
+    �1969-02-18��
+}
+
+test t-54754 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', NULL, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-54883 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', 0123, 9223372036854775807);
+}
+expect {
+    1231970-01-01 00:00:019223372036854775807
+}
+
+test t-54918 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', 3.1415926, -1);
+}
+expect {
+    3.14159261970-01-01 00:00:01-1
+}
+
+test t-54919 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', 3.1415926, 0123);
+}
+expect {
+    3.14159261970-01-01 00:00:01123
+}
+
+test t-55006 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', "😊😂🤢", -1);
+}
+expect {
+    😊😂🤢1970-01-01 00:00:01-1
+}
+
+test t-55033 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', '123', "日本語テスト");
+}
+expect {
+    1231970-01-01 00:00:01日本語テスト
+}
+
+test t-55043 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', '123', _latin1 0xFF);
+}
+expect {
+    1231970-01-01 00:00:01ÿ
+}
+
+test t-55194 {
+    SELECT CONCAT_WS('1970-01-01 00:00:01', _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    ÿ1970-01-01 00:00:01-999999999999999999999999
+}
+
+test t-55337 {
+    SELECT CONCAT_WS('3001-02-19 00:00:00', -1, 0123);
+}
+expect {
+    -13001-02-19 00:00:00123
+}
+
+test t-55357 {
+    SELECT CONCAT_WS('3001-02-19 00:00:00', 0123, 1);
+}
+expect {
+    1233001-02-19 00:00:001
+}
+
+test t-55417 {
+    SELECT CONCAT_WS('3001-02-19 00:00:00', 3.1415926, _latin1 0xFF);
+}
+expect {
+    3.14159263001-02-19 00:00:00ÿ
+}
+
+test t-55591 {
+    SELECT CONCAT_WS('3001-02-19 00:00:00', 999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    9999999999999999999999993001-02-19 00:00:00Müller
+}
+
+test t-55652 {
+    SELECT CONCAT_WS('3001-02-19 00:00:00', _utf8mb4 'abcABCÅå', '123');
+}
+expect {
+    abcABCÅå3001-02-19 00:00:00123
+}
+
+test t-55664 {
+    SELECT CONCAT_WS('3001-02-19 00:00:00', _latin1 0xFF, "abc");
+}
+expect {
+    ÿ3001-02-19 00:00:00abc
+}
+
+test t-55693 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', "Å å", "日本語テスト");
+}
+expect {
+    Å å3001-02-18 23:59:59日本語テスト
+}
+
+test t-55808 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', 1, -9223372036854775808);
+}
+expect {
+    13001-02-18 23:59:59-9223372036854775808
+}
+
+test t-55818 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', -1, "abc");
+}
+expect {
+    -13001-02-18 23:59:59abc
+}
+
+test t-55861 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', 0xAACC, "a");
+}
+expect {
+    ��3001-02-18 23:59:59a
+}
+
+test t-55887 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', 3.1415926, 0123);
+}
+expect {
+    3.14159263001-02-18 23:59:59123
+}
+
+test t-56050 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', -9223372036854775808, -9223372036854775808);
+}
+expect {
+    -92233720368547758083001-02-18 23:59:59-9223372036854775808
+}
+
+test t-56090 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', -999999999999999999999999, "한국어 시험");
+}
+expect {
+    -9999999999999999999999993001-02-18 23:59:59한국어 시험
+}
+
+test t-56111 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', _binary 'Müller' , "日本語テスト");
+}
+expect {
+    Müller3001-02-18 23:59:59日本語テスト
+}
+
+test t-56141 {
+    SELECT CONCAT_WS('3001-02-18 23:59:59', _utf8mb4 'abcABCÅå', _binary 'Müller' );
+}
+expect {
+    abcABCÅå3001-02-18 23:59:59Müller
+}
+
+test t-56226 {
+    SELECT CONCAT_WS(cast(0 as json), "", -9223372036854775808);
+}
+expect {
+    0-9223372036854775808
+}
+
+test t-56232 {
+    SELECT CONCAT_WS(cast(0 as json), "a", "Å å");
+}
+expect {
+    a0Å å
+}
+
+test t-56340 {
+    SELECT CONCAT_WS(cast(0 as json), 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1230abcABCÅå
+}
+
+test t-56380 {
+    SELECT CONCAT_WS(cast(0 as json), 3.1415926, -9223372036854775808);
+}
+expect {
+    3.14159260-9223372036854775808
+}
+
+test t-56406 {
+    SELECT CONCAT_WS(cast(0 as json), "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    中文测试0abcABCÅå
+}
+
+test t-56407 {
+    SELECT CONCAT_WS(cast(0 as json), "中文测试", _latin1 0xFF);
+}
+expect {
+    中文测试0ÿ
+}
+
+test t-56413 {
+    SELECT CONCAT_WS(cast(0 as json), "日本語テスト", 1);
+}
+expect {
+    日本語テスト01
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-56548 {
+    SELECT CONCAT_WS(cast(0 as json), 999999999999999999999999, 0xAACC);
+}
+expect error {
+}
+
+test t-56566 {
+    SELECT CONCAT_WS(cast(0 as json), -999999999999999999999999, "abc");
+}
+expect {
+    -9999999999999999999999990abc
+}
+
+test t-56621 {
+    SELECT CONCAT_WS(cast(0 as json), _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    abcABCÅå09223372036854775807
+}
+
+test t-56705 {
+    SELECT CONCAT_WS(cast(1 as json), "", "日本語テスト");
+}
+expect {
+    1日本語テスト
+}
+
+test t-56733 {
+    SELECT CONCAT_WS(cast(1 as json), "a", 999999999999999999999999);
+}
+expect {
+    a1999999999999999999999999
+}
+
+test t-56981 {
+    SELECT CONCAT_WS(cast(1 as json), 9223372036854775807, NULL);
+}
+expect {
+    9223372036854775807
+}
+
+test t-57023 {
+    SELECT CONCAT_WS(cast(1 as json), -9223372036854775808, _latin1 0xFF);
+}
+expect {
+    -92233720368547758081ÿ
+}
+
+test t-57035 {
+    SELECT CONCAT_WS(cast(1 as json), 999999999999999999999999, "日本語テスト");
+}
+expect {
+    9999999999999999999999991日本語テスト
+}
+
+test t-57084 {
+    SELECT CONCAT_WS(cast(1 as json), _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    Müller1-9223372036854775808
+}
+
+test t-57092 {
+    SELECT CONCAT_WS(cast(1 as json), _utf8mb4 'abcABCÅå', "");
+}
+expect {
+    abcABCÅå1
+}
+
+test t-57201 {
+    SELECT CONCAT_WS(cast(true as json), "a", NULL);
+}
+expect {
+    a
+}
+
+test t-57225 {
+    SELECT CONCAT_WS(cast(true as json), "abc", "a");
+}
+expect {
+    abctruea
+}
+
+test t-57342 {
+    SELECT CONCAT_WS(cast(true as json), 3.1415926, "中文测试");
+}
+expect {
+    3.1415926true中文测试
+}
+
+test t-57500 {
+    SELECT CONCAT_WS(cast(true as json), -9223372036854775808, '123');
+}
+expect {
+    -9223372036854775808true123
+}
+
+test t-57539 {
+    SELECT CONCAT_WS(cast(true as json), -999999999999999999999999, 3.1415926);
+}
+expect {
+    -999999999999999999999999true3.1415926
+}
+
+test t-57580 {
+    SELECT CONCAT_WS(cast(true as json), _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    abcABCÅåtrue-1
+}
+
+test t-57619 {
+    SELECT CONCAT_WS(cast(false as json), "Å å", NULL);
+}
+expect {
+    Å å
+}
+
+test t-57770 {
+    SELECT CONCAT_WS(cast(false as json), -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1falseabcABCÅå
+}
+
+test t-57773 {
+    SELECT CONCAT_WS(cast(false as json), 0123, NULL);
+}
+expect {
+    123
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-57780 {
+    SELECT CONCAT_WS(cast(false as json), 0123, 0xAACC);
+}
+expect error {
+}
+
+test t-57842 {
+    SELECT CONCAT_WS(cast(false as json), "中文测试", "abc");
+}
+expect {
+    中文测试falseabc
+}
+
+test t-58071 {
+    SELECT CONCAT_WS(cast(false as json), _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    abcABCÅåfalse😊😂🤢
+}
+
+test t-58118 {
+    SELECT CONCAT_WS(cast('\{\}' as json), "Å å", -9223372036854775808);
+}
+expect {
+    Å å\{\}-9223372036854775808
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-58294 {
+    SELECT CONCAT_WS(cast('\{\}' as json), 0xAACC, -9223372036854775808);
+}
+expect error {
+}
+
+test t-58454 {
+    SELECT CONCAT_WS(cast('\{\}' as json), -9223372036854775808, "Å å");
+}
+expect {
+    -9223372036854775808\{\}Å å
+}
+
+test t-58482 {
+    SELECT CONCAT_WS(cast('\{\}' as json), 999999999999999999999999, -1);
+}
+expect {
+    999999999999999999999999\{\}-1
+}
+
+test t-58554 {
+    SELECT CONCAT_WS(cast('\{\}' as json), _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    abcABCÅå\{\}한국어 시험
+}
+
+test t-58582 {
+    SELECT CONCAT_WS(cast('\{\}' as json), _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    ÿ\{\}-999999999999999999999999
+}
+
+test t-58640 {
+    SELECT CONCAT_WS(cast('[]' as json), "", "中文测试");
+}
+expect {
+    []中文测试
+}
+
+test t-58686 {
+    SELECT CONCAT_WS(cast('[]' as json), "abc", "한국어 시험");
+}
+expect {
+    abc[]한국어 시험
+}
+
+test t-58785 {
+    SELECT CONCAT_WS(cast('[]' as json), 3.1415926, NULL);
+}
+expect {
+    3.1415926
+}
+
+test t-58793 {
+    SELECT CONCAT_WS(cast('[]' as json), 3.1415926, 3.1415926);
+}
+expect {
+    3.1415926[]3.1415926
+}
+
+test t-58823 {
+    SELECT CONCAT_WS(cast('[]' as json), "中文测试", 999999999999999999999999);
+}
+expect {
+    中文测试[]999999999999999999999999
+}
+
+test t-58962 {
+    SELECT CONCAT_WS(cast('[]' as json), 999999999999999999999999, "");
+}
+expect {
+    999999999999999999999999[]
+}
+
+test t-59041 {
+    SELECT CONCAT_WS(cast('[]' as json), _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    abcABCÅå[]9223372036854775807
+}
+
+test t-59186 {
+    SELECT CONCAT_WS(cast('null' as json), 1, -1);
+}
+expect {
+    1null-1
+}
+
+test t-59234 {
+    SELECT CONCAT_WS(cast('null' as json), 0123, "中文测试");
+}
+expect {
+    123null中文测试
+}
+
+test t-59313 {
+    SELECT CONCAT_WS(cast('null' as json), "日本語テスト", NULL);
+}
+expect {
+    日本語テスト
+}
+
+test t-59369 {
+    SELECT CONCAT_WS(cast('null' as json), "😊😂🤢", "😊😂🤢");
+}
+expect {
+    😊😂🤢null😊😂🤢
+}
+
+test t-59397 {
+    SELECT CONCAT_WS(cast('null' as json), '123', _binary 'Müller' );
+}
+expect {
+    123nullMüller
+}
+
+test t-59415 {
+    SELECT CONCAT_WS(cast('null' as json), 9223372036854775807, 9223372036854775807);
+}
+expect {
+    9223372036854775807null9223372036854775807
+}
+
+test t-59718 {
+    SELECT CONCAT_WS(cast('true' as json), 0123, "中文测试");
+}
+expect {
+    123true中文测试
+}
+
+test t-59827 {
+    SELECT CONCAT_WS(cast('true' as json), "한국어 시험", 3.1415926);
+}
+expect {
+    한국어 시험true3.1415926
+}
+
+test t-60032 {
+    SELECT CONCAT_WS(cast('true' as json), _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    ÿtrue-9223372036854775808
+}
+
+test t-60077 {
+    SELECT CONCAT_WS(cast('false' as json), NULL, 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-60129 {
+    SELECT CONCAT_WS(cast('false' as json), "abc", "a");
+}
+expect {
+    abcfalsea
+}
+
+test t-60177 {
+    SELECT CONCAT_WS(cast('false' as json), -1, 0123);
+}
+expect {
+    -1false123
+}
+
+test t-60241 {
+    SELECT CONCAT_WS(cast('false' as json), 3.1415926, 1);
+}
+expect {
+    3.1415926false1
+}
+
+test t-60334 {
+    SELECT CONCAT_WS(cast('false' as json), "😊😂🤢", "中文测试");
+}
+expect {
+    😊😂🤢false中文测试
+}
+
+test t-60423 {
+    SELECT CONCAT_WS(cast('false' as json), 999999999999999999999999, "日本語テスト");
+}
+expect {
+    999999999999999999999999false日本語テスト
+}
+
+test t-60490 {
+    SELECT CONCAT_WS(cast('false' as json), _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    abcABCÅåfalse한국어 시험
+}
+
+test t-60504 {
+    SELECT CONCAT_WS(cast('false' as json), _latin1 0xFF, "abc");
+}
+expect {
+    ÿfalseabc
+}
+
+test t-61009 {
+    SELECT CONCAT_WS(cast(2 as json), "Å å", "a");
+}
+expect {
+    Å å2a
+}
+
+test t-61016 {
+    SELECT CONCAT_WS(cast(2 as json), "Å å", "中文测试");
+}
+expect {
+    Å å2中文测试
+}
+
+test t-61155 {
+    SELECT CONCAT_WS(cast(2 as json), -1, 999999999999999999999999);
+}
+expect {
+    -12999999999999999999999999
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-61185 {
+    SELECT CONCAT_WS(cast(2 as json), 0xAACC, "a");
+}
+expect error {
+}
+
+test t-61312 {
+    SELECT CONCAT_WS(cast(2 as json), "😊😂🤢", _utf8mb4 'abcABCÅå');
+}
+expect {
+    😊😂🤢2abcABCÅå
+}
+
+test t-61438 {
+    SELECT CONCAT_WS(cast(2 as json), _binary 'Müller' , '123');
+}
+expect {
+    Müller2123
+}
+
+test t-61544 {
+    SELECT CONCAT_WS(cast(1.1 as json), "", "中文测试");
+}
+expect {
+    1.1中文测试
+}
+
+test t-61555 {
+    SELECT CONCAT_WS(cast(1.1 as json), "", _latin1 0xFF);
+}
+expect {
+    1.1ÿ
+}
+
+test t-61664 {
+    SELECT CONCAT_WS(cast(1.1 as json), 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1231.1abcABCÅå
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-61678 {
+    SELECT CONCAT_WS(cast(1.1 as json), 0xAACC, "한국어 시험");
+}
+expect error {
+}
+
+test t-61692 {
+    SELECT CONCAT_WS(cast(1.1 as json), 3.1415926, "abc");
+}
+expect {
+    3.14159261.1abc
+}
+
+test t-61716 {
+    SELECT CONCAT_WS(cast(1.1 as json), "中文测试", -1);
+}
+expect {
+    中文测试1.1-1
+}
+
+test t-61735 {
+    SELECT CONCAT_WS(cast(1.1 as json), "日本語テスト", "a");
+}
+expect {
+    日本語テスト1.1a
+}
+
+test t-61847 {
+    SELECT CONCAT_WS(cast(1.1 as json), -9223372036854775808, 1);
+}
+expect {
+    -92233720368547758081.11
+}
+
+test t-61882 {
+    SELECT CONCAT_WS(cast(1.1 as json), 999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    9999999999999999999999991.1-999999999999999999999999
+}
+
+test t-61918 {
+    SELECT CONCAT_WS(cast(1.1 as json), _binary 'Müller' , "中文测试");
+}
+expect {
+    Müller1.1中文测试
+}
+
+test t-61924 {
+    SELECT CONCAT_WS(cast(1.1 as json), _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    Müller1.1-9223372036854775808
+}
+
+test t-61954 {
+    SELECT CONCAT_WS(cast(1.1 as json), _latin1 0xFF, "");
+}
+expect {
+    ÿ1.1
+}
+
+test t-62203 {
+    SELECT CONCAT_WS(cast(-1.1 as json), "中文测试", 3.1415926);
+}
+expect {
+    中文测试-1.13.1415926
+}
+
+test t-62221 {
+    SELECT CONCAT_WS(cast(-1.1 as json), "日本語テスト", 1);
+}
+expect {
+    日本語テスト-1.11
+}
+
+test t-62303 {
+    SELECT CONCAT_WS(cast(-1.1 as json), '123', _latin1 0xFF);
+}
+expect {
+    123-1.1ÿ
+}
+
+test t-62311 {
+    SELECT CONCAT_WS(cast(-1.1 as json), 9223372036854775807, 0123);
+}
+expect {
+    9223372036854775807-1.1123
+}
+
+test t-62359 {
+    SELECT CONCAT_WS(cast(-1.1 as json), 999999999999999999999999, "日本語テスト");
+}
+expect {
+    999999999999999999999999-1.1日本語テスト
+}
+
+test t-62375 {
+    SELECT CONCAT_WS(cast(-1.1 as json), -999999999999999999999999, 1);
+}
+expect {
+    -999999999999999999999999-1.11
+}
+
+test t-62385 {
+    SELECT CONCAT_WS(cast(-1.1 as json), -999999999999999999999999, 9223372036854775807);
+}
+expect {
+    -999999999999999999999999-1.19223372036854775807
+}
+
+test t-62402 {
+    SELECT CONCAT_WS(cast(-1.1 as json), _binary 'Müller' , "中文测试");
+}
+expect {
+    Müller-1.1中文测试
+}
+
+test t-62534 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), "a", "中文测试");
+}
+expect {
+    a9223372036854775807中文测试
+}
+
+test t-62543 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), "a", _binary 'Müller' );
+}
+expect {
+    a9223372036854775807Müller
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-62554 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), "abc", 0xAACC);
+}
+expect error {
+}
+
+test t-62588 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), 1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    19223372036854775807abcABCÅå
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-62636 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), 0xAACC, "");
+}
+expect error {
+}
+
+test t-62695 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), "中文测试", 999999999999999999999999);
+}
+expect {
+    中文测试9223372036854775807999999999999999999999999
+}
+
+test t-62811 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), -9223372036854775808, NULL);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-62908 {
+    SELECT CONCAT_WS(cast(9223372036854775807 as json), _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect {
+    abcABCÅå9223372036854775807中文测试
+}
+
+test t-62962 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), "Å å", _utf8mb4 'abcABCÅå');
+}
+expect {
+    Å å18446744073709551615abcABCÅå
+}
+
+test t-62980 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), NULL, -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-63028 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), "a", _utf8mb4 'abcABCÅå');
+}
+expect {
+    a18446744073709551615abcABCÅå
+}
+
+test t-63110 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), 0123, '123');
+}
+expect {
+    12318446744073709551615123
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-63127 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), 0xAACC, 3.1415926);
+}
+expect error {
+}
+
+test t-63161 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), 3.1415926, _latin1 0xFF);
+}
+expect {
+    3.141592618446744073709551615ÿ
+}
+
+test t-63238 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), "😊😂🤢", "中文测试");
+}
+expect {
+    😊😂🤢18446744073709551615中文测试
+}
+
+test t-63270 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), '123', _utf8mb4 'abcABCÅå');
+}
+expect {
+    12318446744073709551615abcABCÅå
+}
+
+test t-63400 {
+    SELECT CONCAT_WS(cast(18446744073709551615 as json), _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    abcABCÅå18446744073709551615-999999999999999999999999
+}
+
+test t-63468 {
+    SELECT CONCAT_WS(cast('1' as json), NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abcABCÅå
+}
+
+test t-63691 {
+    SELECT CONCAT_WS(cast('1' as json), "한국어 시험", NULL);
+}
+expect {
+    한국어 시험
+}
+
+test t-63708 {
+    SELECT CONCAT_WS(cast('1' as json), "한국어 시험", -999999999999999999999999);
+}
+expect {
+    한국어 시험1-999999999999999999999999
+}
+
+test t-63709 {
+    SELECT CONCAT_WS(cast('1' as json), "한국어 시험", _binary 'Müller' );
+}
+expect {
+    한국어 시험1Müller
+}
+
+test t-63771 {
+    SELECT CONCAT_WS(cast('1' as json), 9223372036854775807, 9223372036854775807);
+}
+expect {
+    922337203685477580719223372036854775807
+}
+
+test t-63776 {
+    SELECT CONCAT_WS(cast('1' as json), 9223372036854775807, _utf8mb4 'abcABCÅå');
+}
+expect {
+    92233720368547758071abcABCÅå
+}
+
+test t-63789 {
+    SELECT CONCAT_WS(cast('1' as json), -9223372036854775808, "日本語テスト");
+}
+expect {
+    -92233720368547758081日本語テスト
+}
+
+test t-63875 {
+    SELECT CONCAT_WS(cast('1' as json), _utf8mb4 'abcABCÅå', 3.1415926);
+}
+expect {
+    abcABCÅå13.1415926
+}
+
+test t-63878 {
+    SELECT CONCAT_WS(cast('1' as json), _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    abcABCÅå1한국어 시험
+}
+
+test t-63992 {
+    SELECT CONCAT_WS(cast('2' as json), "a", -9223372036854775808);
+}
+expect {
+    a2-9223372036854775808
+}
+
+test t-64081 {
+    SELECT CONCAT_WS(cast('2' as json), 0123, 999999999999999999999999);
+}
+expect {
+    1232999999999999999999999999
+}
+
+test t-64180 {
+    SELECT CONCAT_WS(cast('2' as json), "한국어 시험", -1);
+}
+expect {
+    한국어 시험2-1
+}
+
+test t-64225 {
+    SELECT CONCAT_WS(cast('2' as json), '123', 0123);
+}
+expect {
+    1232123
+}
+
+test t-64389 {
+    SELECT CONCAT_WS(cast('2' as json), _latin1 0xFF, 999999999999999999999999);
+}
+expect {
+    ÿ2999999999999999999999999
+}
+
+test t-64458 {
+    SELECT CONCAT_WS(cast('1.1' as json), "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    1.1abcABCÅå
+}
+
+test t-64459 {
+    SELECT CONCAT_WS(cast('1.1' as json), "", _latin1 0xFF);
+}
+expect {
+    1.1ÿ
+}
+
+test t-64476 {
+    SELECT CONCAT_WS(cast('1.1' as json), "a", -9223372036854775808);
+}
+expect {
+    a1.1-9223372036854775808
+}
+
+test t-64681 {
+    SELECT CONCAT_WS(cast('1.1' as json), "😊😂🤢", NULL);
+}
+expect {
+    😊😂🤢
+}
+
+test t-64741 {
+    SELECT CONCAT_WS(cast('1.1' as json), 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    92233720368547758071.1999999999999999999999999
+}
+
+test t-64781 {
+    SELECT CONCAT_WS(cast('1.1' as json), 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    9999999999999999999999991.1😊😂🤢
+}
+
+test t-64835 {
+    SELECT CONCAT_WS(cast('1.1' as json), _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    abcABCÅå
+}
+
+test t-64911 {
+    SELECT CONCAT_WS(cast('-1.1' as json), NULL, "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-64923 {
+    SELECT CONCAT_WS(cast('-1.1' as json), "", NULL);
+}
+expect {
+    
+}
+
+test t-65017 {
+    SELECT CONCAT_WS(cast('-1.1' as json), -1, 0123);
+}
+expect {
+    -1-1.1123
+}
+
+test t-65141 {
+    SELECT CONCAT_WS(cast('-1.1' as json), "日本語テスト", _latin1 0xFF);
+}
+expect {
+    日本語テスト-1.1ÿ
+}
+
+test t-65143 {
+    SELECT CONCAT_WS(cast('-1.1' as json), "한국어 시험", NULL);
+}
+expect {
+    한국어 시험
+}
+
+test t-65203 {
+    SELECT CONCAT_WS(cast('-1.1' as json), '123', 999999999999999999999999);
+}
+expect {
+    123-1.1999999999999999999999999
+}
+
+test t-65217 {
+    SELECT CONCAT_WS(cast('-1.1' as json), 9223372036854775807, 3.1415926);
+}
+expect {
+    9223372036854775807-1.13.1415926
+}
+
+test t-65305 {
+    SELECT CONCAT_WS(cast('-1.1' as json), _binary 'Müller' , 3.1415926);
+}
+expect {
+    Müller-1.13.1415926
+}
+
+test t-65385 {
+    SELECT CONCAT_WS(cast('9223372036854775807' as json), NULL, NULL);
+}
+expect {
+    
+}
+
+test t-65491 {
+    SELECT CONCAT_WS(cast('9223372036854775807' as json), 1, _binary 'Müller' );
+}
+expect {
+    19223372036854775807Müller
+}
+
+test t-65532 {
+    SELECT CONCAT_WS(cast('9223372036854775807' as json), 0123, -9223372036854775808);
+}
+expect {
+    1239223372036854775807-9223372036854775808
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-65542 {
+    SELECT CONCAT_WS(cast('9223372036854775807' as json), 0xAACC, "abc");
+}
+expect error {
+}
+
+test t-65675 {
+    SELECT CONCAT_WS(cast('9223372036854775807' as json), '123', 1);
+}
+expect {
+    12392233720368547758071
+}
+
+test t-65723 {
+    SELECT CONCAT_WS(cast('9223372036854775807' as json), -9223372036854775808, 3.1415926);
+}
+expect {
+    -922337203685477580892233720368547758073.1415926
+}
+
+test t-65946 {
+    SELECT CONCAT_WS(cast('18446744073709551615' as json), "abc", "한국어 시험");
+}
+expect {
+    abc18446744073709551615한국어 시험
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-65986 {
+    SELECT CONCAT_WS(cast('18446744073709551615' as json), -1, 0xAACC);
+}
+expect error {
+}
+
+test t-66048 {
+    SELECT CONCAT_WS(cast('18446744073709551615' as json), 3.1415926, "abc");
+}
+expect {
+    3.141592618446744073709551615abc
+}
+
+test t-66219 {
+    SELECT CONCAT_WS(cast('18446744073709551615' as json), -9223372036854775808, _latin1 0xFF);
+}
+expect {
+    -922337203685477580818446744073709551615ÿ
+}
+
+test t-66357 {
+    SELECT CONCAT_WS(cast('"foo"' as json), NULL, 1);
+}
+expect {
+    1
+}
+
+test t-66394 {
+    SELECT CONCAT_WS(cast('"foo"' as json), "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    "foo"abcABCÅå
+}
+
+test t-66395 {
+    SELECT CONCAT_WS(cast('"foo"' as json), "", _latin1 0xFF);
+}
+expect {
+    "foo"ÿ
+}
+
+test t-66577 {
+    SELECT CONCAT_WS(cast('"foo"' as json), "日本語テスト", 1);
+}
+expect {
+    日本語テスト"foo"1
+}
+
+test t-66607 {
+    SELECT CONCAT_WS(cast('"foo"' as json), "한국어 시험", "😊😂🤢");
+}
+expect {
+    한국어 시험"foo"😊😂🤢
+}
+
+test t-66647 {
+    SELECT CONCAT_WS(cast('"foo"' as json), '123', 3.1415926);
+}
+expect {
+    123"foo"3.1415926
+}
+
+test t-66649 {
+    SELECT CONCAT_WS(cast('"foo"' as json), '123', "日本語テスト");
+}
+expect {
+    123"foo"日本語テスト
+}
+
+test t-66784 {
+    SELECT CONCAT_WS(cast('"foo"' as json), _utf8mb4 'abcABCÅå', '123');
+}
+expect {
+    abcABCÅå"foo"123
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-66976 {
+    SELECT CONCAT_WS(cast('"bar"' as json), 0123, 0xAACC);
+}
+expect error {
+}
+
+test t-67023 {
+    SELECT CONCAT_WS(cast('"bar"' as json), 3.1415926, "日本語テスト");
+}
+expect {
+    3.1415926"bar"日本語テスト
+}
+
+test t-67169 {
+    SELECT CONCAT_WS(cast('"bar"' as json), -9223372036854775808, "a");
+}
+expect {
+    -9223372036854775808"bar"a
+}
+
+test t-67171 {
+    SELECT CONCAT_WS(cast('"bar"' as json), -9223372036854775808, 1);
+}
+expect {
+    -9223372036854775808"bar"1
+}
+
+test t-67177 {
+    SELECT CONCAT_WS(cast('"bar"' as json), -9223372036854775808, "日本語テスト");
+}
+expect {
+    -9223372036854775808"bar"日本語テスト
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67305 {
+    SELECT CONCAT_WS(cast('invalid' as json), "Å å", 0123);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67336 {
+    SELECT CONCAT_WS(cast('invalid' as json), NULL, -9223372036854775808);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67384 {
+    SELECT CONCAT_WS(cast('invalid' as json), "a", _utf8mb4 'abcABCÅå');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67408 {
+    SELECT CONCAT_WS(cast('invalid' as json), 1, "Å å");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67467 {
+    SELECT CONCAT_WS(cast('invalid' as json), 0123, 9223372036854775807);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67476 {
+    SELECT CONCAT_WS(cast('invalid' as json), 0xAACC, "");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67551 {
+    SELECT CONCAT_WS(cast('invalid' as json), "日本語テスト", "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67563 {
+    SELECT CONCAT_WS(cast('invalid' as json), "한국어 시험", NULL);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-67572 {
+    SELECT CONCAT_WS(cast('invalid' as json), "한국어 시험", "中文测试");
+}
+expect error {
+}
+
+test t-67997 {
+    SELECT CONCAT_WS(cast(_binary' "foo"' as json), 3.1415926, 999999999999999999999999);
+}
+expect {
+    3.1415926"base64:type15:ICJmb28i"999999999999999999999999
+}
+
+test t-68037 {
+    SELECT CONCAT_WS(cast(_binary' "foo"' as json), "日本語テスト", "😊😂🤢");
+}
+expect {
+    日本語テスト"base64:type15:ICJmb28i"😊😂🤢
+}
+
+test t-68085 {
+    SELECT CONCAT_WS(cast(_binary' "foo"' as json), "😊😂🤢", 999999999999999999999999);
+}
+expect {
+    😊😂🤢"base64:type15:ICJmb28i"999999999999999999999999
+}
+
+test t-68141 {
+    SELECT CONCAT_WS(cast(_binary' "foo"' as json), -9223372036854775808, 0123);
+}
+expect {
+    -9223372036854775808"base64:type15:ICJmb28i"123
+}
+
+test t-68213 {
+    SELECT CONCAT_WS(cast(_binary' "foo"' as json), _binary 'Müller' , "😊😂🤢");
+}
+expect {
+    Müller"base64:type15:ICJmb28i"😊😂🤢
+}
+
+test t-68316 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), "", -1);
+}
+expect {
+    "base64:type15:ImJhciI="-1
+}
+
+test t-68345 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), "a", "😊😂🤢");
+}
+expect {
+    a"base64:type15:ImJhciI="😊😂🤢
+}
+
+test t-68359 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), "abc", 1);
+}
+expect {
+    abc"base64:type15:ImJhciI="1
+}
+
+test t-68497 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), "中文测试", "日本語テスト");
+}
+expect {
+    中文测试"base64:type15:ImJhciI="日本語テスト
+}
+
+test t-68511 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), "日本語テスト", "a");
+}
+expect {
+    日本語テスト"base64:type15:ImJhciI="a
+}
+
+test t-68647 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), 999999999999999999999999, 0123);
+}
+expect {
+    999999999999999999999999"base64:type15:ImJhciI="123
+}
+
+test t-68725 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), _utf8mb4 'abcABCÅå', _binary 'Müller' );
+}
+expect {
+    abcABCÅå"base64:type15:ImJhciI="Müller
+}
+
+test t-68727 {
+    SELECT CONCAT_WS(cast(_binary '"bar"' as json), _utf8mb4 'abcABCÅå', _latin1 0xFF);
+}
+expect {
+    abcABCÅå"base64:type15:ImJhciI="ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-68944 {
+    SELECT CONCAT_WS(cast(0xFF666F6F626172FF as json), 0xAACC, -999999999999999999999999);
+}
+expect error {
+}
+
+test t-68998 {
+    SELECT CONCAT_WS(cast(0xFF666F6F626172FF as json), "日本語テスト", -1);
+}
+expect {
+    日本語テスト"base64:type15:/2Zvb2Jhcv8="-1
+}
+
+test t-69016 {
+    SELECT CONCAT_WS(cast(0xFF666F6F626172FF as json), "한국어 시험", "");
+}
+expect {
+    한국어 시험"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-69040 {
+    SELECT CONCAT_WS(cast(0xFF666F6F626172FF as json), "😊😂🤢", "abc");
+}
+expect {
+    😊😂🤢"base64:type15:/2Zvb2Jhcv8="abc
+}
+
+test t-69131 {
+    SELECT CONCAT_WS(cast(0xFF666F6F626172FF as json), 999999999999999999999999, 0123);
+}
+expect {
+    999999999999999999999999"base64:type15:/2Zvb2Jhcv8="123
+}
+
+test t-69150 {
+    SELECT CONCAT_WS(cast(0xFF666F6F626172FF as json), -999999999999999999999999, "abc");
+}
+expect {
+    -999999999999999999999999"base64:type15:/2Zvb2Jhcv8="abc
+}
+
+test t-69241 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), "Å å", 0123);
+}
+expect {
+    Å å"base64:type15:Zm9vYmFy/w=="123
+}
+
+test t-69363 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), 1, _binary 'Müller' );
+}
+expect {
+    1"base64:type15:Zm9vYmFy/w=="Müller
+}
+
+test t-69364 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), 1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1"base64:type15:Zm9vYmFy/w=="abcABCÅå
+}
+
+test t-69387 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), -1, _latin1 0xFF);
+}
+expect {
+    -1"base64:type15:Zm9vYmFy/w=="ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-69413 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), 0xAACC, "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-69427 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), 0xAACC, 999999999999999999999999);
+}
+expect error {
+}
+
+test t-69598 {
+    SELECT CONCAT_WS(cast(0x666F6F626172FF as json), -9223372036854775808, "한국어 시험");
+}
+expect {
+    -9223372036854775808"base64:type15:Zm9vYmFy/w=="한국어 시험
+}
+
+test t-69916 {
+    SELECT CONCAT_WS(cast(0b01 as json), 3.1415926, "Å å");
+}
+expect {
+    3.1415926"base64:type15:AQ=="Å å
+}
+
+test t-70161 {
+    SELECT CONCAT_WS(cast(0b01 as json), _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    abcABCÅå"base64:type15:AQ=="a
+}
+
+test t-70209 {
+    SELECT CONCAT_WS(cast(0b001 as json), "Å å", 0123);
+}
+expect {
+    Å å"base64:type15:AQ=="123
+}
+
+test t-70214 {
+    SELECT CONCAT_WS(cast(0b001 as json), "Å å", "한국어 시험");
+}
+expect {
+    Å å"base64:type15:AQ=="한국어 시험
+}
+
+test t-70244 {
+    SELECT CONCAT_WS(cast(0b001 as json), NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abcABCÅå
+}
+
+test t-70283 {
+    SELECT CONCAT_WS(cast(0b001 as json), "a", 9223372036854775807);
+}
+expect {
+    a"base64:type15:AQ=="9223372036854775807
+}
+
+test t-70327 {
+    SELECT CONCAT_WS(cast(0b001 as json), 1, 9223372036854775807);
+}
+expect {
+    1"base64:type15:AQ=="9223372036854775807
+}
+
+test t-70418 {
+    SELECT CONCAT_WS(cast(0b001 as json), 3.1415926, -999999999999999999999999);
+}
+expect {
+    3.1415926"base64:type15:AQ=="-999999999999999999999999
+}
+
+test t-70683 {
+    SELECT CONCAT_WS(cast(0b001 as json), _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    ÿ"base64:type15:AQ=="Müller
+}
+
+test t-70696 {
+    SELECT CONCAT_WS(cast('["a"]' as json), "Å å", "中文测试");
+}
+expect {
+    Å å["a"]中文测试
+}
+
+test t-70762 {
+    SELECT CONCAT_WS(cast('["a"]' as json), "a", "中文测试");
+}
+expect {
+    a["a"]中文测试
+}
+
+test t-70768 {
+    SELECT CONCAT_WS(cast('["a"]' as json), "a", -9223372036854775808);
+}
+expect {
+    a["a"]-9223372036854775808
+}
+
+test t-70885 {
+    SELECT CONCAT_WS(cast('["a"]' as json), 3.1415926, NULL);
+}
+expect {
+    3.1415926
+}
+
+test t-70938 {
+    SELECT CONCAT_WS(cast('["a"]' as json), "日本語テスト", "中文测试");
+}
+expect {
+    日本語テスト["a"]中文测试
+}
+
+test t-70945 {
+    SELECT CONCAT_WS(cast('["a"]' as json), "日本語テスト", 999999999999999999999999);
+}
+expect {
+    日本語テスト["a"]999999999999999999999999
+}
+
+test t-71000 {
+    SELECT CONCAT_WS(cast('["a"]' as json), '123', -1);
+}
+expect {
+    123["a"]-1
+}
+
+test t-71229 {
+    SELECT CONCAT_WS(cast('["ab"]' as json), "", 9223372036854775807);
+}
+expect {
+    ["ab"]9223372036854775807
+}
+
+test t-71333 {
+    SELECT CONCAT_WS(cast('["ab"]' as json), 0123, 3.1415926);
+}
+expect {
+    123["ab"]3.1415926
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-71349 {
+    SELECT CONCAT_WS(cast('["ab"]' as json), 0xAACC, "a");
+}
+expect error {
+}
+
+test t-71546 {
+    SELECT CONCAT_WS(cast('["ab"]' as json), 999999999999999999999999, "");
+}
+expect {
+    999999999999999999999999["ab"]
+}
+
+test t-71680 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), NULL, "abc");
+}
+expect {
+    abc
+}
+
+test t-71738 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), "a", -999999999999999999999999);
+}
+expect {
+    a["ab", "cd", "ef"]-999999999999999999999999
+}
+
+test t-71822 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), 0123, '123');
+}
+expect {
+    123["ab", "cd", "ef"]123
+}
+
+test t-71901 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), "日本語テスト", 1);
+}
+expect {
+    日本語テスト["ab", "cd", "ef"]1
+}
+
+test t-71903 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), "日本語テスト", 0123);
+}
+expect {
+    日本語テスト["ab", "cd", "ef"]123
+}
+
+test t-71938 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), "한국어 시험", _utf8mb4 'abcABCÅå');
+}
+expect {
+    한국어 시험["ab", "cd", "ef"]abcABCÅå
+}
+
+test t-71966 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), '123', "abc");
+}
+expect {
+    123["ab", "cd", "ef"]abc
+}
+
+test t-71981 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), '123', _binary 'Müller' );
+}
+expect {
+    123["ab", "cd", "ef"]Müller
+}
+
+test t-72023 {
+    SELECT CONCAT_WS(cast('["ab", "cd", "ef"]' as json), -9223372036854775808, 999999999999999999999999);
+}
+expect {
+    -9223372036854775808["ab", "cd", "ef"]999999999999999999999999
+}
+
+test t-72179 {
+    SELECT CONCAT_WS(cast('["ab", "ef"]' as json), NULL, _binary 'Müller' );
+}
+expect {
+    Müller
+}
+
+test t-72196 {
+    SELECT CONCAT_WS(cast('["ab", "ef"]' as json), "", '123');
+}
+expect {
+    ["ab", "ef"]123
+}
+
+test t-72380 {
+    SELECT CONCAT_WS(cast('["ab", "ef"]' as json), "日本語テスト", "Å å");
+}
+expect {
+    日本語テスト["ab", "ef"]Å å
+}
+
+test t-72385 {
+    SELECT CONCAT_WS(cast('["ab", "ef"]' as json), "日本語テスト", 1);
+}
+expect {
+    日本語テスト["ab", "ef"]1
+}
+
+test t-72676 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), "", "中文测试");
+}
+expect {
+    \{"a": 1, "b": 2\}中文测试
+}
+
+test t-72681 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), "", 9223372036854775807);
+}
+expect {
+    \{"a": 1, "b": 2\}9223372036854775807
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-72804 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), 0xAACC, -1);
+}
+expect error {
+}
+
+test t-72862 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    中文测试\{"a": 1, "b": 2\}abcABCÅå
+}
+
+test t-72867 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), "日本語テスト", "a");
+}
+expect {
+    日本語テスト\{"a": 1, "b": 2\}a
+}
+
+test t-72950 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), '123', _utf8mb4 'abcABCÅå');
+}
+expect {
+    123\{"a": 1, "b": 2\}abcABCÅå
+}
+
+test t-72983 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), -9223372036854775808, 3.1415926);
+}
+expect {
+    -9223372036854775808\{"a": 1, "b": 2\}3.1415926
+}
+
+test t-72984 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), -9223372036854775808, "中文测试");
+}
+expect {
+    -9223372036854775808\{"a": 1, "b": 2\}中文测试
+}
+
+test t-73034 {
+    SELECT CONCAT_WS(cast('\{"a": 1, "b": 2\}' as json), -999999999999999999999999, -9223372036854775808);
+}
+expect {
+    -999999999999999999999999\{"a": 1, "b": 2\}-9223372036854775808
+}
+
+test t-73163 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "a": 1\}' as json), "", "😊😂🤢");
+}
+expect {
+    \{"a": 1, "b": 2\}😊😂🤢
+}
+
+test t-73173 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "a": 1\}' as json), "a", NULL);
+}
+expect {
+    a
+}
+
+test t-73200 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "a": 1\}' as json), "abc", -1);
+}
+expect {
+    abc\{"a": 1, "b": 2\}-1
+}
+
+test t-73256 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "a": 1\}' as json), -1, -999999999999999999999999);
+}
+expect {
+    -1\{"a": 1, "b": 2\}-999999999999999999999999
+}
+
+test t-73343 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "a": 1\}' as json), "中文测试", 999999999999999999999999);
+}
+expect {
+    中文测试\{"a": 1, "b": 2\}999999999999999999999999
+}
+
+test t-73564 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "a": 1\}' as json), _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    abcABCÅå\{"a": 1, "b": 2\}-999999999999999999999999
+}
+
+test t-73591 {
+    SELECT CONCAT_WS(cast('\{"c": 1, "b": 2\}' as json), "Å å", NULL);
+}
+expect {
+    Å å
+}
+
+test t-74132 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "c": 1\}' as json), "", '123');
+}
+expect {
+    \{"b": 2, "c": 1\}123
+}
+
+test t-74195 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "c": 1\}' as json), 1, "日本語テスト");
+}
+expect {
+    1\{"b": 2, "c": 1\}日本語テスト
+}
+
+test t-74444 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "c": 1\}' as json), -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    -9223372036854775808\{"b": 2, "c": 1\}-999999999999999999999999
+}
+
+test t-74503 {
+    SELECT CONCAT_WS(cast('\{"b": 2, "c": 1\}' as json), _binary 'Müller' , "日本語テスト");
+}
+expect {
+    Müller\{"b": 2, "c": 1\}日本語テスト
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-74743 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), 0xAACC, 3.1415926);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-74773 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), 3.1415926, 999999999999999999999999);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-74931 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), -9223372036854775808, _latin1 0xFF);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-74943 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), 999999999999999999999999, "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-74948 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), 999999999999999999999999, -9223372036854775808);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-74996 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), _binary 'Müller' , _utf8mb4 'abcABCÅå');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-75033 {
+    SELECT CONCAT_WS(cast(' "b": 2\}' as json), _latin1 0xFF, "😊😂🤢");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75074 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), NULL, "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75087 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), "", NULL);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75101 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), "", 9223372036854775807);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75277 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), "中文测试", 9223372036854775807);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75285 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), "日本語テスト", NULL);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75443 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), -999999999999999999999999, 1);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-75516 {
+    SELECT CONCAT_WS(cast('"a": 1' as json), _latin1 0xFF, "한국어 시험");
+}
+expect error {
+}
+
+test t-75576 {
+    SELECT CONCAT_WS(cast(date '2000-01-01' as json), "", -1);
+}
+expect {
+    "2000-01-01"-1
+}
+
+test t-75771 {
+    SELECT CONCAT_WS(cast(date '2000-01-01' as json), "日本語テスト", "a");
+}
+expect {
+    日本語テスト"2000-01-01"a
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-75776 {
+    SELECT CONCAT_WS(cast(date '2000-01-01' as json), "日本語テスト", 0xAACC);
+}
+expect error {
+}
+
+test t-75808 {
+    SELECT CONCAT_WS(cast(date '2000-01-01' as json), "한국어 시험", -999999999999999999999999);
+}
+expect {
+    한국어 시험"2000-01-01"-999999999999999999999999
+}
+
+test t-75932 {
+    SELECT CONCAT_WS(cast(date '2000-01-01' as json), -999999999999999999999999, "中文测试");
+}
+expect {
+    -999999999999999999999999"2000-01-01"中文测试
+}

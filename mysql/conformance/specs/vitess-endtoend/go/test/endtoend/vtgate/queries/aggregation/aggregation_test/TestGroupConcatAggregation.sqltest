@@ -1,0 +1,98 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493);
+}
+
+setup s3 {
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493);
+    insert into t2(id, shardKey) values (1, 10), (2, 20);
+}
+
+@setup s1
+test l651 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l654 {
+    SELECT group_concat(name) FROM t1;
+}
+expect unordered {
+    a1,b1,c1,a1,d1,c1,e1,a1,b1
+}
+
+@setup s1
+@setup s3
+test l656 {
+    SELECT group_concat(value) FROM t1 join t2 on t1.shardKey = t2.shardKey;
+}
+expect unordered {
+    foo,foo
+}
+
+@setup s1
+@setup s3
+test l658 {
+    SELECT group_concat(value) FROM t1 join t2 on t1.t1_id = t2.shardKey;
+}
+expect unordered {
+    titi,tete
+}
+
+@setup s1
+@setup s3
+test l660 {
+    SELECT group_concat(value) FROM t1 join t2 on t1.shardKey = t2.id;
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s3
+test l662 {
+    SELECT group_concat(value), t1.name FROM t1, t2 group by t1.name;
+}
+expect unordered {
+    foo,foo|c1
+    tete,tete,foo,foo|b1
+    titi,titi,foo,foo|a1
+    toto,toto|d1
+    yoyo,yoyo|e1
+}
+
+@setup s1
+@setup s2
+test l664 {
+    SELECT group_concat(name, value) FROM t1;
+}
+expect unordered {
+    b1foo,c1foo,a1foo,d1toto,e1yoyo,a1titi,b1tete
+}

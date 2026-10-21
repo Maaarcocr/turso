@@ -1,0 +1,30 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/distinct_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE emp (
+    empno bigint NOT NULL,
+    ename VARCHAR(10),
+    job VARCHAR(9),
+    mgr bigint,
+    hiredate DATE,
+    sal bigint,
+    comm bigint,
+    deptno bigint,
+    PRIMARY KEY (empno)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+}
+
+# mysql-error: 1056 42000 Can't group on 'fv'
+@setup s1
+test l74 {
+    SELECT FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv, deptno FROM emp GROUP BY fv, deptno;
+}
+expect error {
+}
