@@ -372,6 +372,22 @@ class RecorderPlanTests(unittest.TestCase):
         outcomes = REC.classify_group(plan, self.runs({"0": ["rows", []]}, None, {}), 1 << 20)
         self.assertEqual(outcomes[0]["bucket"], "unrepresentable")
 
+    def test_diagnostics_after_dropped_statement_and_statistics(self):
+        plan, _ = self.plan([
+            candidate("L1", ["SET lock_warnings = 1"], ["SHOW WARNINGS"]),
+            candidate("L2", ["CREATE TABLE t(a INT)"], ["SHOW WARNINGS"]),
+            candidate("L3", [], ["SHOW KEYS FROM t"], base="L2"),
+        ])
+        errors = {"0": [1193, "HY000", "Unknown system variable 'lock_warnings'"]}
+        rows = ["rows", [["Error", "1193", "x"]]]
+        outcomes = REC.classify_group(plan, self.runs({"0": rows, "1": ["rows", []], "2": ["rows", []]},
+                                                      None, errors), 1 << 20)
+        self.assertEqual(outcomes[0]["bucket"], "setup-failed")
+        self.assertEqual(outcomes[1]["bucket"], "recorded")
+        self.assertEqual(outcomes[2]["bucket"], "nondeterministic")
+        self.assertTrue(LIB.reads_diagnostics("SELECT @@warning_count"))
+        self.assertFalse(LIB.reads_diagnostics("SELECT 'SHOW WARNINGS'"))
+
     def test_setup_failure_policy(self):
         plan, _ = self.plan([
             candidate("L1", ["CREATE TABLE t(a INT)", "BROKEN"], ["SELECT a FROM t"], policy="fail"),

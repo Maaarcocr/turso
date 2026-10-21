@@ -684,6 +684,16 @@ def classify_group(plan, runs, max_expect_bytes):
         if [errors_a[n] for n in failed_a] != [errors_b[n] for n in failed_b] or failed_a != failed_b:
             outcomes[index] = {"bucket": "nondeterministic", "detail": "setup errors differ"}
             continue
+        if failed_a and failed_a[-1] == candidate.node and LIB.reads_diagnostics(record["sql"][0]):
+            # The diagnostics area belongs to the dropped statement, which the
+            # replay never runs.
+            outcomes[index] = {"bucket": "setup-failed",
+                               "detail": "diagnostics read after a dropped setup statement"}
+            continue
+        if any(LIB.reads_storage_statistics(s) for s in record["sql"]):
+            outcomes[index] = {"bucket": "nondeterministic",
+                               "detail": "reads asynchronously updated storage statistics"}
+            continue
         if failed_a and record.get("setup_errors", "fail") == "fail":
             first = errors_a[failed_a[0]]
             outcomes[index] = {"bucket": "setup-failed", "detail": f"{first[0]} {first[2]}"}
