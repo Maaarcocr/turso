@@ -1,0 +1,62 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/evidence/slt_lang_replace.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1( x INTEGER PRIMARY KEY, y VARCHAR(16) );
+    INSERT INTO t1 VALUES(1, 'true');
+    INSERT INTO t1 VALUES(0, 'false');
+}
+
+setup s2 {
+    INSERT INTO t1 VALUES(2, 'insert');
+}
+
+setup s3 {
+    REPLACE INTO t1 VALUES(2, 'replace');
+}
+
+setup s4 {
+    REPLACE INTO t1 VALUES(4, 'replace (new)');
+}
+
+@setup s1
+test l24 {
+    SELECT x, y FROM t1 WHERE x=2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l31 {
+    SELECT x, y FROM t1 WHERE x=2;
+}
+expect unordered {
+    2|insert
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l51 {
+    SELECT x, y FROM t1 WHERE x=2;
+}
+expect unordered {
+    2|replace
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l71 {
+    SELECT x, y FROM t1 WHERE x=4;
+}
+expect unordered {
+    4|replace (new)
+}

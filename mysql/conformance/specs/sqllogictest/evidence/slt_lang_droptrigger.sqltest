@@ -1,0 +1,44 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/evidence/slt_lang_droptrigger.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1( x INTEGER, y VARCHAR(8) );
+    INSERT INTO t1 VALUES(1,'true');
+    INSERT INTO t1 VALUES(0,'false');
+    INSERT INTO t1 VALUES(NULL,'NULL');
+    CREATE INDEX t1i1 ON t1(x);
+}
+
+setup s2 {
+    DROP TABLE t1;
+}
+
+# mysql-error: 1360 HY000 Trigger does not exist
+@setup s1
+test l31 {
+    DROP TRIGGER t1r1;
+}
+expect error {
+}
+
+# mysql-error: 1360 HY000 Trigger does not exist
+@setup s1
+test l35 {
+    DROP TRIGGER tXrX;
+}
+expect error {
+}
+
+# mysql-error: 1360 HY000 Trigger does not exist
+@setup s1
+@setup s2
+test l51 {
+    DROP TRIGGER t1r1;
+}
+expect error {
+}

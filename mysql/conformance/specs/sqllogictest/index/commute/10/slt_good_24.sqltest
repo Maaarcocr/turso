@@ -1,0 +1,3303 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/index/commute/10/slt_good_24.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    INSERT INTO tab0 VALUES(0,199,186.70,'qrodv',216,211.14,'hapey');
+    INSERT INTO tab0 VALUES(1,201,189.27,'vpnzy',217,212.51,'ewdre');
+    INSERT INTO tab0 VALUES(2,202,191.58,'erdep',218,213.84,'bkvmy');
+    INSERT INTO tab0 VALUES(3,203,192.57,'liafk',221,214.49,'qufby');
+    INSERT INTO tab0 VALUES(4,204,193.38,'xyumi',222,216.81,'jjbps');
+    INSERT INTO tab0 VALUES(5,206,194.0,'fqeyv',223,217.84,'xmgqw');
+    INSERT INTO tab0 VALUES(6,207,195.92,'qqjoz',224,218.88,'xabqg');
+    INSERT INTO tab0 VALUES(7,209,196.69,'cbtep',225,219.17,'jahoy');
+    INSERT INTO tab0 VALUES(8,210,197.60,'lomwi',226,220.46,'sjgqm');
+    INSERT INTO tab0 VALUES(9,211,200.28,'lwewy',227,221.65,'whaxa');
+    CREATE TABLE tab1(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE INDEX idx_tab1_0 on tab1 (col0);
+    CREATE INDEX idx_tab1_1 on tab1 (col1);
+    CREATE INDEX idx_tab1_3 on tab1 (col3);
+    CREATE INDEX idx_tab1_4 on tab1 (col4);
+    INSERT INTO tab1 SELECT * FROM tab0;
+    CREATE TABLE tab2(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE UNIQUE INDEX idx_tab2_0 ON tab2 (col1);
+    CREATE UNIQUE INDEX idx_tab2_1 ON tab2 (col3);
+    CREATE UNIQUE INDEX idx_tab2_4 ON tab2 (col0);
+    INSERT INTO tab2 SELECT * FROM tab0;
+    CREATE TABLE tab3(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE INDEX idx_tab3_0 ON tab3 (col0,col4 DESC);
+    CREATE UNIQUE INDEX idx_tab3_1 ON tab3 (col4 DESC,col0 DESC);
+    CREATE UNIQUE INDEX idx_tab3_3 ON tab3 (col1,col3);
+    CREATE UNIQUE INDEX idx_tab3_5 ON tab3 (col3 DESC);
+    INSERT INTO tab3 SELECT * FROM tab0;
+    CREATE TABLE tab4(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE UNIQUE INDEX idx_tab4_0 ON tab4 (col1);
+    CREATE INDEX idx_tab4_4 ON tab4 (col0 DESC,col3);
+    CREATE INDEX idx_tab4_5 ON tab4 (col4);
+    INSERT INTO tab4 SELECT * FROM tab0;
+}
+
+@setup s1
+test l202 {
+    SELECT pk FROM tab2 WHERE 17 >= col3 AND 97.47 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l502 {
+    SELECT pk FROM tab0 WHERE col1 > 23.60;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l664 {
+    SELECT pk FROM tab4 WHERE (col1 < 85.8 AND (col1 <= 98.22 AND ((col0 > 4 AND ((col4 > 23.84) AND col3 < 57) OR col0 > 82 AND ((col1 > 50.84)))) AND (col0 < 67) OR col3 IS NULL AND (col0 IN (40,58) OR (col4 < 45.31) OR col1 < 69.73 AND col0 = 47 OR col3 > 98) OR col1 < 62.97 OR (col0 <= 86) AND col3 > 9 AND col4 = 7.58 OR (col3 IN (32)) AND col1 < 89.70 AND ((col4 >= 33.68)) OR col3 > 15 AND ((((col3 < 35)) OR col0 > 14 OR (col1 < 54.79)))));
+}
+expect unordered {
+}
+
+@setup s1
+test l707 {
+    SELECT pk FROM tab3 WHERE 66 < col0 OR 69.6 > col4 OR (((83 > col0)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l1132 {
+    SELECT pk FROM tab0 WHERE col4 > 80.25 AND col3 = 88 OR col0 < 13 AND col1 <= 10.5 AND col3 = 29 OR ((((col1 < 95.89)))) AND col3 IS NULL AND col4 < 21.24 OR col3 < 37 AND col0 < 14 AND col3 <= 21 AND ((col3 > 88)) OR col4 <= 38.59 OR col3 > 2 OR ((col4 IS NULL)) OR col3 < 67 AND col4 IS NULL OR col3 >= 26 AND col0 IN (39,66) AND (col0 >= 62) AND col3 BETWEEN 10 AND 64 OR col3 IN (SELECT col0 FROM tab0 WHERE col0 >= 54) AND col3 > 95 AND col4 < 91.89 AND col1 >= 79.62 AND col1 > 18.64 AND (col3 > 74 OR col3 < 21 AND col0 < 56 AND col3 > 13 AND (col3 <= 58) OR col4 < 2.85) AND ((col0 >= 57) OR col3 < 91) OR col1 = 22.36 AND col0 > 28 OR col3 > 17 AND col0 >= 31 AND ((col3 < 37) AND col3 >= 16 AND col0 < 52) AND col3 > 3 OR col0 IN (34,29,93,20,45,98) AND col3 > 50 AND col4 <= 43.54 AND col0 < 31 OR col3 > 23;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l1137 {
+    SELECT pk FROM tab0 WHERE 80.25 < col4 AND 88 = col3 OR 13 > col0 AND 10.5 >= col1 AND 29 = col3 OR ((((95.89 > col1)))) AND col3 IS NULL AND 21.24 > col4 OR 37 > col3 AND 14 > col0 AND 21 >= col3 AND ((88 < col3)) OR 38.59 >= col4 OR 2 < col3 OR ((col4 IS NULL)) OR 67 > col3 AND col4 IS NULL OR 26 <= col3 AND col0 IN (39,66) AND (62 <= col0) AND col3 BETWEEN 10 AND 64 OR col3 IN (SELECT col0 FROM tab0 WHERE 54 <= col0) AND 95 < col3 AND 91.89 > col4 AND 79.62 <= col1 AND 18.64 < col1 AND (74 < col3 OR 21 > col3 AND 56 > col0 AND 13 < col3 AND (58 >= col3) OR 2.85 > col4) AND ((57 <= col0) OR 91 > col3) OR 22.36 = col1 AND 28 < col0 OR 17 < col3 AND 31 <= col0 AND ((37 > col3) AND 16 <= col3 AND 52 > col0) AND 3 < col3 OR col0 IN (34,29,93,20,45,98) AND 50 < col3 AND 43.54 >= col4 AND 31 > col0 OR 23 < col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l1236 {
+    SELECT pk FROM tab0 WHERE 85 >= col0 OR (col3 IS NULL AND 33.90 = col4);
+}
+expect unordered {
+}
+
+@setup s1
+test l1264 {
+    SELECT pk FROM tab4 WHERE col0 <= 85 OR (col3 IS NULL AND col4 = 33.90);
+}
+expect unordered {
+}
+
+@setup s1
+test l1418 {
+    SELECT pk FROM tab2 WHERE (col4 < 63.5);
+}
+expect unordered {
+}
+
+@setup s1
+test l1542 {
+    SELECT pk FROM tab1 WHERE col3 > 30 OR col0 > 87 AND ((col1 IS NULL)) AND col4 > 48.45;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l1912 {
+    SELECT pk FROM tab4 WHERE col3 = 67 OR ((((((col4 = 91.17 AND (col1 >= 57.29) OR col1 = 67.84 AND (col4 < 44.37) AND col3 IN (50,62,60,68,0,13) AND col3 >= 44 AND col0 < 20 OR col0 < 62 AND (col3 > 44) AND (col3 >= 65) OR (col0 > 76 OR ((col3 BETWEEN 10 AND 98)) OR col0 > 28) OR col4 > 92.12 AND col3 <= 97 OR ((col0 < 14 AND (col0 < 88 OR col3 IS NULL AND ((col3 <= 54 OR (col0 = 79) AND col4 > 62.4)) AND col3 < 25 AND col0 IN (78)) AND col0 >= 99 AND col3 > 91 AND (col1 IN (51.77,83.48,24.77,4.94,2.50,31.25)) OR col3 >= 19 AND (col0 < 37 AND col3 <= 35 OR col3 = 76 AND ((col3 < 62)) AND col1 >= 78.52 AND col0 > 23 OR col1 > 28.94 AND (col0 < 96) AND col1 >= 39.18 OR col3 < 18 OR ((col0 < 29)) OR ((((col1 > 12.84)))) AND col3 > 69 OR col4 > 27.42) AND col1 <= 41.17 OR col0 < 20 OR (col0 <= 78) OR (col3 > 81))) OR (col3 IN (61,0,46)) AND ((col4 < 62.28)) AND (col1 > 46.33) AND col1 <= 15.19)) OR ((((col0 = 23) AND (((col1 > 76.84))))) AND col3 > 38) OR col4 >= 54.33) OR col3 = 39 AND (((col0 < 16 OR col0 >= 68))))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l2038 {
+    SELECT pk FROM tab2 WHERE col3 > 39 AND ((col0 BETWEEN 16 AND 11));
+}
+expect unordered {
+}
+
+@setup s1
+test l2117 {
+    SELECT pk FROM tab0 WHERE (81 < col3) OR 91 >= col0;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l2268 {
+    SELECT pk FROM tab2 WHERE col4 < 55.83;
+}
+expect unordered {
+}
+
+@setup s1
+test l2660 {
+    SELECT pk FROM tab1 WHERE col3 IS NULL OR col3 = 75 AND col4 <= 30.31;
+}
+expect unordered {
+}
+
+@setup s1
+test l2717 {
+    SELECT pk FROM tab2 WHERE 19.18 < col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l2842 {
+    SELECT pk FROM tab2 WHERE 27.62 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l2932 {
+    SELECT pk FROM tab2 WHERE ((col3 = 27) AND (col4 = 2.7 AND (col3 >= 43 OR col0 = 78 OR (col0 > 94))) OR (col3 >= 67 OR ((col0 IN (40,90,35,10,13))))) AND ((col1 >= 82.54));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l3062 {
+    SELECT pk FROM tab0 WHERE ((col1 > 95.85 AND col4 IN (35.12,42.99,48.59,2.66,9.5)));
+}
+expect unordered {
+}
+
+@setup s1
+test l3307 {
+    SELECT pk FROM tab2 WHERE 87.38 < col4 OR 19 < col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l3687 {
+    SELECT pk FROM tab1 WHERE (82 < col0 AND 6 < col3 AND 44 <= col0 OR (5 < col0 OR ((61.13 >= col4))) AND 62 = col3);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l3977 {
+    SELECT pk FROM tab0 WHERE 95 > col3 OR (10.38 <= col4) OR 58.51 > col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l4116 {
+    SELECT pk FROM tab0 WHERE col1 BETWEEN 14.66 AND 95.56 AND 65 >= col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l4522 {
+    SELECT pk FROM tab1 WHERE col4 > 95.33 OR col3 <= 16 AND col0 >= 34;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l4787 {
+    SELECT pk FROM tab0 WHERE ((5 < col3 AND (52.83 < col4 AND ((19 < col3) AND (2 < col0)) AND (54 <= col3))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l4802 {
+    SELECT pk FROM tab2 WHERE ((col3 > 5 AND (col4 > 52.83 AND ((col3 > 19) AND (col0 > 2)) AND (col3 >= 54))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l4848 {
+    SELECT pk FROM tab2 WHERE ((col3 >= 67 AND col0 IS NULL OR col0 >= 23 AND col4 > 88.54 AND col4 >= 23.28 AND col1 <= 16.69 AND ((col3 BETWEEN 78 AND 49)) OR ((col0 IS NULL) AND (col0 < 75 OR col3 > 92) OR ((col0 >= 61 AND ((col4 = 10.81 AND col0 > 66 OR ((col3 IN (54,32)) OR col0 <= 83 OR (col3 <= 89 OR (col1 <= 3.60) AND col0 < 5 AND (col3 < 61 OR (col3 < 92) AND col0 < 38 AND col4 > 27.20 AND col0 >= 68 OR col3 >= 6)) AND ((col1 < 84.60 OR col1 > 92.54) OR col0 >= 88 OR col1 > 16.75 AND (((col3 < 96 OR col3 < 64 AND col0 IN (72,70,12,62))) AND col4 <= 28.99) AND col0 > 2) AND (col0 < 65 OR (col0 >= 52 AND (col1 <= 26.70) AND col1 = 50.69)) AND (((col0 > 68) AND col0 IN (64))) OR (col4 IS NULL) AND (col3 < 95)) OR col0 < 21 AND col3 < 90 OR (col4 <= 64.15) AND col4 IN (71.86,96.32,87.16,42.7,53.73) OR ((col4 IN (SELECT col1 FROM tab2 WHERE col0 = 94 AND col0 = 62 AND col1 <= 96.90 OR (col3 >= 17) AND (col3 > 12 OR (col4 >= 41.60)) OR col1 >= 91.85 AND col3 <= 91)) OR col4 < 51.45 AND col0 < 45 AND col4 >= 53.87 OR (col0 < 99 OR ((col0 > 41 AND col1 < 45.89 AND (((col4 >= 45.95) AND col1 <= 77.92)))) AND col3 > 62 OR col0 IS NULL AND (col3 < 64) AND ((col0 BETWEEN 43 AND 71 AND (col3 >= 98 OR ((col3 > 84)) OR col4 < 2.74) AND col4 > 74.83) OR col1 >= 4.53)) OR (col4 >= 47.66) OR col3 >= 55)))) OR col0 <= 83) OR col0 >= 90) AND ((col4 > 38.28)) AND col3 > 17 AND col4 <= 12.46));
+}
+expect unordered {
+}
+
+@setup s1
+test l4912 {
+    SELECT pk FROM tab4 WHERE col4 > 43.21 AND ((col0 > 71)) AND (((col4 > 91.45 OR (col1 > 24.93))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l4947 {
+    SELECT pk FROM tab2 WHERE ((72 = col0)) OR 27 <= col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5017 {
+    SELECT pk FROM tab4 WHERE ((54 <= col0));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5162 {
+    SELECT pk FROM tab0 WHERE ((col3 = 11)) OR ((col4 < 98.90)) OR col3 > 68 OR col3 >= 54 OR col3 = 19;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5202 {
+    SELECT pk FROM tab4 WHERE ((col3 = 11)) OR ((col4 < 98.90)) OR col3 > 68 OR col3 >= 54 OR col3 = 19;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5262 {
+    SELECT pk FROM tab0 WHERE col1 >= 80.46;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5344 {
+    SELECT pk FROM tab4 WHERE col1 < 13.73;
+}
+expect unordered {
+}
+
+@setup s1
+test l5772 {
+    SELECT pk FROM tab2 WHERE col4 > 95.1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5787 {
+    SELECT pk FROM tab3 WHERE 95.1 < col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l5846 {
+    SELECT pk FROM tab0 WHERE (66 = col3) OR 51 = col3 AND 26.67 < col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l5906 {
+    SELECT pk FROM tab3 WHERE ((col3 < 96 AND (col1 > 11.1) OR ((col4 = 63.30))) AND ((col3 < 35)) OR (col0 <= 3 AND (col0 <= 66 OR col4 > 42.42 AND (col3 >= 42))));
+}
+expect unordered {
+}
+
+@setup s1
+test l6092 {
+    SELECT pk FROM tab0 WHERE col3 < 90 AND ((col0 > 42 AND col3 = 84) AND col3 >= 34 OR ((col1 = 68.64 OR col3 > 48 AND col3 <= 68))) OR ((col0 < 51) OR col0 > 40) AND (col0 < 8) AND (col0 = 6) OR col3 >= 81 AND col0 < 25 AND ((col4 <= 77.43 OR col0 < 48 AND ((col4 < 30.51 AND col0 = 92 OR col3 < 33) AND (col1 > 89.1 AND (col0 < 24)) OR col3 < 25 AND (col3 < 28) AND col0 <= 81) AND col0 < 64 AND col3 <= 99 OR col0 > 53 AND (col0 BETWEEN 19 AND 53) OR (col4 > 9.87)));
+}
+expect unordered {
+}
+
+@setup s1
+test l6112 {
+    SELECT pk FROM tab2 WHERE 90 > col3 AND ((42 < col0 AND 84 = col3) AND 34 <= col3 OR ((68.64 = col1 OR 48 < col3 AND 68 >= col3))) OR ((51 > col0) OR 40 < col0) AND (8 > col0) AND (6 = col0) OR 81 <= col3 AND 25 > col0 AND ((77.43 >= col4 OR 48 > col0 AND ((30.51 > col4 AND 92 = col0 OR 33 > col3) AND (89.1 < col1 AND (24 > col0)) OR 25 > col3 AND (28 > col3) AND 81 >= col0) AND 64 > col0 AND 99 >= col3 OR 53 < col0 AND (col0 BETWEEN 19 AND 53) OR (9.87 < col4)));
+}
+expect unordered {
+}
+
+@setup s1
+test l6136 {
+    SELECT pk FROM tab0 WHERE col3 IS NULL AND (((80.18 <= col1) OR ((97 < col3))));
+}
+expect unordered {
+}
+
+@setup s1
+test l6156 {
+    SELECT pk FROM tab3 WHERE col3 IS NULL AND (((col1 >= 80.18) OR ((col3 > 97))));
+}
+expect unordered {
+}
+
+@setup s1
+test l6230 {
+    SELECT pk FROM tab1 WHERE (col0 >= 68 AND col3 <= 87);
+}
+expect unordered {
+}
+
+@setup s1
+test l6387 {
+    SELECT pk FROM tab3 WHERE 43.31 <= col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l6536 {
+    SELECT pk FROM tab0 WHERE (72 <= col3) AND 81 > col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l7072 {
+    SELECT pk FROM tab2 WHERE col1 > 92.35 AND col4 > 22.28;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l7250 {
+    SELECT pk FROM tab1 WHERE col3 > 60 AND col3 < 29;
+}
+expect unordered {
+}
+
+@setup s1
+test l7400 {
+    SELECT pk FROM tab3 WHERE col0 IN (SELECT col3 FROM tab3 WHERE (col4 IS NULL)) AND 25 < col0;
+}
+expect unordered {
+}
+
+@setup s1
+test l7560 {
+    SELECT pk FROM tab1 WHERE ((col3 < 58));
+}
+expect unordered {
+}
+
+@setup s1
+test l7637 {
+    SELECT pk FROM tab4 WHERE 44.97 < col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l8062 {
+    SELECT pk FROM tab2 WHERE (45 > col0) AND ((((col4 IN (35.83,82.20)))) AND 37.22 > col4 OR 43 = col3) OR (90 < col3) AND (17 < col3) AND col0 BETWEEN 45 AND 43 OR 41 >= col0 AND (46 > col3) OR 51 > col0 AND 13 > col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l8107 {
+    SELECT pk FROM tab2 WHERE 38 < col0 OR (0 <= col3) OR (65 = col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l8157 {
+    SELECT pk FROM tab2 WHERE 94 >= col0 OR 79 <= col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l8312 {
+    SELECT pk FROM tab4 WHERE col3 = 85 OR col4 > 80.91;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l8577 {
+    SELECT pk FROM tab2 WHERE (4 < col3 OR (((64 >= col3 OR 21 > col0))) AND (((col0 IN (73)))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l8707 {
+    SELECT pk FROM tab1 WHERE col4 BETWEEN 51.39 AND 54.69 OR 98 <= col3 OR (36 < col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l8750 {
+    SELECT pk FROM tab1 WHERE (col0 = 74);
+}
+expect unordered {
+}
+
+@setup s1
+test l8778 {
+    SELECT pk FROM tab4 WHERE (74 = col0);
+}
+expect unordered {
+}
+
+@setup s1
+test l8946 {
+    SELECT pk FROM tab3 WHERE (col1 = 87.69);
+}
+expect unordered {
+}
+
+@setup s1
+test l9390 {
+    SELECT pk FROM tab1 WHERE (col0 > 39) AND col4 > 39.1 AND ((col3 > 42)) AND (((col0 = 62) AND col0 IS NULL)) AND col0 = 3;
+}
+expect unordered {
+}
+
+@setup s1
+test l9732 {
+    SELECT pk FROM tab4 WHERE col1 > 41.68 AND col0 > 40 OR (col3 >= 81) AND col1 <= 75.86 OR col3 <= 44;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l9762 {
+    SELECT pk FROM tab2 WHERE col4 > 66.34 OR ((col3 < 48));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l9787 {
+    SELECT pk FROM tab4 WHERE 66.34 < col4 OR ((48 > col3));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l9910 {
+    SELECT pk FROM tab3 WHERE 1.23 >= col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l10106 {
+    SELECT pk FROM tab0 WHERE 16 >= col0 AND (((10 <= col3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l10212 {
+    SELECT pk FROM tab3 WHERE (col4 >= 40.55);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l10357 {
+    SELECT pk FROM tab2 WHERE (((50 < col3)) OR 32 < col0 AND ((29 > col3)) OR col4 IN (14.27,22.77));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l10398 {
+    SELECT pk FROM tab2 WHERE (((col1 >= 18.25 AND col4 IS NULL)));
+}
+expect unordered {
+}
+
+@setup s1
+test l10462 {
+    SELECT pk FROM tab4 WHERE col1 >= 53.5;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l10737 {
+    SELECT pk FROM tab3 WHERE (11.49 <= col1);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l11242 {
+    SELECT pk FROM tab1 WHERE col0 >= 41 OR col1 > 50.30 AND (col3 > 47) OR (((col0 = 55) AND (col3 > 14)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l11326 {
+    SELECT pk FROM tab0 WHERE (33 < col0 AND (40 < col0) AND 50 > col3 OR col0 IN (SELECT col3 FROM tab0 WHERE col4 BETWEEN 29.18 AND 26.33 OR 34.99 < col1 OR 67.28 < col4) AND ((((5 < col3))))) OR col4 IN (SELECT col1 FROM tab0 WHERE 56 > col3 AND 29 <= col3 OR col1 BETWEEN 15.56 AND 83.60 AND col0 IN (88,64,40,27,93,59) AND 69.8 < col1 AND col1 IS NULL) OR 95 >= col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l11334 {
+    SELECT pk FROM tab1 WHERE (33 < col0 AND (40 < col0) AND 50 > col3 OR col0 IN (SELECT col3 FROM tab1 WHERE col4 BETWEEN 29.18 AND 26.33 OR 34.99 < col1 OR 67.28 < col4) AND ((((5 < col3))))) OR col4 IN (SELECT col1 FROM tab1 WHERE 56 > col3 AND 29 <= col3 OR col1 BETWEEN 15.56 AND 83.60 AND col0 IN (88,64,40,27,93,59) AND 69.8 < col1 AND col1 IS NULL) OR 95 >= col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l11370 {
+    SELECT pk FROM tab1 WHERE col1 >= 14.21 AND (col0 = 90 AND (col0 >= 29 AND (col3 < 51 OR col4 = 86.60 AND col0 < 88) OR col0 = 51 OR col0 < 29) OR col0 IS NULL) AND (col1 > 33.54 OR (col3 > 17) OR (col0 < 8));
+}
+expect unordered {
+}
+
+@setup s1
+test l11502 {
+    SELECT pk FROM tab1 WHERE col4 >= 79.61;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l11558 {
+    SELECT pk FROM tab2 WHERE (col0 > 0 AND (col0 >= 22) AND (col3 <= 67) AND col3 = 28 OR (((col4 > 80.92)) AND col4 < 95.9 AND (col4 < 72.3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l11566 {
+    SELECT pk FROM tab3 WHERE (col0 > 0 AND (col0 >= 22) AND (col3 <= 67) AND col3 = 28 OR (((col4 > 80.92)) AND col4 < 95.9 AND (col4 < 72.3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l11924 {
+    SELECT pk FROM tab4 WHERE ((col3 IS NULL OR col3 >= 9)) AND col4 <= 94.47 AND ((col3 > 57)) OR ((((col0 IS NULL))) OR col0 <= 77) AND col3 <= 66 OR (((col3 < 64))) OR col0 < 64 OR col3 = 95;
+}
+expect unordered {
+}
+
+@setup s1
+test l12732 {
+    SELECT pk FROM tab3 WHERE col0 = 71 AND col0 >= 78 AND col4 IS NULL AND col1 < 85.70 OR col3 = 81 AND ((col1 < 54.66) OR ((col3 >= 68)) AND ((((col3 >= 66))))) OR col1 >= 56.6 AND col3 > 27;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l13042 {
+    SELECT pk FROM tab0 WHERE (col0 IN (69,74,29,24,8,54)) AND (col1 < 5.66);
+}
+expect unordered {
+}
+
+@setup s1
+test l13146 {
+    SELECT pk FROM tab3 WHERE ((col3 > 80 AND (col0 = 38)));
+}
+expect unordered {
+}
+
+@setup s1
+test l13224 {
+    SELECT pk FROM tab1 WHERE (col3 IS NULL) AND 51 = col3 AND (45 > col3);
+}
+expect unordered {
+}
+
+@setup s1
+test l13276 {
+    SELECT pk FROM tab3 WHERE col0 < 12 AND (col0 <= 49 AND col3 < 28 AND (col0 > 74 AND (col0 <= 48 OR (col0 <= 76 AND (col3 > 85) AND col3 > 87)) OR (((col3 < 84 OR col0 > 64 OR col1 IS NULL OR col3 = 56 OR col3 < 83)) AND col3 < 87) OR col0 >= 70 AND col0 <= 75 AND col0 > 12 AND col3 > 40) OR col0 <= 90) AND (((col0 < 89)) OR col0 > 0 OR (((col1 IS NULL AND col0 IN (SELECT col3 FROM tab3 WHERE (col0 < 67 OR (((col0 < 11))))) AND (col0 > 46))) OR col3 > 64 AND (col0 < 67)) OR col1 IS NULL);
+}
+expect unordered {
+}
+
+@setup s1
+test l13337 {
+    SELECT pk FROM tab4 WHERE 5.32 > col4 OR ((33 < col0) OR (66 = col0) AND (71.46 >= col1) AND (((col0 IN (4,7))) OR 22 = col3 OR 64 < col3 OR col0 IN (78) OR 64.73 < col1 OR 7 <= col3 OR 7 < col0 AND (9 <= col3 OR 26 >= col0 AND (19 > col0 AND 35.28 > col4) AND col1 IS NULL AND (90 <= col0) OR ((78 <= col0) AND 27 = col0) OR (((52 > col3 AND 29.55 <= col1 OR (col3 IS NULL) OR col3 IN (34) OR 47.56 = col1 OR 77 > col3))) OR 54 >= col3 AND 34.8 = col1 OR col3 IN (25,5,90,79,66,32)) OR 82.24 < col4 AND ((col0 IS NULL) AND (((21 < col0)) OR 15.86 <= col1 AND (93 > col3 AND (63.42 < col4) AND col0 BETWEEN 95 AND 97) OR 50 = col0 OR (31 >= col0) AND ((57.41 = col1)) AND 32 >= col0 OR ((13.99 < col4) OR 83 < col3)))) AND col4 IN (5.29) OR 26 < col3) OR 79 <= col0 OR (5.53 > col1);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l13932 {
+    SELECT pk FROM tab1 WHERE col1 >= 40.80;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l14216 {
+    SELECT pk FROM tab0 WHERE 30 < col3 AND ((((((((44 > col3)))))))) OR (col3 IN (30));
+}
+expect unordered {
+}
+
+@setup s1
+test l14232 {
+    SELECT pk FROM tab2 WHERE 30 < col3 AND ((((((((44 > col3)))))))) OR (col3 IN (30));
+}
+expect unordered {
+}
+
+@setup s1
+test l14536 {
+    SELECT pk FROM tab0 WHERE ((34 < col3) AND 53 <= col3 AND (((9.99 < col1 AND ((56.93 < col4 OR (56 <= col0) AND (33 = col3))) AND (76 < col3 AND col3 IS NULL) AND col0 IS NULL))) AND 31 > col3 OR (9 <= col0 AND (((85 > col3)))) OR col3 BETWEEN 64 AND 38) OR col0 IN (55,13,66) OR col1 IN (27.79,69.20,65.66,71.66,13.0);
+}
+expect unordered {
+}
+
+@setup s1
+test l14572 {
+    SELECT pk FROM tab0 WHERE (col4 <= 73.39) OR (col3 >= 93) AND (col3 = 77) AND (col3 = 10) AND col0 > 44 OR col0 > 9 AND col1 <= 95.11 AND ((col0 >= 82 OR col3 > 98));
+}
+expect unordered {
+}
+
+@setup s1
+test l14880 {
+    SELECT pk FROM tab3 WHERE 28 < col0 AND 97.1 = col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l15297 {
+    SELECT pk FROM tab2 WHERE ((((92 <= col3)) OR col0 IN (71,2,2,33,78)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l15692 {
+    SELECT pk FROM tab2 WHERE ((col3 < 16) OR col0 >= 36 OR col0 >= 76 AND ((col0 IN (31))) OR col3 BETWEEN 8 AND 77 OR ((((col4 < 66.24)))) OR col3 > 76);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l15822 {
+    SELECT pk FROM tab0 WHERE col1 < 61.96;
+}
+expect unordered {
+}
+
+@setup s1
+test l15834 {
+    SELECT pk FROM tab1 WHERE 61.96 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l16257 {
+    SELECT pk FROM tab1 WHERE ((col1 IN (96.14,46.4,80.15,4.33,20.73,45.59))) AND 32.90 < col1 OR 61.38 >= col4 OR 5 < col0 AND 71.9 > col4 OR 88.33 < col4 OR ((67 < col0));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l16267 {
+    SELECT pk FROM tab2 WHERE ((col1 IN (96.14,46.4,80.15,4.33,20.73,45.59))) AND 32.90 < col1 OR 61.38 >= col4 OR 5 < col0 AND 71.9 > col4 OR 88.33 < col4 OR ((67 < col0));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l16307 {
+    SELECT pk FROM tab1 WHERE col4 IS NULL OR (col0 BETWEEN 73 AND 7) OR (47 <= col3);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l16477 {
+    SELECT pk FROM tab1 WHERE 13.73 <= col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l16742 {
+    SELECT pk FROM tab0 WHERE ((col1 >= 12.56));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l16882 {
+    SELECT pk FROM tab0 WHERE col3 < 54 AND (((col3 = 31))) AND (col4 > 9.0) AND (col0 >= 31);
+}
+expect unordered {
+}
+
+@setup s1
+test l16926 {
+    SELECT pk FROM tab0 WHERE ((((97 >= col0 AND col4 IS NULL OR 15 <= col0 OR (col3 IS NULL) AND 40 <= col0 AND 94 = col3 AND 96.89 <= col1) AND 43 >= col3) OR col4 IN (22.46) AND 76.7 <= col1 OR 52 <= col3 AND (((80 <= col3))) OR ((((52 < col3)) OR ((((((((28 > col3)))))))) OR ((51.69 >= col1) AND 67 >= col0) AND 55.31 < col4 AND col4 IS NULL OR 52 < col0))) AND 18 < col3) AND 88.4 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l16934 {
+    SELECT pk FROM tab1 WHERE ((((97 >= col0 AND col4 IS NULL OR 15 <= col0 OR (col3 IS NULL) AND 40 <= col0 AND 94 = col3 AND 96.89 <= col1) AND 43 >= col3) OR col4 IN (22.46) AND 76.7 <= col1 OR 52 <= col3 AND (((80 <= col3))) OR ((((52 < col3)) OR ((((((((28 > col3)))))))) OR ((51.69 >= col1) AND 67 >= col0) AND 55.31 < col4 AND col4 IS NULL OR 52 < col0))) AND 18 < col3) AND 88.4 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l16998 {
+    SELECT pk FROM tab4 WHERE ((col3 IN (96,10))) AND (col4 IN (73.85) AND (26 < col3 AND (63 <= col0 AND (col0 IS NULL)) AND 5 > col3 OR col0 IS NULL AND col4 IS NULL OR 98 <= col0 OR 58 < col0 AND 56.16 < col4 AND 64 < col3 OR 31 <= col3 AND (62 < col0) AND 13 > col0));
+}
+expect unordered {
+}
+
+@setup s1
+test l17150 {
+    SELECT pk FROM tab1 WHERE (col1 <= 89.70 AND col0 > 9 AND col0 < 11);
+}
+expect unordered {
+}
+
+@setup s1
+test l17317 {
+    SELECT pk FROM tab0 WHERE (((((73 < col0 OR (88 > col0))))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l17607 {
+    SELECT pk FROM tab1 WHERE 99 < col0 AND (((13.63 > col1 OR 64.91 >= col4))) AND (((45 <= col0))) OR col0 IS NULL AND 48.5 < col4 OR (24.76 > col4) OR (col3 IS NULL) AND (24.60 <= col1) OR (26.70 <= col1 OR 93 <= col0) OR 78.19 >= col4 AND ((83 > col0)) OR 1 <= col0 AND (((88 > col3)) AND (88.54 > col4) OR 30.74 > col1);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l17682 {
+    SELECT pk FROM tab0 WHERE (col3 > 99 AND (col0 >= 44));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l17760 {
+    SELECT pk FROM tab3 WHERE (col3 IN (SELECT col0 FROM tab3 WHERE (col0 BETWEEN 3 AND 94) AND 37 > col0));
+}
+expect unordered {
+}
+
+@setup s1
+test l17772 {
+    SELECT pk FROM tab0 WHERE col1 < 24.29 AND col0 >= 75;
+}
+expect unordered {
+}
+
+@setup s1
+test l18032 {
+    SELECT pk FROM tab3 WHERE col4 >= 11.82;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l18254 {
+    SELECT pk FROM tab4 WHERE (col1 = 62.17);
+}
+expect unordered {
+}
+
+@setup s1
+test l18292 {
+    SELECT pk FROM tab3 WHERE col1 > 54.50;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l18356 {
+    SELECT pk FROM tab0 WHERE ((36.7 = col1) AND (((36 < col0)) OR col4 IN (48.6,25.21)) AND 24 = col0);
+}
+expect unordered {
+}
+
+@setup s1
+test l18380 {
+    SELECT pk FROM tab3 WHERE ((36.7 = col1) AND (((36 < col0)) OR col4 IN (48.6,25.21)) AND 24 = col0);
+}
+expect unordered {
+}
+
+@setup s1
+test l18407 {
+    SELECT pk FROM tab1 WHERE (30 <= col3 AND 48.98 <= col1 OR col3 IN (55,84,38));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l18582 {
+    SELECT pk FROM tab2 WHERE (((59 <= col0))) AND (9 >= col3 AND (79 >= col0)) AND (col1 BETWEEN 9.27 AND 45.87) AND 18 <= col3 OR (((6 <= col3) AND col3 IS NULL OR (15.52 <= col1) AND (((34 >= col0 AND 12 < col3 AND 31 < col3 AND 61 > col3 AND 98 > col3 AND (13 < col3)) OR 53.52 = col1))));
+}
+expect unordered {
+}
+
+@setup s1
+test l18802 {
+    SELECT pk FROM tab1 WHERE col4 > 51.33;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l18867 {
+    SELECT pk FROM tab2 WHERE (29 > col0 OR ((98 < col3) AND 0.75 <= col4) OR (55 >= col0));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l18920 {
+    SELECT pk FROM tab3 WHERE 30.6 >= col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l19302 {
+    SELECT pk FROM tab0 WHERE col3 > 98 AND ((col0 > 14)) OR col0 >= 33 OR col1 > 32.60 OR col3 <= 8 AND col3 >= 66 AND (((((((col1 >= 30.55) AND (col1 > 49.77 AND col1 < 17.86) OR (((((((col0 > 64)))))) AND col4 > 93.29) AND col3 > 22 OR col4 > 15.91 AND col0 >= 31 AND col1 > 36.87) AND col0 < 51 OR col3 < 60 AND ((col1 IN (95.85,59.81,6.88,59.88,35.20))) AND (col0 >= 75 AND col1 <= 8.99) OR col4 <= 62.2))) AND col3 IN (46,93) OR col0 < 28)) OR col1 < 58.19;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l19722 {
+    SELECT pk FROM tab1 WHERE col4 >= 91.18 AND col0 > 19 OR ((col0 > 39 OR (col0 < 14)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l19787 {
+    SELECT pk FROM tab2 WHERE 78 = col0 OR 63 < col0;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l19977 {
+    SELECT pk FROM tab2 WHERE 73 < col0 OR col3 IN (51,68,13);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l19992 {
+    SELECT pk FROM tab4 WHERE col0 > 73 OR col3 IN (51,68,13);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l20106 {
+    SELECT pk FROM tab0 WHERE (78 > col3 AND 50 < col3 AND (51.3 < col1 AND (col0 IN (89,99,0)) AND col3 BETWEEN 54 AND 35) AND (77 < col0 AND (95 < col3) OR 67.49 < col1));
+}
+expect unordered {
+}
+
+@setup s1
+test l20138 {
+    SELECT pk FROM tab4 WHERE (78 > col3 AND 50 < col3 AND (51.3 < col1 AND (col0 IN (89,99,0)) AND col3 BETWEEN 54 AND 35) AND (77 < col0 AND (95 < col3) OR 67.49 < col1));
+}
+expect unordered {
+}
+
+@setup s1
+test l20194 {
+    SELECT pk FROM tab1 WHERE ((39.96 > col1) AND (1 <= col3));
+}
+expect unordered {
+}
+
+@setup s1
+test l20362 {
+    SELECT pk FROM tab1 WHERE col3 BETWEEN 54 AND 52 OR col3 > 52;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l20987 {
+    SELECT pk FROM tab2 WHERE ((20.53 <= col1));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l20992 {
+    SELECT pk FROM tab3 WHERE ((col1 >= 20.53));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l21397 {
+    SELECT pk FROM tab3 WHERE col0 IS NULL OR col1 IS NULL OR (((77.3 < col4)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l21562 {
+    SELECT pk FROM tab2 WHERE (31.27 <= col4) AND 94 >= col3 OR (39 > col0) AND ((73.85 <= col1) OR (65 = col3) OR 27 >= col0 AND 53 < col0);
+}
+expect unordered {
+}
+
+@setup s1
+test l21762 {
+    SELECT pk FROM tab1 WHERE col1 > 14.9 OR (col4 = 73.77) OR ((((col4 IN (54.41,18.57,7.75,18.65,64.84,28.23)))) OR (col0 >= 62 AND col0 > 91 AND (((col1 BETWEEN 40.9 AND 78.49))) AND (((col1 < 82.4)) OR (col0 IN (65,10)) OR (col4 >= 45.7)) AND col3 IN (13,93,47) AND col1 >= 35.28) AND col3 = 39 OR col0 IN (81,61,53,32,25,16)) AND (col0 >= 72) AND ((((((col3 IN (SELECT col0 FROM tab1 WHERE col4 IS NULL) AND col1 > 99.9 OR col4 < 77.79 AND ((((col1 >= 33.83)) AND (col1 < 45.57)) AND col0 <= 38)) OR col1 > 44.74)) OR col0 > 32))) OR col3 BETWEEN 76 AND 49;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l22052 {
+    SELECT pk FROM tab1 WHERE (col4 >= 77.25) OR col0 <= 65 AND col0 >= 49 AND col0 < 96;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l22104 {
+    SELECT pk FROM tab1 WHERE 71 < col3 AND 7 > col0;
+}
+expect unordered {
+}
+
+@setup s1
+test l22168 {
+    SELECT pk FROM tab4 WHERE (72.12 < col1 AND (3 < col3) AND ((29 = col0)) OR ((48 > col0)));
+}
+expect unordered {
+}
+
+@setup s1
+test l22242 {
+    SELECT pk FROM tab3 WHERE ((((col3 IS NULL)) AND (col0 >= 21)) AND col3 = 97 OR (col0 > 82) OR ((col3 > 65)) AND col3 <= 57 OR (col3 = 32) AND ((col0 = 4) AND ((col3 < 56 OR col3 <= 7 AND (col3 < 69) AND (((col3 > 59) AND ((((col0 <= 0))) AND col1 > 60.57) AND ((col3 >= 10)) AND col3 < 36 AND (col4 > 27.73 OR (((col3 <= 53)) AND col3 > 4 AND (((col0 > 97))) OR col1 >= 96.74 AND col3 = 23 OR (col4 = 76.21) AND (col0 > 38 AND col3 <= 92)) AND (col1 < 31.69) OR col3 <= 81) OR col0 >= 54))))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l22257 {
+    SELECT pk FROM tab4 WHERE ((((col3 IS NULL)) AND (21 <= col0)) AND 97 = col3 OR (82 < col0) OR ((65 < col3)) AND 57 >= col3 OR (32 = col3) AND ((4 = col0) AND ((56 > col3 OR 7 >= col3 AND (69 > col3) AND (((59 < col3) AND ((((0 >= col0))) AND 60.57 < col1) AND ((10 <= col3)) AND 36 > col3 AND (27.73 < col4 OR (((53 >= col3)) AND 4 < col3 AND (((97 < col0))) OR 96.74 <= col1 AND 23 = col3 OR (76.21 = col4) AND (38 < col0 AND 92 >= col3)) AND (31.69 > col1) OR 81 >= col3) OR 54 <= col0))))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l22270 {
+    SELECT pk FROM tab1 WHERE ((col4 < 33.80));
+}
+expect unordered {
+}
+
+@setup s1
+test l22487 {
+    SELECT pk FROM tab4 WHERE ((15 < col0) OR 6 >= col3);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l22697 {
+    SELECT pk FROM tab1 WHERE (5 <= col0) OR (51 > col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l22954 {
+    SELECT pk FROM tab4 WHERE (col0 <= 20) AND col3 IN (23,81,17);
+}
+expect unordered {
+}
+
+@setup s1
+test l23037 {
+    SELECT pk FROM tab3 WHERE (((46 < col0)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l23407 {
+    SELECT pk FROM tab3 WHERE col0 IN (3,45,95) AND 78 < col3 OR 1.3 <= col1 AND ((col3 IS NULL)) OR (22 < col0) AND 31 <= col3 AND 13 = col0 OR (88.48 < col4) AND 98.34 >= col4 OR (42 < col0 OR 63.64 < col4 AND 48 > col3) OR 13 > col3 OR 7 = col0;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l23446 {
+    SELECT pk FROM tab3 WHERE col1 IS NULL AND col0 = 75;
+}
+expect unordered {
+}
+
+@setup s1
+test l23514 {
+    SELECT pk FROM tab1 WHERE 95 > col3 AND (8 > col0) OR (5.41 > col4);
+}
+expect unordered {
+}
+
+@setup s1
+test l23682 {
+    SELECT pk FROM tab1 WHERE (col4 > 37.78);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l23717 {
+    SELECT pk FROM tab4 WHERE (37.78 < col4);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l23887 {
+    SELECT pk FROM tab2 WHERE (((((col3 IS NULL AND 42.37 >= col4 OR col4 IN (59.55,22.45,26.90)))) OR col4 IN (37.33)) OR ((2 <= col0 AND (43 < col3 AND (70 > col3) AND (76 > col0 AND 46 > col0 AND 63 > col0 OR col3 IS NULL) OR (((((85 > col0)))))) AND 70.44 > col4 OR 91.76 >= col1) AND 23 > col0) OR 57.8 <= col4);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l23972 {
+    SELECT pk FROM tab1 WHERE ((((col1 >= 23.81))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l23992 {
+    SELECT pk FROM tab3 WHERE ((((col1 >= 23.81))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l24087 {
+    SELECT pk FROM tab2 WHERE (95 < col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l24248 {
+    SELECT pk FROM tab2 WHERE col4 > 92.19 AND col0 BETWEEN 59 AND 75 AND col0 <= 77;
+}
+expect unordered {
+}
+
+@setup s1
+test l24372 {
+    SELECT pk FROM tab0 WHERE (col1 = 72.71) AND ((col0 > 52 OR ((((((col0 >= 72 OR (((col3 = 94 AND col4 > 62.68)) AND col3 < 9)) AND (col0 < 89 OR col3 >= 71)) OR col3 >= 23 OR (col0 >= 16) AND col1 >= 57.83 AND (col1 > 25.86) AND col3 IN (60,81,86))))) AND col0 = 36 AND ((col1 < 98.54)) OR (((col3 > 17) AND col4 > 26.49 AND ((col1 > 91.70)) AND col4 > 83.86) OR col0 <= 76) OR (((col0 >= 47 OR col3 >= 23))) AND ((col1 < 51.36 AND col4 < 97.50)) OR (col3 <= 83) AND (col4 >= 49.32) AND (col3 >= 9) OR (col1 = 32.77) OR col3 >= 34 OR (((col1 >= 32.53))) AND col0 >= 90 AND col3 < 42)) OR (col3 > 55 AND col0 < 87 OR col3 <= 25 OR (col0 > 22)) OR col0 > 97;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l24472 {
+    SELECT pk FROM tab0 WHERE (((col0 IN (52,10,9,35)) AND col0 <= 21 AND (((col3 = 79 OR col0 < 54 AND col3 > 8)) AND col0 IS NULL) AND col0 <= 93 OR col0 >= 75 AND col3 > 35 OR col1 <= 6.17 AND ((((col0 > 26 AND (col4 < 66.71 OR col4 BETWEEN 84.72 AND 13.98)))) OR col0 >= 48))) OR (col0 > 61) AND (col4 < 81.23) AND (col3 > 88) AND (col3 <= 51 AND col0 >= 15 AND col3 > 17) AND col3 < 84 OR ((col1 < 57.63)) OR (col3 > 3) AND (col3 > 55) OR (col0 >= 19 AND (((col0 <= 3 AND col1 >= 96.81)))) OR (col4 < 72.1 OR col1 >= 32.84 AND col1 <= 48.18) AND (col4 = 92.22);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l25722 {
+    SELECT pk FROM tab3 WHERE (col0 >= 66 OR col1 IN (53.13,49.84,83.69)) AND (col3 IN (80,64,57,98,17) AND col1 IS NULL) AND col1 > 77.57 AND col0 > 36 AND ((col4 < 65.27) AND col3 > 80 OR col1 >= 91.99 AND ((col0 IN (78,79)) AND (((col3 > 71 AND (col3 > 82))))) AND col3 < 17 OR (col1 = 31.93) OR ((col0 = 18 OR col4 > 11.42) AND col4 IS NULL AND (col4 IS NULL AND col0 >= 23 OR (col3 <= 6) AND col3 <= 29 AND col4 >= 13.92) AND (col3 > 57) AND col3 < 93 OR (((col3 <= 57 AND col3 >= 94 AND col1 IN (97.62)))))) OR ((col0 = 95 AND col0 > 79 OR (col3 = 90 OR col3 >= 16 OR (col3 BETWEEN 3 AND 39)))) OR col3 > 95 AND col0 > 0 AND col1 >= 36.87 AND col0 < 54 AND (col3 > 57 OR ((col3 <= 26 AND col1 < 24.10) OR col0 < 3 OR col1 IN (60.86,71.80,30.57,44.23) AND col0 > 81 AND col0 < 35 AND (col3 > 86) AND col0 > 67 AND col1 < 67.47 OR (col0 = 92) AND ((col1 > 24.19)))) AND (col3 = 91) AND ((col0 >= 38));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l25828 {
+    SELECT pk FROM tab4 WHERE (((69.61 < col1 AND ((56 > col0) OR (((col4 IN (SELECT col1 FROM tab4 WHERE (((17 = col3)) AND 8 <= col0)) AND (col3 IN (80,11,7)) OR 85 <= col0 OR (col1 IN (25.91)) OR 9.62 < col1 AND 70.66 < col4 AND 29.33 <= col4 OR 4 = col3 AND 27 >= col0 AND 86.19 <= col4))) OR 56 < col3 AND ((58 < col3)) OR 60 < col0) OR (63.28 = col4) AND 36 < col0 OR (66 <= col0 OR ((26 > col0)) AND (17 >= col0)) AND 7.31 >= col1 AND 21 <= col3 OR 64 < col0 AND ((0.82 > col4 OR (35 <= col3 AND 93 < col3))) OR 85.97 = col4 AND col4 BETWEEN 96.59 AND 43.82 OR ((27 < col0 OR 72.31 > col1)) AND ((col1 IS NULL)) OR 45 <= col0 AND (62.9 < col4 AND 17 <= col3 OR ((74 <= col0 OR 55.17 < col1 OR 5 >= col0 AND 92.81 < col4))) AND 49 < col3 AND (col0 IS NULL) AND 77 <= col3 AND (((((50.4 < col4)) AND 46 = col3 AND (38 > col3) OR 53 > col3))) AND (56 > col3) OR (19.61 <= col4) AND 72 <= col3 AND (col0 IS NULL) AND 8 > col3 OR (34 <= col3) AND 86 < col3) AND 48 >= col0)) AND 89 >= col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l26197 {
+    SELECT pk FROM tab4 WHERE (39 < col0) OR col4 IN (25.18,32.25);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l26407 {
+    SELECT pk FROM tab2 WHERE (85.41 <= col4);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l26468 {
+    SELECT pk FROM tab4 WHERE 15.26 >= col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l26502 {
+    SELECT pk FROM tab3 WHERE col1 > 59.58;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l26640 {
+    SELECT pk FROM tab3 WHERE (12 > col3) OR 4 >= col0;
+}
+expect unordered {
+}
+
+@setup s1
+test l26672 {
+    SELECT pk FROM tab2 WHERE col0 IN (SELECT col3 FROM tab2 WHERE 60.99 > col4);
+}
+expect unordered {
+}
+
+@setup s1
+test l26822 {
+    SELECT pk FROM tab0 WHERE col0 > 12 OR col3 IS NULL AND col4 = 12.70;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l26884 {
+    SELECT pk FROM tab1 WHERE 3.38 > col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l26967 {
+    SELECT pk FROM tab0 WHERE 89 < col3 AND 7 >= col0 OR (58 > col3) AND 1 > col3 AND 14 >= col0 AND 53.46 <= col4 OR (((89 < col3) AND col3 IS NULL OR 80.65 = col1 AND (col1 IS NULL)) AND (((65 < col0))) OR col0 IN (49,92,37,30,55,51) AND 70.11 < col1 OR ((col1 BETWEEN 37.66 AND 66.94 OR 27.58 > col4 OR 59.48 > col4 OR (((54 <= col0)) OR (94 = col3) AND 82 >= col0))) AND (32 > col3) OR (61.2 <= col1)) OR 65 = col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l27312 {
+    SELECT pk FROM tab4 WHERE ((col0 IS NULL OR col0 >= 48 OR col3 >= 34 AND col4 <= 82.15) AND (((col1 > 99.37))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l27430 {
+    SELECT pk FROM tab1 WHERE (col3 <= 41 AND col4 <= 90.89 AND (((col4 <= 44.73 AND col1 < 57.90 OR col3 > 0) OR col3 BETWEEN 62 AND 87 OR col1 IS NULL AND (col4 < 30.29 OR col1 IN (93.60,62.64,24.51)))) AND ((((((((col4 <= 64.39))) OR (((col0 <= 35)) AND col4 >= 50.96 AND col3 < 81 AND col3 = 57)) AND ((col3 < 80 AND col0 >= 63)))))));
+}
+expect unordered {
+}
+
+@setup s1
+test l27490 {
+    SELECT pk FROM tab3 WHERE col1 IN (22.16,37.73,8.8,41.52,31.11,37.64) AND 19 > col3 AND 23.57 <= col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l28108 {
+    SELECT pk FROM tab2 WHERE col1 <= 51.18 AND ((col3 > 85)) OR (col4 < 64.7) AND col0 < 43 OR col3 = 29 OR (((col4 < 46.42))) OR col3 <= 79 OR col0 <= 38;
+}
+expect unordered {
+}
+
+@setup s1
+test l28192 {
+    SELECT pk FROM tab2 WHERE 2.73 > col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l28432 {
+    SELECT pk FROM tab3 WHERE col1 >= 84.89;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l28484 {
+    SELECT pk FROM tab4 WHERE col0 IS NULL AND col3 > 96;
+}
+expect unordered {
+}
+
+@setup s1
+test l28656 {
+    SELECT pk FROM tab3 WHERE col0 > 24 AND ((col0 < 11) OR col3 < 11 OR (col0 > 0 AND col3 = 43 AND col0 > 1 AND col0 < 92 OR col1 >= 86.89 AND col4 >= 84.42 AND col3 IS NULL OR col0 < 46 AND (col0 >= 21) AND col4 = 14.30 OR col0 >= 45 AND col1 <= 59.80 AND col0 > 32 OR col1 > 92.46 AND col3 >= 14 OR col3 IN (45,15,77,34,17,0) AND col3 >= 48 AND col0 >= 51 OR col1 = 61.25 OR col3 IS NULL) AND col0 = 71) AND col3 IS NULL OR ((col0 < 98) AND col1 > 83.13);
+}
+expect unordered {
+}
+
+@setup s1
+test l28817 {
+    SELECT pk FROM tab2 WHERE (30 < col0 AND 49.24 < col4 OR (col0 IS NULL) AND 43 >= col3 AND (((66 >= col0) AND col1 IN (SELECT col4 FROM tab2 WHERE 80 < col0))) OR (30 < col3) OR 39 <= col3 OR 79 < col3 AND 41 > col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l28967 {
+    SELECT pk FROM tab0 WHERE 90.68 < col1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l28982 {
+    SELECT pk FROM tab2 WHERE col1 > 90.68;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l29352 {
+    SELECT pk FROM tab0 WHERE col0 >= 65 AND (col3 <= 9);
+}
+expect unordered {
+}
+
+@setup s1
+test l29448 {
+    SELECT pk FROM tab2 WHERE ((col1 < 12.92) AND ((col0 > 22 AND ((col0 = 44 AND (((col1 < 24.42))) AND col0 > 18 AND col3 > 13 AND (col4 <= 73.35 AND col0 <= 74)) OR col0 < 31))));
+}
+expect unordered {
+}
+
+@setup s1
+test l29538 {
+    SELECT pk FROM tab2 WHERE col4 < 47.61;
+}
+expect unordered {
+}
+
+@setup s1
+test l29598 {
+    SELECT pk FROM tab4 WHERE col4 IN (4.66,91.4) AND (((44 >= col0)));
+}
+expect unordered {
+}
+
+@setup s1
+test l29857 {
+    SELECT pk FROM tab2 WHERE 24 <= col0 AND 50.15 <= col1 AND ((91 > col0 OR ((94.11 < col1)))) OR 33 < col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l29897 {
+    SELECT pk FROM tab1 WHERE ((93.35 < col4 OR (((43 > col3)) OR ((40.85 > col1) OR ((59.24 > col4)) AND 36.70 <= col4 OR 41 > col3) AND (99 <= col3) AND 75 < col3) OR (37.12 > col1) AND 48.10 <= col4 OR (32 > col3))) OR 35 <= col0;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l30054 {
+    SELECT pk FROM tab4 WHERE col1 IS NULL AND (col0 > 12) AND col3 <= 69;
+}
+expect unordered {
+}
+
+@setup s1
+test l30186 {
+    SELECT pk FROM tab0 WHERE (col0 BETWEEN 10 AND 32 AND ((89 > col3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l30194 {
+    SELECT pk FROM tab1 WHERE (col0 BETWEEN 10 AND 32 AND ((89 > col3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l30222 {
+    SELECT pk FROM tab0 WHERE col1 <= 13.38;
+}
+expect unordered {
+}
+
+@setup s1
+test l30322 {
+    SELECT pk FROM tab2 WHERE 82.86 = col4 OR (54.28 > col1) AND ((3.84 >= col4));
+}
+expect unordered {
+}
+
+@setup s1
+test l30632 {
+    SELECT pk FROM tab0 WHERE (col0 >= 77) AND (col4 < 46.84 AND ((col0 > 58))) AND (col0 > 60 AND ((col0 <= 4) AND col1 < 88.40) AND (col1 <= 41.86) AND col4 = 66.94) AND (col3 >= 26 OR col4 < 84.62 AND col0 > 56);
+}
+expect unordered {
+}
+
+@setup s1
+test l30797 {
+    SELECT pk FROM tab2 WHERE 18.9 < col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l30956 {
+    SELECT pk FROM tab0 WHERE 45.68 >= col4 AND 54 > col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l31120 {
+    SELECT pk FROM tab3 WHERE 38.47 > col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l31194 {
+    SELECT pk FROM tab1 WHERE ((8 < col3) AND (98 = col3) AND 62 <= col3) OR 27.23 > col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l31210 {
+    SELECT pk FROM tab3 WHERE ((8 < col3) AND (98 = col3) AND 62 <= col3) OR 27.23 > col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l31547 {
+    SELECT pk FROM tab0 WHERE 47 <= col3 OR 36 <= col3 AND ((53.27 > col4) OR col1 IS NULL);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l31620 {
+    SELECT pk FROM tab3 WHERE ((17 >= col3));
+}
+expect unordered {
+}
+
+@setup s1
+test l31692 {
+    SELECT pk FROM tab2 WHERE 1.14 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l32097 {
+    SELECT pk FROM tab2 WHERE 82.98 <= col1 OR 67 > col3 AND (79 < col3);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l32176 {
+    SELECT pk FROM tab0 WHERE (67.73 > col4 AND 30 >= col3);
+}
+expect unordered {
+}
+
+@setup s1
+test l32287 {
+    SELECT pk FROM tab2 WHERE 15.78 <= col1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l32536 {
+    SELECT pk FROM tab3 WHERE ((col3 = 71));
+}
+expect unordered {
+}
+
+@setup s1
+test l32714 {
+    SELECT pk FROM tab1 WHERE (67.93 > col1);
+}
+expect unordered {
+}
+
+@setup s1
+test l32782 {
+    SELECT pk FROM tab0 WHERE ((col1 >= 88.16 OR col3 <= 91 AND ((col3 < 3) OR col0 IN (97,18)) AND col3 = 96 OR ((col1 >= 4.15 OR col1 > 68.41 OR ((col3 = 8))) OR col1 >= 3.14) AND col3 IN (SELECT col0 FROM tab0 WHERE col3 >= 46) AND col4 < 23.38));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l32822 {
+    SELECT pk FROM tab4 WHERE ((col1 >= 88.16 OR col3 <= 91 AND ((col3 < 3) OR col0 IN (97,18)) AND col3 = 96 OR ((col1 >= 4.15 OR col1 > 68.41 OR ((col3 = 8))) OR col1 >= 3.14) AND col3 IN (SELECT col0 FROM tab4 WHERE col3 >= 46) AND col4 < 23.38));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l33022 {
+    SELECT pk FROM tab1 WHERE col4 >= 36.7;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l33257 {
+    SELECT pk FROM tab1 WHERE (83 <= col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l33386 {
+    SELECT pk FROM tab0 WHERE 25 = col0 OR col3 IS NULL AND col4 BETWEEN 7.44 AND 56.32 AND 31 = col0 AND (((55 <= col3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l33632 {
+    SELECT pk FROM tab2 WHERE (col4 = 36.84 OR (col0 < 76) OR (((col3 > 48) OR col3 > 89) OR col4 < 54.45) AND col0 < 66 AND col3 > 63 AND (col1 = 8.35 AND (col0 = 90) AND col0 > 55) OR col0 > 12);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l33647 {
+    SELECT pk FROM tab3 WHERE (36.84 = col4 OR (76 > col0) OR (((48 < col3) OR 89 < col3) OR 54.45 > col4) AND 66 > col0 AND 63 < col3 AND (8.35 = col1 AND (90 = col0) AND 55 < col0) OR 12 < col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l33847 {
+    SELECT pk FROM tab0 WHERE 42 = col0 OR 16 <= col0;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l33852 {
+    SELECT pk FROM tab1 WHERE col0 = 42 OR col0 >= 16;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l34292 {
+    SELECT pk FROM tab2 WHERE (col4 < 74.23 OR col1 <= 85.45 AND col3 >= 51 AND (col4 = 92.37)) OR (col1 >= 93.50) OR col0 >= 87;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l34632 {
+    SELECT pk FROM tab0 WHERE col1 <= 87.7;
+}
+expect unordered {
+}
+
+@setup s1
+test l34644 {
+    SELECT pk FROM tab1 WHERE 87.7 >= col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l34768 {
+    SELECT pk FROM tab2 WHERE (col0 IS NULL AND (col1 < 58.1));
+}
+expect unordered {
+}
+
+@setup s1
+test l34937 {
+    SELECT pk FROM tab2 WHERE col3 IS NULL OR (((38 < col3)) AND (59.34 < col4)) OR (((53 = col3))) AND 81 <= col3 OR ((((75 = col0))) OR ((80 = col0) OR (((44 >= col3))))) OR 0 > col0 OR 87 < col3 AND 5 > col3 OR 71 > col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l35087 {
+    SELECT pk FROM tab3 WHERE ((91 < col0));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l35242 {
+    SELECT pk FROM tab2 WHERE ((58 >= col3)) OR (60 < col3) AND (98 = col0) AND (23 <= col0) AND ((88 <= col3 OR 65 > col3)) AND (89.23 > col4) AND (((41.46 > col4))) AND 26 <= col0 OR 91 >= col0;
+}
+expect unordered {
+}
+
+@setup s1
+test l35317 {
+    SELECT pk FROM tab0 WHERE (98 < col3) OR ((((((48 < col3 OR 82 = col3 AND 44.64 < col1) OR (((14.21 >= col1) AND 79.87 < col4 AND (78 > col3 AND (80 < col0) AND (86.85 >= col4 AND ((40.52 >= col1 OR (col0 IS NULL OR (56 < col0)) AND 57.83 = col1 OR 57 <= col3 OR 34.80 <= col4)) AND ((col4 IS NULL) OR ((18 < col0) AND 49.73 < col4) AND 36 = col0 OR 98 <= col3 AND 96.64 <= col1) AND 67 >= col3 OR (24 > col0) OR (12.2 = col4) AND (((28 < col3) OR ((91 > col3 AND ((16 > col3))) OR ((((((col4 IS NULL)) AND ((29 <= col0 AND col0 IN (81,95,53,84,0,91)) OR 14.84 > col4) AND col3 IS NULL AND (((51 < col0))) AND (2 > col3) OR (col3 IN (15,97,45)) AND 22.99 < col4 AND (1.89 < col4 OR (((74.44 <= col4 OR col3 IN (99,45,38,64,9) OR (42 <= col3)) AND ((col4 IN (SELECT col1 FROM tab0 WHERE 21 > col3) AND (col3 IN (72,52,50,13,2,1)) OR 43 > col3) AND ((((72 > col0 OR 49 >= col0 AND 90 < col0 OR 2 <= col0)))) OR 16 = col3 AND 1.43 > col4)))) AND ((0.92 = col1))))) AND 3.22 > col1))) OR col4 IS NULL AND (((47.22 > col1) OR 59.89 < col1)) AND (((46 <= col3 AND 2 < col0) OR 35 < col0)))) OR 43.69 >= col1))))) AND col4 IN (15.78,69.76,98.70,30.16,45.63,69.92) AND 54 >= col3 AND (22 < col3)) OR 51.51 <= col4) OR 86 < col3 AND ((2 < col0)) AND 39 < col3 AND col3 IS NULL) AND (68 <= col0) AND 79 <= col3 OR ((22 <= col0 OR (3.9 <= col4)) AND 62 < col0) AND col0 IS NULL;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l35342 {
+    SELECT pk FROM tab3 WHERE (col3 > 98) OR ((((((col3 > 48 OR col3 = 82 AND col1 > 44.64) OR (((col1 <= 14.21) AND col4 > 79.87 AND (col3 < 78 AND (col0 > 80) AND (col4 <= 86.85 AND ((col1 <= 40.52 OR (col0 IS NULL OR (col0 > 56)) AND col1 = 57.83 OR col3 >= 57 OR col4 >= 34.80)) AND ((col4 IS NULL) OR ((col0 > 18) AND col4 > 49.73) AND col0 = 36 OR col3 >= 98 AND col1 >= 96.64) AND col3 <= 67 OR (col0 < 24) OR (col4 = 12.2) AND (((col3 > 28) OR ((col3 < 91 AND ((col3 < 16))) OR ((((((col4 IS NULL)) AND ((col0 >= 29 AND col0 IN (81,95,53,84,0,91)) OR col4 < 14.84) AND col3 IS NULL AND (((col0 > 51))) AND (col3 < 2) OR (col3 IN (15,97,45)) AND col4 > 22.99 AND (col4 > 1.89 OR (((col4 >= 74.44 OR col3 IN (99,45,38,64,9) OR (col3 >= 42)) AND ((col4 IN (SELECT col1 FROM tab3 WHERE col3 < 21) AND (col3 IN (72,52,50,13,2,1)) OR col3 < 43) AND ((((col0 < 72 OR col0 <= 49 AND col0 > 90 OR col0 >= 2)))) OR col3 = 16 AND col4 < 1.43)))) AND ((col1 = 0.92))))) AND col1 < 3.22))) OR col4 IS NULL AND (((col1 < 47.22) OR col1 > 59.89)) AND (((col3 >= 46 AND col0 > 2) OR col0 > 35)))) OR col1 <= 43.69))))) AND col4 IN (15.78,69.76,98.70,30.16,45.63,69.92) AND col3 <= 54 AND (col3 > 22)) OR col4 >= 51.51) OR col3 > 86 AND ((col0 > 2)) AND col3 > 39 AND col3 IS NULL) AND (col0 >= 68) AND col3 >= 79 OR ((col0 >= 22 OR (col4 >= 3.9)) AND col0 > 62) AND col0 IS NULL;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l35390 {
+    SELECT pk FROM tab3 WHERE col0 IN (17,35) OR 60.38 > col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l35422 {
+    SELECT pk FROM tab2 WHERE (96.26 >= col1) AND col3 IN (10,97,29,90,82) OR 73 > col3 OR 55 >= col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l35522 {
+    SELECT pk FROM tab4 WHERE (((col1 >= 29.68) OR col0 < 40 AND ((col0 > 6)) AND col1 > 6.26 AND (col0 = 90) AND col1 <= 83.54) OR (((col1 <= 66.45 AND col3 < 64 OR (col0 >= 68) OR col4 < 90.44))) AND col0 = 96 AND col4 > 94.84 OR ((col3 > 95)));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l35682 {
+    SELECT pk FROM tab0 WHERE (col4 >= 57.21);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l36297 {
+    SELECT pk FROM tab4 WHERE ((91.72 <= col4)) OR 69 > col0 AND (15 <= col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l36317 {
+    SELECT pk FROM tab1 WHERE col3 BETWEEN 10 AND 46 OR 25.24 <= col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l36608 {
+    SELECT pk FROM tab2 WHERE col3 = 41 OR ((col3 IS NULL));
+}
+expect unordered {
+}
+
+@setup s1
+test l36662 {
+    SELECT pk FROM tab3 WHERE ((((col3 >= 14)) AND (col4 < 44.89) AND col1 < 49.72 OR (col1 <= 56.58 AND col0 >= 39 OR col0 IS NULL)) OR col4 >= 54.26 AND (col1 >= 42.25));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l36904 {
+    SELECT pk FROM tab4 WHERE (col1 < 5.63);
+}
+expect unordered {
+}
+
+@setup s1
+test l36970 {
+    SELECT pk FROM tab1 WHERE (col1 < 23.33 OR col0 > 49 AND col3 >= 88 AND (col0 IS NULL AND col0 >= 5 AND col0 <= 0));
+}
+expect unordered {
+}
+
+@setup s1
+test l37372 {
+    SELECT pk FROM tab2 WHERE 15 = col0 AND (92.76 > col4);
+}
+expect unordered {
+}
+
+@setup s1
+test l37542 {
+    SELECT pk FROM tab2 WHERE col0 <= 86 OR (col0 >= 84 AND (col0 > 10));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l37632 {
+    SELECT pk FROM tab2 WHERE col3 = 24 AND col4 < 84.66 OR (((col0 > 40 AND ((col3 IS NULL))))) AND ((col1 > 36.84) AND (col4 < 79.27) AND ((((col3 >= 9)))) AND col1 < 11.50) OR (col1 > 34.65 AND (col3 >= 44)) AND col3 < 75 OR col0 >= 78 OR col4 < 88.37;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l38127 {
+    SELECT pk FROM tab2 WHERE (31 <= col0) OR ((43 = col0 AND ((85.27 < col1 OR ((49 = col0)) OR 58 >= col0)) AND 97 > col3 OR (98 > col3) AND 70 <= col3 AND 64 <= col3 OR ((52 = col0 OR ((57.99 > col1)) OR (col0 IN (68,11,7)))) AND 36 = col0)) AND (89 < col0) OR (93.37 < col4 AND col0 BETWEEN 40 AND 98);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l38488 {
+    SELECT pk FROM tab2 WHERE col4 IN (SELECT col1 FROM tab2 WHERE col0 = 0);
+}
+expect unordered {
+}
+
+@setup s1
+test l39134 {
+    SELECT pk FROM tab1 WHERE 66 < col0 AND (52 >= col0 AND 38 = col3) AND ((75 > col0)) AND 31 < col3;
+}
+expect unordered {
+}
+
+@setup s1
+test l39526 {
+    SELECT pk FROM tab3 WHERE (col4 <= 67.48 AND (col0 >= 70));
+}
+expect unordered {
+}
+
+@setup s1
+test l39552 {
+    SELECT pk FROM tab1 WHERE col0 > 82 AND col1 < 31.0 OR col3 > 98;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l39722 {
+    SELECT pk FROM tab4 WHERE (col4 >= 47.34);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l39772 {
+    SELECT pk FROM tab4 WHERE ((col0 < 15) AND (col0 <= 32 AND col0 IN (76,34,74)) OR col0 >= 43);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l39777 {
+    SELECT pk FROM tab4 WHERE ((15 > col0) AND (32 >= col0 AND col0 IN (76,34,74)) OR 43 <= col0);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l39860 {
+    SELECT pk FROM tab3 WHERE (col0 IS NULL AND 59.18 <= col1 AND 51.62 <= col1 AND (((((((col1 BETWEEN 80.33 AND 19.95 AND 81.98 < col1))) AND 68 < col3 OR (25 <= col3 OR ((((29.80 >= col1) AND 65.73 < col1 OR 1.34 > col4) AND (24 >= col3) AND 12 < col0)) OR 75 <= col0) AND ((73 > col3 OR col4 BETWEEN 73.48 AND 87.89)) AND col3 IN (65))) AND 39 <= col0 OR 27 >= col0)) OR 92 >= col0 OR (35.7 = col4) OR ((col3 IS NULL AND (96 <= col0) AND 63 > col0 AND 83.17 >= col1 OR (43 < col0 OR 28 < col3 AND 79.72 >= col4 AND col0 IS NULL OR (col1 IS NULL) AND 42 > col0) OR 22.5 > col1 AND 46.62 > col4 OR 66 < col3) AND 51.22 < col4 AND (55.83 <= col4) AND (30.3 <= col1) AND (77 <= col0 AND 52 <= col3) AND 14 > col3) AND (96 < col0) AND 66.75 > col1);
+}
+expect unordered {
+}
+
+@setup s1
+test l39942 {
+    SELECT pk FROM tab2 WHERE ((col0 > 50) OR col0 >= 72);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l40057 {
+    SELECT pk FROM tab4 WHERE 71.32 < col4;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l40538 {
+    SELECT pk FROM tab4 WHERE (30 > col3 AND 36 >= col0);
+}
+expect unordered {
+}
+
+@setup s1
+test l40596 {
+    SELECT pk FROM tab0 WHERE (71.93 >= col4);
+}
+expect unordered {
+}
+
+@setup s1
+test l40668 {
+    SELECT pk FROM tab4 WHERE 85 <= col0 AND (22 < col0) AND 92 >= col0 AND (((34.50 < col4))) AND 26.32 <= col4 AND 72 < col0 OR 89.60 > col4 AND (52 = col3);
+}
+expect unordered {
+}
+
+@setup s1
+test l40916 {
+    SELECT pk FROM tab3 WHERE (col4 = 97.63);
+}
+expect unordered {
+}
+
+@setup s1
+test l40984 {
+    SELECT pk FROM tab1 WHERE (42.51 > col1);
+}
+expect unordered {
+}
+
+@setup s1
+test l41264 {
+    SELECT pk FROM tab4 WHERE col4 > 5.32 AND (col4 < 34.68);
+}
+expect unordered {
+}
+
+@setup s1
+test l41282 {
+    SELECT pk FROM tab1 WHERE (col4 > 65.66);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l41402 {
+    SELECT pk FROM tab0 WHERE col4 <= 38.56;
+}
+expect unordered {
+}
+
+@setup s1
+test l42154 {
+    SELECT pk FROM tab1 WHERE (8 >= col0 OR ((69 > col3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l42318 {
+    SELECT pk FROM tab4 WHERE 93.53 = col4;
+}
+expect unordered {
+}
+
+@setup s1
+test l42367 {
+    SELECT pk FROM tab0 WHERE (81 <= col3) AND (((61 <= col0 AND 23 < col3 OR (55 = col0))) OR ((19 <= col0)) AND 99 <= col3);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l42382 {
+    SELECT pk FROM tab2 WHERE (col3 >= 81) AND (((col0 >= 61 AND col3 > 23 OR (col0 = 55))) OR ((col0 >= 19)) AND col3 >= 99);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l42416 {
+    SELECT pk FROM tab0 WHERE (14.69 >= col1);
+}
+expect unordered {
+}
+
+@setup s1
+test l42604 {
+    SELECT pk FROM tab1 WHERE (88 >= col3) OR 80.58 > col1;
+}
+expect unordered {
+}
+
+@setup s1
+test l42684 {
+    SELECT pk FROM tab1 WHERE 83 > col0 AND (((80 < col3 AND 35 < col0 AND 97 = col3 AND 78 > col0 OR 95 = col0 AND 79.24 >= col1 AND (col0 IS NULL) AND (col3 IS NULL) OR 5 = col3)));
+}
+expect unordered {
+}
+
+@setup s1
+test l42806 {
+    SELECT pk FROM tab0 WHERE (78.83 = col4 AND 35 > col0);
+}
+expect unordered {
+}
+
+@setup s1
+test l43282 {
+    SELECT pk FROM tab3 WHERE (col4 > 96.19);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l43377 {
+    SELECT pk FROM tab2 WHERE 28.16 < col1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l43487 {
+    SELECT pk FROM tab4 WHERE 62.75 <= col1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l43537 {
+    SELECT pk FROM tab4 WHERE (((96.10 <= col4) AND 55 < col3)) OR 94.51 <= col1 AND ((((7.68 = col4))));
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l43577 {
+    SELECT pk FROM tab3 WHERE 0.79 < col1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l43714 {
+    SELECT pk FROM tab4 WHERE (col1 < 96.85);
+}
+expect unordered {
+}
+
+@setup s1
+test l44362 {
+    SELECT pk FROM tab0 WHERE col1 > 44.97 AND (col3 IN (82,90,62,1,52));
+}
+expect unordered {
+}
+
+@setup s1
+test l44442 {
+    SELECT pk FROM tab4 WHERE ((col0 > 99)) OR col3 > 97;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l44447 {
+    SELECT pk FROM tab4 WHERE ((99 < col0)) OR 97 < col3;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l44484 {
+    SELECT pk FROM tab4 WHERE col4 < 27.87;
+}
+expect unordered {
+}
