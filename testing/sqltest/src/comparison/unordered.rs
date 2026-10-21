@@ -1,35 +1,40 @@
 use super::{ComparisonResult, parse_expected_rows};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
-/// Compare rows as sets (order-independent)
+/// Compare rows as multisets: the order is free, but every row must appear
+/// as many times as expected.
 pub fn compare(actual: &[Vec<String>], expected_lines: &[String]) -> ComparisonResult {
     let expected_rows = parse_expected_rows(expected_lines);
 
-    // Convert to sets of formatted rows
-    let actual_set: HashSet<String> = actual.iter().map(|row| row.join("|")).collect();
-    let expected_set: HashSet<String> = expected_rows.iter().map(|row| row.join("|")).collect();
-
-    if actual_set == expected_set {
+    // Occurrences in the actual rows minus occurrences in the expected rows.
+    let mut balance: HashMap<String, i64> = HashMap::new();
+    for row in actual {
+        *balance.entry(row.join("|")).or_default() += 1;
+    }
+    for row in &expected_rows {
+        *balance.entry(row.join("|")).or_default() -= 1;
+    }
+    if balance.values().all(|count| *count == 0) {
         return ComparisonResult::Match;
     }
 
-    // Find differences
-    let missing: Vec<_> = expected_set.difference(&actual_set).collect();
-    let extra: Vec<_> = actual_set.difference(&expected_set).collect();
-
+    let mut rows: Vec<(String, i64)> = balance.into_iter().filter(|(_, c)| *c != 0).collect();
+    rows.sort();
     let mut reason = String::new();
-
-    if !missing.is_empty() {
-        reason.push_str("Missing rows:\n");
-        for row in &missing {
-            reason.push_str(&format!("  - {row}\n"));
-        }
-    }
-
-    if !extra.is_empty() {
-        reason.push_str("Extra rows:\n");
-        for row in &extra {
-            reason.push_str(&format!("  + {row}\n"));
+    for (heading, sign, missing) in [
+        ("Missing rows:\n", '-', true),
+        ("Extra rows:\n", '+', false),
+    ] {
+        let mut lines = rows
+            .iter()
+            .filter(|(_, count)| (*count < 0) == missing)
+            .flat_map(|(row, count)| std::iter::repeat_n(row, count.unsigned_abs() as usize))
+            .peekable();
+        if lines.peek().is_some() {
+            reason.push_str(heading);
+            for row in lines {
+                reason.push_str(&format!("  {sign} {row}\n"));
+            }
         }
     }
 
@@ -101,6 +106,29 @@ mod tests {
             assert!(reason.contains("Extra rows"));
             assert!(reason.contains("3"));
         }
+    }
+
+    #[test]
+    fn test_unordered_counts_duplicate_rows() {
+        let rows = |values: &[&str]| -> Vec<Vec<String>> {
+            values.iter().map(|v| vec![v.to_string()]).collect()
+        };
+        let expected = vec!["1".to_string(), "1".to_string(), "2".to_string()];
+        assert!(compare(&rows(&["1", "2", "1"]), &expected).is_match());
+
+        let result = compare(&rows(&["1", "2"]), &expected);
+        assert_eq!(
+            result,
+            ComparisonResult::mismatch("Missing rows:\n  - 1\n"),
+            "a missing duplicate is a mismatch"
+        );
+
+        let result = compare(&rows(&["1", "1", "1", "2", "2"]), &expected);
+        assert_eq!(
+            result,
+            ComparisonResult::mismatch("Extra rows:\n  + 1\n  + 2\n"),
+            "an extra duplicate is a mismatch"
+        );
     }
 
     #[test]

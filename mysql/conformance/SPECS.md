@@ -214,9 +214,9 @@ receives:
 
 The string `'NULL'` and SQL `NULL` render identically. In exact mode an empty
 result and a single empty value both render as an empty block. `expect
-unordered` compares rows as a set (the runner's comparator), so it does not
-distinguish duplicate rows; its rows are written sorted so that re-recording is
-byte-identical. When a value starts or ends with whitespace, which `expect`
+unordered` compares rows as a multiset (the runner's comparator): order is
+free, but every row must appear as often as MySQL returned it. Its rows are
+written sorted so that re-recording is byte-identical. When a value starts or ends with whitespace, which `expect`
 blocks trim, an ordered or single-row result is written as an unindented
 `expect raw` block instead.
 

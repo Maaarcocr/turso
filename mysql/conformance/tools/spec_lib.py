@@ -186,10 +186,9 @@ def expectation_round_trips(rows, ordered, raw=False):
         if format_rows(parsed) != format_rows(rows):
             return "row text is altered by sqltest trimming"
     else:
+        # The runner compares unordered rows as multisets.
         parsed = expected_rows(parse_unordered_lines(content))
-        actual_set = {"|".join(row) for row in rows}
-        expected_set = {"|".join(row) for row in parsed}
-        if actual_set != expected_set:
+        if sorted(format_rows([row]) for row in parsed) != sorted(format_rows([row]) for row in rows):
             return "row text is altered by sqltest trimming"
     return None
 
