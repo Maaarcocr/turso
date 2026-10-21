@@ -7,9 +7,9 @@ This directory contains the schema, pinned-source manifest, and import recipes f
 The repository includes 5,000 Apache-2.0 cases mined from the pinned go-mysql-server `enginetest` fixtures:
 
 - 67 Go fixture files scanned
-- 13,130 static query assertions extracted
+- 13,129 static query assertions extracted (one more is not valid UTF-8 once its Go byte escapes are decoded)
 - 5,004 static setup statements extracted
-- 13,519 unique candidates after deduplication
+- 13,518 unique candidates after deduplication
 - 5,000 cases selected across eleven rough implementation levels
 - 4,494 positive syntax expectations and 506 source error cases awaiting oracle classification
 
@@ -28,7 +28,7 @@ These first cases are syntax requirements with source intent and rough feature c
 
 ## Reproduce or expand the corpus
 
-Regenerate the tracked Apache-licensed corpus, or set `GO_MYSQL_SERVER_LIMIT=0` to emit all 13,519 currently extractable cases:
+Regenerate the tracked Apache-licensed corpus, or set `GO_MYSQL_SERVER_LIMIT=0` to emit all 13,518 currently extractable cases:
 
 ```bash
 CARGO=/path/to/cargo ./mysql/conformance/mine-go-mysql-server.sh

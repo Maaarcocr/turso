@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 import argparse
-import ast
 import collections
 import dataclasses
 import hashlib
 import json
 import pathlib
 import re
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import go_source  # noqa: E402
 
 SCHEMA_VERSION = 1
 REPOSITORY = "https://github.com/dolthub/go-mysql-server.git"
@@ -52,10 +56,10 @@ def tokenize_go(source):
             end = source.find("`", index + 1)
             if end < 0:
                 raise ValueError(f"unterminated raw string at line {line}")
-            value = source[index + 1 : end]
-            line += value.count("\n")
+            literal = source[index : end + 1]
+            line += literal.count("\n")
             index = end + 1
-            tokens.append(Token("string", value, start, index, start_line))
+            tokens.append(Token("string", decode_literal(literal), start, index, start_line))
             continue
         if character == '"':
             start = index
@@ -75,8 +79,8 @@ def tokenize_go(source):
                 raise ValueError(f"unterminated interpreted string at line {start_line}")
             literal = source[start:index]
             try:
-                value = ast.literal_eval(literal)
-            except (SyntaxError, ValueError) as error:
+                value = decode_literal(literal)
+            except ValueError as error:
                 raise ValueError(f"unsupported Go string at line {start_line}: {error}") from error
             tokens.append(Token("string", value, start, index, start_line))
             continue
@@ -113,6 +117,8 @@ def tokenize_go(source):
     pairs = {}
     for token_index, token in enumerate(tokens):
         token.parent = stack[-1] if stack else None
+        if token.kind != "punct":
+            continue
         if token.value == "{":
             stack.append(token_index)
         elif token.value == "}":
@@ -123,6 +129,18 @@ def tokenize_go(source):
     if stack:
         raise ValueError(f"unmatched opening brace at line {tokens[stack[-1]].line}")
     return tokens, pairs
+
+
+def decode_literal(literal):
+    """Decode a Go string literal; ``None`` when its bytes are not valid UTF-8.
+
+    Go strings are byte sequences, so ``\\xNN`` and octal escapes are bytes that
+    must be decoded together as UTF-8 (``"\\xef\\xbf\\xbd"`` is U+FFFD).
+    """
+    try:
+        return go_source.decode_string_bytes(literal).decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
 def parse_string_expression(tokens, start, parent):
@@ -138,6 +156,8 @@ def parse_string_expression(tokens, start, parent):
         index += 2
     if index < len(tokens) and tokens[index].parent == parent and tokens[index].value not in {",", "}"}:
         return None
+    if any(piece is None for piece in pieces):
+        return None, line, index
     return "".join(pieces), line, index
 
 
@@ -196,6 +216,9 @@ def extract_file(path, root, revision):
                 stats["dynamic_query"] += 1
                 continue
             sql, line, _ = parsed
+            if sql is None:
+                stats["non_utf8_query"] += 1
+                continue
             if not sql.strip():
                 stats["empty"] += 1
                 continue
@@ -237,7 +260,9 @@ def extract_file(path, root, revision):
                     parsed = parse_string_expression(tokens, cursor, opening)
                     if parsed:
                         sql, line, cursor = parsed
-                        if sql.strip():
+                        if sql is None:
+                            stats["non_utf8_setup"] += 1
+                        elif sql.strip():
                             cases.append(
                                 make_case(
                                     sql=sql,
