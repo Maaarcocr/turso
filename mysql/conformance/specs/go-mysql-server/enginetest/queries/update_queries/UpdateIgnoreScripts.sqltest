@@ -1,0 +1,239 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/update_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE pkTable(pk int, val int, primary key(pk, val));
+    INSERT INTO pkTable VALUES (1, 1), (2, 2), (3, 3);
+}
+
+setup s2 {
+    UPDATE IGNORE pkTable set pk = pk + 1, val = val + 1;
+}
+
+setup s3 {
+    CREATE TABLE idxTable(pk int primary key, val int UNIQUE);
+    INSERT INTO idxTable VALUES (1, 1), (2, 2), (3, 3);
+}
+
+setup s4 {
+    UPDATE IGNORE idxTable set val = val + 1;
+}
+
+setup s5 {
+    UPDATE IGNORE pkTable set val = val + 1 where pk = 2;
+}
+
+setup s6 {
+    UPDATE IGNORE pkTable SET pk = NULL;
+}
+
+setup s7 {
+    UPDATE IGNORE pkTable SET val = NULL;
+}
+
+setup s8 {
+    UPDATE IGNORE idxTable set pk = pk + 1, val = val + 1;
+}
+
+setup s9 {
+    CREATE TABLE t1 (pk int primary key, v1 int, v2 int);
+    INSERT INTO t1 VALUES (1, 1, 1);
+}
+
+setup s10 {
+    UPDATE IGNORE t1 SET v1 = 'dsddads';
+}
+
+setup s11 {
+    UPDATE IGNORE t1 SET pk = 'dasda', v2 = 'dsddads';
+}
+
+setup s12 {
+    CREATE TABLE checksTable(pk int primary key);
+    ALTER TABLE checksTable ADD CONSTRAINT mycx CHECK (pk < 5);
+    INSERT INTO checksTable VALUES (1),(2),(3),(4);
+}
+
+setup s13 {
+    UPDATE IGNORE checksTable SET pk = pk + 1 where pk = 4;
+}
+
+@setup s1
+test l868 {
+    UPDATE IGNORE pkTable set pk = pk + 1, val = val + 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l874 {
+    SELECT * FROM pkTable order by pk;
+}
+expect {
+    1|1
+    2|2
+    4|4
+}
+
+@setup s3
+test l878 {
+    UPDATE IGNORE idxTable set val = val + 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l884 {
+    SELECT * FROM idxTable order by pk;
+}
+expect {
+    1|1
+    2|2
+    3|4
+}
+
+@setup s1
+@setup s2
+test l888 {
+    UPDATE IGNORE pkTable set val = val + 1 where pk = 2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s5
+test l892 {
+    SELECT * FROM pkTable order by pk;
+}
+expect {
+    1|1
+    2|3
+    4|4
+}
+
+@setup s1
+@setup s2
+@setup s5
+test l896 {
+    UPDATE IGNORE pkTable SET pk = NULL;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s5
+@setup s6
+test l902 {
+    SELECT * FROM pkTable order by pk;
+}
+expect {
+    0|1
+    0|3
+    0|4
+}
+
+@setup s1
+@setup s2
+@setup s5
+@setup s6
+test l906 {
+    UPDATE IGNORE pkTable SET val = NULL;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s5
+@setup s6
+@setup s7
+test l910 {
+    SELECT * FROM pkTable order by pk;
+}
+expect {
+    0|0
+    0|3
+    0|4
+}
+
+@setup s3
+@setup s4
+test l914 {
+    UPDATE IGNORE idxTable set pk = pk + 1, val = val + 1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+@setup s8
+test l920 {
+    SELECT * FROM idxTable order by pk;
+}
+expect {
+    1|1
+    2|2
+    4|5
+}
+
+@setup s9
+test l933 {
+    UPDATE IGNORE t1 SET v1 = 'dsddads';
+}
+expect unordered {
+}
+
+@setup s9
+@setup s10
+test l939 {
+    SELECT * FROM t1;
+}
+expect unordered {
+    1|0|1
+}
+
+@setup s9
+@setup s10
+test l943 {
+    UPDATE IGNORE t1 SET pk = 'dasda', v2 = 'dsddads';
+}
+expect unordered {
+}
+
+@setup s9
+@setup s10
+@setup s11
+test l949 {
+    SELECT * FROM t1;
+}
+expect unordered {
+    0|0|0
+}
+
+@setup s12
+test l984 {
+    UPDATE IGNORE checksTable SET pk = pk + 1 where pk = 4;
+}
+expect unordered {
+}
+
+@setup s12
+@setup s13
+test l990 {
+    SELECT * from checksTable ORDER BY pk;
+}
+expect {
+    1
+    2
+    3
+    4
+}

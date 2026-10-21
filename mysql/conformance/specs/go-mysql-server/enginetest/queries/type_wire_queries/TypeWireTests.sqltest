@@ -1,0 +1,1391 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/type_wire_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE test (pk TINYINT PRIMARY KEY, v1 TINYINT);
+    INSERT INTO test VALUES (-75, "-25"), (0, 0), (107.2, 0025), (107.5, 0025), (120, -120);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk > "119";
+}
+
+setup s2 {
+    CREATE TABLE test (pk SMALLINT PRIMARY KEY, v1 SMALLINT);
+    INSERT INTO test VALUES (-75.7, "-2531"), (-75, "-2531"), (0, 0), (2547.2, 03325), (2547.6, 03325), (9999, 9999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk >= "9999";
+}
+
+setup s3 {
+    CREATE TABLE test (pk MEDIUMINT PRIMARY KEY, v1 MEDIUMINT);
+    INSERT INTO test VALUES (-75, "-2531"), (0, 0), (2547.2, 03325), (2547.7, 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s4 {
+    CREATE TABLE test (pk INT PRIMARY KEY, v1 INT);
+    INSERT INTO test VALUES (-75, "-2531"), (0, 0), (2547.2, 03325), (2547.8, 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s5 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);
+    INSERT INTO test VALUES (-75, "-2531"), (0, 0), (2547.2, 03325), (2547.9, 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s6 {
+    CREATE TABLE test (pk TINYINT UNSIGNED PRIMARY KEY, v1 TINYINT UNSIGNED);
+    INSERT INTO test VALUES (0, 0), (25, "26"), (32.1, 0126), (42.8, 0126), (255, 255);
+    UPDATE test SET v1 = v1 - 1 WHERE pk > 0 AND pk < 30;
+    DELETE FROM test WHERE pk >= "255";
+}
+
+setup s7 {
+    CREATE TABLE test (pk SMALLINT UNSIGNED PRIMARY KEY, v1 SMALLINT UNSIGNED);
+    INSERT INTO test VALUES (0, 0), (25, "2531"), (2547.2, 03325), (2547.5, 03325), (9999, 9999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk > 0 AND pk < 100;
+    DELETE FROM test WHERE pk >= "9999";
+}
+
+setup s8 {
+    CREATE TABLE test (pk MEDIUMINT UNSIGNED PRIMARY KEY, v1 MEDIUMINT UNSIGNED);
+    INSERT INTO test VALUES (75, "2531"), (0, 0), (2547.2, 03325), (2547.6, 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 + 1 WHERE pk < 100;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s9 {
+    CREATE TABLE test (pk INT UNSIGNED PRIMARY KEY, v1 INT UNSIGNED);
+    INSERT INTO test VALUES (75, "2531"), (0, 0), (2547.2, 03325), (2547.7, 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 + 1 WHERE pk < 100;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s10 {
+    CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 BIGINT UNSIGNED);
+    INSERT INTO test VALUES (75, "2531"), (0, 0), (2547.2, 03325), (2547.8, 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 + 1 WHERE pk < 100;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s11 {
+    CREATE TABLE test (pk FLOAT PRIMARY KEY, v1 FLOAT);
+    INSERT INTO test VALUES (-75.11, "-2531"), (0, 0), ("2547.2", 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s12 {
+    CREATE TABLE test (pk DOUBLE PRIMARY KEY, v1 DOUBLE);
+    INSERT INTO test VALUES (-75.11, "-2531"), (0, 0), ("2547.2", 03325), (999999, 999999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk > "99999";
+}
+
+setup s13 {
+    CREATE TABLE test (pk DECIMAL(5,0) PRIMARY KEY, v1 DECIMAL(25,5));
+    INSERT INTO test VALUES (-75, "-2531.356"), (0, 0), (2547.2, 03325), (99999, 999999);
+    UPDATE test SET v1 = v1 - 1 WHERE pk < 0;
+    DELETE FROM test WHERE pk >= "99999";
+}
+
+setup s14 {
+    CREATE TABLE test (pk BIT(55) PRIMARY KEY, v1 BIT(1), v2 BIT(24));
+    INSERT INTO test VALUES (75, 0, "21"), (0, 0, 0), (2547.2, 1, 03325), (999999, 1, 999999);
+    UPDATE test SET v2 = v2 - 1 WHERE pk > 0 AND pk < 100;
+    DELETE FROM test WHERE pk > 99999;
+}
+
+setup s15 {
+    CREATE TABLE test (pk YEAR PRIMARY KEY, v1 YEAR);
+    INSERT INTO test VALUES (1901, 1901), (1950, "1950"), (1979.2, 01986), (2122, 2122);
+    UPDATE test SET v1 = v1 + 1 WHERE pk < 1975;
+    DELETE FROM test WHERE pk > "2100";
+}
+
+setup s16 {
+    CREATE TABLE test (pk TIMESTAMP PRIMARY KEY, v1 TIMESTAMP);
+    INSERT INTO test VALUES ("1980-04-12 12:02:11", "1986-08-02 17:04:22"), ("1999-11-28 13:06:33", "2022-01-14 15:08:44"), ("2020-05-06 18:10:55", "1975-09-15 11:12:16");
+    UPDATE test SET v1 = "2000-01-01 00:00:00" WHERE pk < "1990-01-01 00:00:00";
+    DELETE FROM test WHERE pk > "2015-01-01 00:00:00";
+}
+
+setup s17 {
+    CREATE TABLE test (pk DATETIME PRIMARY KEY, v1 DATETIME);
+    INSERT INTO test VALUES ("1000-04-12 12:02:11", "1986-08-02 17:04:22"), ("1999-11-28 13:06:33", "2022-01-14 15:08:44"), ("5020-05-06 18:10:55", "1975-09-15 11:12:16");
+    UPDATE test SET v1 = "2000-01-01 00:00:00" WHERE pk < "1990-01-01 00:00:00";
+    DELETE FROM test WHERE pk > "5000-01-01 00:00:00";
+}
+
+setup s18 {
+    CREATE TABLE test (d0 datetime(0), d1 datetime(1), d2 datetime(2), d3 datetime(3), d4 datetime(4), d5 datetime(5), d6 datetime(6));
+    INSERT INTO test VALUES ("1994-05-30 12:34:56.789012", "1994-05-30 12:34:56.789012", "1994-05-30 12:34:56.789012", "1994-05-30 12:34:56.789012", "1994-05-30 12:34:56.789012", "1994-05-30 12:34:56.789012", "1994-05-30 12:34:56.789012");
+}
+
+setup s19 {
+    CREATE TABLE test (pk DATE PRIMARY KEY, v1 DATE);
+    INSERT INTO test VALUES ("1000-04-12", "1986-08-02"), ("1999-11-28", "2022-01-14"), ("5020-05-06", "1975-09-15");
+    UPDATE test SET v1 = "2000-01-01" WHERE pk < "1990-01-01";
+    DELETE FROM test WHERE pk > "5000-01-01";
+}
+
+setup s20 {
+    CREATE TABLE test (pk TIME PRIMARY KEY, v1 TIME(6));
+    INSERT INTO test VALUES ("-800:00:00", "-20:21:22"), ("00:00:00", "00:00:00"), ("10:26:57", "30:53:14"), ("700:23:51", "300:25:52");
+    UPDATE test SET v1 =  "-120:12:20" WHERE pk < "00:00:00";
+    DELETE FROM test WHERE pk > "600:00:00";
+}
+
+setup s21 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 CHAR(5), v2 CHAR(10));
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = "a-c" WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s22 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 VARCHAR(5), v2 VARCHAR(10));
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s23 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 VARBINARY(5), v2 VARBINARY(10));
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s24 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 TINYTEXT, v2 TINYTEXT);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s25 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 TEXT, v2 TEXT);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s26 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 MEDIUMTEXT, v2 MEDIUMTEXT);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s27 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 LONGTEXT, v2 LONGTEXT);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s28 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 TINYBLOB, v2 TINYBLOB);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s29 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BLOB, v2 BLOB);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s30 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 MEDIUMBLOB, v2 MEDIUMBLOB);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s31 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 LONGBLOB, v2 LONGBLOB);
+    INSERT INTO test VALUES (1, "abc", "def"), (2, "c-a", "123"), (3, "__2", 456), (4, "?hi?", "\\\n");
+    UPDATE test SET v1 = CONCAT(v1, "x") WHERE pk = 2;
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s32 {
+    CREATE TABLE test (pk ENUM("a","b","c") PRIMARY KEY, v1 ENUM("x","y","z"));
+    INSERT INTO test VALUES (1, 1), ("b", "y"), (3, "z");
+    UPDATE test SET v1 = "x" WHERE pk = 2;
+    DELETE FROM test WHERE pk > 2;
+}
+
+setup s33 {
+    CREATE TABLE test (pk SET("a","b","c") PRIMARY KEY, v1 SET("w","x","y","z"));
+    INSERT INTO test VALUES (0, 1), ("b", "y"), ("b,c", "z,z"), ("a,c,b", 10);
+    UPDATE test SET v1 = "y,x,w" WHERE pk >= 4;
+    DELETE FROM test WHERE pk > "b,c";
+}
+
+setup s34 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 GEOMETRY);
+    INSERT INTO test VALUES (1, POINT(1, 2)), (2, LINESTRING(POINT(1, 2), POINT(3, 4))), (3, ST_GeomFromText('POLYGON((0 0,0 3,3 0,0 0),(1 1,1 2,2 1,1 1))'));
+}
+
+setup s35 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 POINT);
+    INSERT INTO test VALUES (1, POINT(1, 2)), (2, POINT(3.4, 5.6)), (3, POINT(10, -20)), (4, POINT(1000, -1000));
+    DELETE FROM test WHERE pk = 4;
+}
+
+setup s36 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 LINESTRING);
+    INSERT INTO test VALUES (1, LINESTRING(POINT(1, 2), POINT(3, 4))), (2, LINESTRING(POINT(5, 6), POINT(7, 8)));
+}
+
+setup s37 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 POLYGON);
+    INSERT INTO test VALUES (1, ST_GeomFromText('POLYGON((0 0,0 3,3 0,0 0),(1 1,1 2,2 1,1 1))'));
+}
+
+setup s38 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 JSON);
+    INSERT INTO test VALUES (1, '\{"key1": \{"key": "value"\}\}'), (2, '\{"key1": "value1", "key2": "value2"\}'), (3, '\{"key1": \{"key": [2,3]\}\}');
+    UPDATE test SET v1 = '["a", 1]' WHERE pk = 1;
+    DELETE FROM test WHERE pk = 3;
+}
+
+@setup s1
+test l50 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75|-26
+    0|0
+    107|25
+    108|25
+}
+
+@setup s1
+test l51 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -26|-75
+    0|0
+    25|107
+    25|108
+}
+
+@setup s1
+test l52 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -52|-74
+    0|1
+    50|108
+    50|109
+}
+
+@setup s2
+test l69 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -76|-2532
+    -75|-2532
+    0|0
+    2547|3325
+    2548|3325
+}
+
+@setup s2
+test l70 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532|-76
+    -2532|-75
+    0|0
+    3325|2547
+    3325|2548
+}
+
+@setup s2
+test l71 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064|-75
+    -5064|-74
+    0|1
+    6650|2548
+    6650|2549
+}
+
+@setup s3
+test l88 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75|-2532
+    0|0
+    2547|3325
+    2548|3325
+}
+
+@setup s3
+test l89 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532|-75
+    0|0
+    3325|2547
+    3325|2548
+}
+
+@setup s3
+test l90 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064|-74
+    0|1
+    6650|2548
+    6650|2549
+}
+
+@setup s4
+test l107 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75|-2532
+    0|0
+    2547|3325
+    2548|3325
+}
+
+@setup s4
+test l108 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532|-75
+    0|0
+    3325|2547
+    3325|2548
+}
+
+@setup s4
+test l109 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064|-74
+    0|1
+    6650|2548
+    6650|2549
+}
+
+@setup s5
+test l126 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75|-2532
+    0|0
+    2547|3325
+    2548|3325
+}
+
+@setup s5
+test l127 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532|-75
+    0|0
+    3325|2547
+    3325|2548
+}
+
+@setup s5
+test l128 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064|-74
+    0|1
+    6650|2548
+    6650|2549
+}
+
+@setup s6
+test l145 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    0|0
+    25|25
+    32|126
+    43|126
+}
+
+@setup s6
+test l146 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    0|0
+    25|25
+    126|32
+    126|43
+}
+
+@setup s6
+test l147 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    0|1
+    50|26
+    252|33
+    252|44
+}
+
+@setup s7
+test l164 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    0|0
+    25|2530
+    2547|3325
+    2548|3325
+}
+
+@setup s7
+test l165 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    0|0
+    2530|25
+    3325|2547
+    3325|2548
+}
+
+@setup s7
+test l166 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    0|1
+    5060|26
+    6650|2548
+    6650|2549
+}
+
+@setup s8
+test l183 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    0|1
+    75|2532
+    2547|3325
+    2548|3325
+}
+
+@setup s8
+test l184 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    1|0
+    2532|75
+    3325|2547
+    3325|2548
+}
+
+@setup s8
+test l185 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    2|1
+    5064|76
+    6650|2548
+    6650|2549
+}
+
+@setup s9
+test l202 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    0|1
+    75|2532
+    2547|3325
+    2548|3325
+}
+
+@setup s9
+test l203 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    1|0
+    2532|75
+    3325|2547
+    3325|2548
+}
+
+@setup s9
+test l204 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    2|1
+    5064|76
+    6650|2548
+    6650|2549
+}
+
+@setup s10
+test l221 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    0|1
+    75|2532
+    2547|3325
+    2548|3325
+}
+
+@setup s10
+test l222 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    1|0
+    2532|75
+    3325|2547
+    3325|2548
+}
+
+@setup s10
+test l223 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    2|1
+    5064|76
+    6650|2548
+    6650|2549
+}
+
+@setup s11
+test l240 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75.11|-2532
+    0|0
+    2547.2|3325
+}
+
+@setup s11
+test l241 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532|-75.11
+    0|0
+    3325|2547.2
+}
+
+@setup s11
+test l242 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064|-74.11000061035156
+    0|1
+    6650|2548.199951171875
+}
+
+@setup s12
+test l259 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75.11|-2532
+    0|0
+    2547.2|3325
+}
+
+@setup s12
+test l260 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532|-75.11
+    0|0
+    3325|2547.2
+}
+
+@setup s12
+test l261 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064|-74.11
+    0|1
+    6650|2548.2
+}
+
+@setup s13
+test l278 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -75|-2532.35600
+    0|0.00000
+    2547|3325.00000
+}
+
+@setup s13
+test l279 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -2532.35600|-75
+    0.00000|0
+    3325.00000|2547
+}
+
+@setup s13
+test l280 {
+    SELECT v1*2, pk+1 FROM test ORDER BY pk;
+}
+expect {
+    -5064.71200|-74
+    0.00000|1
+    6650.00000|2548
+}
+
+@setup s14
+test l299 {
+    SELECT v1*1, pk/10, v2+1 FROM test ORDER BY pk;
+}
+expect {
+    0|0.0000|1
+    0|7.5000|12849
+    1|254.7000|3326
+}
+
+@setup s15
+test l316 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1901|1902
+    1950|1951
+    1979|1986
+}
+
+@setup s15
+test l317 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    1902|1901
+    1951|1950
+    1986|1979
+}
+
+@setup s15
+test l318 {
+    SELECT v1+3, pk+2 FROM test ORDER BY pk;
+}
+expect {
+    1905|1903
+    1954|1952
+    1989|1981
+}
+
+@setup s16
+test l335 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1980-04-12 12:02:11|2000-01-01 00:00:00
+    1999-11-28 13:06:33|2022-01-14 15:08:44
+}
+
+@setup s16
+test l336 {
+    SELECT pk, v1 FROM test ORDER BY pk;
+}
+expect {
+    1980-04-12 12:02:11|2000-01-01 00:00:00
+    1999-11-28 13:06:33|2022-01-14 15:08:44
+}
+
+@setup s16
+test l337 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    2000-01-01 00:00:00|1980-04-12 12:02:11
+    2022-01-14 15:08:44|1999-11-28 13:06:33
+}
+
+test l338 {
+    SELECT DATE_ADD(TIMESTAMP('2022-10-26 13:14:15'), INTERVAL 1 DAY);
+}
+expect unordered {
+    2022-10-27 13:14:15
+}
+
+test l339 {
+    SELECT DATE_ADD('2022-10-26 13:14:15', INTERVAL 1 DAY);
+}
+expect unordered {
+    2022-10-27 13:14:15
+}
+
+test l340 {
+    SELECT DATE_ADD('2022-10-26', INTERVAL 1 SECOND);
+}
+expect unordered {
+    2022-10-26 00:00:01
+}
+
+test l341 {
+    SELECT DATE_ADD('2022-10-26', INTERVAL 1 MINUTE);
+}
+expect unordered {
+    2022-10-26 00:01:00
+}
+
+test l342 {
+    SELECT DATE_ADD('2022-10-26', INTERVAL 1 HOUR);
+}
+expect unordered {
+    2022-10-26 01:00:00
+}
+
+@setup s17
+test l364 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1000-04-12 12:02:11|2000-01-01 00:00:00
+    1999-11-28 13:06:33|2022-01-14 15:08:44
+}
+
+@setup s17
+test l365 {
+    SELECT pk, v1 FROM test ORDER BY pk;
+}
+expect {
+    1000-04-12 12:02:11|2000-01-01 00:00:00
+    1999-11-28 13:06:33|2022-01-14 15:08:44
+}
+
+@setup s17
+test l366 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    2000-01-01 00:00:00|1000-04-12 12:02:11
+    2022-01-14 15:08:44|1999-11-28 13:06:33
+}
+
+@setup s18
+test l390 {
+    SELECT * FROM test;
+}
+expect unordered {
+    1994-05-30 12:34:57|1994-05-30 12:34:56.8|1994-05-30 12:34:56.79|1994-05-30 12:34:56.789|1994-05-30 12:34:56.7890|1994-05-30 12:34:56.78901|1994-05-30 12:34:56.789012
+}
+
+@setup s19
+test l424 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1000-04-12|2000-01-01
+    1999-11-28|2022-01-14
+}
+
+@setup s19
+test l425 {
+    SELECT pk, v1 FROM test ORDER BY pk;
+}
+expect {
+    1000-04-12|2000-01-01
+    1999-11-28|2022-01-14
+}
+
+@setup s19
+test l426 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    2000-01-01|1000-04-12
+    2022-01-14|1999-11-28
+}
+
+test l427 {
+    SELECT DATE_ADD(DATE('2022-10-26'), INTERVAL 1 DAY);
+}
+expect unordered {
+    2022-10-27
+}
+
+test l428 {
+    SELECT DATE_ADD(DATE('2022-10-26'), INTERVAL 1 WEEK);
+}
+expect unordered {
+    2022-11-02
+}
+
+test l429 {
+    SELECT DATE_ADD(DATE('2022-10-26'), INTERVAL 1 MONTH);
+}
+expect unordered {
+    2022-11-26
+}
+
+test l430 {
+    SELECT DATE_ADD(DATE('2022-10-26'), INTERVAL 1 QUARTER);
+}
+expect unordered {
+    2023-01-26
+}
+
+test l431 {
+    SELECT DATE_ADD(DATE('2022-10-26'), INTERVAL 1 YEAR);
+}
+expect unordered {
+    2023-10-26
+}
+
+@setup s20
+test l453 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    -800:00:00|-120:12:20.000000
+    00:00:00|00:00:00.000000
+    10:26:57|30:53:14.000000
+}
+
+@setup s20
+test l454 {
+    SELECT pk, v1 FROM test ORDER BY pk;
+}
+expect {
+    -800:00:00|-120:12:20.000000
+    00:00:00|00:00:00.000000
+    10:26:57|30:53:14.000000
+}
+
+@setup s20
+test l455 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    -120:12:20.000000|-800:00:00
+    00:00:00.000000|00:00:00
+    30:53:14.000000|10:26:57
+}
+
+test l456 {
+    SELECT DATE_ADD(TIMEDIFF('12:13:14', '0:0:0'), INTERVAL 1 SECOND);
+}
+expect unordered {
+    12:13:15
+}
+
+test l457 {
+    SELECT DATE_ADD(TIMEDIFF('12:13:14', '0:0:0'), INTERVAL 1 MINUTE);
+}
+expect unordered {
+    12:14:14
+}
+
+test l458 {
+    SELECT DATE_ADD(TIMEDIFF('12:13:14', '0:0:0'), INTERVAL 1 HOUR);
+}
+expect unordered {
+    13:13:14
+}
+
+@setup s21
+test l478 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|a-c|123
+    3|__2|456
+}
+
+@setup s21
+test l479 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|a-c
+    3|456|__2
+}
+
+@setup s21
+test l480 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    a-cr|2|123
+    __2r|3|456
+}
+
+@setup s22
+test l497 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s22
+test l498 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s22
+test l499 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s23
+test l537 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s23
+test l538 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s23
+test l539 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s24
+test l556 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s24
+test l557 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s24
+test l558 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s25
+test l575 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s25
+test l576 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s25
+test l577 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s26
+test l594 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s26
+test l595 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s26
+test l596 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s27
+test l613 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s27
+test l614 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s27
+test l615 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s28
+test l632 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s28
+test l633 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s28
+test l634 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s29
+test l651 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s29
+test l652 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s29
+test l653 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s30
+test l670 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s30
+test l671 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s30
+test l672 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s31
+test l689 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|abc|def
+    2|c-ax|123
+    3|__2|456
+}
+
+@setup s31
+test l690 {
+    SELECT pk, v2, v1 FROM test ORDER BY pk;
+}
+expect {
+    1|def|abc
+    2|123|c-ax
+    3|456|__2
+}
+
+@setup s31
+test l691 {
+    SELECT CONCAT(v1, "r"), pk, v2 FROM test ORDER BY pk;
+}
+expect {
+    abcr|1|def
+    c-axr|2|123
+    __2r|3|456
+}
+
+@setup s32
+test l708 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    a|x
+    b|x
+}
+
+@setup s32
+test l709 {
+    SELECT pk, v1 FROM test ORDER BY pk;
+}
+expect {
+    a|x
+    b|x
+}
+
+@setup s32
+test l710 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    x|a
+    x|b
+}
+
+@setup s33
+test l727 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    |w
+    b|y
+    b,c|w,x,y
+    a,b,c|w,x,y
+}
+
+@setup s33
+test l728 {
+    SELECT pk, v1 FROM test ORDER BY pk;
+}
+expect {
+    |w
+    b|y
+    b,c|w,x,y
+    a,b,c|w,x,y
+}
+
+@setup s33
+test l729 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    w|
+    y|b
+    w,x,y|b,c
+    w,x,y|a,b,c
+}
+
+@setup s34
+test l746 {
+    SELECT pk, ST_ASWKT(v1) FROM test ORDER BY pk;
+}
+expect {
+    1|POINT(1 2)
+    2|LINESTRING(1 2,3 4)
+    3|POLYGON((0 0,0 3,3 0,0 0),(1 1,1 2,2 1,1 1))
+}
+
+@setup s35
+test l776 {
+    SELECT pk, ST_ASWKT(v1) FROM test ORDER BY pk;
+}
+expect {
+    1|POINT(1 2)
+    2|POINT(3.4 5.6)
+    3|POINT(10 -20)
+}
+
+@setup s36
+test l805 {
+    SELECT pk, ST_ASWKT(v1) FROM test ORDER BY pk;
+}
+expect {
+    1|LINESTRING(1 2,3 4)
+    2|LINESTRING(5 6,7 8)
+}
+
+@setup s37
+test l831 {
+    SELECT pk, ST_ASWKT(v1) FROM test ORDER BY pk;
+}
+expect {
+    1|POLYGON((0 0,0 3,3 0,0 0),(1 1,1 2,2 1,1 1))
+}
+
+@setup s38
+test l854 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    1|["a", 1]
+    2|\{"key1": "value1", "key2": "value2"\}
+}
+
+@setup s38
+test l855 {
+    SELECT v1, pk FROM test ORDER BY pk;
+}
+expect {
+    ["a", 1]|1
+    \{"key1": "value1", "key2": "value2"\}|2
+}
+
+@setup s38
+test l856 {
+    SELECT pk, JSON_ARRAYAGG(v1) FROM (SELECT * FROM test ORDER BY pk) as sub GROUP BY pk, v1 ORDER BY pk;
+}
+expect {
+    1|[["a", 1]]
+    2|[\{"key1": "value1", "key2": "value2"\}]
+}

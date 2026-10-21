@@ -1,0 +1,215 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/procedure_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    SET @outparam = 5;
+}
+
+setup s2 {
+    CREATE PROCEDURE testabc(OUT x BIGINT) SET x = 9;
+    CALL testabc(@outparam);
+}
+
+setup s3 {
+    CREATE PROCEDURE testabc(OUT x BIGINT) SELECT x;
+    CALL testabc(@outparam);
+}
+
+setup s4 {
+    CREATE PROCEDURE testabc(INOUT x BIGINT) SELECT x;
+    CALL testabc(@outparam);
+}
+
+setup s5 {
+    CREATE PROCEDURE p1(x DATETIME) SELECT x;
+}
+
+setup s6 {
+    CREATE PROCEDURE p1(x BIGINT, y BIGINT) SELECT x + y;
+}
+
+setup s7 {
+    CREATE PROCEDURE p1() SELECT 42;
+}
+
+setup s8 {
+    CALL p1();
+}
+
+setup s9 {
+    CREATE PROCEDURE joe(IN str VARCHAR(15)) SELECT CONCAT('joe''s bar:', str);
+}
+
+setup s10 {
+    CREATE PROCEDURE jill(IN str VARCHAR(15)) SELECT CONCAT('jill\'s bar:', str);
+}
+
+setup s11 {
+    CREATE PROCEDURE stan(IN str VARCHAR(15)) SELECT CONCAT("stan\'s bar:", str);
+}
+
+setup s12 {
+    CREATE PROCEDURE after_2000(IN bday DATE) SELECT TIMESTAMPDIFF(YEAR, '2000-01-01', bday);
+}
+
+setup s13 {
+    CALL after_2000('2001-09-11');
+}
+
+setup s14 {
+    CREATE PROCEDURE add_month(IN bday DATE) SELECT TIMESTAMPADD(MONTH, 1, bday);
+}
+
+setup s15 {
+    CALL add_month('2001-09-11');
+}
+
+@setup s1
+@setup s2
+test l2439 {
+    SELECT @outparam;
+}
+expect unordered {
+    9
+}
+
+@setup s1
+@setup s3
+test l2457 {
+    SELECT @outparam;
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s4
+test l2491 {
+    SELECT @outparam;
+}
+expect unordered {
+    5
+}
+
+# mysql-error: 1292 22007 Incorrect datetime value: 'hi' for column 'x' at row 1
+@setup s5
+test l2543 {
+    CALL p1('hi');
+}
+expect error {
+}
+
+# mysql-error: 1318 42000 Incorrect number of arguments for PROCEDURE test.p1; expected 2, got 1
+@setup s6
+test l2555 {
+    CALL p1(1);
+}
+expect error {
+}
+
+# mysql-error: 1318 42000 Incorrect number of arguments for PROCEDURE test.p1; expected 2, got 3
+@setup s6
+test l2559 {
+    CALL p1(1, 2, 3);
+}
+expect error {
+}
+
+test l2603 {
+    SELECT @foo;
+}
+expect unordered {
+    NULL
+}
+
+@setup s7
+test l2621 {
+    CALL p1();
+}
+expect unordered {
+    42
+}
+
+@setup s7
+@setup s8
+test l2625 {
+    CALL p1();
+}
+expect unordered {
+    42
+}
+
+@setup s9
+test l2651 {
+    CALL joe('open');
+}
+expect unordered {
+    joe's bar:open
+}
+
+@setup s10
+test l2655 {
+    CALL jill('closed');
+}
+expect unordered {
+    jill's bar:closed
+}
+
+@setup s11
+test l2659 {
+    CALL stan('quarantined');
+}
+expect unordered {
+    stan's bar:quarantined
+}
+
+@setup s12
+test l2672 {
+    CALL after_2000('2001-09-11');
+}
+expect unordered {
+    1
+}
+
+@setup s12
+@setup s13
+test l2676 {
+    CALL after_2000('2025-01-01');
+}
+expect unordered {
+    25
+}
+
+@setup s14
+test l2680 {
+    CALL add_month('2001-09-11');
+}
+expect unordered {
+    2001-10-11
+}
+
+@setup s14
+@setup s15
+test l2684 {
+    CALL add_month('2025-01-01');
+}
+expect unordered {
+    2025-02-01
+}
+
+test l2711 {
+    CREATE PROCEDURE proc1 (OUT out_count INT) READS SQL DATA SELECT COUNT(*) FROM mytable WHERE i = 1 AND s = 'first row' AND func1(i);
+}
+expect unordered {
+}
+
+test l2719 {
+    CREATE TABLE mytable (i int, s varchar(128));
+}
+expect unordered {
+}

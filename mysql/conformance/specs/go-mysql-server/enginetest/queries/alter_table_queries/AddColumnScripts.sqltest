@@ -1,0 +1,249 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    ALTER TABLE mytable ADD COLUMN i2 INT COMMENT 'hello' default 42;
+}
+
+setup s3 {
+    ALTER TABLE mytable ADD COLUMN s2 TEXT COMMENT 'hello' AFTER i;
+}
+
+setup s4 {
+    ALTER TABLE mytable ADD COLUMN s3 VARCHAR(25) COMMENT 'hello' default 'yay' FIRST;
+}
+
+setup s5 {
+    ALTER TABLE mytable ADD COLUMN s5 VARCHAR(26), ADD COLUMN s6 VARCHAR(27);
+}
+
+setup s6 {
+    create table t (i int primary key, j int);
+    insert into t values (1, 2);
+}
+
+setup s7 {
+    alter table t add column k int check (k > 0);
+}
+
+@setup s1
+test l1970 {
+    ALTER TABLE mytable ADD COLUMN i2 INT COMMENT 'hello' default 42;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l1974 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+    i2|int|NULL|YES||42||select,insert,update,references|hello
+}
+
+@setup s1
+@setup s2
+test l1984 {
+    SELECT * FROM mytable ORDER BY i;
+}
+expect {
+    1|first row|42
+    2|second row|42
+    3|third row|42
+}
+
+@setup s1
+test l1997 {
+    ALTER TABLE mytable ADD COLUMN s2 TEXT COMMENT 'hello' AFTER i;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l2001 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s2|text|utf8mb4_0900_ai_ci|YES||NULL||select,insert,update,references|hello
+    s|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+}
+
+@setup s1
+@setup s3
+test l2010 {
+    SELECT * FROM mytable ORDER BY i;
+}
+expect {
+    1|NULL|first row
+    2|NULL|second row
+    3|NULL|third row
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+@setup s3
+test l2018 {
+    insert into mytable values (4, 's2', 'fourth row', 11);
+}
+expect error {
+}
+
+@setup s1
+@setup s3
+test l2026 {
+    SELECT * FROM mytable ORDER BY i;
+}
+expect {
+    1|NULL|first row
+    2|NULL|second row
+    3|NULL|third row
+}
+
+@setup s1
+test l2040 {
+    ALTER TABLE mytable ADD COLUMN s3 VARCHAR(25) COMMENT 'hello' default 'yay' FIRST;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s4
+test l2044 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    s3|varchar(25)|utf8mb4_0900_ai_ci|YES||yay||select,insert,update,references|hello
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+}
+
+@setup s1
+@setup s4
+test l2054 {
+    SELECT * FROM mytable ORDER BY i;
+}
+expect {
+    yay|1|first row
+    yay|2|second row
+    yay|3|third row
+}
+
+@setup s1
+test l2072 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+}
+
+@setup s1
+test l2083 {
+    SELECT * FROM mytable ORDER BY i;
+}
+expect {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l2097 {
+    ALTER TABLE mytable ADD COLUMN s5 VARCHAR(26), ADD COLUMN s6 VARCHAR(27);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s5
+test l2101 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+    s5|varchar(26)|utf8mb4_0900_ai_ci|YES||NULL||select,insert,update,references|
+    s6|varchar(27)|utf8mb4_0900_ai_ci|YES||NULL||select,insert,update,references|
+}
+
+@setup s1
+@setup s5
+test l2114 {
+    SELECT * FROM mytable ORDER BY i;
+}
+expect {
+    1|first row|NULL|NULL
+    2|second row|NULL|NULL
+    3|third row|NULL|NULL
+}
+
+@setup s6
+test l2132 {
+    alter table t add column k int check (k > 0);
+}
+expect unordered {
+}
+
+# mysql-error: 3819 HY000 Check constraint 't_chk_2' is violated.
+@setup s6
+@setup s7
+test l2137 {
+    alter table t add column l int check (l is not null);
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 't_chk_2' is violated.
+@setup s6
+@setup s7
+test l2141 {
+    alter table t add column m int default 0 check (m != 0);
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'i'
+@setup s1
+test l2158 {
+    ALTER TABLE mytable ADD COLUMN i BIGINT COMMENT 'ok';
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'b'
+@setup s1
+test l2162 {
+    ALTER TABLE mytable ADD COLUMN b INT NOT NULL DEFAULT 'yes';
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'c'
+@setup s1
+test l2166 {
+    ALTER TABLE mytable ADD COLUMN c int, add c int;
+}
+expect error {
+}

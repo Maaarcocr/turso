@@ -1,0 +1,140 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (i int, j int);
+    insert into t1 values (1,1), (2,2), (3,3);
+}
+
+setup s2 {
+    alter table t1 add column pk int primary key auto_increment;
+}
+
+setup s3 {
+    alter table t1 add column pk int primary key auto_increment first;
+}
+
+setup s4 {
+    CREATE TABLE t1 (i bigint primary key, s varchar(20));
+    INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+}
+
+setup s5 {
+    alter table t1 add column j int auto_increment unique;
+}
+
+setup s6 {
+    CREATE TABLE test (pk int primary key, uk int UNIQUE KEY auto_increment);
+}
+
+setup s7 {
+    CREATE table test (pk int primary key, uk1 int, uk2 int, unique(uk1, uk2));
+    ALTER TABLE `test` MODIFY column uk1 int auto_increment;
+}
+
+setup s8 {
+    CREATE table test (pk int primary key, mk1 int, mk2 int, index(mk1, mk2));
+    ALTER TABLE `test` MODIFY column mk1 int auto_increment;
+}
+
+@setup s1
+test l1420 {
+    alter table t1 add column pk int primary key auto_increment;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l1434 {
+    select pk from t1 order by pk;
+}
+expect {
+    1
+    2
+    3
+}
+
+# mysql-error: 1062 23000 Duplicate entry '0' for key 't1.PRIMARY'
+@setup s1
+test l1449 {
+    alter table t1 add column pk int primary key;
+}
+expect error {
+}
+
+@setup s1
+test l1453 {
+    alter table t1 add column pk int primary key auto_increment first;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l1467 {
+    select pk from t1 order by pk;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s4
+test l1482 {
+    alter table t1 add column j int auto_increment unique;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s5
+test l1497 {
+    select * from t1 order by i;
+}
+expect {
+    1|a|1
+    2|b|2
+    3|c|3
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+@setup s4
+test l1514 {
+    alter table t1 add column j int auto_increment;
+}
+expect error {
+}
+
+@setup s6
+test l1526 {
+    alter table test add column j int;
+}
+expect unordered {
+}
+
+@setup s7
+test l1540 {
+    describe test;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    uk1|int|NO|MUL|NULL|auto_increment
+    uk2|int|YES||NULL|
+}
+
+@setup s8
+test l1558 {
+    describe test;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    mk1|int|NO|MUL|NULL|auto_increment
+    mk2|int|YES||NULL|
+}

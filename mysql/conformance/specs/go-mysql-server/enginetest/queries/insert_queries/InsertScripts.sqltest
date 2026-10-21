@@ -1,0 +1,1770 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/insert_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table xy (x int auto_increment primary key, y varchar(50) not null);
+    create table uv (u int auto_increment primary key, v varchar(50) not null, x_id int, constraint u_x_fk foreign key (x_id) references xy (x));
+    insert into xy values (1,'admin'), (2, 'standard');
+}
+
+setup s2 {
+    INSERT INTO uv(v, x_id) VALUES ('test', (SELECT x FROM xy WHERE y = 'admin'));
+}
+
+setup s3 {
+    create table xy (x int primary key, y datetime);
+    insert into xy values (0,'2023-09-16');
+}
+
+setup s4 {
+    CREATE TABLE t1 (dt datetime not null);
+}
+
+setup s5 {
+    create table auto (pk int primary key auto_increment);
+}
+
+setup s6 {
+    insert into auto values (10), (20), (30);
+}
+
+setup s7 {
+    insert into auto values (NULL);
+    insert into auto values (40);
+    insert into auto values (0);
+}
+
+setup s8 {
+    insert into auto values (-1), (-2), (-3);
+    insert into auto () values ();
+    insert into auto values (0), (0), (0);
+}
+
+setup s9 {
+    create table auto (pk int primary key, npk int unique auto_increment);
+    insert into auto (pk) values (10), (20), (30);
+}
+
+setup s10 {
+    create table auto (pk int primary key, npk1 int auto_increment, npk2 int, unique(npk1, npk2));
+    insert into auto (pk) values (10), (20), (30);
+}
+
+setup s11 {
+    create table auto_no_primary (i int auto_increment, index(i));
+    insert into auto_no_primary (i) values (0), (0), (0);
+}
+
+setup s12 {
+    create table auto_no_primary (i int auto_increment, j int, index(i));
+    insert into auto_no_primary (i) values (0), (0), (0);
+}
+
+setup s13 {
+    insert into auto values (10);
+    delete from auto where pk = 10;
+    insert into auto values (NULL);
+}
+
+setup s14 {
+    create table auto (
+				pk int auto_increment,
+				c0 int,
+				primary key(pk)
+			);
+    insert into auto values (NULL,10), (NULL,20), (NULL,30);
+}
+
+setup s15 {
+    alter table auto auto_increment 9;
+}
+
+setup s16 {
+    insert into auto values (NULL,90);
+}
+
+setup s17 {
+    alter table auto auto_increment = 19.9;
+    insert into auto values (NULL,190);
+}
+
+setup s18 {
+    create table auto (pk tinyint primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s19 {
+    create table auto (pk smallint primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s20 {
+    create table auto (pk mediumint primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s21 {
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s22 {
+    create table auto (pk bigint primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s23 {
+    create table auto (pk tinyint unsigned primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s24 {
+    create table auto (pk smallint unsigned primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s25 {
+    create table auto (pk mediumint unsigned primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s26 {
+    create table auto (pk int unsigned primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s27 {
+    create table auto (pk bigint unsigned primary key auto_increment);
+    insert into auto values (NULL),(10),(0);
+}
+
+setup s28 {
+    set @@sql_mode='NO_auto_value_ON_ZERO';
+}
+
+setup s29 {
+    create table auto (i int auto_increment, index (i));
+}
+
+setup s30 {
+    insert into auto values (0), (0), (1-1);
+}
+
+setup s31 {
+    create table auto_pk (i int auto_increment primary key);
+}
+
+setup s32 {
+    CREATE TABLE t1(id int DEFAULT '2', dt datetime DEFAULT now());
+}
+
+setup s33 {
+    INSERT INTO t1 (id, dt) values (DEFAULT, DEFAULT);
+}
+
+setup s34 {
+    INSERT INTO t1 (dt, ID) values (DEFAULT, DEFAULT);
+}
+
+setup s35 {
+    INSERT INTO t1 (ID) values (DEFAULT), (3);
+}
+
+setup s36 {
+    INSERT INTO t1 (dt) values (DEFAULT), ('1981-02-16 00:00:00');
+}
+
+setup s37 {
+    INSERT INTO t1 values (100, '2000-01-01 12:34:56'), (DEFAULT, DEFAULT);
+}
+
+setup s38 {
+    INSERT INTO t1 (id, dt) values (100, '2022-01-01 01:01:01'), (DEFAULT, DEFAULT);
+}
+
+setup s39 {
+    INSERT INTO t1 (id) values (10), (DEFAULT);
+}
+
+setup s40 {
+    CREATE TABLE t2(id varchar(100) DEFAULT (uuid()));
+}
+
+setup s41 {
+    INSERT INTO t2 values ('10'), (DEFAULT);
+}
+
+setup s42 {
+    INSERT INTO t2 (id) values (DEFAULT), ('11'), (DEFAULT);
+}
+
+setup s43 {
+    CREATE TABLE t3(a int DEFAULT '1', b int default (2 * a));
+}
+
+setup s44 {
+    INSERT INTO t3 (a) values (DEFAULT), ('2'), (DEFAULT);
+}
+
+setup s45 {
+    CREATE TABLE t4(c0 varchar(10) null default 'c0', c1 varchar(10) null default 'c1');
+}
+
+setup s46 {
+    CREATE TABLE t1 (a int default 1, b int default (a+1));
+}
+
+setup s47 {
+    INSERT INTO t1 (a,b) values (1, DEFAULT);
+}
+
+setup s48 {
+    INSERT INTO t1 values (2, DEFAULT);
+}
+
+setup s49 {
+    INSERT INTO t1 (b,a) values (DEFAULT, 3);
+}
+
+setup s50 {
+    CREATE TABLE y (pk int primary key, c1 int NOT NULL);
+    INSERT IGNORE INTO y VALUES (1, 1), (1,2), (2, 2), (3, 3);
+}
+
+setup s51 {
+    INSERT IGNORE INTO y VALUES (1, 2), (4,4);
+}
+
+setup s52 {
+    INSERT IGNORE INTO y VALUES (5, NULL);
+}
+
+setup s53 {
+    INSERT IGNORE INTO y SELECT * FROM y WHERE pk=(SELECT pk+10 FROM y WHERE pk > 1);
+}
+
+setup s54 {
+    INSERT IGNORE INTO y SELECT 10, 0 FROM dual WHERE 1=(SELECT 1 FROM dual UNION SELECT 2 FROM dual);
+}
+
+setup s55 {
+    INSERT IGNORE INTO y SELECT 11, 0 FROM dual WHERE 1=(SELECT 1 FROM dual UNION SELECT 2 FROM dual) UNION SELECT 12, 0 FROM dual;
+}
+
+setup s56 {
+    INSERT IGNORE INTO y SELECT 13, 0 FROM dual UNION SELECT 14, 0 FROM dual WHERE 1=(SELECT 1 FROM dual UNION SELECT 2 FROM dual);
+}
+
+setup s57 {
+    CREATE TABLE test(pk int primary key, val int);
+    INSERT INTO test values (1,1);
+}
+
+setup s58 {
+    DELETE FROM test where pk = 1;
+}
+
+setup s59 {
+    CREATE TABLE test (PK int PRIMARY KEY);
+}
+
+setup s60 {
+    CREATE TABLE city (id int PRIMARY KEY, district char(20) NOT NULL DEFAULT '');
+}
+
+setup s61 {
+    CREATE TABLE users (
+				id varchar(42) PRIMARY KEY
+			);
+    CREATE TABLE nodes (
+			    id varchar(42) PRIMARY KEY,
+			    owner varchar(42),
+			    status varchar(12),
+			    timestamp bigint NOT NULL,
+			    FOREIGN KEY(owner) REFERENCES users(id)
+			);
+}
+
+setup s62 {
+    create table a (i int primary key);
+}
+
+setup s63 {
+    insert into a values (1);
+    create table b (j int primary key);
+    insert into b values (1), (2), (3);
+}
+
+setup s64 {
+    insert into a (select * from b) on duplicate key update a.i = b.j + 100;
+}
+
+setup s65 {
+    create table a (i int primary key, j int, k int);
+    insert into a values (1, 2, 3);
+    create table b (i int primary key);
+    insert into b values (1);
+}
+
+setup s66 {
+    insert into a (i) select * from (select i from b) as bb on duplicate key update a.i = bb.i + 100;
+}
+
+setup s67 {
+    insert into a (select * from b as t) on duplicate key update a.i = t.j + 100;
+}
+
+setup s68 {
+    create table b (i int primary key);
+}
+
+setup s69 {
+    create table a (i int primary key, j int);
+    insert into a values (1,1);
+    create table b (x int primary key);
+    insert into b values (1), (2), (3);
+    create table c (y int primary key);
+    insert into c values (1), (2), (3);
+}
+
+setup s70 {
+    insert into a (select * from b join c where b.x = c.y) on duplicate key update a.j = b.x + c.y + 100;
+}
+
+setup s71 {
+    CREATE TABLE t (pk int PRIMARY key);
+}
+
+setup s72 {
+    INSERT INTO t VALUES (1), (2);
+}
+
+setup s73 {
+    CREATE TABLE t2 (pk1 int, pk2 int, PRIMARY KEY (pk1, pk2));
+}
+
+setup s74 {
+    INSERT into t2 VALUES (1, 1), (2, 2);
+}
+
+setup s75 {
+    CREATE TABLE t (pk int PRIMARY key, col1 int UNIQUE);
+    INSERT into t VALUES (1, 1);
+}
+
+setup s76 {
+    CREATE TABLE t2 (pk int PRIMARY key, col1 int, col2 int, CONSTRAINT col1_col2 UNIQUE KEY (col1, col2));
+    INSERT into t2 VALUES (1, 1, 1);
+}
+
+setup s77 {
+    INSERT into t2 VALUES (5, NULL, 1), (6, NULL, 1), (7, 1, NULL), (8, 1, NULL), (9, NULL, NULL), (10, NULL, NULL);
+}
+
+setup s78 {
+    CREATE TABLE t (not_pk int NOT NULL, col1 int UNIQUE);
+    INSERT into t VALUES (1, 1);
+}
+
+setup s79 {
+    CREATE TABLE t2 (not_pk int NOT NULL, col1 int, col2 int, CONSTRAINT col1_col2 UNIQUE KEY (col1, col2));
+    INSERT into t2 VALUES (1, 1, 1);
+}
+
+setup s80 {
+    INSERT into t2 VALUES (5, NULL, 1), (6, NULL, 1), (7, 1, NULL), (8, 1, NULL), (9, NULL, NULL), (10, NULL, NULL);
+}
+
+setup s81 {
+    CREATE TABLE t (pk1 int, pk2 int, col int, PRIMARY KEY(pk1, pk2), UNIQUE KEY(col, pk2));
+    INSERT into t (pk1, pk2, col) VALUES (1, 1, 1), (2, 1, 2);
+}
+
+setup s82 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY NOT NULL, v1 ENUM('a','b','c'));
+}
+
+setup s83 {
+    INSERT INTO test (pk, v1) VALUES (1, 'a');
+}
+
+setup s84 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY NOT NULL, v1 SET('a','b','c'));
+}
+
+setup s85 {
+    INSERT INTO test (pk, v1) VALUES (1, 'a');
+}
+
+setup s86 {
+    create table t1 (i int primary key, t text);
+    insert into t1 values (1, '2001-01-01'), (2, 'badtime'), (3, '');
+    create table t2 (d datetime);
+}
+
+setup s87 {
+    insert into t2(d) select t from t1 where false;
+}
+
+setup s88 {
+    insert into t2(d) select t from t1 where i = 1;
+}
+
+setup s89 {
+    CREATE TABLE escpe (
+                               id int NOT NULL AUTO_INCREMENT,
+                               t1 varchar(15) DEFAULT 'foo''s baz',
+                               t2 varchar(15) DEFAULT 'who\'s dat',
+                               t3 varchar(15) DEFAULT "joe\'s bar",
+                               t4 varchar(15) DEFAULT "quote""bazzar",
+                               t5 varchar(15) DEFAULT 'back\\\''slash',
+                               t6 varchar(15) DEFAULT 'tab\ttab',
+                               t7 varchar(15) DEFAULT 'new\nline',
+                               PRIMARY KEY (id)
+                     );
+    INSERT INTO escpe VALUES ();
+}
+
+setup s90 {
+    CREATE TABLE quoted ( id int NOT NULL AUTO_INCREMENT,
+                                   val varchar(15) NOT NULL CHECK (val IN ('joe''s',
+                                                                           "jan's",
+                                                                           'mia\\\''s',
+                                                                           'bob\'s',
+                                                                           'tab\tvs\tcoke',
+                                                                           'percent\%')),
+                                   PRIMARY KEY (id));
+    INSERT INTO quoted VALUES (0,"joe's");
+    INSERT INTO quoted VALUES (0,"jan's");
+    INSERT INTO quoted VALUES (0,"mia\\\'s");
+    INSERT INTO quoted VALUES (0,"bob's");
+    INSERT INTO quoted VALUES (0,"tab\tvs\tcoke");
+}
+
+setup s91 {
+    create table alphabet (letter varchar(1), constraint `good_letters` check (letter in ('a','l','e','c')));
+}
+
+setup s92 {
+    insert into alphabet values ('a') on duplicate key update letter = values(letter);
+}
+
+setup s93 {
+    CREATE TABLE t1 (id INT PRIMARY KEY, v int);
+    CREATE TABLE t2 (id INT PRIMARY KEY, v2 int, CONSTRAINT mfk FOREIGN KEY (v2) REFERENCES t1(id));
+}
+
+setup s94 {
+    CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(3));
+    INSERT INTO t1 VALUES (1, 'abc');
+}
+
+setup s95 {
+    INSERT INTO t1 VALUES (2, 'def');
+}
+
+setup s96 {
+    SET autocommit = 0;
+}
+
+setup s97 {
+    INSERT INTO t1 VALUES (2, 'def');
+}
+
+setup s98 {
+    create table parent (id int not null auto_increment, primary key (id));
+    create table child(parent_id int not null, version_id int not null auto_increment, primary key (version_id));
+    insert into parent () values ();
+}
+
+setup s99 {
+    create trigger trg_child_after_insert after insert on child for each row update parent set id = (id + 1) where id = NEW.parent_id;
+}
+
+setup s100 {
+    create trigger trg_child_before_insert before insert on child for each row update parent set id = (id + 1) where id = NEW.parent_id;
+}
+
+setup s101 {
+    create table t(d date);
+}
+
+setup s102 {
+    create table t2(d datetime);
+}
+
+@setup s1
+test l874 {
+    INSERT INTO uv(v, x_id) VALUES ('test', (SELECT x FROM xy WHERE y = 'admin'));
+}
+expect unordered {
+}
+
+# mysql-error: 1242 21000 Subquery returns more than 1 row
+@setup s1
+@setup s2
+test l878 {
+    INSERT INTO uv(v, x_id) VALUES ('test', (SELECT x FROM xy WHERE x > 0));
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l882 {
+    select * from uv;
+}
+expect unordered {
+    1|test|1
+}
+
+# mysql-error: 1292 22007 Truncated incorrect datetime value: '2019-12-31T12:00:00Z'
+@setup s3
+test l896 {
+    INSERT INTO xy (y,x) select * from (select cast('2019-12-31T12:00:00Z' as date), 0) dt(a,b) ON DUPLICATE KEY UPDATE x=dt.b+1, y=dt.a;
+}
+expect error {
+}
+
+@setup s3
+test l900 {
+    select * from xy;
+}
+expect unordered {
+    0|2023-09-16 00:00:00
+}
+
+@setup s4
+test l931 {
+    INSERT INTO t1 (dt) VALUES ('0001-01-01 00:00:00');
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+@setup s7
+test l948 {
+    select * from auto order by 1;
+}
+expect {
+    10
+    20
+    30
+    31
+    40
+    41
+}
+
+@setup s5
+@setup s6
+@setup s8
+test l967 {
+    select * from auto order by 1;
+}
+expect {
+    -3
+    -2
+    -1
+    10
+    20
+    30
+    31
+    32
+    33
+    34
+}
+
+@setup s9
+test l982 {
+    select * from auto order by 1;
+}
+expect {
+    10|1
+    20|2
+    30|3
+}
+
+@setup s10
+test l997 {
+    select * from auto order by 1;
+}
+expect {
+    10|1|NULL
+    20|2|NULL
+    30|3|NULL
+}
+
+@setup s11
+test l1013 {
+    select * from auto_no_primary order by 1;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s12
+test l1029 {
+    select * from auto_no_primary order by 1;
+}
+expect {
+    1|NULL
+    2|NULL
+    3|NULL
+}
+
+@setup s5
+@setup s13
+test l1047 {
+    select * from auto order by 1;
+}
+expect {
+    11
+}
+
+@setup s14
+test l1067 {
+    select * from auto order by 1;
+}
+expect {
+    1|10
+    2|20
+    3|30
+}
+
+@setup s14
+@setup s15
+test l1092 {
+    insert into auto values (NULL,90);
+}
+expect unordered {
+}
+
+@setup s14
+@setup s15
+@setup s16
+test l1099 {
+    select * from auto order by 1;
+}
+expect {
+    1|10
+    2|20
+    3|30
+    9|90
+}
+
+@setup s14
+@setup s17
+test l1121 {
+    select * from auto order by 1;
+}
+expect {
+    1|10
+    2|20
+    3|30
+    19|190
+}
+
+@setup s18
+test l1137 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s19
+test l1153 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s20
+test l1169 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s5
+@setup s21
+test l1185 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s22
+test l1201 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s23
+test l1217 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s24
+test l1233 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s25
+test l1249 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s26
+test l1265 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s27
+test l1281 {
+    select * from auto order by 1;
+}
+expect {
+    1
+    10
+    11
+}
+
+@setup s28
+@setup s29
+test l1305 {
+    insert into auto values (0), (0), (1-1);
+}
+expect unordered {
+}
+
+@setup s28
+@setup s29
+@setup s30
+test l1311 {
+    select * from auto order by i;
+}
+expect {
+    0
+    0
+    0
+}
+
+@setup s28
+@setup s29
+@setup s30
+test l1325 {
+    insert into auto values (1);
+}
+expect unordered {
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 4
+@setup s28
+@setup s31
+test l1344 {
+    insert into auto_pk values (0), (1), (NULL), ();
+}
+expect error {
+}
+
+@setup s28
+@setup s31
+test l1350 {
+    select * from auto_pk;
+}
+expect unordered {
+}
+
+@setup s32
+test l1392 {
+    INSERT INTO t1 (id, dt) values (DEFAULT, DEFAULT);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+test l1396 {
+    INSERT INTO t1 (dt, ID) values (DEFAULT, DEFAULT);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+test l1400 {
+    INSERT INTO t1 (ID) values (DEFAULT), (3);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+@setup s35
+test l1404 {
+    INSERT INTO t1 (dt) values (DEFAULT), ('1981-02-16 00:00:00');
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+@setup s35
+@setup s36
+test l1408 {
+    INSERT INTO t1 values (100, '2000-01-01 12:34:56'), (DEFAULT, DEFAULT);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+@setup s35
+@setup s36
+@setup s37
+test l1412 {
+    INSERT INTO t1 (id, dt) values (100, '2022-01-01 01:01:01'), (DEFAULT, DEFAULT);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+@setup s35
+@setup s36
+@setup s37
+@setup s38
+test l1416 {
+    INSERT INTO t1 (id) values (10), (DEFAULT);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s33
+@setup s34
+@setup s35
+@setup s36
+@setup s37
+@setup s38
+@setup s39
+test l1420 {
+    INSERT INTO t1 (DT) values ('2022-02-02 02:02:02'), (DEFAULT);
+}
+expect unordered {
+}
+
+@setup s40
+test l1424 {
+    INSERT INTO t2 values ('10'), (DEFAULT);
+}
+expect unordered {
+}
+
+@setup s40
+@setup s41
+test l1428 {
+    INSERT INTO t2 (id) values (DEFAULT), ('11'), (DEFAULT);
+}
+expect unordered {
+}
+
+@setup s40
+@setup s41
+@setup s42
+test l1432 {
+    select count(distinct id) from t2;
+}
+expect unordered {
+    5
+}
+
+@setup s43
+test l1436 {
+    INSERT INTO t3 (a) values (DEFAULT), ('2'), (DEFAULT);
+}
+expect unordered {
+}
+
+@setup s43
+@setup s44
+test l1440 {
+    SELECT b from t3 order by b asc;
+}
+expect {
+    2
+    2
+    4
+}
+
+@setup s45
+test l1448 {
+    select * from t4;
+}
+expect unordered {
+}
+
+@setup s46
+test l1478 {
+    INSERT INTO t1 (a,b) values (1, DEFAULT);
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+test l1482 {
+    select * from t1 order by a;
+}
+expect {
+    1|2
+}
+
+@setup s46
+@setup s47
+test l1486 {
+    INSERT INTO t1 values (2, DEFAULT);
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s48
+test l1490 {
+    select * from t1 where a = 2 order by a;
+}
+expect {
+    2|3
+}
+
+@setup s46
+@setup s47
+@setup s48
+test l1494 {
+    INSERT INTO t1 (b,a) values (DEFAULT, 3);
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s48
+@setup s49
+test l1498 {
+    select * from t1 where a = 3 order by a;
+}
+expect {
+    3|2
+}
+
+@setup s50
+test l1512 {
+    SELECT * FROM y;
+}
+expect unordered {
+    1|1
+    2|2
+    3|3
+}
+
+@setup s50
+test l1518 {
+    INSERT IGNORE INTO y VALUES (1, 2), (4,4);
+}
+expect unordered {
+}
+
+@setup s50
+@setup s51
+test l1526 {
+    INSERT IGNORE INTO y VALUES (5, NULL);
+}
+expect unordered {
+}
+
+@setup s50
+@setup s51
+@setup s52
+test l1534 {
+    INSERT IGNORE INTO y SELECT * FROM y WHERE pk=(SELECT pk+10 FROM y WHERE pk > 1);
+}
+expect unordered {
+}
+
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+test l1542 {
+    INSERT IGNORE INTO y SELECT 10, 0 FROM dual WHERE 1=(SELECT 1 FROM dual UNION SELECT 2 FROM dual);
+}
+expect unordered {
+}
+
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+test l1550 {
+    INSERT IGNORE INTO y SELECT 11, 0 FROM dual WHERE 1=(SELECT 1 FROM dual UNION SELECT 2 FROM dual) UNION SELECT 12, 0 FROM dual;
+}
+expect unordered {
+}
+
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+test l1558 {
+    INSERT IGNORE INTO y SELECT 13, 0 FROM dual UNION SELECT 14, 0 FROM dual WHERE 1=(SELECT 1 FROM dual UNION SELECT 2 FROM dual);
+}
+expect unordered {
+}
+
+@setup s50
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+@setup s55
+@setup s56
+test l1566 {
+    INSERT IGNORE INTO y VALUES (3, 8);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2' for key 'test.PRIMARY'
+@setup s57
+test l1583 {
+    INSERT INTO test VALUES (2,2),(2,3);
+}
+expect error {
+}
+
+@setup s57
+test l1587 {
+    DELETE FROM test where pk = 1;
+}
+expect unordered {
+}
+
+@setup s57
+@setup s58
+test l1591 {
+    INSERT INTO test VALUES (1,1);
+}
+expect unordered {
+}
+
+@setup s59
+test l1605 {
+    insert into test(pk) values (1);
+}
+expect unordered {
+}
+
+@setup s60
+test l1617 {
+    INSERT INTO city VALUES (1,'San Pedro de Macorís');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`nodes`, CONSTRAINT `nodes_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `users` (`id`))
+@setup s61
+test l1640 {
+    insert into nodes(id,owner,status,timestamp) values('id1','dabe','off',2) on duplicate key update owner='milo',status='on';
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`nodes`, CONSTRAINT `nodes_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `users` (`id`))
+@setup s61
+test l1646 {
+    insert into nodes(id,owner,status,timestamp) values('id2','dabe','off',3) on duplicate key update owner='milo',status='on';
+}
+expect error {
+}
+
+@setup s61
+test l1652 {
+    select * from nodes;
+}
+expect unordered {
+}
+
+@setup s62
+@setup s63
+test l1670 {
+    insert into a (select * from b) on duplicate key update a.i = b.j + 100;
+}
+expect unordered {
+}
+
+@setup s62
+@setup s63
+@setup s64
+test l1676 {
+    select * from a;
+}
+expect unordered {
+    101
+    2
+    3
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s65
+test l1695 {
+    insert into a select * from (select i from b) as bb on duplicate key update a.i = bb.i + 100;
+}
+expect error {
+}
+
+@setup s65
+test l1699 {
+    insert into a (i) select * from (select i from b) as bb on duplicate key update a.i = bb.i + 100;
+}
+expect unordered {
+}
+
+@setup s65
+@setup s66
+test l1705 {
+    select * from a;
+}
+expect unordered {
+    101|2|3
+}
+
+@setup s62
+@setup s63
+test l1726 {
+    insert into a (select * from b as t) on duplicate key update a.i = t.j + 100;
+}
+expect unordered {
+}
+
+@setup s62
+@setup s63
+@setup s67
+test l1732 {
+    select * from a;
+}
+expect unordered {
+    101
+    2
+    3
+}
+
+# mysql-error: 1052 23000 Column 'i' in field list is ambiguous
+@setup s62
+@setup s68
+test l1749 {
+    insert into a (select * from b) on duplicate key update i = i;
+}
+expect error {
+}
+
+@setup s69
+test l1770 {
+    insert into a (select * from b join c where b.x = c.y) on duplicate key update a.j = b.x + c.y + 100;
+}
+expect unordered {
+}
+
+@setup s69
+@setup s70
+test l1776 {
+    select * from a;
+}
+expect unordered {
+    1|102
+    2|2
+    3|3
+}
+
+@setup s62
+@setup s63
+test l1823 {
+    insert into a with cte as (select * from b) select * from cte on duplicate key update a.i = cte.j + 100;
+}
+expect unordered {
+}
+
+# mysql-error: 1353 HY000 In definition of view, derived table or common table expression, SELECT list and column names list have different column counts
+@setup s62
+test l1846 {
+    insert into a values (1) as new(c, d) on duplicate key update i = c;
+}
+expect error {
+}
+
+@setup s71
+test l1859 {
+    INSERT INTO t VALUES (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't.PRIMARY'
+@setup s71
+@setup s72
+test l1863 {
+    INSERT into t VALUES (1);
+}
+expect error {
+}
+
+@setup s71
+@setup s72
+test l1867 {
+    SELECT * from t;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s73
+test l1871 {
+    INSERT into t2 VALUES (1, 1), (2, 2);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1-1' for key 't2.PRIMARY'
+@setup s73
+@setup s74
+test l1875 {
+    INSERT into t2 VALUES (1, 1);
+}
+expect error {
+}
+
+@setup s73
+@setup s74
+test l1879 {
+    SELECT * from t2;
+}
+expect unordered {
+    1|1
+    2|2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't.col1'
+@setup s75
+test l1894 {
+    INSERT INTO t VALUES (2, 2), (3, 1), (4, 4);
+}
+expect error {
+}
+
+@setup s75
+test l1898 {
+    SELECT * from t;
+}
+expect unordered {
+    1|1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1-1' for key 't2.col1_col2'
+@setup s76
+test l1902 {
+    INSERT INTO t2 VALUES (2, 2, 2), (3, 1, 1), (4, 4, 4);
+}
+expect error {
+}
+
+@setup s76
+test l1906 {
+    SELECT * from t2;
+}
+expect unordered {
+    1|1|1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2' for key 't.col1'
+@setup s75
+test l1910 {
+    INSERT INTO t VALUES (5, 2), (6, 2);
+}
+expect error {
+}
+
+@setup s75
+test l1914 {
+    SELECT * from t;
+}
+expect unordered {
+    1|1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2-2' for key 't2.col1_col2'
+@setup s76
+test l1918 {
+    INSERT INTO t2 VALUES (5, 2, 2), (6, 2, 2);
+}
+expect error {
+}
+
+@setup s76
+test l1922 {
+    SELECT * from t2;
+}
+expect unordered {
+    1|1|1
+}
+
+@setup s76
+test l1926 {
+    INSERT into t2 VALUES (5, NULL, 1), (6, NULL, 1), (7, 1, NULL), (8, 1, NULL), (9, NULL, NULL), (10, NULL, NULL);
+}
+expect unordered {
+}
+
+@setup s76
+@setup s77
+test l1930 {
+    SELECT * from t2;
+}
+expect unordered {
+    10|NULL|NULL
+    1|1|1
+    5|NULL|1
+    6|NULL|1
+    7|1|NULL
+    8|1|NULL
+    9|NULL|NULL
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't.col1'
+@setup s78
+test l1945 {
+    INSERT INTO t VALUES (2, 2), (3, 1), (4, 4);
+}
+expect error {
+}
+
+@setup s78
+test l1949 {
+    SELECT * from t;
+}
+expect unordered {
+    1|1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1-1' for key 't2.col1_col2'
+@setup s79
+test l1953 {
+    INSERT INTO t2 VALUES (2, 2, 2), (3, 1, 1), (4, 4, 4);
+}
+expect error {
+}
+
+@setup s79
+test l1957 {
+    SELECT * from t2;
+}
+expect unordered {
+    1|1|1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2' for key 't.col1'
+@setup s78
+test l1961 {
+    INSERT INTO t VALUES (5, 2), (6, 2);
+}
+expect error {
+}
+
+@setup s78
+test l1965 {
+    SELECT * from t;
+}
+expect unordered {
+    1|1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2-2' for key 't2.col1_col2'
+@setup s79
+test l1969 {
+    INSERT INTO t2 VALUES (5, 2, 2), (6, 2, 2);
+}
+expect error {
+}
+
+@setup s79
+test l1973 {
+    SELECT * from t2;
+}
+expect unordered {
+    1|1|1
+}
+
+@setup s79
+test l1977 {
+    INSERT into t2 VALUES (5, NULL, 1), (6, NULL, 1), (7, 1, NULL), (8, 1, NULL), (9, NULL, NULL), (10, NULL, NULL);
+}
+expect unordered {
+}
+
+@setup s79
+@setup s80
+test l1981 {
+    SELECT * from t2;
+}
+expect unordered {
+    10|NULL|NULL
+    1|1|1
+    5|NULL|1
+    6|NULL|1
+    7|1|NULL
+    8|1|NULL
+    9|NULL|NULL
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1-1' for key 't.col'
+@setup s81
+test l1994 {
+    INSERT INTO t (pk1, pk2, col) VALUES (3, 1, 1);
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2-1' for key 't.col'
+@setup s81
+test l1998 {
+    UPDATE t SET col = col + 1;
+}
+expect error {
+}
+
+@setup s82
+test l2011 {
+    INSERT INTO test (pk, v1) VALUES (1, 'a');
+}
+expect unordered {
+}
+
+@setup s82
+@setup s83
+test l2015 {
+    INSERT INTO test (pk, v1) SELECT 2 as pk, 'a' as v1;
+}
+expect unordered {
+}
+
+@setup s84
+test l2028 {
+    INSERT INTO test (pk, v1) VALUES (1, 'a');
+}
+expect unordered {
+}
+
+@setup s84
+@setup s85
+test l2032 {
+    INSERT INTO test (pk, v1) SELECT 2 as pk, 'a' as v1;
+}
+expect unordered {
+}
+
+@setup s86
+test l2046 {
+    insert into t2(d) select t from t1 where false;
+}
+expect unordered {
+}
+
+# mysql-error: 1292 22007 Incorrect datetime value: '' for column 'd' at row 1
+@setup s86
+@setup s87
+test l2052 {
+    insert into t2(d) select t from t1 where i = 3;
+}
+expect error {
+}
+
+# mysql-error: 1292 22007 Incorrect datetime value: 'badtime' for column 'd' at row 1
+@setup s86
+@setup s87
+test l2056 {
+    insert into t2(d) select t from t1 where i = 2;
+}
+expect error {
+}
+
+@setup s86
+@setup s87
+test l2060 {
+    insert into t2(d) select t from t1 where i = 1;
+}
+expect unordered {
+}
+
+@setup s86
+@setup s87
+@setup s88
+test l2066 {
+    select * from t2;
+}
+expect unordered {
+    2001-01-01 00:00:00
+}
+
+@setup s89
+test l2093 {
+    SELECT t1 from escpe;
+}
+expect unordered {
+    foo's baz
+}
+
+@setup s89
+test l2097 {
+    SELECT t2 from escpe;
+}
+expect unordered {
+    who's dat
+}
+
+@setup s89
+test l2101 {
+    SELECT t3 from escpe;
+}
+expect unordered {
+    joe's bar
+}
+
+@setup s89
+test l2105 {
+    SELECT t4 from escpe;
+}
+expect unordered {
+    quote"bazzar
+}
+
+@setup s89
+test l2109 {
+    SELECT t5 from escpe;
+}
+expect unordered {
+    back\'slash
+}
+
+@setup s89
+test l2113 {
+    SELECT t6 from escpe;
+}
+expect unordered {
+    tab	tab
+}
+
+@setup s90
+test l2143 {
+    SELECT val from quoted order by id;
+}
+expect {
+    joe's
+    jan's
+    mia\'s
+    bob's
+    tab	vs	coke
+}
+
+@setup s91
+test l2162 {
+    insert into alphabet values ('a') on duplicate key update letter = values(letter);
+}
+expect unordered {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'good_letters' is violated.
+@setup s91
+@setup s92
+test l2168 {
+    insert into alphabet values ('z') on duplicate key update letter = values(letter);
+}
+expect error {
+}
+
+@setup s93
+test l2183 {
+    INSERT IGNORE INTO t2 VALUES (1,2);
+}
+expect unordered {
+}
+
+@setup s94
+test l2200 {
+    select * from t1 order by pk;
+}
+expect {
+    1|abc
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't1.PRIMARY'
+@setup s94
+test l2204 {
+    INSERT INTO t1 VALUES (1, 'abc');
+}
+expect error {
+}
+
+@setup s94
+test l2208 {
+    INSERT INTO t1 VALUES (2, 'def');
+}
+expect unordered {
+}
+
+@setup s94
+@setup s95
+test l2212 {
+    select * from t1 order by pk;
+}
+expect {
+    1|abc
+    2|def
+}
+
+@setup s94
+@setup s96
+test l2226 {
+    select * from t1 order by pk;
+}
+expect {
+    1|abc
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't1.PRIMARY'
+@setup s94
+@setup s96
+test l2230 {
+    INSERT INTO t1 VALUES (1, 'abc');
+}
+expect error {
+}
+
+@setup s94
+@setup s96
+test l2234 {
+    INSERT INTO t1 VALUES (2, 'def');
+}
+expect unordered {
+}
+
+@setup s94
+@setup s96
+@setup s97
+test l2242 {
+    select * from t1 order by pk;
+}
+expect {
+    1|abc
+    2|def
+}
+
+@setup s98
+@setup s99
+test l2297 {
+    select * from parent;
+}
+expect unordered {
+    1
+}
+
+@setup s98
+@setup s99
+test l2305 {
+    select * from parent;
+}
+expect unordered {
+    1
+}
+
+@setup s98
+@setup s100
+test l2332 {
+    select * from parent;
+}
+expect unordered {
+    1
+}
+
+@setup s98
+@setup s100
+test l2340 {
+    select * from parent;
+}
+expect unordered {
+    1
+}
+
+@setup s101
+test l2363 {
+    select * from t;
+}
+expect unordered {
+}
+
+@setup s102
+test l2367 {
+    select * from t2;
+}
+expect unordered {
+}

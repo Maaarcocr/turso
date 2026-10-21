@@ -1,0 +1,65 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE `keyless` (   `c0` bigint,   `c1` bigint );
+    insert into keyless values
+    (0,0),
+    (1,1),
+    (1,1),
+    (2,2);
+}
+
+@setup s1
+test l9406 {
+    SELECT * FROM keyless ORDER BY c0;
+}
+expect {
+    0|0
+    1|1
+    1|1
+    2|2
+}
+
+@setup s1
+test l9415 {
+    SELECT * FROM keyless ORDER BY c1 DESC;
+}
+expect {
+    2|2
+    1|1
+    1|1
+    0|0
+}
+
+@setup s1
+test l9440 {
+    DESCRIBE keyless;
+}
+expect {
+    c0|bigint|YES||NULL|
+    c1|bigint|YES||NULL|
+}
+
+@setup s1
+test l9447 {
+    SHOW COLUMNS FROM keyless;
+}
+expect {
+    c0|bigint|YES||NULL|
+    c1|bigint|YES||NULL|
+}
+
+@setup s1
+test l9454 {
+    SHOW FULL COLUMNS FROM keyless;
+}
+expect {
+    c0|bigint|NULL|YES||NULL||select,insert,update,references|
+    c1|bigint|NULL|YES||NULL||select,insert,update,references|
+}

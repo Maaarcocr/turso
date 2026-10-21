@@ -1,0 +1,1199 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (pk int PRIMARY KEY, c1 int, c2 int);
+    ALTER TABLE t1 ADD CONSTRAINT uniq_c1c2 UNIQUE (c1, c2);
+}
+
+setup s2 {
+    CREATE TABLE t(a int primary key);
+}
+
+setup s3 {
+    CREATE TABLE b(b int primary key);
+    CREATE TABLE a(a int primary key, b int, CONSTRAINT `fk` FOREIGN KEY (b) REFERENCES b (b));
+}
+
+setup s4 {
+    CREATE TABLE t32(pk BIGINT PRIMARY KEY, v1 int, v2 int, v3 int default (v1), toRename int);
+    alter table t32 add column v4 int after pk,
+			drop column v2, modify v1 varchar(100) not null,
+			alter column v3 set default 100, rename column toRename to newName;
+}
+
+setup s5 {
+    CREATE TABLE t32_2(pk BIGINT PRIMARY KEY, v1 int, v2 int, v3 int);
+    alter table t32_2 drop v1, add v1 int;
+}
+
+setup s6 {
+    CREATE TABLE t32_3(pk BIGINT PRIMARY KEY, v1 int, v2 int, v3 int);
+    alter table t32_3 rename column v1 to v5, add v1 int;
+}
+
+setup s7 {
+    CREATE TABLE t33(pk BIGINT PRIMARY KEY, v1 int, v2 int);
+    alter table t33 add column v4 int after pk,
+			drop column v2, add constraint v1gt0 check (v1 > 0);
+}
+
+setup s8 {
+    create table t (pk int primary key, col1 timestamp(6) default current_timestamp(6), col2 varchar(1000), index idx1 (pk, col1));
+}
+
+setup s9 {
+    alter table t alter column col2 DROP DEFAULT;
+}
+
+setup s10 {
+    alter table t alter column col2 SET DEFAULT 'FOO!';
+}
+
+setup s11 {
+    create table t43 (i bigint primary key, s varchar(20));
+    ALTER TABLE t43 ADD COLUMN j int;
+    ALTER TABLE t43 ADD COLUMN k int;
+    ALTER TABLE t43 ADD CONSTRAINT test_check CHECK (j < k);
+}
+
+setup s12 {
+    create table t36 (i bigint primary key, j varchar(20));
+    create table t37 (i bigint primary key, j varchar(20));
+    ALTER TABLE t36 ADD key (j);
+}
+
+setup s13 {
+    CREATE TABLE t38 (pk int PRIMARY KEY, col1 int);
+    INSERT INTO t38 VALUES (1, 1);
+    INSERT INTO t38 VALUES (2, 2);
+    INSERT INTO t38 VALUES (3, NULL);
+    INSERT INTO t38 VALUES (4, NULL);
+}
+
+setup s14 {
+    CREATE TABLE t39 (pk int PRIMARY KEY, col1 int, col2 int);
+    INSERT INTO t39 VALUES (1, 1, 1);
+    INSERT INTO t39 VALUES (2, 1, 2);
+    INSERT INTO t39 VALUES (3, 2, 1);
+    INSERT INTO t39 VALUES (4, 1, NULL);
+    INSERT INTO t39 VALUES (5, 1, NULL);
+    INSERT INTO t39 VALUES (6, NULL, 1);
+    INSERT INTO t39 VALUES (7, NULL, 1);
+    INSERT INTO t39 VALUES (8, NULL, NULL);
+    INSERT INTO t39 VALUES (9, NULL, NULL);
+}
+
+setup s15 {
+    ALTER TABLE t38 ADD UNIQUE u_col1 (col1);
+}
+
+setup s16 {
+    ALTER TABLE t38 DROP INDEX u_col1;
+}
+
+setup s17 {
+    INSERT INTO t38 VALUES (5, 1);
+}
+
+setup s18 {
+    ALTER TABLE t39 ADD UNIQUE u_col1_col2 (col1, col2);
+}
+
+setup s19 {
+    ALTER TABLE t39 DROP INDEX u_col1_col2;
+}
+
+setup s20 {
+    INSERT INTO t39 VALUES (10, 1, 1);
+}
+
+setup s21 {
+    CREATE TABLE t40 (pk int AUTO_INCREMENT PRIMARY KEY, val int);
+}
+
+setup s22 {
+    INSERT into t40 VALUES (1, 1), (NULL, 2), (NULL, 3);
+}
+
+setup s23 {
+    ALTER TABLE t40 MODIFY COLUMN pk int;
+}
+
+setup s24 {
+    INSERT INTO t40 VALUES (NULL, 1);
+}
+
+setup s25 {
+    CREATE TABLE t1 (i bigint primary key, s varchar(20));
+    INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+}
+
+setup s26 {
+    create table t (pk int primary key);
+}
+
+setup s27 {
+    alter table t add column c int CONSTRAINT chk_c check(c > 10);
+}
+
+setup s28 {
+    create table tbl_i (i int primary key);
+}
+
+setup s29 {
+    create table tbl_ij (i int primary key, j int);
+}
+
+setup s30 {
+    create table t (c1 int primary key, c2 int, c3 int);
+    insert into t values (1, 1, 1), (2, 2, 2), (3, 3, 3);
+}
+
+setup s31 {
+    alter table t add column c4 int null, add unique index uniq(c4);
+}
+
+setup s32 {
+    CREATE TABLE test1 (v1 VARCHAR(200), v2 ENUM('a'), v3 SET('a'));
+}
+
+setup s33 {
+    CREATE TABLE test2 (v1 VARCHAR(200), v2 ENUM('a'), v3 SET('a')) COLLATE=utf8mb4_general_ci;
+}
+
+setup s34 {
+    CREATE TABLE test3 (v1 VARCHAR(200) COLLATE utf8mb4_general_ci, v2 ENUM('a'), v3 SET('a') CHARACTER SET utf8mb3) COLLATE=utf8mb4_general_ci;
+}
+
+setup s35 {
+    CREATE TABLE test4 (v1 VARCHAR(200) COLLATE utf8mb4_0900_ai_ci, v2 ENUM('a') COLLATE utf8mb4_general_ci, v3 SET('a') COLLATE utf8mb4_unicode_ci) COLLATE=utf8mb4_bin;
+}
+
+setup s36 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT NOT NULL DEFAULT 88);
+}
+
+setup s37 {
+    ALTER TABLE test ADD CONSTRAINT cx CHECK (v1 < 100);
+}
+
+setup s38 {
+    ALTER TABLE test DROP CHECK cx, ADD CHECK (v1 < 50);
+}
+
+setup s39 {
+    CREATE table test (pk int primary key);
+    ALTER TABLE `test` auto_increment = 2;
+    INSERT INTO test VALUES (1);
+}
+
+setup s40 {
+    CREATE table test (pk int primary key, uk int unique);
+    ALTER TABLE `test` MODIFY column uk int auto_increment;
+}
+
+setup s41 {
+    CREATE table test (pk int primary key, uk int);
+    ALTER TABLE `test` MODIFY column uk int unique;
+}
+
+setup s42 {
+    CREATE table test (pk int primary key, mk int, index (mk));
+    ALTER TABLE `test` MODIFY column mk int auto_increment;
+}
+
+setup s43 {
+    create table t1 (a int primary key, b int);
+}
+
+setup s44 {
+    alter table t1 rename to abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl;
+}
+
+setup s45 {
+    alter table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl rename to t1;
+}
+
+setup s46 {
+    create table parent (a int primary key);
+    alter table t1 rename to abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl;
+    alter table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl rename to t1;
+    alter table t1 add constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk0 foreign key(a) references parent(a);
+}
+
+setup s47 {
+    create table t1 (abc int primary key, def int);
+}
+
+setup s48 {
+    CREATE table t (pk int primary key, col1 varchar(100));
+    INSERT into t values (1, '100'), (2, '200');
+    alter table t add unique index idx1 (col1);
+}
+
+setup s49 {
+    create table t1 (i int, KEY myIndex1 (`i`));
+}
+
+setup s50 {
+    create table t2 (i int, KEY myIndex2 (`i`));
+}
+
+setup s51 {
+    create table t3 (i int, KEY myIndex3 (`i`));
+}
+
+setup s52 {
+    create table t (i int);
+}
+
+setup s53 {
+    start transaction;
+    alter table t change i j int;
+    rename table t to tt;
+    commit;
+}
+
+setup s54 {
+    create table t1 (pk int primary key, c1 float);
+    insert into t1 values (1, 0.0);
+    insert into t1 values (2, 127.9);
+    insert into t1 values (3, 42.1);
+}
+
+setup s55 {
+    alter table t1 modify column c1 bigint;
+}
+
+setup s56 {
+    create table tableWithComment (i int) comment = 'comment';
+}
+
+setup s57 {
+    create table xy (x int primary key, y enum ('a', 'b'));
+    insert into xy values (0, NULL),(1, 'b');
+}
+
+setup s58 {
+    alter table xy modify y enum('a','b','c');
+}
+
+setup s59 {
+    create table t (c1 int, c2 varchar(200), c3 enum('one', 'two'));
+    insert into t values (1, 'one', NULL);
+}
+
+setup s60 {
+    alter table t modify column c1 int unsigned;
+}
+
+setup s61 {
+    alter table t drop column c1;
+}
+
+setup s62 {
+    alter table t add column new3 int;
+}
+
+setup s63 {
+    insert into t values ('two', 'two', -2);
+}
+
+setup s64 {
+    create table t (i int primary key, e enum('a', 'b', 'c'));
+    insert ignore into t values (0, 'error');
+    insert into t values (1, 'a');
+    insert into t values (2, 'b');
+    insert into t values (3, 'c');
+}
+
+setup s65 {
+    alter table t modify column e enum('c', 'a', 'b');
+}
+
+setup s66 {
+    alter table t modify column e enum('asdf', 'a', 'b', 'c');
+}
+
+setup s67 {
+    alter table t modify column e enum('asdf', 'a', 'b', 'c', 'd');
+}
+
+setup s68 {
+    alter table t modify column e enum('a', 'b', 'c');
+}
+
+setup s69 {
+    create table t (i int primary key, s set('a', 'b', 'c'));
+    insert ignore into t values (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7);
+}
+
+setup s70 {
+    alter table t modify column s set('a', 'b', 'c', 'd');
+}
+
+@setup s1
+test l36 {
+    ALTER TABLE t1 DROP CONSTRAINT uniq_c1c2;
+}
+expect unordered {
+}
+
+# mysql-error: 1118 42000 Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+@setup s2
+test l48 {
+    alter table t add column b varchar(16383);
+}
+expect error {
+}
+
+# mysql-error: 1118 42000 Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+@setup s2
+test l53 {
+    alter table t add column b varchar(16000), add column c varchar(16000);
+}
+expect error {
+}
+
+@setup s2
+test l57 {
+    alter table t add column b varchar(16000), add column c varchar(10);
+}
+expect unordered {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'b' and referenced column 'b' in foreign key constraint 'fk' are incompatible.
+@setup s3
+test l70 {
+    alter table a add column c varchar(100), modify column b varchar(100);
+}
+expect error {
+}
+
+@setup s4
+test l89 {
+    SHOW FULL COLUMNS FROM t32;
+}
+expect {
+    pk|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    v4|int|NULL|YES||NULL||select,insert,update,references|
+    v1|varchar(100)|utf8mb4_0900_ai_ci|NO||NULL||select,insert,update,references|
+    v3|int|NULL|YES||100||select,insert,update,references|
+    newName|int|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s5
+test l100 {
+    SHOW FULL COLUMNS FROM t32_2;
+}
+expect {
+    pk|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    v2|int|NULL|YES||NULL||select,insert,update,references|
+    v3|int|NULL|YES||NULL||select,insert,update,references|
+    v1|int|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s6
+test l109 {
+    SHOW FULL COLUMNS FROM t32_3;
+}
+expect {
+    pk|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    v5|int|NULL|YES||NULL||select,insert,update,references|
+    v2|int|NULL|YES||NULL||select,insert,update,references|
+    v3|int|NULL|YES||NULL||select,insert,update,references|
+    v1|int|NULL|YES||NULL||select,insert,update,references|
+}
+
+# mysql-error: 1091 42000 Can't DROP 'vnew'; check that column/key exists
+@setup s4
+test l119 {
+    alter table t32 add column vnew int, drop column vnew;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'v5'; check that column/key exists
+@setup s4
+test l123 {
+    alter table t32 rename column v3 to v5, drop column v5;
+}
+expect error {
+}
+
+@setup s7
+test l141 {
+    SHOW FULL COLUMNS FROM t33;
+}
+expect {
+    pk|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    v4|int|NULL|YES||NULL||select,insert,update,references|
+    v1|int|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s8
+test l187 {
+    alter table t alter column col2 DROP DEFAULT;
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+test l195 {
+    alter table t alter column col2 SET DEFAULT 'FOO!';
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+test l203 {
+    alter table t drop index idx1;
+}
+expect unordered {
+}
+
+# mysql-error: 3959 HY000 Check constraint 'test_check' uses column 'j', hence column cannot be dropped or renamed.
+@setup s11
+test l320 {
+    alter table t43 drop column j;
+}
+expect error {
+}
+
+@setup s12
+test l365 {
+    alter table t37 drop column j;
+}
+expect unordered {
+}
+
+@setup s13
+test l414 {
+    ALTER TABLE t38 ADD UNIQUE u_col1 (col1);
+}
+expect unordered {
+}
+
+@setup s14
+test l418 {
+    ALTER TABLE t39 ADD UNIQUE u_col1_col2 (col1, col2);
+}
+expect unordered {
+}
+
+@setup s13
+@setup s15
+test l422 {
+    ALTER TABLE t38 DROP INDEX u_col1;
+}
+expect unordered {
+}
+
+@setup s13
+@setup s15
+@setup s16
+test l426 {
+    INSERT INTO t38 VALUES (5, 1);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't38.u_col1'
+@setup s13
+@setup s15
+@setup s16
+@setup s17
+test l430 {
+    ALTER TABLE t38 ADD UNIQUE u_col1 (col1);
+}
+expect error {
+}
+
+@setup s14
+@setup s18
+test l442 {
+    ALTER TABLE t39 DROP INDEX u_col1_col2;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s18
+@setup s19
+test l446 {
+    INSERT INTO t39 VALUES (10, 1, 1);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1-1' for key 't39.u_col1_col2'
+@setup s14
+@setup s18
+@setup s19
+@setup s20
+test l450 {
+    ALTER TABLE t39 ADD UNIQUE u_col1_col2 (col1, col2);
+}
+expect error {
+}
+
+@setup s21
+@setup s22
+test l472 {
+    ALTER TABLE t40 MODIFY COLUMN pk int;
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+@setup s23
+test l476 {
+    describe t40;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    val|int|YES||NULL|
+}
+
+# mysql-error: 1048 23000 Column 'pk' cannot be null
+@setup s21
+@setup s22
+@setup s23
+test l483 {
+    INSERT INTO t40 VALUES (NULL, 4);
+}
+expect error {
+}
+
+@setup s21
+@setup s22
+@setup s23
+test l487 {
+    drop table t40;
+}
+expect unordered {
+}
+
+test l491 {
+    CREATE TABLE t40 (pk int AUTO_INCREMENT PRIMARY KEY, val int);
+}
+expect unordered {
+}
+
+@setup s21
+test l495 {
+    INSERT INTO t40 VALUES (NULL, 1);
+}
+expect unordered {
+}
+
+@setup s21
+@setup s24
+test l502 {
+    SELECT * FROM t40;
+}
+expect unordered {
+    1|1
+}
+
+@setup s25
+test l515 {
+    alter table t1 add column j int unique;
+}
+expect unordered {
+}
+
+@setup s26
+test l537 {
+    alter table t add column c int CONSTRAINT chk_c check(c > 10);
+}
+expect unordered {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk_c' is violated.
+@setup s26
+@setup s27
+test l541 {
+    insert into t values (1, 9);
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'j'; check that column/key exists
+@setup s28
+test l554 {
+    alter table tbl_i add column j int, drop column j;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'k'; check that column/key exists
+@setup s29
+test l570 {
+    alter table tbl_ij drop column k, rename column j to k;
+}
+expect error {
+}
+
+@setup s28
+test l574 {
+    alter table tbl_i add index(j), add column j int;
+}
+expect unordered {
+}
+
+@setup s30
+test l587 {
+    alter table t add column c4 int null, add unique index uniq(c4);
+}
+expect unordered {
+}
+
+@setup s30
+@setup s31
+test l605 {
+    select * from t;
+}
+expect unordered {
+    1|1|1|NULL
+    2|2|2|NULL
+    3|3|3|NULL
+}
+
+@setup s32
+test l660 {
+    ALTER TABLE test1 COLLATE utf8mb4_general_ci;
+}
+expect unordered {
+}
+
+@setup s33
+test l664 {
+    ALTER TABLE test2 COLLATE utf8mb4_0900_bin;
+}
+expect unordered {
+}
+
+@setup s34
+test l668 {
+    ALTER TABLE test3 COLLATE utf8mb4_0900_bin;
+}
+expect unordered {
+}
+
+@setup s35
+test l672 {
+    ALTER TABLE test4 COLLATE utf8mb4_unicode_ci;
+}
+expect unordered {
+}
+
+@setup s36
+test l720 {
+    ALTER TABLE test ADD CONSTRAINT cx CHECK (v1 < 100);
+}
+expect unordered {
+}
+
+@setup s36
+@setup s37
+test l724 {
+    ALTER TABLE test DROP CHECK cx, ADD CHECK (v1 < 50);
+}
+expect unordered {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'test_chk_1' is violated.
+@setup s36
+@setup s37
+@setup s38
+test l728 {
+    INSERT INTO test VALUES (1, 99);
+}
+expect error {
+}
+
+@setup s36
+@setup s37
+@setup s38
+test l732 {
+    INSERT INTO test VALUES (2, 2);
+}
+expect unordered {
+}
+
+@setup s39
+test l746 {
+    SELECT * FROM test;
+}
+expect unordered {
+    1
+}
+
+@setup s40
+test l759 {
+    describe test;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    uk|int|NO|UNI|NULL|auto_increment
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'test.uk'
+@setup s41
+test l775 {
+    INSERT INTO test VALUES (1, 1), (2, 1);
+}
+expect error {
+}
+
+@setup s42
+test l788 {
+    describe test;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    mk|int|NO|MUL|NULL|auto_increment
+}
+
+@setup s43
+test l819 {
+    alter table t1 rename to abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl;
+}
+expect unordered {
+}
+
+@setup s43
+@setup s44
+test l824 {
+    alter table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl rename to t1;
+}
+expect unordered {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s44
+@setup s45
+test l829 {
+    alter table t1 rename to abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm;
+}
+expect error {
+}
+
+# mysql-error: 1166 42000 Incorrect column name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm'
+@setup s43
+@setup s44
+@setup s45
+test l844 {
+    alter table t1 rename column a to abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm;
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s44
+@setup s45
+test l854 {
+    alter table t1 add constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm check (a > 0);
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s46
+test l864 {
+    alter table t1 add constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm foreign key(a) references parent(a);
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s46
+test l874 {
+    alter table t1 add constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm unique key(a);
+}
+expect error {
+}
+
+# mysql-error: 1176 42000 Key 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk2' doesn't exist in table 't1'
+@setup s43
+@setup s46
+test l884 {
+    alter table t1 rename index abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk2 to abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm;
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s46
+test l894 {
+    alter table t1 add column abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm int;
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s46
+test l904 {
+    alter table t1 change column abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk3 abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm int;
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s46
+test l914 {
+    alter table t1 add index abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (b);
+}
+expect error {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s43
+@setup s46
+test l919 {
+    alter table t1 add column d int, add index abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (b);
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'ABC'
+@setup s47
+test l931 {
+    alter table t1 add column ABC int;
+}
+expect error {
+}
+
+@setup s48
+test l945 {
+    alter table t add index idx2 (col1(10));
+}
+expect unordered {
+}
+
+@setup s49
+test l970 {
+    alter table t1 drop index MYINDEX1;
+}
+expect unordered {
+}
+
+@setup s50
+test l978 {
+    alter table t2 rename index myIndex2 to mySecondIndex;
+}
+expect unordered {
+}
+
+@setup s51
+test l986 {
+    alter table t3 rename index MYiNDEX3 to anotherIndex;
+}
+expect unordered {
+}
+
+@setup s52
+@setup s53
+test l1018 {
+    select j from tt;
+}
+expect unordered {
+}
+
+@setup s54
+test l1034 {
+    alter table t1 modify column c1 bigint;
+}
+expect unordered {
+}
+
+@setup s54
+@setup s55
+test l1037 {
+    select * from t1 order by pk;
+}
+expect {
+    1|0
+    2|128
+    3|42
+}
+
+@setup s52
+test l1068 {
+    alter table t comment = 'new comment';
+}
+expect unordered {
+}
+
+@setup s56
+test l1072 {
+    alter table tableWithComment comment = 'new comment';
+}
+expect unordered {
+}
+
+@setup s57
+test l1136 {
+    alter table xy modify y enum('a','b','c');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'y' at row 2
+@setup s57
+@setup s58
+test l1139 {
+    alter table xy modify y enum('a');
+}
+expect error {
+}
+
+@setup s59
+test l1153 {
+    alter table t modify column c1 int unsigned;
+}
+expect unordered {
+}
+
+@setup s59
+@setup s60
+test l1157 {
+    describe t;
+}
+expect {
+    c1|int unsigned|YES||NULL|
+    c2|varchar(200)|YES||NULL|
+    c3|enum('one','two')|YES||NULL|
+}
+
+@setup s59
+@setup s60
+test l1165 {
+    alter table t drop column c1;
+}
+expect unordered {
+}
+
+@setup s59
+@setup s60
+@setup s61
+test l1169 {
+    describe t;
+}
+expect {
+    c2|varchar(200)|YES||NULL|
+    c3|enum('one','two')|YES||NULL|
+}
+
+@setup s59
+@setup s60
+@setup s61
+test l1176 {
+    alter table t add column new3 int;
+}
+expect unordered {
+}
+
+@setup s59
+@setup s60
+@setup s61
+@setup s62
+test l1180 {
+    insert into t values ('two', 'two', -2);
+}
+expect unordered {
+}
+
+@setup s59
+@setup s60
+@setup s61
+@setup s62
+@setup s63
+test l1184 {
+    describe t;
+}
+expect {
+    c2|varchar(200)|YES||NULL|
+    c3|enum('one','two')|YES||NULL|
+    new3|int|YES||NULL|
+}
+
+@setup s59
+@setup s60
+@setup s61
+@setup s62
+@setup s63
+test l1192 {
+    select * from t;
+}
+expect unordered {
+    one|NULL|NULL
+    two|two|-2
+}
+
+@setup s64
+test l1208 {
+    select i, e, e + 0 from t;
+}
+expect unordered {
+    0||0
+    1|a|1
+    2|b|2
+    3|c|3
+}
+
+@setup s64
+test l1217 {
+    alter table t modify column e enum('c', 'a', 'b');
+}
+expect unordered {
+}
+
+@setup s64
+@setup s65
+test l1223 {
+    select i, e, e + 0 from t;
+}
+expect unordered {
+    0||0
+    1|a|2
+    2|b|3
+    3|c|1
+}
+
+@setup s64
+@setup s65
+test l1232 {
+    alter table t modify column e enum('asdf', 'a', 'b', 'c');
+}
+expect unordered {
+}
+
+@setup s64
+@setup s65
+@setup s66
+test l1238 {
+    select i, e, e + 0 from t;
+}
+expect unordered {
+    0||0
+    1|a|2
+    2|b|3
+    3|c|4
+}
+
+@setup s64
+@setup s65
+@setup s66
+test l1247 {
+    alter table t modify column e enum('asdf', 'a', 'b', 'c', 'd');
+}
+expect unordered {
+}
+
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+test l1253 {
+    select i, e, e + 0 from t;
+}
+expect unordered {
+    0||0
+    1|a|2
+    2|b|3
+    3|c|4
+}
+
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+test l1262 {
+    alter table t modify column e enum('a', 'b', 'c');
+}
+expect unordered {
+}
+
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+test l1268 {
+    select i, e, e + 0 from t;
+}
+expect unordered {
+    0||0
+    1|a|1
+    2|b|2
+    3|c|3
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 2
+@setup s64
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+test l1277 {
+    alter table t modify column e enum('abc');
+}
+expect error {
+}
+
+@setup s69
+test l1292 {
+    select i, s + 0, s from t;
+}
+expect unordered {
+    0|0|
+    1|1|a
+    2|2|b
+    3|3|a,b
+    4|4|c
+    5|5|a,c
+    6|6|b,c
+    7|7|a,b,c
+}
+
+@setup s69
+test l1305 {
+    alter table t modify column s set('a', 'b', 'c', 'd');
+}
+expect unordered {
+}
+
+@setup s69
+@setup s70
+test l1311 {
+    select i, s + 0, s from t;
+}
+expect unordered {
+    0|0|
+    1|1|a
+    2|2|b
+    3|3|a,b
+    4|4|c
+    5|5|a,c
+    6|6|b,c
+    7|7|a,b,c
+}

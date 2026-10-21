@@ -1,0 +1,88 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    RENAME TABLE mytable TO newTableName;
+}
+
+setup s3 {
+    create table othertable (s2 varchar(20) not null, i2 bigint primary key);
+    insert into othertable values
+    ('first', 3),
+    ('second', 2),
+    ('third', 1);
+    create index othertable_s2 on othertable (s2);
+    create index othertable_s2_i2 on othertable (s2,i2);
+}
+
+setup s4 {
+    CREATE TABLE `niltable` (   `i` bigint NOT NULL,   `i2` bigint,   `b` tinyint,   `f` double,   PRIMARY KEY (`i`) );
+    insert into niltable values
+    (1,null,null,null),
+    (2,2,1,null),
+    (3,null,0,null),
+    (4,4,null,4.0),
+    (5,null,1,5.0),
+    (6,6,0,6.0);
+    create index niltable_i2 on niltable (i2);
+    create table emptytable (i mediumint primary key, s varchar(20));
+}
+
+@setup s1
+test l1358 {
+    RENAME TABLE mytable TO newTableName;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l1366 {
+    SELECT COUNT(*) FROM newTableName;
+}
+expect unordered {
+    3
+}
+
+# mysql-error: 1050 42S01 Table 'mytable' already exists
+@setup s1
+@setup s3
+test l1375 {
+    RENAME TABLE othertable to othertable2, newTableName to mytable;
+}
+expect error {
+}
+
+@setup s1
+@setup s3
+test l1387 {
+    SELECT COUNT(*) FROM mytable;
+}
+expect unordered {
+    3
+}
+
+# mysql-error: 1050 42S01 Table 'niltable' already exists
+@setup s4
+test l1404 {
+    ALTER TABLE emptytable RENAME niltable;
+}
+expect error {
+}

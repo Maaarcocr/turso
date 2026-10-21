@@ -1,0 +1,65 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    ALTER TABLE mytable RENAME COLUMN i TO i2, RENAME COLUMN s TO s2;
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 's'
+@setup s1
+test l2190 {
+    ALTER TABLE mytable RENAME COLUMN i TO S;
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'N'
+@setup s1
+test l2194 {
+    ALTER TABLE mytable RENAME COLUMN i TO n, RENAME COLUMN s TO N;
+}
+expect error {
+}
+
+@setup s1
+test l2203 {
+    ALTER TABLE mytable RENAME COLUMN i TO i2, RENAME COLUMN s TO s2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l2207 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i2|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s2|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+}
+
+@setup s1
+@setup s2
+test l2214 {
+    select * from mytable order by i2 limit 1;
+}
+expect {
+    1|first row
+}

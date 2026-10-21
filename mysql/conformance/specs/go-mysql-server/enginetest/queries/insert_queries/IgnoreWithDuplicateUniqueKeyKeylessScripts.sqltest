@@ -1,0 +1,263 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/insert_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE one_uniq(not_pk int, value int UNIQUE);
+    INSERT INTO one_uniq values (1, 1);
+}
+
+setup s2 {
+    INSERT IGNORE INTO one_uniq VALUES (3, 2), (2, 1), (4, null), (5, null);
+}
+
+setup s3 {
+    CREATE TABLE two_uniq(not_pk int, col1 int, col2 int, UNIQUE KEY col1_col2_uniq (col1, col2));
+    INSERT INTO two_uniq values (1, 1, 1);
+}
+
+setup s4 {
+    INSERT IGNORE INTO two_uniq VALUES (4, 1, 2), (5, 2, 1), (6, null, 1), (7, null, 1), (12, 1, 1), (8, 1, null), (9, 1, null), (10, null, null), (11, null, null);
+}
+
+setup s5 {
+    CREATE TABLE keyless(pk int, val int);
+}
+
+setup s6 {
+    INSERT INTO keyless values (1, 1), (2, 2), (3, 3);
+}
+
+setup s7 {
+    INSERT IGNORE INTO keyless VALUES (1, 2);
+}
+
+setup s8 {
+    DELETE FROM keyless where pk = 1 and val = 2;
+}
+
+setup s9 {
+    ALTER TABLE keyless ADD CONSTRAINT c UNIQUE(val);
+}
+
+setup s10 {
+    INSERT INTO keyless VALUES (1, 1), (2, 2), (3, 3);
+}
+
+setup s11 {
+    UPDATE IGNORE keyless SET val = 2 where pk = 1;
+}
+
+setup s12 {
+    UPDATE IGNORE keyless SET val = 1 where pk = 1;
+}
+
+setup s13 {
+    ALTER TABLE keyless ADD CONSTRAINT c UNIQUE(val);
+}
+
+setup s14 {
+    UPDATE IGNORE keyless SET val = 3 where pk = 1;
+}
+
+setup s15 {
+    UPDATE IGNORE keyless SET val = val + 1 ORDER BY pk;
+}
+
+@setup s1
+test l2940 {
+    INSERT IGNORE INTO one_uniq VALUES (3, 2), (2, 1), (4, null), (5, null);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l2948 {
+    SELECT * from one_uniq;
+}
+expect unordered {
+    1|1
+    3|2
+    4|NULL
+    5|NULL
+}
+
+@setup s3
+test l2954 {
+    INSERT IGNORE INTO two_uniq VALUES (4, 1, 2), (5, 2, 1), (6, null, 1), (7, null, 1), (12, 1, 1), (8, 1, null), (9, 1, null), (10, null, null), (11, null, null);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l2962 {
+    SELECT * from two_uniq;
+}
+expect unordered {
+    10|NULL|NULL
+    11|NULL|NULL
+    1|1|1
+    4|1|2
+    5|2|1
+    6|NULL|1
+    7|NULL|1
+    8|1|NULL
+    9|1|NULL
+}
+
+@setup s5
+@setup s6
+test l2977 {
+    INSERT IGNORE INTO keyless VALUES (1, 2);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2' for key 'keyless.c'
+@setup s5
+@setup s6
+@setup s7
+test l2981 {
+    ALTER TABLE keyless ADD CONSTRAINT c UNIQUE(val);
+}
+expect error {
+}
+
+@setup s5
+@setup s6
+@setup s7
+test l2985 {
+    DELETE FROM keyless where pk = 1 and val = 2;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+test l2989 {
+    ALTER TABLE keyless ADD CONSTRAINT c UNIQUE(val);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+test l2993 {
+    INSERT IGNORE INTO keyless VALUES (1, 3);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s10
+test l3008 {
+    UPDATE IGNORE keyless SET val = 2 where pk = 1;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s10
+@setup s11
+test l3012 {
+    SELECT * FROM keyless ORDER BY pk;
+}
+expect {
+    1|2
+    2|2
+    3|3
+}
+
+# mysql-error: 1062 23000 Duplicate entry '2' for key 'keyless.c'
+@setup s5
+@setup s10
+@setup s11
+test l3016 {
+    ALTER TABLE keyless ADD CONSTRAINT c UNIQUE(val);
+}
+expect error {
+}
+
+@setup s5
+@setup s10
+@setup s11
+test l3020 {
+    UPDATE IGNORE keyless SET val = 1 where pk = 1;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s10
+@setup s11
+@setup s12
+test l3024 {
+    ALTER TABLE keyless ADD CONSTRAINT c UNIQUE(val);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+test l3028 {
+    UPDATE IGNORE keyless SET val = 3 where pk = 1;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+test l3034 {
+    SELECT * FROM keyless ORDER BY pk;
+}
+expect {
+    1|1
+    2|2
+    3|3
+}
+
+@setup s5
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+test l3038 {
+    UPDATE IGNORE keyless SET val = val + 1 ORDER BY pk;
+}
+expect {
+}
+
+@setup s5
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+@setup s15
+test l3044 {
+    SELECT * FROM keyless ORDER BY pk;
+}
+expect {
+    1|1
+    2|2
+    3|4
+}

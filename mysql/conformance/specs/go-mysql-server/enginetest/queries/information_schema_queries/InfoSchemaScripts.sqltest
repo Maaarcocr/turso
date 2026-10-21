@@ -1,0 +1,137 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/information_schema_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table parent(a int primary key, b int);
+    create table child(c int primary key);
+    alter table child add foreign key (c) references parent(a);
+    set foreign_key_checks=0;
+}
+
+setup s2 {
+    insert into child values (1), (2);
+}
+
+setup s3 {
+    delete from child;
+}
+
+setup s4 {
+    set foreign_key_checks=0;
+}
+
+setup s5 {
+    set foreign_key_checks=1;
+}
+
+test l884 {
+    set foreign_key_checks=0;
+}
+expect unordered {
+}
+
+@setup s1
+test l887 {
+    drop table parent;
+}
+expect unordered {
+}
+
+@setup s1
+test l890 {
+    insert into child values (1), (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l894 {
+    select * from child;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s2
+test l898 {
+    delete from child;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l902 {
+    select * from child;
+}
+expect unordered {
+}
+
+@setup s4
+test l906 {
+    set foreign_key_checks=1;
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child`, CONSTRAINT `child_ibfk_1` FOREIGN KEY (`c`) REFERENCES `parent` (`a`))
+@setup s1
+@setup s2
+@setup s3
+@setup s5
+test l909 {
+    insert into child values (1), (2);
+}
+expect error {
+}
+
+# mysql-error: 3708 SR006 Missing mandatory attribute NAME.
+test l1750 {
+    create or replace spatial reference system 1234 organization 'test_org' identified by 1234 definition 'test_definition' description 'test_description';
+}
+expect error {
+}
+
+# mysql-error: 3517 SR002 Can't parse the spatial reference system definition of SRID 1234.
+test l1757 {
+    create or replace spatial reference system 1234 name 'test_name' definition 'test_definition' description 'test_description';
+}
+expect error {
+}
+
+# mysql-error: 3708 SR006 Missing mandatory attribute DEFINITION.
+test l1764 {
+    create or replace spatial reference system 1234 name 'test_name' organization 'test_org' identified by 1234 description 'test_description';
+}
+expect error {
+}
+
+# mysql-error: 3710 SR006 The spatial reference system name can't be an empty string or start or end with whitespace.
+test l1771 {
+    create or replace spatial reference system 1234 name ' test_name ' definition 'test_definition' organization 'test_org' identified by 1234 description 'test_description';
+}
+expect error {
+}
+
+# mysql-error: 3711 SR006 The organization name can't be an empty string or start or end with whitespace.
+test l1779 {
+    create or replace spatial reference system 1234 name 'test_name' definition 'test_definition' organization ' test_org ' identified by 1234 description 'test_description';
+}
+expect error {
+}
+
+# mysql-error: 3517 SR002 Can't parse the spatial reference system definition of SRID 1234.
+test l1799 {
+    create or replace spatial reference system 1234 name 'test_name' organization 'test_org' identified by 1234 definition 'test_definition' description 'test_description';
+}
+expect error {
+}

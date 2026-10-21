@@ -1,0 +1,293 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/foreign_key_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE parent(a INTEGER PRIMARY KEY, b INTEGER);
+    ALTER TABLE parent ADD INDEX pb (b);
+    CREATE TABLE child2(e INTEGER PRIMARY KEY, f INTEGER);
+}
+
+setup s2 {
+    CREATE TABLE parent3 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));
+    CREATE TABLE child3 (pk BIGINT PRIMARY KEY);
+}
+
+setup s3 {
+    SET FOREIGN_KEY_CHECKS=0;
+}
+
+setup s4 {
+    create table parent (c char(3) primary key);
+    insert into parent values ('abc'), ('def'), ('ghi');
+}
+
+setup s5 {
+    create table child_char_1 (c char(1), foreign key (c) references parent(c));
+}
+
+setup s6 {
+    create table child_varchar_10 (vc varchar(10), foreign key (vc) references parent(c));
+}
+
+setup s7 {
+    insert into child_varchar_10 values ('abc');
+}
+
+setup s8 {
+    create table parent (b binary(3) primary key);
+    insert into parent values ('abc'), ('def'), ('ghi');
+}
+
+setup s9 {
+    create table child_binary_1 (b binary(1), foreign key (b) references parent(b));
+}
+
+setup s10 {
+    create table child_varbinary_10 (vb varbinary(10), foreign key (vb) references parent(b));
+}
+
+setup s11 {
+    insert into child_varbinary_10 values ('abc');
+}
+
+setup s12 {
+    create table parent (i int primary key);
+    insert into parent values (1), (2), (3);
+}
+
+setup s13 {
+    create table parent(id int primary key);
+    create table child(a int, b int as (a) stored);
+}
+
+setup s14 {
+    create table child2(a int, b int as (a) virtual);
+}
+
+setup s15 {
+    alter table child2 add constraint fk_child foreign key (a) references parent(id) on delete set null;
+}
+
+# mysql-error: 1824 HY000 Failed to open the referenced table 'dne'
+@setup s1
+test l2967 {
+    ALTER TABLE child2 ADD CONSTRAINT fk3 FOREIGN KEY (f) REFERENCES dne(d) ON UPDATE SET NULL;
+}
+expect error {
+}
+
+# mysql-error: 1824 HY000 Failed to open the referenced table 'child'
+@setup s1
+test l2975 {
+    ALTER TABLE child2 ADD CONSTRAINT fk5 FOREIGN KEY (f) REFERENCES child(dne) ON UPDATE SET NULL;
+}
+expect error {
+}
+
+# mysql-error: 6125 HY000 Failed to add the foreign key constraint. Missing unique key for constraint 'fk_child3' in the referenced table 'parent3'
+@setup s2
+test l2988 {
+    ALTER TABLE child3 ADD COLUMN v1 BIGINT NULL, ADD CONSTRAINT fk_child3 FOREIGN KEY (v1) REFERENCES parent3(v1);
+}
+expect error {
+}
+
+@setup s3
+test l3001 {
+    CREATE TABLE child4 (pk BIGINT PRIMARY KEY, CONSTRAINT fk_child4 FOREIGN KEY (pk) REFERENCES delayed_parent4 (pk));
+}
+expect unordered {
+}
+
+@setup s3
+test l3005 {
+    CREATE TABLE delayed_parent4 (pk BIGINT PRIMARY KEY);
+}
+expect unordered {
+}
+
+@setup s4
+test l3019 {
+    create table child_char_1 (c char(1), foreign key (c) references parent(c));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_char_1`, CONSTRAINT `child_char_1_ibfk_1` FOREIGN KEY (`c`) REFERENCES `parent` (`c`))
+@setup s4
+@setup s5
+test l3025 {
+    insert into child_char_1 values ('a');
+}
+expect error {
+}
+
+# mysql-error: 1406 22001 Data too long for column 'c' at row 1
+@setup s4
+@setup s5
+test l3029 {
+    insert into child_char_1 values ('abc');
+}
+expect error {
+}
+
+@setup s4
+@setup s5
+test l3033 {
+    create table child_varchar_10 (vc varchar(10), foreign key (vc) references parent(c));
+}
+expect unordered {
+}
+
+@setup s4
+@setup s5
+@setup s6
+test l3039 {
+    insert into child_varchar_10 values ('abc');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_varchar_10`, CONSTRAINT `child_varchar_10_ibfk_1` FOREIGN KEY (`vc`) REFERENCES `parent` (`c`))
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+test l3045 {
+    insert into child_varchar_10 values ('abcdefghij');
+}
+expect error {
+}
+
+@setup s8
+test l3059 {
+    create table child_binary_1 (b binary(1), foreign key (b) references parent(b));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_binary_1`, CONSTRAINT `child_binary_1_ibfk_1` FOREIGN KEY (`b`) REFERENCES `parent` (`b`))
+@setup s8
+@setup s9
+test l3065 {
+    insert into child_binary_1 values ('a');
+}
+expect error {
+}
+
+# mysql-error: 1406 22001 Data too long for column 'b' at row 1
+@setup s8
+@setup s9
+test l3069 {
+    insert into child_binary_1 values ('abc');
+}
+expect error {
+}
+
+@setup s8
+@setup s9
+test l3073 {
+    create table child_varbinary_10 (vb varbinary(10), foreign key (vb) references parent(b));
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+test l3079 {
+    insert into child_varbinary_10 values ('abc');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_varbinary_10`, CONSTRAINT `child_varbinary_10_ibfk_1` FOREIGN KEY (`vb`) REFERENCES `parent` (`b`))
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+test l3085 {
+    insert into child_varbinary_10 values ('abcdefghij');
+}
+expect error {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'ti' and referenced column 'i' in foreign key constraint 'child_tinyint_ibfk_1' are incompatible.
+@setup s12
+test l3099 {
+    create table child_tinyint (ti tinyint, foreign key (ti) references parent (i));
+}
+expect error {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'si' and referenced column 'i' in foreign key constraint 'child_smallint_ibfk_1' are incompatible.
+@setup s12
+test l3103 {
+    create table child_smallint (si tinyint, foreign key (si) references parent (i));
+}
+expect error {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'mi' and referenced column 'i' in foreign key constraint 'child_mediumint_ibfk_1' are incompatible.
+@setup s12
+test l3107 {
+    create table child_mediumint (mi tinyint, foreign key (mi) references parent (i));
+}
+expect error {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'ti' and referenced column 'i' in foreign key constraint 'child_bigint_ibfk_1' are incompatible.
+@setup s12
+test l3111 {
+    create table child_bigint (ti tinyint, foreign key (ti) references parent (i));
+}
+expect error {
+}
+
+# mysql-error: 3780 HY000 Referencing column 'i' and referenced column 'i' in foreign key constraint 'child_unsigned_ibfk_1' are incompatible.
+@setup s12
+test l3115 {
+    create table child_unsigned (i int unsigned, foreign key (i) references parent (i));
+}
+expect error {
+}
+
+# mysql-error: 1215 HY000 Cannot add foreign key constraint
+@setup s13
+test l3129 {
+    alter table child add constraint fk_child foreign key (a) references parent(id) on delete set null;
+}
+expect error {
+}
+
+@setup s13
+@setup s14
+test l3139 {
+    alter table child2 add constraint fk_child foreign key (a) references parent(id) on delete set null;
+}
+expect unordered {
+}
+
+# mysql-error: 1215 HY000 Cannot add foreign key constraint
+@setup s13
+@setup s14
+@setup s15
+test l3144 {
+    create table child3(a int, b int as (a) stored, foreign key (a) references parent(id) on update cascade);
+}
+expect error {
+}
+
+@setup s13
+@setup s14
+@setup s15
+test l3162 {
+    create table child4(a int, b int as (a) virtual, foreign key (a) references parent(id) on update cascade);
+}
+expect unordered {
+}

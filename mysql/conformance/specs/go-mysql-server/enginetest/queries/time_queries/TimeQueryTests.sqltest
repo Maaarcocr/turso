@@ -1,0 +1,84 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/time_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    set time_zone='UTC';
+}
+
+setup s2 {
+    set time_zone='-5:00';
+}
+
+setup s3 {
+    set time_zone='Pacific/Honolulu';
+}
+
+setup s4 {
+    create table timezones(pk int primary key, tz varchar(20));
+    insert into timezones values (1, 'invalid time zone'), (2, '-5:00');
+}
+
+setup s5 {
+    set @old_time_zone=@@time_zone;
+}
+
+test l32 {
+    set time_zone='UTC';
+}
+expect unordered {
+}
+
+@setup s1
+test l40 {
+    set time_zone='-5:00';
+}
+expect unordered {
+}
+
+@setup s2
+test l49 {
+    set time_zone='Pacific/Honolulu';
+}
+expect unordered {
+}
+
+# mysql-error: 1298 HY000 Unknown or incorrect time zone: 'invalid time zone'
+@setup s3
+test l57 {
+    set time_zone='invalid time zone';
+}
+expect error {
+}
+
+# mysql-error: 1298 HY000 Unknown or incorrect time zone: 'invalid time zone'
+@setup s4
+test l70 {
+    set time_zone=(select tz from timezones where pk = 1);
+}
+expect error {
+}
+
+@setup s4
+test l74 {
+    set time_zone=(select tz from timezones where pk = 2);
+}
+expect unordered {
+}
+
+test l92 {
+    set @old_time_zone=@@time_zone;
+}
+expect unordered {
+}
+
+@setup s5
+test l96 {
+    set @@time_zone=@old_time_zone;
+}
+expect unordered {
+}

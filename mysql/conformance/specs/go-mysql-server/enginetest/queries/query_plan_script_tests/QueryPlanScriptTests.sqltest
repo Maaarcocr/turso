@@ -1,0 +1,561 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/query_plan_script_tests.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1 (i int primary key);
+    create table t2 (j int primary key);
+    insert into t1 values (1), (2), (3);
+    insert into t2 values (2), (3), (4);
+}
+
+setup s2 {
+    create table t3 (i int, j int, primary key (i, j));
+    create table t4 (x int, y int, primary key (x, y));
+    insert into t3 values (1, 1), (1, 2), (2, 2), (3, 3);
+    insert into t4 values (2, 2), (3, 3), (4, 4);
+}
+
+setup s3 {
+    create table t1 (i int primary key, j int, k int);
+    create table t2 (x int primary key, y int, z int);
+    insert into t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3);
+    insert into t2 values (1, 1, 1), (2, 2, 2), (3, 3, 3);
+}
+
+setup s4 {
+    CREATE TABLE issues (id INT PRIMARY KEY, title TEXT, status TEXT);
+    CREATE TABLE dependencies (issue_id INT, depends_on_id INT, type TEXT);
+    INSERT INTO issues (id, title, status) VALUES
+					(1, 'Login API',        'open'),
+					(2, 'Auth Library',    'in_progress'),
+					(3, 'User Profile',    'open'),
+					(4, 'Profile UI',      'open'),
+					(5, 'Settings Page',   'open'),
+					(6, 'Marketing Page',  'open'),
+					(7, 'Old Feature',     'closed');
+    INSERT INTO dependencies (issue_id, depends_on_id, type) VALUES
+					(3, 1, 'blocks'),
+					(3, 2, 'blocks'),
+					(4, 3, 'parent-child'),
+					(5, 4, 'parent-child');
+}
+
+setup s5 {
+    CREATE TABLE orders (
+  id INT PRIMARY KEY,
+  region VARCHAR(20) NOT NULL,
+  product VARCHAR(100) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  INDEX idx_region (region)
+);
+    INSERT INTO orders VALUES
+  (1, 'East', 'Widget', 100.00),
+  (2, 'West', 'Gadget', 200.00),
+  (3, 'East', 'Gizmo', 150.00),
+  (4, 'North', 'Widget', 80.00),
+  (5, 'South', 'Gadget', 250.00),
+  (6, 'West', 'Widget', 120.00),
+  (7, 'East', 'Gadget', 180.00),
+  (8, 'North', 'Gizmo', 90.00),
+  (9, 'South', 'Widget', 110.00),
+  (10, 'West', 'Gizmo', 220.00),
+  (11, 'East', 'Thing', 75.00),
+  (12, 'West', 'Thing', 95.00),
+  (13, 'North', 'Gadget', 160.00),
+  (14, 'South', 'Gizmo', 130.00),
+  (15, 'East', 'Gadget', 210.00),
+  (16, 'West', 'Gadget', 190.00),
+  (17, 'North', 'Thing', 85.00),
+  (18, 'South', 'Widget', 140.00),
+  (19, 'East', 'Widget', 170.00),
+  (20, 'West', 'Gizmo', 230.00),
+  (21, 'North', 'Widget', 105.00),
+  (22, 'South', 'Gadget', 155.00),
+  (23, 'East', 'Gizmo', 125.00),
+  (24, 'West', 'Thing', 99.00),
+  (25, 'East', 'Widget', 135.00),
+  (26, 'West', 'Gadget', 215.00),
+  (27, 'North', 'Gizmo', 145.00),
+  (28, 'South', 'Widget', 88.00),
+  (29, 'East', 'Gadget', 165.00),
+  (30, 'West', 'Gizmo', 240.00);
+    CREATE TABLE customers (
+  id INT PRIMARY KEY,
+  region VARCHAR(20) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  INDEX idx_cust_region (region)
+);
+    INSERT INTO customers VALUES
+  (1, 'East', 'Alpha Corp'),
+  (2, 'West', 'Beta Inc'),
+  (3, 'North', 'Gamma LLC'),
+  (4, 'South', 'Delta Co'),
+  (5, 'West', 'Epsilon Ltd'),
+  (6, 'East', 'Zeta Group');
+    CREATE TABLE summary (
+  id INT,
+  region VARCHAR(20),
+  product VARCHAR(100),
+  amount DECIMAL(10,2),
+  customer VARCHAR(100)
+);
+}
+
+setup s6 {
+    INSERT INTO summary SELECT * FROM
+(SELECT o.id, o.region, o.product, o.amount, c.name AS customer
+FROM orders o
+JOIN customers c ON o.region = c.region AND o.id = c.id)
+AS sub
+WHERE sub.region = 'West';
+}
+
+@setup s1
+test l41 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on t1.i = t2.j order by t1.i;
+}
+expect {
+    2|2
+    3|3
+}
+
+@setup s1
+test l69 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on t1.i = t2.j order by t2.j;
+}
+expect {
+    2|2
+    3|3
+}
+
+@setup s1
+test l97 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on t1.i = t2.j order by t1.i desc;
+}
+expect {
+    3|3
+    2|2
+}
+
+@setup s1
+test l127 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on t1.i = t2.j order by t2.j desc;
+}
+expect {
+    3|3
+    2|2
+}
+
+@setup s1
+test l157 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 where ((i in (select j from t2 where j > 2))) order by i desc;
+}
+expect {
+    3
+}
+
+@setup s2
+test l193 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l221 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i desc;
+}
+expect {
+    3|3|3|3
+    2|2|2|2
+}
+
+@setup s2
+test l251 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t4.x;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l279 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t4.x desc;
+}
+expect {
+    3|3|3|3
+    2|2|2|2
+}
+
+@setup s2
+test l309 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i, t3.j;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l337 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i desc, t3.j desc;
+}
+expect {
+    3|3|3|3
+    2|2|2|2
+}
+
+@setup s2
+test l367 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t4.x, t4.y;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l395 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t4.x desc, t4.y desc;
+}
+expect {
+    3|3|3|3
+    2|2|2|2
+}
+
+@setup s2
+test l425 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i, t4.x;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l454 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i, t4.x desc;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l483 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i, t3.j, t4.x;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l512 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i, t3.j, t4.x, t4.y;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l541 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.j;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l570 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t4.y;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s2
+test l599 {
+    select /*+ MERGE_JOIN(t3, t4) */ * from t3 join t4 on t3.i = t4.x order by t3.i, t3.j desc;
+}
+expect {
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s1
+test l628 {
+    select * from t1 join t2 order by t1.i;
+}
+expect {
+    1|2
+    1|3
+    1|4
+    2|2
+    2|3
+    2|4
+    3|2
+    3|3
+    3|4
+}
+
+@setup s1
+test l656 {
+    select * from t1 join t2 order by t2.j;
+}
+expect {
+    3|2
+    2|2
+    1|2
+    3|3
+    2|3
+    1|3
+    3|4
+    2|4
+    1|4
+}
+
+@setup s1
+test l686 {
+    select * from t1 join t2 order by t1.i desc;
+}
+expect {
+    3|2
+    3|3
+    3|4
+    2|2
+    2|3
+    2|4
+    1|2
+    1|3
+    1|4
+}
+
+@setup s1
+test l715 {
+    select * from t1 join t2 where t1.i > 1 and t1.i < 3 and t2.j > 2 and t2.j < 4 order by t1.i;
+}
+expect {
+    2|3
+}
+
+@setup s2
+test l739 {
+    select * from t3 join t4 where t3.i = 1 and t4.x = 3 order by t3.i;
+}
+expect {
+    1|1|3|3
+    1|2|3|3
+}
+
+@setup s2
+test l764 {
+    select * from t3 join t4 where t3.j = 2 and t4.x = 3 order by t3.i desc;
+}
+expect {
+    2|2|3|3
+    1|2|3|3
+}
+
+@setup s1
+test l794 {
+    select * from t1 inner join t2 where t1.i < t2.j order by t1.i;
+}
+expect {
+    1|2
+    1|3
+    1|4
+    2|3
+    2|4
+    3|4
+}
+
+@setup s1
+test l822 {
+    select * from t1 inner join t2 where t1.i < t2.j order by t2.j desc;
+}
+expect {
+    1|4
+    2|4
+    3|4
+    1|3
+    2|3
+    1|2
+}
+
+@setup s2
+test l853 {
+    select * from t3 inner join t4 where i != x order by t3.i, t3.j;
+}
+expect {
+    1|1|4|4
+    1|1|3|3
+    1|1|2|2
+    1|2|4|4
+    1|2|3|3
+    1|2|2|2
+    2|2|4|4
+    2|2|3|3
+    3|3|4|4
+    3|3|2|2
+}
+
+@setup s3
+test l897 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where i = 2;
+}
+expect unordered {
+    2|2|2|2|2|2
+}
+
+@setup s3
+test l930 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where x = 2;
+}
+expect unordered {
+    2|2|2|2|2|2
+}
+
+@setup s3
+test l961 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where i > 1;
+}
+expect unordered {
+    2|2|2|2|2|2
+    3|3|3|3|3|3
+}
+
+@setup s3
+test l993 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where x > 1;
+}
+expect unordered {
+    2|2|2|2|2|2
+    3|3|3|3|3|3
+}
+
+@setup s3
+test l1025 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where i < 3;
+}
+expect unordered {
+    1|1|1|1|1|1
+    2|2|2|2|2|2
+}
+
+@setup s3
+test l1057 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where x < 3;
+}
+expect unordered {
+    1|1|1|1|1|1
+    2|2|2|2|2|2
+}
+
+@setup s3
+test l1089 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where i >= 2;
+}
+expect unordered {
+    2|2|2|2|2|2
+    3|3|3|3|3|3
+}
+
+@setup s3
+test l1121 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where x >= 2;
+}
+expect unordered {
+    2|2|2|2|2|2
+    3|3|3|3|3|3
+}
+
+@setup s3
+test l1153 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where i <= 2;
+}
+expect unordered {
+    1|1|1|1|1|1
+    2|2|2|2|2|2
+}
+
+@setup s3
+test l1185 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where x <= 2;
+}
+expect unordered {
+    1|1|1|1|1|1
+    2|2|2|2|2|2
+}
+
+@setup s3
+test l1217 {
+    select /*+ MERGE_JOIN(t1, t2) */ * from t1 join t2 on i = x where i = 2 or x = 2;
+}
+expect unordered {
+    2|2|2|2|2|2
+}
+
+@setup s4
+test l1274 {
+    WITH RECURSIVE
+					  blocked_directly AS (
+						SELECT DISTINCT d.issue_id
+						FROM dependencies d
+						JOIN issues blocker ON d.depends_on_id = blocker.id
+						WHERE d.type = 'blocks'
+						  AND blocker.status IN ('open', 'in_progress', 'blocked', 'deferred', 'hooked')
+					  ),
+					  blocked_transitively AS (
+						SELECT issue_id, 0 as depth
+						FROM blocked_directly
+						UNION ALL
+						SELECT d.issue_id, bt.depth + 1
+						FROM blocked_transitively bt
+						JOIN dependencies d ON d.depends_on_id = bt.issue_id
+						WHERE d.type = 'parent-child'
+						  AND bt.depth < 50
+					  )
+					SELECT i.*
+					FROM issues i
+					WHERE i.status = 'open'
+					  AND NOT EXISTS (
+						SELECT 1 FROM blocked_transitively WHERE issue_id = i.id
+					  );
+}
+expect unordered {
+    1|Login API|open
+    6|Marketing Page|open
+}
+
+@setup s5
+test l1451 {
+    INSERT INTO summary SELECT * FROM
+(SELECT o.id, o.region, o.product, o.amount, c.name AS customer
+FROM orders o
+JOIN customers c ON o.region = c.region AND o.id = c.id)
+AS sub
+WHERE sub.region = 'West';
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l1503 {
+    select * from summary;
+}
+expect unordered {
+    2|West|Gadget|200.00|Beta Inc
+}

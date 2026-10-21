@@ -1,0 +1,73 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/procedure_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create procedure create_proc() create table t (i int primary key, j int);
+}
+
+setup s2 {
+    call create_proc();
+}
+
+test l3102 {
+    create procedure create_proc() create table t (i int primary key, j int);
+}
+expect unordered {
+}
+
+@setup s1
+test l3109 {
+    call create_proc();
+}
+expect unordered {
+}
+
+# mysql-error: 1050 42S01 Table 't' already exists
+@setup s1
+@setup s2
+test l3125 {
+    call create_proc();
+}
+expect error {
+}
+
+test l3130 {
+    create procedure insert_proc() insert into t values (1, 1), (2, 2), (3, 3);
+}
+expect unordered {
+}
+
+test l3157 {
+    create procedure update_proc() update t set j = 999 where i > 1;
+}
+expect unordered {
+}
+
+test l3186 {
+    create procedure drop_proc() drop table t;
+}
+expect unordered {
+}
+
+test l3199 {
+    show tables like 't';
+}
+expect {
+}
+
+test l3230 {
+    create procedure p() create database procdb;
+}
+expect unordered {
+}
+
+test l3244 {
+    create procedure p1() create view v as select 1;
+}
+expect unordered {
+}

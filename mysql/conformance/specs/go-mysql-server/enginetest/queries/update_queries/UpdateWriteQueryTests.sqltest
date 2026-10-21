@@ -1,0 +1,632 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/update_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+    CREATE TABLE `fk_tbl` (   `pk` bigint NOT NULL,   `a` bigint,   `b` varchar(20),   PRIMARY KEY (`pk`) );
+}
+
+setup s2 {
+    CREATE TABLE `floattable` (   `i` bigint NOT NULL,   `f32` float NOT NULL,   `f64` double NOT NULL,   PRIMARY KEY (`i`) );
+    insert into floattable values
+    (1, 1.0, 1.0),
+    (2, 1.5, 1.5),
+    (3, 2.0, 2.0),
+    (4, 2.5, 2.5),
+    (-1, -1.0, -1.0),
+    (-2, -1.5, -1.5);
+    create index floattable_f on floattable (f64);
+}
+
+setup s3 {
+    CREATE TABLE `niltable` (   `i` bigint NOT NULL,   `i2` bigint,   `b` tinyint,   `f` double,   PRIMARY KEY (`i`) );
+    insert into niltable values
+    (1,null,null,null),
+    (2,2,1,null),
+    (3,null,0,null),
+    (4,4,null,4.0),
+    (5,null,1,5.0),
+    (6,6,0,6.0);
+    create index niltable_i2 on niltable (i2);
+}
+
+setup s4 {
+    CREATE TABLE `typestable` (   `id` bigint NOT NULL,   `i8` tinyint,   `i16` smallint,   `i32` int,   `i64` bigint,   `u8` tinyint unsigned,   `u16` smallint unsigned,   `u32` int unsigned,   `u64` bigint unsigned,   `f32` float,   `f64` double,   `ti` timestamp,   `da` date,   `te` varchar(20),   `bo` tinyint,   `js` json,   `bl` blob,   `e1` enum('', 'v1', 'v2'),   `s1` set('', 'v1', 'v2'),   PRIMARY KEY (`id`) );
+}
+
+setup s5 {
+    create table one_pk (pk smallint primary key, c1 smallint, c2 smallint, c3 smallint, c4 smallint, c5 smallint);
+    insert into one_pk values
+    (0,0,1,2,3,4),
+    (1,10,11,12,13,14),
+    (2,20,21,22,23,24),
+    (3,30,31,32,33,34);
+}
+
+setup s6 {
+    create table two_pk (
+    pk1 tinyint,
+    pk2 tinyint,
+    c1 tinyint NOT NULL,
+    c2 tinyint NOT NULL,
+    c3 tinyint NOT NULL,
+    c4 tinyint NOT NULL,
+    c5 tinyint NOT NULL,
+    primary key (pk1, pk2)
+);
+    insert into two_pk values
+    (0,0,0,1,2,3,4),
+    (0,1,10,11,12,13,14),
+    (1,0,20,21,22,23,24),
+    (1,1,30,31,32,33,34);
+}
+
+setup s7 {
+    create table one_pk (pk smallint primary key, c1 smallint, c2 smallint, c3 smallint, c4 smallint, c5 smallint);
+    insert into one_pk values
+    (0,0,1,2,3,4),
+    (1,10,11,12,13,14),
+    (2,20,21,22,23,24),
+    (3,30,31,32,33,34);
+}
+
+setup s8 {
+    create table othertable (s2 varchar(20) not null, i2 bigint primary key);
+    insert into othertable values
+    ('first', 3),
+    ('second', 2),
+    ('third', 1);
+    create index othertable_s2 on othertable (s2);
+    create index othertable_s2_i2 on othertable (s2,i2);
+}
+
+setup s9 {
+    create table one_pk (pk smallint primary key, c1 smallint, c2 smallint, c3 smallint, c4 smallint, c5 smallint);
+    insert into one_pk values
+    (0,0,1,2,3,4),
+    (1,10,11,12,13,14),
+    (2,20,21,22,23,24),
+    (3,30,31,32,33,34);
+    create table two_pk (
+    pk1 tinyint,
+    pk2 tinyint,
+    c1 tinyint NOT NULL,
+    c2 tinyint NOT NULL,
+    c3 tinyint NOT NULL,
+    c4 tinyint NOT NULL,
+    c5 tinyint NOT NULL,
+    primary key (pk1, pk2)
+);
+    insert into two_pk values
+    (0,0,0,1,2,3,4),
+    (0,1,10,11,12,13,14),
+    (1,0,20,21,22,23,24),
+    (1,1,30,31,32,33,34);
+}
+
+setup s10 {
+    create table tabletest (
+    i int primary key,
+    s text not null
+);
+    insert into tabletest values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+setup s11 {
+    create table tabletest (
+    i int primary key,
+    s text not null
+);
+    insert into tabletest values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+setup s12 {
+    create table one_pk (pk smallint primary key, c1 smallint, c2 smallint, c3 smallint, c4 smallint, c5 smallint);
+    insert into one_pk values
+    (0,0,1,2,3,4),
+    (1,10,11,12,13,14),
+    (2,20,21,22,23,24),
+    (3,30,31,32,33,34);
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'updated' for key 'mytable.mytable_s'
+@setup s1
+test l29 {
+    UPDATE mytable SET s = 'updated';
+    SELECT * FROM mytable;
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'updated' for key 'mytable.mytable_s'
+@setup s1
+test l35 {
+    UPDATE mytable SET S = 'updated';
+    SELECT * FROM mytable;
+}
+expect error {
+}
+
+@setup s1
+test l41 {
+    UPDATE mytable SET s = 'updated' WHERE i > 9999;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l47 {
+    UPDATE mytable SET s = 'updated' WHERE i = 1;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|updated
+    2|second row
+    3|third row
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'updated' for key 'mytable.mytable_s'
+@setup s1
+test l53 {
+    UPDATE mytable SET s = 'updated' WHERE i <> 9999;
+    SELECT * FROM mytable;
+}
+expect error {
+}
+
+@setup s2
+test l59 {
+    UPDATE floattable SET f32 = f32 + f32, f64 = f32 * f64 WHERE i = 2;
+    SELECT * FROM floattable WHERE i = 2;
+}
+expect unordered {
+    2|3|4.5
+}
+
+@setup s2
+test l65 {
+    UPDATE floattable SET f32 = 5, f32 = 4 WHERE i = 1;
+    SELECT f32 FROM floattable WHERE i = 1;
+}
+expect unordered {
+    4
+}
+
+@setup s1
+test l71 {
+    UPDATE mytable SET s = 'first row' WHERE i = 1;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s3
+test l77 {
+    UPDATE niltable SET b = NULL WHERE f IS NULL;
+    SELECT i,b FROM niltable WHERE f IS NULL;
+}
+expect unordered {
+    1|NULL
+    2|NULL
+    3|NULL
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'updated' for key 'mytable.mytable_s'
+@setup s1
+test l83 {
+    UPDATE mytable SET s = 'updated' ORDER BY i ASC LIMIT 2;
+    SELECT * FROM mytable;
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'updated' for key 'mytable.mytable_s'
+@setup s1
+test l89 {
+    UPDATE mytable SET s = 'updated' ORDER BY i DESC LIMIT 2;
+    SELECT * FROM mytable;
+}
+expect error {
+}
+
+@setup s1
+test l107 {
+    UPDATE mytable SET s = _binary 'updated' WHERE i = 3;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|updated
+}
+
+@setup s4
+test l113 {
+    UPDATE typestable SET ti = '2020-03-06 00:00:00';
+    SELECT * FROM typestable;
+}
+expect unordered {
+}
+
+@setup s4
+test l137 {
+    UPDATE typestable SET ti = '2020-03-06 00:00:00', da = '2020-03-06';
+    SELECT * FROM typestable;
+}
+expect unordered {
+}
+
+@setup s4
+test l162 {
+    UPDATE typestable SET da = '0000-00-00', ti = '0000-00-00 00:00:00';
+    SELECT * FROM typestable;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l186 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 SET two_pk.c1 = two_pk.c1 + 1;
+    SELECT * FROM two_pk;
+}
+expect unordered {
+    0|0|1|1|2|3|4
+    0|1|11|11|12|13|14
+    1|0|21|21|22|23|24
+    1|1|31|31|32|33|34
+}
+
+@setup s1
+@setup s7
+test l197 {
+    UPDATE mytable INNER JOIN one_pk ON mytable.i = one_pk.c5 SET mytable.i = mytable.i * 10;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s5
+@setup s6
+test l207 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 SET two_pk.c1 = two_pk.c1 + 1 WHERE one_pk.c5 < 10;
+    SELECT * FROM two_pk;
+}
+expect unordered {
+    0|0|1|1|2|3|4
+    0|1|11|11|12|13|14
+    1|0|20|21|22|23|24
+    1|1|30|31|32|33|34
+}
+
+@setup s8
+@setup s9
+test l218 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 INNER JOIN othertable on othertable.i2 = two_pk.pk2 SET one_pk.c1 = one_pk.c1 + 1;
+    SELECT * FROM one_pk;
+}
+expect unordered {
+    0|1|1|2|3|4
+    1|11|11|12|13|14
+    2|20|21|22|23|24
+    3|30|31|32|33|34
+}
+
+@setup s5
+@setup s6
+test l229 {
+    UPDATE one_pk INNER JOIN (SELECT * FROM two_pk order by pk1, pk2) as t2 on one_pk.pk = t2.pk1 SET one_pk.c1 = t2.c1 + 1 where one_pk.pk < 1;
+    SELECT * FROM one_pk where pk < 1;
+}
+expect unordered {
+    0|1|1|2|3|4
+}
+
+@setup s5
+@setup s6
+test l237 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 SET one_pk.c1 = one_pk.c1 + 1;
+    SELECT * FROM one_pk;
+}
+expect unordered {
+    0|1|1|2|3|4
+    1|11|11|12|13|14
+    2|20|21|22|23|24
+    3|30|31|32|33|34
+}
+
+# mysql-error: 1221 HY000 Incorrect usage of UPDATE and ORDER BY
+@setup s5
+@setup s6
+test l248 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 SET one_pk.c1 = one_pk.c1 + 1, one_pk.c2 = one_pk.c2 + 1 ORDER BY one_pk.pk;
+    SELECT * FROM one_pk;
+}
+expect error {
+}
+
+@setup s5
+@setup s6
+test l259 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 SET one_pk.c1 = one_pk.c1 + 1, two_pk.c1 = two_pk.c2 + 1;
+    SELECT * FROM two_pk;
+}
+expect unordered {
+    0|0|2|1|2|3|4
+    0|1|12|11|12|13|14
+    1|0|22|21|22|23|24
+    1|1|32|31|32|33|34
+}
+
+@setup s1
+test l270 {
+    update mytable h join mytable on h.i = mytable.i and h.s <> mytable.s set h.i = mytable.i+1;
+    select * from mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s8
+@setup s10
+test l276 {
+    UPDATE othertable CROSS JOIN tabletest set othertable.i2 = othertable.i2 * 10;
+    SELECT * FROM othertable order by i2;
+}
+expect {
+    third|10
+    second|20
+    first|30
+}
+
+@setup s11
+test l286 {
+    UPDATE tabletest cross join tabletest as t2 set tabletest.i = tabletest.i * 10;
+    SELECT * FROM tabletest order by i;
+}
+expect {
+    10|first row
+    20|second row
+    30|third row
+}
+
+@setup s8
+@setup s10
+test l296 {
+    UPDATE othertable cross join tabletest set tabletest.i = tabletest.i * 10;
+    SELECT * FROM tabletest order by i;
+}
+expect {
+    10|first row
+    20|second row
+    30|third row
+}
+
+@setup s5
+@setup s6
+test l306 {
+    UPDATE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 INNER JOIN two_pk a1 on one_pk.pk = two_pk.pk2 SET two_pk.c1 = two_pk.c1 + 1;
+    SELECT * FROM two_pk order by pk1 ASC, pk2 ASC;
+}
+expect {
+    0|0|1|1|2|3|4
+    0|1|10|11|12|13|14
+    1|0|20|21|22|23|24
+    1|1|31|31|32|33|34
+}
+
+@setup s8
+@setup s10
+test l317 {
+    UPDATE othertable INNER JOIN tabletest on othertable.i2=3 and tabletest.i=3 SET othertable.s2 = 'fourth';
+    SELECT * FROM othertable order by i2;
+}
+expect {
+    third|1
+    second|2
+    fourth|3
+}
+
+@setup s11
+test l327 {
+    UPDATE tabletest cross join tabletest as t2 set t2.i = t2.i * 10;
+    SELECT * FROM tabletest order by i;
+}
+expect {
+    10|first row
+    20|second row
+    30|third row
+}
+
+@setup s8
+@setup s10
+test l337 {
+    UPDATE othertable LEFT JOIN tabletest on othertable.i2=3 and tabletest.i=3 SET othertable.s2 = 'fourth';
+    SELECT * FROM othertable order by i2;
+}
+expect {
+    fourth|1
+    fourth|2
+    fourth|3
+}
+
+@setup s8
+@setup s10
+test l347 {
+    UPDATE othertable LEFT JOIN tabletest on othertable.i2=3 and tabletest.i=3 SET tabletest.s = 'fourth row', tabletest.i = tabletest.i + 1;
+    SELECT * FROM tabletest order by i;
+}
+expect {
+    1|first row
+    2|second row
+    4|fourth row
+}
+
+@setup s8
+@setup s10
+test l357 {
+    UPDATE othertable LEFT JOIN tabletest t3 on othertable.i2=3 and t3.i=3 SET t3.s = 'fourth row', t3.i = t3.i + 1;
+    SELECT * FROM tabletest order by i;
+}
+expect {
+    1|first row
+    2|second row
+    4|fourth row
+}
+
+@setup s8
+@setup s10
+@setup s12
+test l367 {
+    UPDATE othertable LEFT JOIN tabletest on othertable.i2=3 and tabletest.i=3 LEFT JOIN one_pk on othertable.i2 = one_pk.pk SET one_pk.c1 = one_pk.c1 + 1;
+    SELECT * FROM one_pk order by pk;
+}
+expect {
+    0|0|1|2|3|4
+    1|11|11|12|13|14
+    2|21|21|22|23|24
+    3|31|31|32|33|34
+}
+
+@setup s8
+@setup s10
+@setup s12
+test l378 {
+    UPDATE othertable LEFT JOIN tabletest on othertable.i2=3 and tabletest.i=3 LEFT JOIN one_pk on othertable.i2 = one_pk.pk SET one_pk.c1 = one_pk.c1 + 1 where one_pk.pk > 4;
+    SELECT * FROM one_pk order by pk;
+}
+expect {
+    0|0|1|2|3|4
+    1|10|11|12|13|14
+    2|20|21|22|23|24
+    3|30|31|32|33|34
+}
+
+@setup s8
+@setup s10
+@setup s12
+test l389 {
+    UPDATE othertable LEFT JOIN tabletest on othertable.i2=3 and tabletest.i=3 LEFT JOIN one_pk on othertable.i2 = 1 and one_pk.pk = 1 SET one_pk.c1 = one_pk.c1 + 1;
+    SELECT * FROM one_pk order by pk;
+}
+expect {
+    0|0|1|2|3|4
+    1|11|11|12|13|14
+    2|20|21|22|23|24
+    3|30|31|32|33|34
+}
+
+@setup s8
+@setup s10
+test l400 {
+    UPDATE othertable RIGHT JOIN tabletest on othertable.i2=3 and tabletest.i=3 SET othertable.s2 = 'fourth';
+    SELECT * FROM othertable order by i2;
+}
+expect {
+    third|1
+    second|2
+    fourth|3
+}
+
+@setup s8
+@setup s10
+test l410 {
+    UPDATE othertable RIGHT JOIN tabletest on othertable.i2=3 and tabletest.i=3 SET othertable.i2 = othertable.i2 + 1;
+    SELECT * FROM othertable order by i2;
+}
+expect {
+    third|1
+    second|2
+    first|4
+}
+
+@setup s8
+@setup s10
+@setup s12
+test l420 {
+    UPDATE othertable LEFT JOIN tabletest on othertable.i2=tabletest.i RIGHT JOIN one_pk on othertable.i2 = 1 and one_pk.pk = 1 SET tabletest.s = 'updated';
+    SELECT * FROM tabletest order by i;
+}
+expect {
+    1|updated
+    2|second row
+    3|third row
+}
+
+@setup s5
+@setup s6
+test l430 {
+    UPDATE IGNORE one_pk INNER JOIN two_pk on one_pk.pk = two_pk.pk1 SET two_pk.c1 = two_pk.c1 + 1;
+    SELECT * FROM two_pk;
+}
+expect unordered {
+    0|0|1|1|2|3|4
+    0|1|11|11|12|13|14
+    1|0|21|21|22|23|24
+    1|1|31|31|32|33|34
+}
+
+@setup s5
+test l441 {
+    UPDATE IGNORE one_pk JOIN one_pk one_pk2 on one_pk.pk = one_pk2.pk SET one_pk.pk = 10;
+    SELECT * FROM one_pk;
+}
+expect unordered {
+    10|0|1|2|3|4
+    1|10|11|12|13|14
+    2|20|21|22|23|24
+    3|30|31|32|33|34
+}
+
+@setup s1
+test l452 {
+    with t (n) as (select (1) from dual) UPDATE mytable set s = concat('updated ', i) where i in (select n from t);
+    select * from mytable order by i;
+}
+expect {
+    1|updated 1
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l462 {
+    with recursive t (n) as (select (1) from dual union all select n + 1 from t where n < 2) UPDATE mytable set s = concat('updated ', i) where i in (select n from t);
+    select * from mytable order by i;
+}
+expect {
+    1|updated 1
+    2|updated 2
+    3|third row
+}

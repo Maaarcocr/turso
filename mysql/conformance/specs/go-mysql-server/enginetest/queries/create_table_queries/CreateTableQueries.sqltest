@@ -1,0 +1,103 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/create_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+@setup s1
+test l252 {
+    CREATE TABLE t1 as select * from mytable;
+    select * from t1 order by i;
+}
+expect {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l264 {
+    CREATE TABLE t1 as select s, i from mytable;
+    select * from t1 order by i;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s1
+test l270 {
+    CREATE TABLE t1 as select distinct s, i from mytable;
+    select * from t1 order by i;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s1
+test l276 {
+    CREATE TABLE t1 as select s, i from mytable order by s;
+    select * from t1 order by i;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s1
+test l283 {
+    CREATE TABLE t1 as select s, sum(i) from mytable group by s;
+    select * from t1 order by s;
+}
+expect {
+    first row|1
+    second row|2
+    third row|3
+}
+
+@setup s1
+test l289 {
+    CREATE TABLE t1 as select s, sum(i) from mytable group by s having sum(i) > 2;
+    select * from t1;
+}
+expect unordered {
+    third row|3
+}
+
+@setup s1
+test l295 {
+    CREATE TABLE t1 as select s, i from mytable order by s limit 1;
+    select * from t1 order by i;
+}
+expect {
+    first row|1
+}
+
+@setup s1
+test l301 {
+    CREATE TABLE t1 as select concat("new", s), i from mytable;
+    select * from t1 order by i;
+}
+expect {
+    newfirst row|1
+    newsecond row|2
+    newthird row|3
+}

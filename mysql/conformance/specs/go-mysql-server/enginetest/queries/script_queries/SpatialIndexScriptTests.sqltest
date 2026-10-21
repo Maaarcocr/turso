@@ -1,0 +1,123 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/script_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table geom(g geometry);
+}
+
+setup s2 {
+    create table geom(g geometry SRID 4326);
+}
+
+setup s3 {
+    create table geom_tbl(g geometry not null srid 0);
+    insert into geom_tbl values (point(0,0)), (linestring(point(1,1), point(2,2)));
+}
+
+setup s4 {
+    alter table geom_tbl add spatial index (g);
+}
+
+setup s5 {
+    create table geom_tbl(i int, j int, g geometry not null srid 0, primary key (i, j));
+    insert into geom_tbl values (1, 10, point(0,0)), (2, 20, linestring(point(1,1), point(2,2)));
+}
+
+setup s6 {
+    alter table geom_tbl add spatial index (g);
+}
+
+setup s7 {
+    create table parent (i int primary key, p point not null srid 0, spatial index (p));
+    create table child1 (j int primary key, p point not null srid 0, spatial index (p));
+}
+
+# mysql-error: 1252 42000 All parts of a SPATIAL index must be NOT NULL
+test l15946 {
+    create table geom(g geometry, SPATIAL INDEX(g));
+}
+expect error {
+}
+
+# mysql-error: 1252 42000 All parts of a SPATIAL index must be NOT NULL
+test l15950 {
+    create table geom(g geometry SRID 4326, SPATIAL INDEX(g));
+}
+expect error {
+}
+
+# mysql-error: 1070 42000 Too many key parts specified; max 1 parts allowed
+test l15954 {
+    create table geom(g1 geometry NOT NULL SRID 0, g2 geometry NOT NULL SRID 4326, SPATIAL INDEX(g1, g2));
+}
+expect error {
+}
+
+# mysql-error: 1252 42000 All parts of a SPATIAL index must be NOT NULL
+@setup s1
+test l15966 {
+    alter table geom add spatial index (g);
+}
+expect error {
+}
+
+# mysql-error: 1252 42000 All parts of a SPATIAL index must be NOT NULL
+@setup s2
+test l15978 {
+    alter table geom add spatial index (g);
+}
+expect error {
+}
+
+@setup s3
+test l16041 {
+    alter table geom_tbl add spatial index (g);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l16053 {
+    select count(*) from geom_tbl where st_intersects(g, st_geomfromtext('polygon((0 0,0 10,10 10,10 0,0 0))'));
+}
+expect unordered {
+    2
+}
+
+@setup s5
+test l16068 {
+    alter table geom_tbl add spatial index (g);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l16080 {
+    select count(*) from geom_tbl where st_intersects(g, st_geomfromtext('polygon((0 0,0 10,10 10,10 0,0 0))'));
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 1821 HY000 Failed to add the foreign key constraint. Missing index for constraint 'child1_ibfk_1' in the foreign table 'child1'
+@setup s7
+test l16095 {
+    alter table child1 add foreign key (p) references parent (p);
+}
+expect error {
+}
+
+# mysql-error: 1821 HY000 Failed to add the foreign key constraint. Missing index for constraint 'child2_ibfk_1' in the foreign table 'child2'
+@setup s7
+test l16099 {
+    create table child2 (p point not null srid 0, spatial index (p), foreign key (p) references parent (p));
+}
+expect error {
+}

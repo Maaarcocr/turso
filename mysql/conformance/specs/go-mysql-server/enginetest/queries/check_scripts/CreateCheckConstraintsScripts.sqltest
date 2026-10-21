@@ -1,0 +1,120 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/check_scripts.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE checks (a INTEGER PRIMARY KEY, b INTEGER, c varchar(20));
+    ALTER TABLE checks ADD CONSTRAINT chk1 CHECK (B > 0);
+    ALTER TABLE checks ADD CONSTRAINT chk2 CHECK (b > 0) NOT ENFORCED;
+    ALTER TABLE checks ADD CONSTRAINT chk3 CHECK (B > 1);
+    ALTER TABLE checks ADD CONSTRAINT chk4 CHECK (upper(C) = c);
+}
+
+setup s2 {
+    CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 varchar(100), v2 varchar(100), INDEX (v1,v2));
+    INSERT INTO test VALUES (1,'happy','birthday'), (2,'HAPPY','BIRTHDAY'), (3,'hello','sailor');
+}
+
+setup s3 {
+    CREATE TABLE test (pk int);
+    INSERT INTO test VALUES (1),(2),(300);
+}
+
+setup s4 {
+    CREATE TABLE test (i int);
+    CREATE INDEX test_idx1 on test (i);
+    CREATE INDEX test_idx2 on test (i);
+    INSERT INTO test values (1), (2), (3);
+}
+
+setup s5 {
+    create table t (`order` int primary key, constraint chk check (`order` > 0));
+}
+
+setup s6 {
+    insert into t values (100);
+}
+
+# mysql-error: 3822 HY000 Duplicate check constraint name 'chk3'.
+@setup s1
+test l90 {
+    ALTER TABLE checks ADD CONSTRAINT chk3 CHECK (d > 0);
+}
+expect error {
+}
+
+# mysql-error: 3820 HY000 Check constraint 't4_chk_3' refers to non-existing column 'c3'.
+test l94 {
+    CREATE TABLE t4
+(
+  CHECK (c1 = c2),
+  c1 INT CHECK (c1 > 10),
+  c2 INT CONSTRAINT c2_positive CHECK (c2 > 0),
+  CHECK (c1 > c3)
+);
+}
+expect error {
+}
+
+@setup s2
+test l290 {
+    SELECT pk FROM test where lower(v1) = 'happy' and lower(v2) = 'birthday' order by 1;
+}
+expect {
+    1
+    2
+}
+
+# mysql-error: 3819 HY000 Check constraint 'bad_check' is violated.
+@setup s3
+test l303 {
+    ALTER TABLE test ADD CONSTRAINT bad_check CHECK (pk < 5);
+}
+expect error {
+}
+
+@setup s4
+test l318 {
+    SELECT * FROM test ORDER BY i;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s4
+test l322 {
+    SELECT * FROM test where i = 2;
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk' is violated.
+@setup s5
+test l336 {
+    insert into t values (0);
+}
+expect error {
+}
+
+@setup s5
+test l340 {
+    insert into t values (100);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l346 {
+    select * from t;
+}
+expect unordered {
+    100
+}

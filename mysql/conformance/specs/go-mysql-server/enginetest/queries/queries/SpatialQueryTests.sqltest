@@ -1,0 +1,560 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table point_table (i bigint primary key, p point NOT NULL);
+    insert into point_table values (5, ST_GeomFromText('Point(1 2)'));
+}
+
+setup s2 {
+    create table line_table (i bigint primary key, l linestring NOT NULL);
+    insert into line_table values
+    (0, ST_GeomFromText('Linestring(1 2,3 4)')),
+    (1, ST_GeomFromText('Linestring(1 2,3 4,5 6)'));
+}
+
+setup s3 {
+    create table polygon_table (i bigint primary key, p polygon NOT NULL);
+    insert into polygon_table values
+    (0, ST_GeomFromText('Polygon((0 0,0 1,1 1,0 0))')),
+    (1, ST_GeomFromText('Polygon((0 0,0 1,1 1,0 0),(0 0,0 1,1 1,0 0))'));
+}
+
+setup s4 {
+    create table stringtogeojson_table (i bigint primary key, s blob);
+    insert into stringtogeojson_table values
+        (0, '\{"type": "Point", "coordinates": [1,2]\}'),
+        (1, '\{"type": "Point", "coordinates": [123.45,56.789]\}'),
+        (2, '\{"type": "LineString", "coordinates": [[1,2],[3,4]]\}'),
+        (3, '\{"type": "LineString", "coordinates": [[1.23,2.345],[3.56789,4.56]]\}'),
+        (4, '\{"type": "Polygon", "coordinates": [[[1.1,2.2],[3.3,4.4],[5.5,6.6],[1.1,2.2]]]\}'),
+        (5, '\{"type": "Polygon", "coordinates": [[[0,0],[1,1],[2,2],[0,0]]]\}'),
+        (6, '\{"type": "MultiPoint", "coordinates": [[1,2],[3,4]]\}'),
+        (7, '\{"type": "MultiPoint", "coordinates": [[1.23,2.345],[3.56789,4.56]]\}'),
+        (8, '\{"type": "MultiLineString", "coordinates": [[[1.1,2.2],[3.3,4.4]],[[5.5,6.6],[7.7,8.8]]]\}'),
+        (9, '\{"type": "MultiPolygon", "coordinates": [[[[0.0, 0.0],[1.1,2.2],[3.3,4.4],[0.0,0.0]]],[[[1.1,1.1],[1.1,2.2],[3.3,4.4],[1.1,1.1]]]]\}'),
+        (10, '\{"type": "GeometryCollection", "geometries": [\{"type": "GeometryCollection", "geometries":[]\}]\}');
+}
+
+setup s5 {
+    create table mpoint_table (i bigint primary key, p multipoint NOT NULL);
+    insert into mpoint_table values
+    (0, ST_GeomFromText('MultiPoint(1 2,3 4)')),
+    (1, ST_GeomFromText('MultiPoint(1 2,3 4,5 6)'));
+}
+
+setup s6 {
+    create table mline_table (i bigint primary key, l multilinestring NOT NULL);
+    insert into mline_table values
+    (0, ST_GeomFromText('MultiLineString((1 2,3 4))')),
+    (1, ST_GeomFromText('MultiLineString((1 2,3 4,5 6))'));
+}
+
+setup s7 {
+    create table mpoly_table (i bigint primary key, p multipolygon NOT NULL);
+    insert into mpoly_table values
+    (0, ST_GeomFromText('MultiPolygon(((0 0,1 2,3 4,0 0)))')),
+    (1, ST_GeomFromText('MultiPolygon(((0 0,1 2,3 4,0 0)),((1 1,2 3,4 5,1 1)))'));
+}
+
+setup s8 {
+    create table geom_coll_table (i bigint primary key, g geometrycollection NOT NULL);
+    insert into geom_coll_table values
+    (0, ST_GeomFromText('GeometryCollection(GeometryCollection())'));
+}
+
+setup s9 {
+    create table geometry_table (i bigint primary key, g geometry NOT NULL);
+    insert into geometry_table values
+        (1, ST_GeomFromText('Point(1 2)')),
+        (2, ST_SRID(ST_GeomFromText('Point(1 2)'), 4326)),
+		(3, ST_GeomFromText('Linestring(1 2,3 4)')),
+		(4, ST_SRID(ST_GeomFromText('Linestring(1 2,3 4)'), 4326)),
+        (5, ST_GeomFromText('POLYGON((0 0,0 1,1 1,0 0))')),
+        (6, ST_SRID(ST_GeomFromText('POLYGON((0 0,0 1,1 1,0 0))'), 4326)),
+        (7, ST_GeomFromText('MultiPoint(1 2,3 4)')),
+		(8, ST_SRID(ST_GeomFromText('MultiPoint(1 2,3 4)'), 4326)),
+		(9, ST_GeomFromText('MULTILINESTRING((1 2,3 4))')),
+        (10, ST_SRID(ST_GeomFromText('MULTILINESTRING((1 2,3 4))'), 4326)),
+        (11, ST_GeomFromText('MultiPolygon(((0 0,1 2,3 4,0 0)))')),
+        (12, ST_SRID(ST_GeomFromText('MultiPolygon(((0 0,1 2,3 4,0 0)))'), 4326)),
+        (13, ST_GeomFromText('GeometryCollection(GeometryCollection())')),
+        (14, ST_SRID(ST_GeomFromText('GeometryCollection(GeometryCollection())'), 4326));
+}
+
+@setup s1
+test l185 {
+    SELECT HEX(ST_ASWKB(p)) from point_table;
+}
+expect unordered {
+    0101000000000000000000F03F0000000000000040
+}
+
+@setup s2
+test l189 {
+    SELECT HEX(ST_ASWKB(l)) from line_table;
+}
+expect unordered {
+    010200000002000000000000000000F03F000000000000004000000000000008400000000000001040
+    010200000003000000000000000000F03F00000000000000400000000000000840000000000000104000000000000014400000000000001840
+}
+
+@setup s3
+test l196 {
+    SELECT HEX(ST_ASWKB(p)) from polygon_table;
+}
+expect unordered {
+    01030000000100000004000000000000000000000000000000000000000000000000000000000000000000F03F000000000000F03F000000000000F03F00000000000000000000000000000000
+    01030000000200000004000000000000000000000000000000000000000000000000000000000000000000F03F000000000000F03F000000000000F03F0000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000F03F000000000000F03F000000000000F03F00000000000000000000000000000000
+}
+
+@setup s1
+test l215 {
+    SELECT ST_ASWKT(p) from point_table;
+}
+expect unordered {
+    POINT(1 2)
+}
+
+@setup s2
+test l219 {
+    SELECT ST_ASWKT(l) from line_table;
+}
+expect unordered {
+    LINESTRING(1 2,3 4)
+    LINESTRING(1 2,3 4,5 6)
+}
+
+@setup s3
+test l226 {
+    SELECT ST_ASWKT(p) from polygon_table;
+}
+expect unordered {
+    POLYGON((0 0,0 1,1 1,0 0))
+    POLYGON((0 0,0 1,1 1,0 0),(0 0,0 1,1 1,0 0))
+}
+
+@setup s3
+test l233 {
+    SELECT ST_ASTEXT(p) from polygon_table;
+}
+expect unordered {
+    POLYGON((0 0,0 1,1 1,0 0))
+    POLYGON((0 0,0 1,1 1,0 0),(0 0,0 1,1 1,0 0))
+}
+
+test l252 {
+    SELECT ST_X(POINT(1,2));
+}
+expect unordered {
+    1
+}
+
+test l256 {
+    SELECT ST_Y(POINT(1,2));
+}
+expect unordered {
+    2
+}
+
+test l260 {
+    SELECT ST_X(POINT(123.45,6.789));
+}
+expect unordered {
+    123.45
+}
+
+test l264 {
+    SELECT ST_Y(POINT(123.45,6.789));
+}
+expect unordered {
+    6.789
+}
+
+@setup s1
+test l276 {
+    SELECT ST_X(p) from point_table;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l284 {
+    SELECT ST_Y(p) from point_table;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+test l288 {
+    SELECT ST_SRID(p) from point_table;
+}
+expect unordered {
+    0
+}
+
+@setup s2
+test l292 {
+    SELECT ST_SRID(l) from line_table;
+}
+expect unordered {
+    0
+    0
+}
+
+@setup s3
+test l296 {
+    SELECT ST_SRID(p) from polygon_table;
+}
+expect unordered {
+    0
+    0
+}
+
+# mysql-error: 3064 HY000 Incorrect type for argument geojson in function st_geomfromgeojson.
+@setup s4
+test l321 {
+    SELECT ST_GEOMFROMGEOJSON(s) from stringtogeojson_table;
+}
+expect error {
+}
+
+@setup s1
+test l340 {
+    SELECT ST_ASGEOJSON(p) from point_table;
+}
+expect unordered {
+    \{"type": "Point", "coordinates": [1.0, 2.0]\}
+}
+
+@setup s2
+test l346 {
+    SELECT ST_ASGEOJSON(l) from line_table;
+}
+expect unordered {
+    \{"type": "LineString", "coordinates": [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]\}
+    \{"type": "LineString", "coordinates": [[1.0, 2.0], [3.0, 4.0]]\}
+}
+
+@setup s3
+test l353 {
+    SELECT ST_ASGEOJSON(p) from polygon_table;
+}
+expect unordered {
+    \{"type": "Polygon", "coordinates": [[[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.0, 0.0]]]\}
+    \{"type": "Polygon", "coordinates": [[[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.0, 0.0]]]\}
+}
+
+@setup s5
+test l360 {
+    SELECT ST_ASGEOJSON(p) from mpoint_table;
+}
+expect unordered {
+    \{"type": "MultiPoint", "coordinates": [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]\}
+    \{"type": "MultiPoint", "coordinates": [[1.0, 2.0], [3.0, 4.0]]\}
+}
+
+@setup s6
+test l367 {
+    SELECT ST_ASGEOJSON(l) from mline_table;
+}
+expect unordered {
+    \{"type": "MultiLineString", "coordinates": [[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]\}
+    \{"type": "MultiLineString", "coordinates": [[[1.0, 2.0], [3.0, 4.0]]]\}
+}
+
+# mysql-error: 3064 HY000 Incorrect type for argument geojson in function st_geomfromgeojson.
+@setup s4
+test l374 {
+    SELECT ST_ASGEOJSON(ST_GEOMFROMGEOJSON(s)) from stringtogeojson_table;
+}
+expect error {
+}
+
+@setup s1
+test l439 {
+    SELECT ST_DIMENSION(p) from point_table;
+}
+expect unordered {
+    0
+}
+
+@setup s2
+test l445 {
+    SELECT ST_DIMENSION(l) from line_table;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s3
+test l452 {
+    SELECT ST_DIMENSION(p) from polygon_table;
+}
+expect unordered {
+    2
+    2
+}
+
+@setup s5
+test l459 {
+    SELECT ST_DIMENSION(p) from mpoint_table;
+}
+expect unordered {
+    0
+    0
+}
+
+@setup s6
+test l466 {
+    SELECT ST_DIMENSION(l) from mline_table;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s7
+test l473 {
+    SELECT ST_DIMENSION(p) from mpoly_table;
+}
+expect unordered {
+    2
+    2
+}
+
+@setup s8
+test l480 {
+    SELECT ST_DIMENSION(g) from geom_coll_table;
+}
+expect unordered {
+    NULL
+}
+
+@setup s9
+test l506 {
+    SELECT ST_ASWKT(g) from geometry_table ORDER BY i;
+}
+expect {
+    POINT(1 2)
+    POINT(2 1)
+    LINESTRING(1 2,3 4)
+    LINESTRING(2 1,4 3)
+    POLYGON((0 0,0 1,1 1,0 0))
+    POLYGON((0 0,1 0,1 1,0 0))
+    MULTIPOINT((1 2),(3 4))
+    MULTIPOINT((2 1),(4 3))
+    MULTILINESTRING((1 2,3 4))
+    MULTILINESTRING((2 1,4 3))
+    MULTIPOLYGON(((0 0,1 2,3 4,0 0)))
+    MULTIPOLYGON(((0 0,2 1,4 3,0 0)))
+    GEOMETRYCOLLECTION(GEOMETRYCOLLECTION EMPTY)
+    GEOMETRYCOLLECTION(GEOMETRYCOLLECTION EMPTY)
+}
+
+@setup s9
+test l549 {
+    SELECT HEX(ST_ASWKB(g)) from geometry_table ORDER BY i;
+}
+expect {
+    0101000000000000000000F03F0000000000000040
+    01010000000000000000000040000000000000F03F
+    010200000002000000000000000000F03F000000000000004000000000000008400000000000001040
+    0102000000020000000000000000000040000000000000F03F00000000000010400000000000000840
+    01030000000100000004000000000000000000000000000000000000000000000000000000000000000000F03F000000000000F03F000000000000F03F00000000000000000000000000000000
+    0103000000010000000400000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F00000000000000000000000000000000
+    0104000000020000000101000000000000000000F03F0000000000000040010100000000000000000008400000000000001040
+    01040000000200000001010000000000000000000040000000000000F03F010100000000000000000010400000000000000840
+    010500000001000000010200000002000000000000000000F03F000000000000004000000000000008400000000000001040
+    0105000000010000000102000000020000000000000000000040000000000000F03F00000000000010400000000000000840
+    0106000000010000000103000000010000000400000000000000000000000000000000000000000000000000F03F00000000000000400000000000000840000000000000104000000000000000000000000000000000
+    01060000000100000001030000000100000004000000000000000000000000000000000000000000000000000040000000000000F03F0000000000001040000000000000084000000000000000000000000000000000
+    010700000001000000010700000000000000
+    010700000001000000010700000000000000
+}
+
+@setup s9
+test l568 {
+    SELECT ST_SRID(g) from geometry_table order by i;
+}
+expect {
+    0
+    4326
+    0
+    4326
+    0
+    4326
+    0
+    4326
+    0
+    4326
+    0
+    4326
+    0
+    4326
+}
+
+@setup s9
+test l606 {
+    SELECT ST_DIMENSION(g) from geometry_table order by i;
+}
+expect {
+    0
+    0
+    1
+    1
+    2
+    2
+    0
+    0
+    1
+    1
+    2
+    2
+    NULL
+    NULL
+}
+
+@setup s3
+test l644 {
+    SELECT ST_AREA(p) from polygon_table;
+}
+expect unordered {
+    0
+    0.5
+}
+
+# mysql-error: 1305 42000 FUNCTION test.ST_PERIMETER does not exist
+@setup s3
+test l651 {
+    SELECT ST_PERIMETER(p) from polygon_table;
+}
+expect error {
+}
+
+@setup s2
+test l658 {
+    SELECT ST_LENGTH(l) from line_table;
+}
+expect unordered {
+    2.8284271247461903
+    5.656854249492381
+}
+
+@setup s9
+test l665 {
+    SELECT ST_ASWKT(g) from geometry_table where g = point(1,2);
+}
+expect unordered {
+    POINT(1 2)
+}
+
+@setup s9
+test l671 {
+    SELECT ST_ASWKT(g) from geometry_table where g = st_srid(point(1,2),4326);
+}
+expect unordered {
+    POINT(2 1)
+}
+
+@setup s9
+test l677 {
+    SELECT ST_ASWKT(g) from geometry_table where g = unhex(hex(point(1,2)));
+}
+expect unordered {
+    POINT(1 2)
+}
+
+test l683 {
+    SELECT unhex(hex(point(1,2))) < unhex(hex(point(3,4)));
+}
+expect unordered {
+    0
+}
+
+@setup s9
+test l689 {
+    SELECT ST_ASWKT(g) from geometry_table where g = st_geomfromtext('MultiPolygon(((0 0,1 2,3 4,0 0)))');
+}
+expect unordered {
+    MULTIPOLYGON(((0 0,1 2,3 4,0 0)))
+}
+
+@setup s9
+test l695 {
+    SELECT ST_ASWKT(g) from geometry_table ORDER BY g;
+}
+expect {
+    POINT(1 2)
+    LINESTRING(1 2,3 4)
+    POLYGON((0 0,0 1,1 1,0 0))
+    MULTIPOINT((1 2),(3 4))
+    MULTILINESTRING((1 2,3 4))
+    MULTIPOLYGON(((0 0,1 2,3 4,0 0)))
+    GEOMETRYCOLLECTION(GEOMETRYCOLLECTION EMPTY)
+    POINT(2 1)
+    LINESTRING(2 1,4 3)
+    POLYGON((0 0,1 0,1 1,0 0))
+    MULTIPOINT((2 1),(4 3))
+    MULTILINESTRING((2 1,4 3))
+    MULTIPOLYGON(((0 0,2 1,4 3,0 0)))
+    GEOMETRYCOLLECTION(GEOMETRYCOLLECTION EMPTY)
+}
+
+@setup s9
+test l714 {
+    SELECT ST_DISTANCE(st_srid(g, 0), point(0,0)) from geometry_table ORDER BY g;
+}
+expect {
+    2.23606797749979
+    2.23606797749979
+    0
+    2.23606797749979
+    2.23606797749979
+    0
+    NULL
+    2.23606797749979
+    2.23606797749979
+    0
+    2.23606797749979
+    2.23606797749979
+    0
+    NULL
+}
+
+# mysql-error: 3618 22S00 st_isclosed(POINT) has not been implemented for geographic spatial reference systems.
+@setup s9
+test l771 {
+    SELECT st_isclosed(g) from geometry_table ORDER BY g;
+}
+expect error {
+}
+
+@setup s9
+test l790 {
+    SELECT st_intersects(st_srid(g, 0), point(1,2)) from geometry_table ORDER BY g;
+}
+expect {
+    1
+    1
+    0
+    1
+    1
+    1
+    NULL
+    1
+    1
+    0
+    1
+    1
+    1
+    NULL
+}

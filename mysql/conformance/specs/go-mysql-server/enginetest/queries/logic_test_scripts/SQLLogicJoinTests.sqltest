@@ -1,0 +1,150 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/logic_test_scripts.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE foo (a INT, b INT, c FLOAT, d FLOAT);
+    INSERT INTO foo VALUES  (1, 1, 1, 1), (2, 2, 2, 2), (3, 3, 3, 3);
+    CREATE TABLE bar (a INT, b FLOAT, c FLOAT, d INT);
+    INSERT INTO bar VALUES (1, 1, 1, 1), (2, 2, 2, 2), (3, 3, 3, 3);
+}
+
+setup s2 {
+    CREATE TABLE str1 (a INT PRIMARY KEY, s TEXT COLLATE utf8mb4_0900_ai_ci);
+    INSERT INTO str1 VALUES (1, 'a' COLLATE utf8mb4_0900_ai_ci), (2, 'A' COLLATE utf8mb4_0900_ai_ci), (3, 'c' COLLATE utf8mb4_0900_ai_ci), (4, 'D' COLLATE utf8mb4_0900_ai_ci);
+    CREATE TABLE str2 (a INT PRIMARY KEY, s TEXT COLLATE utf8mb4_0900_ai_ci);
+    INSERT INTO str2 VALUES (1, 'A' COLLATE utf8mb4_0900_ai_ci), (2, 'B' COLLATE utf8mb4_0900_ai_ci), (3, 'C' COLLATE utf8mb4_0900_ai_ci), (4, 'E' COLLATE utf8mb4_0900_ai_ci);
+}
+
+setup s3 {
+    CREATE TABLE xy (x INT PRIMARY KEY, y INT);
+}
+
+setup s4 {
+    CREATE TABLE abcd (a INT, b INT, c INT, d INT);
+    INSERT INTO abcd VALUES (1, 1, 1, 1), (2, 2, 2, 2);
+    CREATE TABLE dxby (d INT, x INT, b INT, y INT);
+    INSERT INTO dxby VALUES (2, 2, 2, 2), (3, 3, 3, 3);
+}
+
+@setup s1
+test l41 {
+    SELECT * FROM foo NATURAL JOIN bar;
+}
+expect unordered {
+    1|1|1|1
+    2|2|2|2
+    3|3|3|3
+}
+
+@setup s1
+test l49 {
+    SELECT * FROM foo JOIN bar USING (b);
+}
+expect unordered {
+    1|1|1|1|1|1|1
+    2|2|2|2|2|2|2
+    3|3|3|3|3|3|3
+}
+
+@setup s1
+test l57 {
+    SELECT * FROM foo JOIN bar USING (a, b);
+}
+expect unordered {
+    1|1|1|1|1|1
+    2|2|2|2|2|2
+    3|3|3|3|3|3
+}
+
+@setup s1
+test l65 {
+    SELECT * FROM foo JOIN bar USING (a, b, c);
+}
+expect unordered {
+    1|1|1|1|1
+    2|2|2|2|2
+    3|3|3|3|3
+}
+
+@setup s1
+test l73 {
+    SELECT * FROM foo JOIN bar ON foo.b = bar.b;
+}
+expect unordered {
+    1|1|1|1|1|1|1|1
+    2|2|2|2|2|2|2|2
+    3|3|3|3|3|3|3|3
+}
+
+@setup s1
+test l81 {
+    SELECT * FROM foo JOIN bar ON foo.a = bar.a AND foo.b = bar.b;
+}
+expect unordered {
+    1|1|1|1|1|1|1|1
+    2|2|2|2|2|2|2|2
+    3|3|3|3|3|3|3|3
+}
+
+@setup s1
+test l89 {
+    SELECT * FROM foo, bar WHERE foo.b = bar.b;
+}
+expect unordered {
+    1|1|1|1|1|1|1|1
+    2|2|2|2|2|2|2|2
+    3|3|3|3|3|3|3|3
+}
+
+@setup s1
+test l97 {
+    SELECT * FROM foo, bar WHERE foo.a = bar.a AND foo.b = bar.b;
+}
+expect unordered {
+    1|1|1|1|1|1|1|1
+    2|2|2|2|2|2|2|2
+    3|3|3|3|3|3|3|3
+}
+
+@setup s2
+test l125 {
+    SELECT s, str1.s, str2.s FROM str1 LEFT OUTER JOIN str2 USING(s);
+}
+expect unordered {
+    A|A|A
+    D|D|NULL
+    a|a|A
+    c|c|C
+}
+
+@setup s2
+test l134 {
+    SELECT s, str1.s, str2.s FROM str1 RIGHT OUTER JOIN str2 USING(s);
+}
+expect unordered {
+    A|A|A
+    A|a|A
+    B|NULL|B
+    C|c|C
+    E|NULL|E
+}
+
+@setup s3
+test l153 {
+    INSERT INTO xy (VALUES ROW(1, 1));
+}
+expect unordered {
+}
+
+@setup s4
+test l170 {
+    SELECT abcd.*, dxby.* FROM abcd INNER JOIN dxby USING (d, b);
+}
+expect unordered {
+    2|2|2|2|2|2|2|2
+}

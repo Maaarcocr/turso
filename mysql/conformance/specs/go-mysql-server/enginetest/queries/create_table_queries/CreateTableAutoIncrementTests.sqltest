@@ -1,0 +1,114 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/create_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1 (a int auto_increment unique, b int, primary key(b));
+}
+
+setup s2 {
+    insert into t1 (b) values (1), (2);
+}
+
+setup s3 {
+    create table t1 (a int auto_increment, b int, primary key(b), unique key(a));
+}
+
+setup s4 {
+    insert into t1 (b) values (1), (2);
+}
+
+setup s5 {
+    create table t2 (i int auto_increment primary key) auto_increment=10;
+}
+
+setup s6 {
+    insert into t2 values (null), (null), (null);
+}
+
+test l1250 {
+    create table t1 (a int auto_increment unique, b int, primary key(b));
+}
+expect unordered {
+}
+
+@setup s1
+test l1254 {
+    insert into t1 (b) values (1), (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l1275 {
+    select * from t1 order by b;
+}
+expect {
+    1|1
+    2|2
+}
+
+test l1285 {
+    create table t1 (a int auto_increment, b int, primary key(b), unique key(a));
+}
+expect unordered {
+}
+
+@setup s3
+test l1289 {
+    insert into t1 (b) values (1), (2);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l1310 {
+    select * from t1 order by b;
+}
+expect {
+    1|1
+    2|2
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+test l1320 {
+    create table t1 (a int auto_increment, b int, primary key(b));
+}
+expect error {
+}
+
+test l1331 {
+    create table t1 (i int) auto_increment=10;
+}
+expect unordered {
+}
+
+test l1344 {
+    create table t2 (i int auto_increment primary key) auto_increment=10;
+}
+expect unordered {
+}
+
+@setup s5
+test l1357 {
+    insert into t2 values (null), (null), (null);
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l1361 {
+    select * from t2;
+}
+expect unordered {
+    10
+    11
+    12
+}

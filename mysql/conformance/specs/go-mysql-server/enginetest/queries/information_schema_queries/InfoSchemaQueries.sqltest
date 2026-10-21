@@ -1,0 +1,90 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/information_schema_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+    CREATE TABLE `fk_tbl` (   `pk` bigint NOT NULL,   `a` bigint,   `b` varchar(20),   PRIMARY KEY (`pk`) );
+}
+
+test l182 {
+    SHOW TABLES;
+}
+expect {
+}
+
+test l190 {
+    SHOW FULL TABLES;
+}
+expect {
+}
+
+test l204 {
+    SHOW TABLES LIKE '%table';
+}
+expect {
+}
+
+@setup s1
+test l210 {
+    SHOW COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NO|PRI|NULL|
+    s|varchar(20)|NO|UNI|NULL|
+}
+
+@setup s1
+test l217 {
+    DESCRIBE mytable;
+}
+expect {
+    i|bigint|NO|PRI|NULL|
+    s|varchar(20)|NO|UNI|NULL|
+}
+
+@setup s1
+test l224 {
+    DESC mytable;
+}
+expect {
+    i|bigint|NO|PRI|NULL|
+    s|varchar(20)|NO|UNI|NULL|
+}
+
+@setup s1
+test l231 {
+    SHOW COLUMNS FROM mytable WHERE Field = 'i';
+}
+expect {
+    i|bigint|NO|PRI|NULL|
+}
+
+@setup s1
+test l237 {
+    SHOW COLUMNS FROM mytable LIKE 'i';
+}
+expect {
+    i|bigint|NO|PRI|NULL|
+}
+
+@setup s1
+test l243 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+    s|varchar(20)|utf8mb4_0900_ai_ci|NO|UNI|NULL||select,insert,update,references|column s
+}

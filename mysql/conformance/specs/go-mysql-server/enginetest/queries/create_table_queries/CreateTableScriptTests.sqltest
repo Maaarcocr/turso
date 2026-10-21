@@ -1,0 +1,800 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/create_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE ost_form_entry (id INT PRIMARY KEY, object_id INT, object_type VARCHAR(1));
+    CREATE TABLE ost_form_entry_values (entry_id INT, field_id INT, value VARCHAR(100), value_id INT);
+    CREATE TABLE ost_form_field (id INT PRIMARY KEY);
+    INSERT INTO ost_form_entry VALUES (1, 100, 'U'), (2, 101, 'U'), (3, 102, 'X');
+    INSERT INTO ost_form_entry_values VALUES (1, 1, 'user100@example.com', 1000), (2, 1, 'user101@example.com', 1001), (3, 2, 'other', 2000);
+    INSERT INTO ost_form_field VALUES (1), (2);
+}
+
+setup s2 {
+    CREATE TABLE IF NOT EXISTS ost_user__cdata (
+						PRIMARY KEY (user_id)
+					) DEFAULT CHARSET=utf8 AS
+					SELECT
+						entry.object_id as user_id,
+						MAX(IF(field.id='1',coalesce(ans.value_id, ans.value),NULL)) as email
+						FROM ost_form_entry entry
+						JOIN ost_form_entry_values ans
+						ON ans.entry_id = entry.id
+						JOIN ost_form_field field
+						ON field.id=ans.field_id
+						WHERE entry.object_type='U' GROUP BY entry.object_id;
+}
+
+setup s3 {
+    CREATE TABLE t1 (a int not null, b varchar(10));
+    INSERT INTO t1 VALUES (1, 'one'), (2, 'two'), (3, 'three');
+}
+
+setup s4 {
+    CREATE TABLE t2 (PRIMARY KEY(a)) SELECT * FROM t1;
+}
+
+setup s5 {
+    CREATE TABLE source (id int, name varchar(20));
+    INSERT INTO source VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie');
+}
+
+setup s6 {
+    CREATE TABLE indexed (KEY(name)) SELECT * FROM source;
+}
+
+setup s7 {
+    CREATE TABLE override_src (a bigint, b int);
+    INSERT INTO override_src VALUES (100, 200);
+}
+
+setup s8 {
+    CREATE TABLE override (a TINYINT NOT NULL) SELECT a, b FROM override_src;
+}
+
+setup s9 {
+    CREATE TABLE base (a int, b varchar(10));
+    INSERT INTO base VALUES (1, 'alpha'), (2, 'beta');
+}
+
+setup s10 {
+    CREATE TABLE uniq (UNIQUE KEY(a)) SELECT * FROM base;
+}
+
+setup s11 {
+    CREATE TABLE multi_src (id int, email varchar(50), age int);
+    INSERT INTO multi_src VALUES (1, 'a@test.com', 25), (2, 'b@test.com', 30);
+}
+
+setup s12 {
+    CREATE TABLE multi_idx (PRIMARY KEY(id), KEY(email), KEY(age)) SELECT * FROM multi_src;
+}
+
+setup s13 {
+    CREATE TABLE numericDisplayWidthTest (pk int primary key, b boolean, ti tinyint, ti1 tinyint(1), ti2 tinyint(2), i1 int(1));
+}
+
+setup s14 {
+    CREATE TABLE t1 (pk int primary key, test_score int, height int CHECK (height < 10) , CONSTRAINT mycheck CHECK (test_score >= 50));
+    CREATE TABLE t2 LIKE t1;
+}
+
+setup s15 {
+    CREATE TABLE t1 (pk int primary key, d datetime);
+}
+
+setup s16 {
+    insert into t1 values (1, '2020-01-01 00:00:00.123456');
+}
+
+setup s17 {
+    CREATE TABLE t2 (pk int primary key, d datetime(3));
+}
+
+setup s18 {
+    insert into t2 values (1, '2020-01-01 00:00:00.123456');
+}
+
+setup s19 {
+    CREATE TABLE t3 (pk int primary key, d datetime(6));
+}
+
+setup s20 {
+    insert into t3 values (1, '2020-01-01 00:00:00.123456');
+}
+
+setup s21 {
+    CREATE TABLE t1 (pk int primary key, d timestamp);
+}
+
+setup s22 {
+    insert into t1 values (1, '2020-01-01 00:00:00.123456');
+}
+
+setup s23 {
+    CREATE TABLE t2 (pk int primary key, d timestamp(3));
+}
+
+setup s24 {
+    insert into t2 values (1, '2020-01-01 00:00:00.123456');
+}
+
+setup s25 {
+    CREATE TABLE t3 (pk int primary key, d timestamp(6));
+}
+
+setup s26 {
+    insert into t3 values (1, '2020-01-01 00:00:00.123456');
+}
+
+setup s27 {
+    create table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl (a int primary key);
+}
+
+setup s28 {
+    create table a (abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl int primary key);
+}
+
+setup s29 {
+    create table b (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl check (a > 0));
+}
+
+setup s30 {
+    create table c (a int primary key, b int, key abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl (b));
+}
+
+setup s31 {
+    create table parent (a int primary key);
+    create table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl (a int primary key);
+    create table a (abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl int primary key);
+    create table b (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl check (a > 0));
+    create table c (a int primary key, b int, key abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl (b));
+}
+
+setup s32 {
+    create table d (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl foreign key (a) references parent(a));
+}
+
+setup s33 {
+    create table t1 (i int, index (i));
+}
+
+setup s34 {
+    create table if not exists t1 (i int, index (i));
+}
+
+setup s35 {
+    create table if not exists t1 (i int, index notthesamename (i));
+}
+
+setup s36 {
+    create table if not exists t1 (i int primary key, foreign key (i) references t1(i));
+}
+
+setup s37 {
+    create table a (i int primary key, j int default 100);
+}
+
+setup s38 {
+    create table t1 select * from a;
+}
+
+setup s39 {
+    create table t2 select j from a;
+}
+
+setup s40 {
+    create table t3 select j as i from a;
+}
+
+setup s41 {
+    create table t4 select j + 1 from a;
+}
+
+setup s42 {
+    create table t5 select a.j from a;
+}
+
+setup s43 {
+    create table t6 select sqa.j from (select i, j from a) sqa;
+}
+
+setup s44 {
+    create table b (x int primary key, y int default 200);
+    create table t1 select * from a;
+    create table t2 select j from a;
+    create table t3 select j as i from a;
+    create table t4 select j + 1 from a;
+    create table t5 select a.j from a;
+    create table t6 select sqa.j from (select i, j from a) sqa;
+    create table t7 select (select j from a) sq from dual;
+}
+
+setup s45 {
+    create table t8 select * from (select * from a) a join (select * from b) b;
+}
+
+setup s46 {
+    create table t11 select sum(j) over() as jj from a;
+}
+
+setup s47 {
+    create table c (p int primary key, q int default 300, u int as (q));
+}
+
+@setup s1
+test l384 {
+    CREATE TABLE IF NOT EXISTS ost_user__cdata (
+						PRIMARY KEY (user_id)
+					) DEFAULT CHARSET=utf8 AS
+					SELECT
+						entry.object_id as user_id,
+						MAX(IF(field.id='1',coalesce(ans.value_id, ans.value),NULL)) as email
+						FROM ost_form_entry entry
+						JOIN ost_form_entry_values ans
+						ON ans.entry_id = entry.id
+						JOIN ost_form_field field
+						ON field.id=ans.field_id
+						WHERE entry.object_type='U' GROUP BY entry.object_id;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l398 {
+    SELECT * FROM ost_user__cdata ORDER BY user_id;
+}
+expect {
+    100|1000
+    101|1001
+}
+
+@setup s3
+test l430 {
+    CREATE TABLE t2 (PRIMARY KEY(a)) SELECT * FROM t1;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l433 {
+    SELECT * FROM t2 ORDER BY a;
+}
+expect {
+    1|one
+    2|two
+    3|three
+}
+
+@setup s5
+test l447 {
+    CREATE TABLE indexed (KEY(name)) SELECT * FROM source;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l450 {
+    SELECT * FROM indexed ORDER BY id;
+}
+expect {
+    1|alice
+    2|bob
+    3|charlie
+}
+
+@setup s7
+test l464 {
+    CREATE TABLE override (a TINYINT NOT NULL) SELECT a, b FROM override_src;
+}
+expect unordered {
+}
+
+@setup s7
+@setup s8
+test l467 {
+    SELECT * FROM override;
+}
+expect unordered {
+    100|200
+}
+
+@setup s9
+test l479 {
+    CREATE TABLE uniq (UNIQUE KEY(a)) SELECT * FROM base;
+}
+expect unordered {
+}
+
+@setup s9
+@setup s10
+test l482 {
+    SELECT * FROM uniq ORDER BY a;
+}
+expect {
+    1|alpha
+    2|beta
+}
+
+@setup s11
+test l495 {
+    CREATE TABLE multi_idx (PRIMARY KEY(id), KEY(email), KEY(age)) SELECT * FROM multi_src;
+}
+expect unordered {
+}
+
+@setup s11
+@setup s12
+test l498 {
+    SELECT * FROM multi_idx ORDER BY id;
+}
+expect {
+    1|a@test.com|25
+    2|b@test.com|30
+}
+
+@setup s13
+test l527 {
+    SHOW FULL FIELDS FROM numericDisplayWidthTest;
+}
+expect {
+    pk|int|NULL|NO|PRI|NULL||select,insert,update,references|
+    b|tinyint(1)|NULL|YES||NULL||select,insert,update,references|
+    ti|tinyint|NULL|YES||NULL||select,insert,update,references|
+    ti1|tinyint(1)|NULL|YES||NULL||select,insert,update,references|
+    ti2|tinyint|NULL|YES||NULL||select,insert,update,references|
+    i1|int|NULL|YES||NULL||select,insert,update,references|
+}
+
+# mysql-error: 3819 HY000 Check constraint 't2_chk_1' is violated.
+@setup s14
+test l551 {
+    INSERT INTO t2 VALUE (1, 40, 5);
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 't2_chk_2' is violated.
+@setup s14
+test l555 {
+    INSERT INTO t2 VALUE (1, 60, 15);
+}
+expect error {
+}
+
+@setup s15
+test l578 {
+    insert into t1 values (1, '2020-01-01 00:00:00.123456');
+}
+expect unordered {
+}
+
+@setup s15
+@setup s16
+test l582 {
+    select * from t1 order by pk;
+}
+expect {
+    1|2020-01-01 00:00:00
+}
+
+@setup s17
+test l595 {
+    insert into t2 values (1, '2020-01-01 00:00:00.123456');
+}
+expect unordered {
+}
+
+@setup s17
+@setup s18
+test l599 {
+    select * from t2 order by pk;
+}
+expect {
+    1|2020-01-01 00:00:00.123
+}
+
+@setup s19
+test l612 {
+    insert into t3 values (1, '2020-01-01 00:00:00.123456');
+}
+expect unordered {
+}
+
+@setup s19
+@setup s20
+test l616 {
+    select * from t3 order by pk;
+}
+expect {
+    1|2020-01-01 00:00:00.123456
+}
+
+# mysql-error: 1426 42000 Too-big precision 7 specified for 'd'. Maximum is 6.
+test l624 {
+    create table t4 (pk int primary key, d datetime(7));
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'd'
+test l628 {
+    CREATE TABLE tt (pk int primary key, d datetime(3) default current_timestamp(6));
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'd'
+test l632 {
+    CREATE TABLE tt (pk int primary key, d datetime(6) default current_timestamp(3));
+}
+expect error {
+}
+
+test l636 {
+    CREATE TABLE tt (pk int primary key, d datetime(6) default current_timestamp(6));
+}
+expect unordered {
+}
+
+@setup s21
+test l659 {
+    insert into t1 values (1, '2020-01-01 00:00:00.123456');
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+test l664 {
+    select * from t1 order by pk;
+}
+expect {
+    1|2020-01-01 00:00:00
+}
+
+@setup s23
+test l677 {
+    insert into t2 values (1, '2020-01-01 00:00:00.123456');
+}
+expect unordered {
+}
+
+@setup s23
+@setup s24
+test l682 {
+    select * from t2 order by pk;
+}
+expect {
+    1|2020-01-01 00:00:00.123
+}
+
+@setup s25
+test l695 {
+    insert into t3 values (1, '2020-01-01 00:00:00.123456');
+}
+expect unordered {
+}
+
+@setup s25
+@setup s26
+test l700 {
+    select * from t3 order by pk;
+}
+expect {
+    1|2020-01-01 00:00:00.123456
+}
+
+# mysql-error: 1426 42000 Too-big precision 7 specified for 'd'. Maximum is 6.
+test l708 {
+    create table t4 (pk int primary key, d TIMESTAMP(7));
+}
+expect error {
+}
+
+test l721 {
+    create table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl (a int primary key);
+}
+expect unordered {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+test l726 {
+    create table abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (a int primary key);
+}
+expect error {
+}
+
+@setup s27
+test l731 {
+    create table a (abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl int primary key);
+}
+expect unordered {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s27
+@setup s28
+test l736 {
+    create table a (abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm int primary key);
+}
+expect error {
+}
+
+@setup s27
+@setup s28
+test l741 {
+    create table b (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl check (a > 0));
+}
+expect unordered {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s27
+@setup s28
+@setup s29
+test l746 {
+    create table b (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm check (a > 0));
+}
+expect error {
+}
+
+@setup s27
+@setup s28
+@setup s29
+test l751 {
+    create table c (a int primary key, b int, key abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl (b));
+}
+expect unordered {
+}
+
+# mysql-error: 1050 42S01 Table 'c' already exists
+@setup s27
+@setup s28
+@setup s29
+@setup s30
+test l756 {
+    create table c (a int primary key, b int, key abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (b));
+}
+expect error {
+}
+
+@setup s31
+test l761 {
+    create table d (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl foreign key (a) references parent(a));
+}
+expect unordered {
+}
+
+# mysql-error: 1059 42000 Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+@setup s31
+@setup s32
+test l766 {
+    create table d (a int primary key, constraint abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm foreign key (a) references parent(a));
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'abc'
+test l775 {
+    create table t1 (abc int, abc int);
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'ABC'
+test l779 {
+    create table t2 (ABC int, ABC int);
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'A'
+test l783 {
+    create table t3 (a int, A int);
+}
+expect error {
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'Abc'
+test l787 {
+    create table t4 (abc int, def int, Abc int);
+}
+expect error {
+}
+
+# mysql-error: 1253 42000 COLLATION 'utf8mb4_0900_bin' is not valid for CHARACTER SET 'binary'
+test l799 {
+    CREATE TABLE t1 (pk varbinary(10) primary key collate utf8mb4_0900_bin);
+}
+expect error {
+}
+
+# mysql-error: 1253 42000 COLLATION 'utf8mb3_esperanto_ci' is not valid for CHARACTER SET 'utf8mb4'
+test l823 {
+    create table t (i int, primary key(i)) charset=utf8mb4 collate=utf8mb3_esperanto_ci;
+}
+expect error {
+}
+
+test l827 {
+    create table t (i int, primary key(i)) charset=utf8mb4 collate=utf8mb4_esperanto_ci;
+}
+expect unordered {
+}
+
+test l837 {
+    create table t1 (i int) charset latin1;
+}
+expect unordered {
+}
+
+test l849 {
+    create table t2 (i int) character set latin1;
+}
+expect unordered {
+}
+
+test l861 {
+    create table t3 (i int) charset binary;
+}
+expect unordered {
+}
+
+test l873 {
+    create table t4 (i int) character set binary;
+}
+expect unordered {
+}
+
+@setup s33
+test l904 {
+    create table if not exists t1 (i int, index (i));
+}
+expect unordered {
+}
+
+@setup s33
+@setup s34
+test l919 {
+    create table if not exists t1 (i int, index notthesamename (i));
+}
+expect unordered {
+}
+
+@setup s33
+@setup s34
+@setup s35
+test l934 {
+    create table if not exists t1 (i int primary key, foreign key (i) references t1(i));
+}
+expect unordered {
+}
+
+@setup s33
+@setup s34
+@setup s35
+@setup s36
+test l949 {
+    create table if not exists t1 (i int, check (i > 10));
+}
+expect unordered {
+}
+
+@setup s37
+test l973 {
+    create table t1 select * from a;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+test l989 {
+    create table t2 select j from a;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+@setup s39
+test l1004 {
+    create table t3 select j as i from a;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+@setup s39
+@setup s40
+test l1019 {
+    create table t4 select j + 1 from a;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+@setup s39
+@setup s40
+@setup s41
+test l1034 {
+    create table t5 select a.j from a;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+@setup s39
+@setup s40
+@setup s41
+@setup s42
+test l1049 {
+    create table t6 select sqa.j from (select i, j from a) sqa;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+@setup s39
+@setup s40
+@setup s41
+@setup s42
+@setup s43
+test l1064 {
+    create table t7 select (select j from a) sq from dual;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s44
+test l1079 {
+    create table t8 select * from (select * from a) a join (select * from b) b;
+}
+expect unordered {
+}
+
+test l1097 {
+    create table t9 select * from json_table('[\{"c1": 1\}]', '$[*]' columns (c1 int path '$.c1' default '100' on empty)) as jt;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s44
+@setup s45
+test l1129 {
+    create table t11 select sum(j) over() as jj from a;
+}
+expect unordered {
+}
+
+@setup s37
+@setup s44
+@setup s45
+@setup s46
+test l1144 {
+    create table t12 select j from a group by j;
+}
+expect unordered {
+}
+
+@setup s47
+test l1159 {
+    create table t13 select * from c;
+}
+expect unordered {
+}

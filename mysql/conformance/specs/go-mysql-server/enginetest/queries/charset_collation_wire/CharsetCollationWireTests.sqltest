@@ -1,0 +1,379 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/charset_collation_wire.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    SET character_set_results = 'binary';
+}
+
+setup s2 {
+    CREATE TABLE test (v1 VARCHAR(255) COLLATE utf16_unicode_ci);
+}
+
+setup s3 {
+    CREATE TABLE test1 (v1 VARCHAR(255) COLLATE utf8mb4_0900_bin);
+}
+
+setup s4 {
+    CREATE TABLE test2 (v1 VARCHAR(255) COLLATE utf16_unicode_ci);
+}
+
+setup s5 {
+    INSERT INTO test1 VALUES ('HEY2'), ('hey1');
+}
+
+setup s6 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf8mb4_0900_bin, INDEX(v1));
+    INSERT INTO test2 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+}
+
+setup s7 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(255) COLLATE utf16_unicode_ci, INDEX(v1));
+    INSERT INTO test1 VALUES (1, 'abc'), (2, 'ABC'), (3, 'aBc'), (4, 'AbC');
+}
+
+setup s8 {
+    SET NAMES utf8mb4;
+}
+
+setup s9 {
+    SET collation_connection = 'utf8mb4_0900_bin';
+}
+
+setup s10 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 ENUM('abc','def','ghi') COLLATE utf16_unicode_ci);
+}
+
+setup s11 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 ENUM('abc','def','ghi') COLLATE utf8mb4_0900_bin);
+}
+
+setup s12 {
+    CREATE TABLE test1 (pk BIGINT PRIMARY KEY, v1 SET('a','b','c') COLLATE utf16_unicode_ci);
+}
+
+setup s13 {
+    CREATE TABLE test2 (pk BIGINT PRIMARY KEY, v1 SET('a','b','c') COLLATE utf8mb4_0900_bin);
+}
+
+setup s14 {
+    INSERT INTO test VALUES (_utf8mb4'hey');
+    SET character_set_results = 'utf8mb4';
+}
+
+setup s15 {
+    SET character_set_results = 'utf8mb4';
+}
+
+setup s16 {
+    SET character_set_results = 'utf32';
+}
+
+@setup s1
+@setup s2
+test l63 {
+    INSERT INTO test VALUES ('hey');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l89 {
+    INSERT INTO test1 VALUES ('HEY2'), ('hey1');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s4
+test l93 {
+    INSERT INTO test2 VALUES ('HEY2'), ('hey1');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+@setup s5
+test l97 {
+    SELECT * FROM test1 ORDER BY 1;
+}
+expect {
+    HEY2
+    hey1
+}
+
+@setup s1
+@setup s6
+test l129 {
+    SELECT v1, pk FROM test2 ORDER BY pk;
+}
+expect {
+    abc|1
+    ABC|2
+    aBc|3
+    AbC|4
+}
+
+@setup s1
+@setup s6
+test l135 {
+    SELECT v1, pk FROM test2 ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+    AbC|4
+    aBc|3
+    abc|1
+}
+
+@setup s1
+@setup s7
+test l153 {
+    SELECT v1, pk FROM test1 WHERE v1 > 'AbC' ORDER BY v1, pk;
+}
+expect {
+}
+
+@setup s1
+@setup s6
+test l187 {
+    SELECT v1, pk FROM test2 WHERE v1 > 'AbC' ORDER BY v1, pk;
+}
+expect {
+    aBc|3
+    abc|1
+}
+
+@setup s1
+@setup s6
+test l193 {
+    SELECT v1, pk FROM test2 WHERE v1 >= 'AbC' ORDER BY v1, pk;
+}
+expect {
+    AbC|4
+    aBc|3
+    abc|1
+}
+
+@setup s1
+@setup s6
+test l199 {
+    SELECT v1, pk FROM test2 WHERE v1 <= 'aBc' ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+    AbC|4
+    aBc|3
+}
+
+@setup s1
+@setup s6
+test l205 {
+    SELECT v1, pk FROM test2 WHERE v1 = 'ABC' ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+}
+
+@setup s1
+@setup s6
+test l211 {
+    SELECT v1, pk FROM test2 WHERE v1 BETWEEN 'ABC' AND 'AbC' ORDER BY v1, pk;
+}
+expect {
+    ABC|2
+}
+
+@setup s1
+@setup s6
+test l217 {
+    SELECT v1, pk FROM test2 WHERE v1 IN ('abc') ORDER BY v1, pk;
+}
+expect {
+    abc|1
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'does_not_exist'
+test l254 {
+    SET character_set_client = 'does_not_exist';
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'invalid_charset'
+test l258 {
+    SET character_set_connection = 'invalid_charset';
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'whoops'
+test l262 {
+    SET character_set_results = 'whoops';
+}
+expect error {
+}
+
+# mysql-error: 1273 HY000 Unknown collation: 'cant_be'
+test l266 {
+    SET collation_connection = 'cant_be';
+}
+expect error {
+}
+
+# mysql-error: 1273 HY000 Unknown collation: 'something_else'
+test l270 {
+    SET collation_database = 'something_else';
+}
+expect error {
+}
+
+# mysql-error: 1273 HY000 Unknown collation: 'why_try'
+test l274 {
+    SET collation_server = 'why_try';
+}
+expect error {
+}
+
+# mysql-error: 1115 42000 Unknown character set: 'outside_correct'
+test l278 {
+    SET NAMES outside_correct;
+}
+expect error {
+}
+
+@setup s8
+test l290 {
+    SELECT HEX(UNHEX('c0a80000')) = 'c0a80000';
+}
+expect unordered {
+    1
+}
+
+@setup s8
+@setup s9
+test l298 {
+    SELECT HEX(UNHEX('c0a80000')) = 'c0a80000';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s10
+test l312 {
+    INSERT INTO test1 VALUES (1, 'ABC');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'v1' at row 1
+@setup s1
+@setup s11
+test l318 {
+    INSERT INTO test2 VALUES (1, 'ABC');
+}
+expect error {
+}
+
+@setup s1
+@setup s12
+test l356 {
+    INSERT INTO test1 VALUES (1, 'A');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'v1' at row 1
+@setup s1
+@setup s13
+test l362 {
+    INSERT INTO test2 VALUES (1, 'A');
+}
+expect error {
+}
+
+@setup s1
+test l405 {
+    SET character_set_results = 'utf8mb4';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s14
+test l409 {
+    SELECT * FROM test;
+}
+expect unordered {
+    hey
+}
+
+@setup s15
+test l414 {
+    SET character_set_results = 'utf32';
+}
+expect unordered {
+}
+
+@setup s16
+test l423 {
+    SET character_set_results = NULL;
+}
+expect unordered {
+}
+
+@setup s1
+test l674 {
+    SELECT UPPER(_utf8mb4'aBc' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    ABC
+}
+
+@setup s1
+test l700 {
+    SELECT LOWER(_utf8mb4'AbC' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+@setup s1
+test l860 {
+    SELECT SUBSTRING(_utf8mb4'abcd' COLLATE utf8mb4_0900_bin, 2, 2);
+}
+expect unordered {
+    bc
+}
+
+@setup s1
+test l926 {
+    SELECT TRIM(_utf8mb4' abc ' COLLATE utf8mb4_0900_bin);
+}
+expect unordered {
+    abc
+}
+
+@setup s1
+test l952 {
+    SELECT RTRIM(_utf8mb4' abc ' COLLATE utf8mb4_0900_bin);
+}
+expect raw {
+ abc
+}
+
+@setup s1
+test l978 {
+    SELECT LTRIM(_utf8mb4' abc ' COLLATE utf8mb4_0900_bin);
+}
+expect raw {
+abc 
+}
