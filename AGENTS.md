@@ -315,8 +315,12 @@ Workspace packages:
 Implemented APIs and behavior include:
 
 - `parse`, `parse_one`, `translate`, and `parse_and_translate`
+- `split_statements`/`first_statement`: MySQL-aware statement splitting with
+  exact byte offsets; `MySqlDialect::parse` consumes one statement per call,
+  so multi-statement text runs through `Connection`
 - Strict MySQL AST-to-Turso AST lowering
-- In-memory embedded execution through a `Dialect`
+- In-memory and file-backed embedded execution through a `Dialect`
+  (`open_memory`, `open_file`, `open_with_io`)
 - A CLI that executes supplied SQL or a default hello-world query
 - Projection metadata and aliases, including backtick aliases
 - Explicit errors for unsupported statement and query shapes

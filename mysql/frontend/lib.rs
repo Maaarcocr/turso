@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use turso_core::schema::{BTreeTable, Schema};
-use turso_core::{Dialect, Func, Result, SqliteDialect};
+use turso_core::{Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, IO};
 use turso_parser::ast;
 
 #[derive(Debug)]
@@ -12,19 +12,36 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        // Engine-generated helper statements and pragmas are canonical SQLite
-        // text, so anything the MySQL frontend cannot handle falls back to
-        // SQLite parsing, mirroring the PostgreSQL frontend.
-        let Ok(statements) = turso_mysql_parser::parse(sql) else {
-            return turso_core::dialect::sqlite::parse(sql);
+        // Parse only the first statement and report the input consumed
+        // through its semicolon, so Connection can iterate multi-statement
+        // text. Text the MySQL tokenizer rejects is not MySQL; engine helper
+        // SQL is canonical SQLite text, so parse it as SQLite.
+        let statement = match turso_mysql_parser::first_statement(sql) {
+            Ok(Some(statement)) => statement,
+            Ok(None) => return Ok((None, sql.len())),
+            Err(_) => return turso_core::dialect::sqlite::parse(sql),
         };
-        let [statement] = statements.as_slice() else {
-            return turso_core::dialect::sqlite::parse(sql);
-        };
-        match turso_mysql_parser::translate(statement) {
-            Ok(statement) => Ok((Some(ast::Cmd::Stmt(statement)), sql.len())),
-            Err(_) => turso_core::dialect::sqlite::parse(sql),
+        let text = &sql[statement.text.clone()];
+        if let Ok(stmt) = turso_mysql_parser::parse_and_translate(text) {
+            return Ok((Some(ast::Cmd::Stmt(stmt)), statement.end));
         }
+        // Anything the MySQL frontend cannot lower yet falls back to SQLite
+        // parsing of the same statement, mirroring the PostgreSQL frontend.
+        // SQLite must see the same single statement: if it ended earlier
+        // (its lexer disagrees about a quote or comment), resuming after its
+        // end could run text that MySQL treats as part of a string.
+        let (cmd, consumed) = turso_core::dialect::sqlite::parse(text)?;
+        let Some(cmd) = cmd else {
+            return Err(LimboError::ParseError(format!(
+                "MySQL statement is empty when parsed as SQLite: {text}"
+            )));
+        };
+        if let (Some(_), _) = turso_core::dialect::sqlite::parse(&text[consumed..])? {
+            return Err(LimboError::ParseError(format!(
+                "MySQL and SQLite disagree on where this statement ends: {text}"
+            )));
+        }
+        Ok((Some(cmd), statement.end))
     }
 
     fn parse_table_sql(&self, sql: &str, root_page: i64) -> Result<BTreeTable> {
@@ -57,20 +74,74 @@ impl Dialect for MySqlDialect {
     }
 }
 
-pub fn open_memory() -> Result<Arc<turso_core::Connection>> {
-    let io: Arc<dyn turso_core::IO> = Arc::new(turso_core::MemoryIO::new());
-    let database = turso_core::Database::open(
+/// Opens the database at `path` on `io` with the MySQL dialect and returns a
+/// connection to it.
+pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
+    let database = Database::open(
         io,
-        ":memory:",
+        path,
         turso_core::OpenOptions::new(Arc::new(MySqlDialect)),
     )?;
     database.connect(turso_core::ConnectOpts::new())
+}
+
+/// Opens (creating it if needed) the database file at `path` with the MySQL
+/// dialect.
+pub fn open_file(path: &str) -> Result<Arc<Connection>> {
+    open_with_io(Database::io_for_path(path)?, path)
+}
+
+/// Opens a new in-memory database with the MySQL dialect.
+pub fn open_memory() -> Result<Arc<Connection>> {
+    open_with_io(Arc::new(turso_core::MemoryIO::new()), ":memory:")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use turso_core::Value;
+
+    fn consumed(sql: &str) -> (bool, usize) {
+        let (cmd, consumed) = MySqlDialect.parse(sql).expect("SQL must parse");
+        (cmd.is_some(), consumed)
+    }
+
+    #[test]
+    fn parses_the_first_statement_and_reports_its_end() {
+        assert_eq!(consumed("SELECT 1; SELECT 2"), (true, 9));
+        assert_eq!(consumed("SELECT 'a;b' /* ; */ ;\nSELECT 2"), (true, 22));
+        assert_eq!(consumed("SELECT 1 -- done"), (true, 16));
+        // The SQLite fallback consumes the same statement.
+        assert_eq!(consumed("PRAGMA page_size; SELECT 2"), (true, 17));
+        for empty in ["", "  \n", "-- comment", "# comment\n;;"] {
+            assert_eq!(consumed(empty), (false, empty.len()), "{empty:?}");
+        }
+    }
+
+    #[test]
+    fn executes_multi_statement_text_statement_by_statement() -> Result<()> {
+        let connection = open_memory()?;
+        connection.execute("CREATE TABLE a(x INTEGER); # one;\nCREATE TABLE b(x INTEGER);")?;
+        for table in ["a", "b"] {
+            let error = connection
+                .execute(format!("CREATE TABLE {table}(x INTEGER)"))
+                .expect_err("table must exist");
+            assert!(error.to_string().contains("already exists"), "{error}");
+        }
+        connection.close()?;
+        Ok(())
+    }
+
+    #[test]
+    fn sqlite_fallback_cannot_end_a_statement_early() {
+        // MySQL reads one statement whose string contains `; DROP TABLE t;`.
+        // It is not lowered yet, and SQLite would read it as several
+        // statements, so the fallback must refuse it rather than run the
+        // statements SQLite sees after the first.
+        let sql = "SELECT x FROM t WHERE y = 'a\\'; DROP TABLE t; -- '";
+        let error = MySqlDialect.parse(sql).expect_err("lexers disagree");
+        assert!(error.to_string().contains("disagree"), "{error}");
+    }
 
     #[test]
     fn hello_world_runs_through_mysql_dialect() -> Result<()> {
