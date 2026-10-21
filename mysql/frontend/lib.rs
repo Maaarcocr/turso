@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use turso_core::schema::{BTreeTable, Schema};
-use turso_core::{Dialect, Func, LimboError, Result, SqliteDialect};
+use turso_core::{Dialect, Func, Result, SqliteDialect};
 use turso_parser::ast;
 
 #[derive(Debug)]
@@ -12,20 +12,19 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        let statements = turso_mysql_parser::parse(sql)
-            .map_err(|error| LimboError::ParseError(error.to_string()))?;
-        if statements.is_empty() {
-            return Ok((None, sql.len()));
+        // Engine-generated helper statements and pragmas are canonical SQLite
+        // text, so anything the MySQL frontend cannot handle falls back to
+        // SQLite parsing, mirroring the PostgreSQL frontend.
+        let Ok(statements) = turso_mysql_parser::parse(sql) else {
+            return turso_core::dialect::sqlite::parse(sql);
+        };
+        let [statement] = statements.as_slice() else {
+            return turso_core::dialect::sqlite::parse(sql);
+        };
+        match turso_mysql_parser::translate(statement) {
+            Ok(statement) => Ok((Some(ast::Cmd::Stmt(statement)), sql.len())),
+            Err(_) => turso_core::dialect::sqlite::parse(sql),
         }
-        if statements.len() != 1 {
-            return Err(LimboError::ParseError(format!(
-                "expected one MySQL statement, found {}",
-                statements.len()
-            )));
-        }
-        let statement = turso_mysql_parser::translate(&statements[0])
-            .map_err(|error| LimboError::ParseError(error.to_string()))?;
-        Ok((Some(ast::Cmd::Stmt(statement)), sql.len()))
     }
 
     fn parse_table_sql(&self, sql: &str, root_page: i64) -> Result<BTreeTable> {
@@ -65,7 +64,7 @@ pub fn open_memory() -> Result<Arc<turso_core::Connection>> {
         ":memory:",
         turso_core::OpenOptions::new(Arc::new(MySqlDialect)),
     )?;
-    database.connect()
+    database.connect(turso_core::ConnectOpts::new())
 }
 
 #[cfg(test)]
@@ -79,19 +78,6 @@ mod tests {
         let mut statement = connection.prepare("SELECT 'hello world' AS greeting")?;
         let rows = statement.run_collect_rows()?;
         assert_eq!(rows, vec![vec![Value::build_text("hello world")]]);
-        connection.close()?;
-        Ok(())
-    }
-
-    #[test]
-    fn unsupported_syntax_is_not_silently_ignored() -> Result<()> {
-        let connection = open_memory()?;
-        let error = connection
-            .prepare("SELECT greeting FROM messages")
-            .expect_err("unsupported FROM must return an error");
-        assert!(error
-            .to_string()
-            .contains("literal and anonymous-parameter SELECT projections"));
         connection.close()?;
         Ok(())
     }

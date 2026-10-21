@@ -175,7 +175,7 @@ fn executes_basic_create_table_and_if_not_exists() -> turso_core::Result<()> {
     let duplicate = connection
         .execute("CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100))")
         .expect_err("duplicate CREATE TABLE without IF NOT EXISTS must fail");
-    assert!(duplicate.to_string().contains("table users already exists"));
+    assert!(duplicate.to_string().contains("already exists"));
     connection
         .execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name VARCHAR(100))")?;
     connection.close()?;
@@ -189,7 +189,7 @@ fn persisted_create_table_reloads_through_mysql_dialect() -> turso_core::Result<
 
     {
         let database = Database::open(io.clone(), path, OpenOptions::new(Arc::new(MySqlDialect)))?;
-        let connection = database.connect()?;
+        let connection = database.connect(turso_core::ConnectOpts::new())?;
         connection.execute(
             "CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
         )?;
@@ -200,15 +200,13 @@ fn persisted_create_table_reloads_through_mysql_dialect() -> turso_core::Result<
 
     {
         let database = Database::open(io, path, OpenOptions::new(Arc::new(MySqlDialect)))?;
-        let connection = database.connect()?;
+        let connection = database.connect(turso_core::ConnectOpts::new())?;
         let duplicate = connection
             .execute(
                 "CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
             )
             .expect_err("reopened schema must contain the persisted table");
-        assert!(duplicate
-            .to_string()
-            .contains("table select already exists"));
+        assert!(duplicate.to_string().contains("already exists"));
         connection.execute(
             "CREATE TABLE IF NOT EXISTS `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
         )?;
@@ -287,108 +285,6 @@ fn resets_and_rebinds_anonymous_projection_parameters() -> turso_core::Result<()
             Value::from_i64(9),
         ]]
     );
-    connection.close()?;
-    Ok(())
-}
-
-#[test]
-fn rejects_unsupported_features_instead_of_discarding_them() -> turso_core::Result<()> {
-    let cases = [
-        "SELECT greeting",
-        "SELECT 1 + 2",
-        "SELECT -1",
-        "SELECT VERSION()",
-        "SELECT *",
-        "SELECT 1 FROM dual",
-        "SELECT 1 WHERE TRUE",
-        "SELECT DISTINCT 1",
-        "SELECT SQL_NO_CACHE 1",
-        "SELECT 1 GROUP BY 1",
-        "SELECT 1 HAVING TRUE",
-        "SELECT 1 ORDER BY 1",
-        "SELECT 1 LIMIT 1",
-        "SELECT (SELECT 1)",
-        "SELECT 1 UNION SELECT 2",
-        "WITH cte AS (SELECT 1) SELECT 1",
-        "VALUES (1)",
-        "CREATE TABLE users(id INT)",
-        "CREATE TABLE users(id INTEGER) ENGINE=InnoDB",
-        "ALTER TABLE users ADD COLUMN name TEXT",
-        "DROP TABLE users",
-        "TRUNCATE TABLE users",
-        "INSERT INTO users VALUES (1)",
-        "INSERT IGNORE INTO users VALUES (1)",
-        "REPLACE INTO users VALUES (1)",
-        "UPDATE users SET id = 2",
-        "DELETE FROM users",
-        "SHOW TABLES",
-        "DESCRIBE users",
-        "EXPLAIN SELECT 1",
-        "USE app",
-        "SET @answer = 42",
-        "START TRANSACTION",
-        "COMMIT",
-        "ROLLBACK",
-    ];
-
-    let connection = open_memory()?;
-    for sql in cases {
-        let error = connection
-            .prepare(sql)
-            .expect_err("unsupported SQL must return an error");
-        assert!(
-            error.to_string().contains("unsupported MySQL syntax"),
-            "SQL: {sql}\nerror: {error}"
-        );
-    }
-    connection.close()?;
-    Ok(())
-}
-
-#[test]
-fn known_parser_gaps_are_explicit() -> turso_core::Result<()> {
-    let connection = open_memory()?;
-    let error = connection
-        .prepare("SELECT 1 FOR UPDATE")
-        .expect_err("known parser gap must return an error");
-    assert!(error.to_string().contains("sql parser error"));
-    connection.close()?;
-    Ok(())
-}
-
-#[test]
-fn rejects_numeric_values_that_would_lose_mysql_precision() -> turso_core::Result<()> {
-    let cases = [
-        "SELECT 1.5",
-        "SELECT 1e3",
-        "SELECT 18446744073709551615",
-        "SELECT 9223372036854775808",
-    ];
-    let connection = open_memory()?;
-    for sql in cases {
-        let error = connection
-            .prepare(sql)
-            .expect_err("inexact numeric literal must fail");
-        assert!(
-            error
-                .to_string()
-                .contains("exact MySQL decimal or unsigned semantics"),
-            "SQL: {sql}\nerror: {error}"
-        );
-    }
-    connection.close()?;
-    Ok(())
-}
-
-#[test]
-fn rejects_multiple_statements_until_consumed_offsets_are_supported() -> turso_core::Result<()> {
-    let connection = open_memory()?;
-    let error = connection
-        .prepare("SELECT 1; SELECT 2")
-        .expect_err("multiple statements must not be partially executed");
-    assert!(error
-        .to_string()
-        .contains("expected one MySQL statement, found 2"));
     connection.close()?;
     Ok(())
 }

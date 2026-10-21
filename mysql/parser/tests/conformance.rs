@@ -105,7 +105,7 @@ fn lowers_basic_create_table_to_shared_ast() {
     };
     assert!(!temporary);
     assert!(!if_not_exists);
-    assert_eq!(tbl_name.db_name, None);
+    assert_eq!(tbl_name.namespace, None);
     assert_eq!(tbl_name.name.as_str(), "users");
     assert_eq!(tbl_name.alias, None);
 
