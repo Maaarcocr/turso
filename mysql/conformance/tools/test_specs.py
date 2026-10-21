@@ -22,6 +22,7 @@ LIB = load("spec_lib")
 SLT = load("import_sqllogictest")
 REC = load("record_mysql")
 SCORE = load("score")
+REPLAY = load("replay")
 
 
 class BlockModelTests(unittest.TestCase):
@@ -560,6 +561,72 @@ class ScoreTests(unittest.TestCase):
             self.assertEqual(score(["--update"]), 1)
             self.assertEqual(score(["--update", "--allow-shrink"]), 0)
             self.assertEqual(baseline.read_text(), "src/dir/x.sqltest::l1\nsrc/dir/x.sqltest::l3\n")
+
+
+# Stands in for `sqltest run FILE ... --output json [--filter NAME]`: every
+# test passes, except that a test named `abort` aborts the process and one
+# named `fail` fails.
+FAKE_SQLTEST = """#!/usr/bin/env python3
+import json, os, re, sys
+args = sys.argv[1:]
+path = args[1]
+names = re.findall(r"^test (\\S+) \\{", open(path).read(), re.MULTILINE)
+if "--filter" in args:
+    names = [n for n in names if n == args[args.index("--filter") + 1]]
+results = []
+for name in names:
+    if name == "abort":
+        sys.stderr.write("memory allocation of 4294967296 bytes failed\\n")
+        sys.stderr.flush()
+        os.abort()
+    outcome = "failed" if name == "fail" else "passed"
+    results.append({"name": name, "outcome": outcome, "duration_ms": 1})
+print(json.dumps({"files": [{"path": path, "results": results}], "summary": {}}))
+sys.exit(1 if any(r["outcome"] != "passed" for r in results) else 0)
+"""
+
+
+class ReplayTests(unittest.TestCase):
+    def test_crashing_file_is_replayed_one_test_per_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            fake = root / "sqltest"
+            fake.write_text(FAKE_SQLTEST)
+            fake.chmod(0o755)
+            specs = root / "specs"
+            (specs / "src").mkdir(parents=True)
+            (specs / "local" / "src").mkdir(parents=True)
+            test = "test {} {{\n    SELECT 1;\n}}\nexpect {{\n    1\n}}\n\n"
+            (specs / "src" / "a.sqltest").write_text("".join(test.format(n) for n in ("l1", "abort", "l3")))
+            (specs / "src" / "b.sqltest").write_text("".join(test.format(n) for n in ("l1", "fail")))
+            (specs / "local" / "src" / "c.sqltest").write_text(test.format("l1"))
+            output = root / "report.json"
+            argv = [str(specs), "--sqltest", str(fake), "--output", str(output), "--jobs", "2",
+                    "--memory-mb", "0"]
+            with contextlib.redirect_stderr(io.StringIO()) as log:
+                self.assertEqual(REPLAY.main(argv), 0)
+            report = json.loads(output.read_text())
+            outcomes = {(pathlib.Path(f["path"]).name, r["name"]): r for f in report["files"] for r in f["results"]}
+            self.assertEqual(sorted(outcomes), [("a.sqltest", "abort"), ("a.sqltest", "l1"), ("a.sqltest", "l3"),
+                                                ("b.sqltest", "fail"), ("b.sqltest", "l1")])
+            self.assertEqual(outcomes[("a.sqltest", "l1")]["outcome"], "passed")
+            self.assertEqual(outcomes[("a.sqltest", "l3")]["outcome"], "passed")
+            self.assertEqual(outcomes[("b.sqltest", "fail")]["outcome"], "failed")
+            crashed = outcomes[("a.sqltest", "abort")]
+            self.assertEqual(crashed["outcome"], "error")
+            self.assertIn("killed by SIGABRT", crashed["reason"])
+            self.assertIn("memory allocation of 4294967296 bytes failed", crashed["reason"])
+            summary = report["summary"]
+            self.assertEqual((summary["total"], summary["passed"], summary["failed"], summary["errors"]),
+                             (5, 3, 1, 1))
+            # Two file processes, then the three tests of a.sqltest alone.
+            self.assertEqual((summary["processes"], summary["crashed_processes"]), (5, 2))
+            self.assertIn("rerunning the 3 tests", log.getvalue())
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(REPLAY.main(argv + ["--include-local"]), 0)
+            files = [pathlib.Path(f["path"]).name for f in json.loads(output.read_text())["files"]]
+            self.assertEqual(sorted(files), ["a.sqltest", "b.sqltest", "c.sqltest"])
 
 
 if __name__ == "__main__":
