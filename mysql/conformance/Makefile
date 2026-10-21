@@ -52,7 +52,7 @@ SPECS_MEMORY_MB ?= 2048
 REPLAY_OPTIONS = --sqltest $(SQLTEST_BIN) --jobs $(SPECS_JOBS) --timeout $(SPECS_TIMEOUT) \
 	--memory-mb $(SPECS_MEMORY_MB)
 
-.PHONY: all build check run test run-specs score run-one materialize-local run-local-specs \
+.PHONY: all build check run test run-specs score triage run-one materialize-local run-local-specs \
 	score-local clean
 
 # Build everything
@@ -91,6 +91,11 @@ run-specs: build
 # under specs/local/ are never scored against baseline.txt.
 score:
 	python3 tools/score.py $(SPECS_REPORT)
+
+# Bucket the last replay's failures by the feature that blocks them and
+# rewrite FAILURES.md (the ranked list of what to implement next)
+triage:
+	python3 tools/triage.py $(SPECS_REPORT) --markdown FAILURES.md
 
 # Rebuild specs/local/<source>/ for sources that commit only MySQL's results
 # (GPL or license-unclear test suites): fetch the pinned source, re-run its
