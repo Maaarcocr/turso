@@ -1,0 +1,467 @@
+# Owned specs for MySQL DDL lowering: column types and their value ranges,
+# column options, table constraints and options, CREATE/DROP INDEX, ALTER
+# TABLE and DROP TABLE. Every expected value was recorded from MySQL 8.4.10
+# (mysql/conformance/target.toml) in a fresh database per test; error tests
+# note the MySQL error in a comment.
+
+@database :memory:
+
+test table-options-and-comments-are-accepted {
+    CREATE TABLE users (
+      id INT NOT NULL AUTO_INCREMENT COMMENT 'surrogate key',
+      name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'display name',
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='people';
+    INSERT INTO users (name) VALUES ('Ada'), ('Grace');
+    SELECT id, name FROM users ORDER BY id;
+}
+expect {
+    1|Ada
+    2|Grace
+}
+
+# MySQL: ERROR 1286: Unknown storage engine 'NoSuchEngine'
+test other-storage-engines-are-rejected {
+    CREATE TABLE t (id INT) ENGINE=NoSuchEngine;
+}
+expect error {
+}
+
+test auto-increment-assigns-on-null-and-omitted-values {
+    CREATE TABLE t (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, v INT);
+    INSERT INTO t (v) VALUES (10);
+    INSERT INTO t VALUES (NULL, 20);
+    INSERT INTO t VALUES (7, 30);
+    INSERT INTO t (v) VALUES (40);
+    SELECT id, v FROM t ORDER BY id;
+}
+expect {
+    1|10
+    2|20
+    7|30
+    8|40
+}
+
+test auto-increment-does-not-reuse-a-deleted-maximum {
+    CREATE TABLE t (id INT AUTO_INCREMENT, v INT, PRIMARY KEY (id));
+    INSERT INTO t (v) VALUES (1), (2), (3);
+    DELETE FROM t WHERE id = 3;
+    INSERT INTO t (v) VALUES (4);
+    SELECT id, v FROM t ORDER BY id;
+}
+expect {
+    1|1
+    2|2
+    4|4
+}
+
+# MySQL: ERROR 1048: Column 'id' cannot be null
+test int-primary-key-without-auto-increment-rejects-null {
+    CREATE TABLE t (id INT PRIMARY KEY, v INT);
+    INSERT INTO t VALUES (NULL, 1);
+}
+expect error {
+}
+
+# MySQL: ERROR 1364: Field 'id' doesn't have a default value
+test bigint-primary-key-rejects-null {
+    CREATE TABLE t (id BIGINT, v INT, PRIMARY KEY (id));
+    INSERT INTO t (v) VALUES (1);
+}
+expect error {
+}
+
+test integer-primary-key-keeps-explicit-values {
+    CREATE TABLE t (id INTEGER PRIMARY KEY, v INT);
+    INSERT INTO t VALUES (5, 1), (-3, 2);
+    SELECT id, v FROM t ORDER BY id;
+}
+expect {
+    -3|2
+    5|1
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'u' at row 1
+test unsigned-rejects-negative-values {
+    CREATE TABLE t (u INT UNSIGNED);
+    INSERT INTO t VALUES (-1);
+}
+expect error {
+}
+
+test unsigned-accepts-its-whole-range {
+    CREATE TABLE t (a TINYINT UNSIGNED, b SMALLINT UNSIGNED, c INT(10) UNSIGNED);
+    INSERT INTO t VALUES (0, 0, 0), (255, 65535, 4294967295);
+    SELECT a, b, c FROM t ORDER BY a;
+}
+expect {
+    0|0|0
+    255|65535|4294967295
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'a' at row 1
+test tinyint-rejects-out-of-range-values {
+    CREATE TABLE t (a TINYINT);
+    INSERT INTO t VALUES (128);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'a' at row 1
+test smallint-rejects-out-of-range-values {
+    CREATE TABLE t (a SMALLINT(6));
+    INSERT INTO t VALUES (-32769);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'a' at row 1
+test int-rejects-out-of-range-updates {
+    CREATE TABLE t (a INT);
+    INSERT INTO t VALUES (2147483647);
+    UPDATE t SET a = a + 1;
+}
+expect error {
+}
+
+test boolean-is-a-tinyint {
+    CREATE TABLE t (b BOOLEAN, c BOOL);
+    INSERT INTO t VALUES (TRUE, FALSE), (5, -5);
+    SELECT b, c FROM t ORDER BY b;
+}
+expect {
+    1|0
+    5|-5
+}
+
+# MySQL: ERROR 1406: Data too long for column 'v' at row 1
+test varchar-rejects-values-longer-than-its-length {
+    CREATE TABLE t (v VARCHAR(3));
+    INSERT INTO t VALUES ('abcd');
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'c' at row 1
+test char-rejects-values-longer-than-its-length {
+    CREATE TABLE t (c CHAR(2));
+    INSERT INTO t VALUES ('abc');
+}
+expect error {
+}
+
+test varchar-counts-characters-not-bytes {
+    CREATE TABLE t (v VARCHAR(3));
+    INSERT INTO t VALUES ('äöü'), ('日本語');
+    SELECT v FROM t ORDER BY v;
+}
+expect {
+    äöü
+    日本語
+}
+
+# MySQL: ERROR 1406: Data too long for column 'v' at row 1
+test tinytext-rejects-values-longer-than-255-bytes {
+    CREATE TABLE t (v TINYTEXT);
+    INSERT INTO t VALUES (REPEAT('a', 256));
+}
+expect error {
+}
+
+test enum-accepts-members {
+    CREATE TABLE t (size ENUM('small', 'medium', 'large') NOT NULL DEFAULT 'medium', id INT);
+    INSERT INTO t (id, size) VALUES (1, 'large');
+    INSERT INTO t (id) VALUES (2);
+    SELECT id, size FROM t ORDER BY id;
+}
+expect {
+    1|large
+    2|medium
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'size' at row 1
+test enum-rejects-other-values {
+    CREATE TABLE t (size ENUM('small', 'medium', 'large'));
+    INSERT INTO t VALUES ('huge');
+}
+expect error {
+}
+
+test enum-default-takes-the-member-spelling {
+    CREATE TABLE t (id INT, size ENUM('small', 'large') DEFAULT 'LARGE');
+    INSERT INTO t (id) VALUES (1);
+    SELECT id, size FROM t;
+}
+expect {
+    1|large
+}
+
+test set-accepts-members-in-definition-order {
+    CREATE TABLE t (id INT, flags SET('read', 'write', 'admin') DEFAULT 'write,read');
+    INSERT INTO t (id) VALUES (1);
+    INSERT INTO t VALUES (2, 'read,admin'), (3, '');
+    SELECT id, flags FROM t ORDER BY id;
+}
+expect {
+    1|read,write
+    2|read,admin
+    3|
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'flags' at row 1
+test set-rejects-other-values {
+    CREATE TABLE t (flags SET('read', 'write'));
+    INSERT INTO t VALUES ('read,delete');
+}
+expect error {
+}
+
+# MySQL: ERROR 3140: Invalid JSON text: "Missing a comma or '}' after an object member." at position 7 in value for column 't.doc'.
+test json-rejects-invalid-documents {
+    CREATE TABLE t (doc JSON);
+    INSERT INTO t VALUES ('\{"a": 1');
+}
+expect error {
+}
+
+test json-accepts-valid-documents {
+    CREATE TABLE t (id INT, doc JSON);
+    INSERT INTO t VALUES (1, '\{"a": 1\}'), (2, NULL);
+    SELECT id, JSON_EXTRACT(doc, '$.a') FROM t ORDER BY id;
+}
+expect {
+    1|1
+    2|NULL
+}
+
+# MySQL: ERROR 1406: Data too long for column 'b' at row 1
+test bit-rejects-values-wider-than-the-column {
+    CREATE TABLE t (b BIT(2));
+    INSERT INTO t VALUES (4);
+}
+expect error {
+}
+
+test bit-stores-values-that-fit {
+    CREATE TABLE t (b BIT(4));
+    INSERT INTO t VALUES (0), (15);
+    SELECT b + 0 FROM t ORDER BY b;
+}
+expect {
+    0
+    15
+}
+
+test defaults-are-stored-as-mysql-converts-them {
+    CREATE TABLE t (
+      id INT,
+      rounded INT DEFAULT 2.5,
+      negative INT DEFAULT -2.5,
+      from_text INT DEFAULT '12',
+      text_from_number VARCHAR(5) DEFAULT 1.50,
+      price DECIMAL(5,2) DEFAULT 1.234,
+      day DATE DEFAULT '2020-1-2',
+      moment DATETIME(3) DEFAULT '2020-01-02 03:04:05',
+      midday TIME DEFAULT '12:00',
+      padded CHAR(4) DEFAULT 'ab  '
+    );
+    INSERT INTO t (id) VALUES (1);
+    SELECT rounded, negative, from_text, text_from_number, price, day, moment, midday, CONCAT('[', padded, ']') FROM t;
+}
+expect {
+    3|-3|12|1.50|1.23|2020-01-02|2020-01-02 03:04:05.000|12:00:00|[ab]
+}
+
+test default-current-timestamp-fills-datetime {
+    CREATE TABLE t (id INT, created DATETIME DEFAULT CURRENT_TIMESTAMP, updated TIMESTAMP NULL DEFAULT NOW());
+    INSERT INTO t (id) VALUES (1);
+    SELECT id, created IS NOT NULL, updated IS NOT NULL FROM t;
+}
+expect {
+    1|1|1
+}
+
+test default-expression-in-parentheses {
+    CREATE TABLE t (id INT, doubled INT DEFAULT (21 * 2), label VARCHAR(10) DEFAULT ('x'));
+    INSERT INTO t (id) VALUES (1);
+    SELECT id, doubled, label FROM t;
+}
+expect {
+    1|42|x
+}
+
+# MySQL: ERROR 1062: Duplicate entry 'a@example.com' for key 't.uq_email'
+test unique-key-is-enforced {
+    CREATE TABLE t (id INT PRIMARY KEY, email VARCHAR(50), UNIQUE KEY uq_email (email));
+    INSERT INTO t VALUES (1, 'a@example.com');
+    INSERT INTO t VALUES (2, 'a@example.com');
+}
+expect error {
+}
+
+test inline-unique-allows-many-nulls {
+    CREATE TABLE t (id INT PRIMARY KEY, code VARCHAR(5) UNIQUE KEY);
+    INSERT INTO t VALUES (1, NULL), (2, NULL), (3, 'x');
+    SELECT COUNT(*) FROM t;
+}
+expect {
+    3
+}
+
+test secondary-keys-do-not-change-results {
+    CREATE TABLE t (
+      id INT PRIMARY KEY,
+      a INT,
+      b VARCHAR(20),
+      body TEXT,
+      KEY idx_a (a),
+      INDEX idx_ab (a DESC, b) USING BTREE COMMENT 'lookup',
+      KEY idx_body (body(10))
+    );
+    INSERT INTO t VALUES (1, 2, 'x', 'long text'), (2, 1, 'y', NULL);
+    SELECT id FROM t WHERE a = 1;
+}
+expect {
+    2
+}
+
+# MySQL: ERROR 1072: Key column 'nope' doesn't exist in table
+test secondary-key-on-missing-column-is-rejected {
+    CREATE TABLE t (id INT, KEY idx (nope));
+}
+expect error {
+}
+
+# MySQL: ERROR 1170: BLOB/TEXT column 'body' used in key specification without a key length
+test text-key-without-length-is-rejected {
+    CREATE TABLE t (body TEXT, KEY idx (body));
+}
+expect error {
+}
+
+# MySQL: ERROR 3152: JSON column 'doc' supports indexing only via generated columns on a specified JSON path.
+test json-key-is-rejected {
+    CREATE TABLE t (doc JSON, KEY idx (doc));
+}
+expect error {
+}
+
+# MySQL: ERROR 1071: Specified key was too long; max key length is 3072 bytes
+test key-longer-than-3072-bytes-is-rejected {
+    CREATE TABLE t (v VARCHAR(1000), KEY idx (v));
+}
+expect error {
+}
+
+# MySQL: ERROR 1061: Duplicate key name 'k'
+test duplicate-key-names-are-rejected {
+    CREATE TABLE t (a INT, b INT, KEY k (a), KEY k (b));
+}
+expect error {
+}
+
+# MySQL: ERROR 3819: Check constraint 'price_positive' is violated.
+test check-constraints-are-enforced {
+    CREATE TABLE t (qty INT CHECK (qty >= 0), price INT, CONSTRAINT price_positive CHECK (price > 0));
+    INSERT INTO t VALUES (1, 1);
+    INSERT INTO t VALUES (1, 0);
+}
+expect error {
+}
+
+test check-not-enforced-is-not-checked {
+    CREATE TABLE t (qty INT, CHECK (qty > 0) NOT ENFORCED);
+    INSERT INTO t VALUES (-1);
+    SELECT qty FROM t;
+}
+expect {
+    -1
+}
+
+test inline-references-are-ignored-like-mysql {
+    CREATE TABLE parent (id INT PRIMARY KEY);
+    CREATE TABLE child (parent_id INT REFERENCES parent(id));
+    INSERT INTO child VALUES (42);
+    SELECT parent_id FROM child;
+}
+expect {
+    42
+}
+
+test create-index-using-btree-and-drop-index {
+    CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR(20));
+    CREATE INDEX idx_name USING BTREE ON t (name);
+    CREATE UNIQUE INDEX uq_name ON t (name DESC) COMMENT 'unique names';
+    INSERT INTO t VALUES (1, 'a');
+    DROP INDEX uq_name ON t;
+    INSERT INTO t VALUES (2, 'a');
+    DROP INDEX idx_name ON t;
+    SELECT COUNT(*) FROM t;
+}
+expect {
+    2
+}
+
+test alter-table-add-column-with-comment-and-default {
+    CREATE TABLE t (id INT PRIMARY KEY);
+    INSERT INTO t VALUES (1);
+    ALTER TABLE t ADD COLUMN status TINYINT UNSIGNED NOT NULL DEFAULT 3 COMMENT 'state';
+    SELECT id, status FROM t;
+}
+expect {
+    1|3
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'qty' at row 1
+test alter-table-added-column-keeps-its-range {
+    CREATE TABLE t (id INT PRIMARY KEY);
+    ALTER TABLE t ADD qty SMALLINT UNSIGNED;
+    INSERT INTO t VALUES (1, -1);
+}
+expect error {
+}
+
+test alter-table-rename-and-drop-columns {
+    CREATE TABLE t (id INT PRIMARY KEY, old_name VARCHAR(10), unused INT);
+    INSERT INTO t VALUES (1, 'x', 2);
+    ALTER TABLE t RENAME COLUMN old_name TO new_name;
+    ALTER TABLE t DROP COLUMN unused;
+    SELECT id, new_name FROM t;
+}
+expect {
+    1|x
+}
+
+test alter-table-rename-table {
+    CREATE TABLE t (id INT PRIMARY KEY);
+    INSERT INTO t VALUES (1);
+    ALTER TABLE t RENAME TO t2;
+    RENAME TABLE t2 TO t3;
+    SELECT id FROM t3;
+}
+expect {
+    1
+}
+
+test drop-table-if-exists {
+    CREATE TABLE t (id INT);
+    DROP TABLE IF EXISTS t;
+    DROP TABLE IF EXISTS t;
+    CREATE TABLE t (id INT);
+    SELECT COUNT(*) FROM t;
+}
+expect {
+    0
+}
+
+test foreign-key-table-constraint-is-accepted {
+    CREATE TABLE parent (id INT PRIMARY KEY);
+    CREATE TABLE child (id INT PRIMARY KEY, parent_id INT, CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES parent (id) ON DELETE CASCADE);
+    INSERT INTO parent VALUES (1);
+    INSERT INTO child VALUES (10, 1);
+    SELECT id, parent_id FROM child;
+}
+expect {
+    10|1
+}
+
