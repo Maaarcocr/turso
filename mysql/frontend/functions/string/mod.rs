@@ -1,0 +1,117 @@
+use turso_core::{Result, Value};
+
+mod collation;
+mod compare;
+mod convert;
+mod hash;
+mod network;
+mod numeric;
+mod regexp;
+mod text;
+
+type Function = fn(&[Value]) -> Result<Value>;
+
+pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
+    function(name, arg_count).is_some()
+}
+
+pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
+    function(name, args.len()).map(|function| function(args))
+}
+
+fn function(name: &str, arg_count: usize) -> Option<Function> {
+    let function: Function = match (name, arg_count) {
+        ("ABS", 1) => numeric::abs,
+        ("ACOS", 1) => numeric::acos,
+        ("ASIN", 1) => numeric::asin,
+        ("ATAN", 1 | 2) => numeric::atan,
+        ("ATAN2", 2) => numeric::atan2,
+        ("BIN", 1) => numeric::bin,
+        ("BIT_COUNT", 1) => numeric::bit_count,
+        ("CEIL" | "CEILING", 1) => numeric::ceiling,
+        ("CONV", 3) => numeric::conv,
+        ("COS", 1) => numeric::cos,
+        ("COT", 1) => numeric::cot,
+        ("DEGREES", 1) => numeric::degrees,
+        ("EXP", 1) => numeric::exp,
+        ("FLOOR", 1) => numeric::floor,
+        ("LN", 1) => numeric::ln,
+        ("LOG", 1 | 2) => numeric::log,
+        ("LOG10", 1) => numeric::log10,
+        ("LOG2", 1) => numeric::log2,
+        ("MOD", 2) => numeric::modulo,
+        ("OCT", 1) => numeric::oct,
+        ("POW" | "POWER", 2) => numeric::pow,
+        ("RADIANS", 1) => numeric::radians,
+        ("ROUND", 1 | 2) => numeric::round,
+        ("SIGN", 1) => numeric::sign,
+        ("SIN", 1) => numeric::sin,
+        ("SQRT", 1) => numeric::sqrt,
+        ("TAN", 1) => numeric::tan,
+        ("TRUNCATE", 2) => numeric::truncate,
+
+        ("FIELD", 2..) => compare::field,
+        ("GREATEST", 2..) => compare::greatest,
+        ("INTERVAL", 2..) => compare::interval,
+        ("LEAST", 2..) => compare::least,
+        ("STRCMP", 2) => compare::strcmp,
+
+        ("ASCII", 1) => text::ascii,
+        ("BIT_LENGTH", 1) => text::bit_length,
+        ("CHAR", 1..) => text::char,
+        ("CHAR_LENGTH" | "CHARACTER_LENGTH", 1) => text::char_length,
+        ("CONCAT", 1..) => text::concat,
+        ("CONCAT_WS", 2..) => text::concat_ws,
+        ("ELT", 2..) => text::elt,
+        ("EXPORT_SET", 3..=5) => text::export_set,
+        ("FIND_IN_SET", 2) => text::find_in_set,
+        ("HEX", 1) => text::hex,
+        ("INSERT", 4) => text::insert,
+        ("INSTR", 2) => text::instr,
+        ("LCASE" | "LOWER", 1) => text::lower,
+        ("LEFT", 2) => text::left,
+        ("LENGTH" | "OCTET_LENGTH", 1) => text::length,
+        ("LOCATE", 2 | 3) => text::locate,
+        ("LPAD", 3) => text::lpad,
+        ("MAKE_SET", 2..) => text::make_set,
+        ("MID", 3) => text::substring,
+        ("ORD", 1) => text::ord,
+        ("POSITION", 2) => text::locate,
+        ("REPEAT", 2) => text::repeat,
+        ("REPLACE", 3) => text::replace,
+        ("RIGHT", 2) => text::right,
+        ("RPAD", 3) => text::rpad,
+        ("SPACE", 1) => text::space,
+        ("SUBSTR" | "SUBSTRING", 2 | 3) => text::substring,
+        ("SUBSTRING_INDEX", 3) => text::substring_index,
+        ("UCASE" | "UPPER", 1) => text::upper,
+        ("UNHEX", 1) => text::unhex,
+
+        ("CRC32", 1) => hash::crc32,
+        ("FROM_BASE64", 1) => hash::from_base64,
+        ("MD5", 1) => hash::md5,
+        ("SHA" | "SHA1", 1) => hash::sha1,
+        ("SHA2", 2) => hash::sha2,
+        ("TO_BASE64", 1) => hash::to_base64,
+
+        ("BIN_TO_UUID", 1 | 2) => network::bin_to_uuid,
+        ("INET6_ATON", 1) => network::inet6_aton,
+        ("INET6_NTOA", 1) => network::inet6_ntoa,
+        ("INET_ATON", 1) => network::inet_aton,
+        ("INET_NTOA", 1) => network::inet_ntoa,
+        ("IS_IPV4", 1) => network::is_ipv4,
+        ("IS_IPV4_COMPAT", 1) => network::is_ipv4_compat,
+        ("IS_IPV4_MAPPED", 1) => network::is_ipv4_mapped,
+        ("IS_IPV6", 1) => network::is_ipv6,
+        ("IS_UUID", 1) => network::is_uuid,
+        ("UUID_TO_BIN", 1 | 2) => network::uuid_to_bin,
+
+        ("REGEXP", 2) => regexp::regexp_operator,
+        ("REGEXP_INSTR", 2..=6) => regexp::regexp_instr,
+        ("REGEXP_LIKE", 2 | 3) => regexp::regexp_like,
+        ("REGEXP_REPLACE", 3..=6) => regexp::regexp_replace,
+        ("REGEXP_SUBSTR", 2..=5) => regexp::regexp_substr,
+        _ => return None,
+    };
+    Some(function)
+}
