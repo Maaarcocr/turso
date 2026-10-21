@@ -25,6 +25,10 @@ This tier requires Docker and may pull the pinned image on its first run. It che
 
 The compatibility target is frozen in `target.toml`. Feature prerequisites and stage-by-stage status are tracked in `curriculum.toml`.
 
+## Recorded MySQL specs
+
+`specs/` holds a large corpus of `.sqltest` specs whose expected results were recorded once from MySQL 8.4.10 (currently about 150,000 from sqllogictest). The pipeline (fetch pinned sources, import candidates, record against the pinned container, replay through `tursomysql`, score against `baseline.txt`) and the file formats are specified in [`SPECS.md`](SPECS.md).
+
 ## Mined implementation curriculum
 
 The quantity-first corpus miner and source pins live under [`corpus/`](corpus/README.md). Five thousand Apache-licensed go-mysql-server cases are checked in and can be regenerated with:
