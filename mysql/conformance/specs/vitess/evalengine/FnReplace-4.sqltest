@@ -1,0 +1,1134 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-10162 {
+    SELECT REPLACE(_utf8mb4 'abcABCÅå', _latin1 0xFF, 9223372036854775807);
+}
+expect {
+    abcABCÅå
+}
+
+test t-10165 {
+    SELECT REPLACE(_utf8mb4 'abcABCÅå', _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    abcABCÅå
+}
+
+test t-10166 {
+    SELECT REPLACE(_utf8mb4 'abcABCÅå', _latin1 0xFF, _binary 'Müller' );
+}
+expect {
+    abcABCÅå
+}
+
+test t-10168 {
+    SELECT REPLACE(_utf8mb4 'abcABCÅå', _latin1 0xFF, _latin1 0xFF);
+}
+expect {
+    abcABCÅå
+}
+
+test t-10170 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", NULL);
+}
+expect {
+    NULL
+}
+
+test t-10174 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", 1);
+}
+expect {
+    ÿ
+}
+
+test t-10176 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", 0123);
+}
+expect {
+    ÿ
+}
+
+test t-10177 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", 0xAACC);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10179 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10180 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10181 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", "한국어 시험");
+}
+expect error {
+}
+
+test t-10184 {
+    SELECT REPLACE(_latin1 0xFF, "Å å", 9223372036854775807);
+}
+expect {
+    ÿ
+}
+
+test t-10191 {
+    SELECT REPLACE(_latin1 0xFF, NULL, "Å å");
+}
+expect {
+    NULL
+}
+
+test t-10192 {
+    SELECT REPLACE(_latin1 0xFF, NULL, NULL);
+}
+expect {
+    NULL
+}
+
+test t-10195 {
+    SELECT REPLACE(_latin1 0xFF, NULL, "abc");
+}
+expect {
+    NULL
+}
+
+test t-10196 {
+    SELECT REPLACE(_latin1 0xFF, NULL, 1);
+}
+expect {
+    NULL
+}
+
+test t-10199 {
+    SELECT REPLACE(_latin1 0xFF, NULL, 0xAACC);
+}
+expect {
+    NULL
+}
+
+test t-10203 {
+    SELECT REPLACE(_latin1 0xFF, NULL, "한국어 시험");
+}
+expect {
+    NULL
+}
+
+test t-10206 {
+    SELECT REPLACE(_latin1 0xFF, NULL, 9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-10207 {
+    SELECT REPLACE(_latin1 0xFF, NULL, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-10210 {
+    SELECT REPLACE(_latin1 0xFF, NULL, _binary 'Müller' );
+}
+expect {
+    NULL
+}
+
+test t-10211 {
+    SELECT REPLACE(_latin1 0xFF, NULL, _utf8mb4 'abcABCÅå');
+}
+expect {
+    NULL
+}
+
+test t-10214 {
+    SELECT REPLACE(_latin1 0xFF, "", NULL);
+}
+expect {
+    NULL
+}
+
+test t-10216 {
+    SELECT REPLACE(_latin1 0xFF, "", "a");
+}
+expect {
+    ÿ
+}
+
+test t-10221 {
+    SELECT REPLACE(_latin1 0xFF, "", 0xAACC);
+}
+expect {
+    ÿ
+}
+
+test t-10222 {
+    SELECT REPLACE(_latin1 0xFF, "", 3.1415926);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10226 {
+    SELECT REPLACE(_latin1 0xFF, "", "😊😂🤢");
+}
+expect error {
+}
+
+test t-10227 {
+    SELECT REPLACE(_latin1 0xFF, "", '123');
+}
+expect {
+    ÿ
+}
+
+test t-10230 {
+    SELECT REPLACE(_latin1 0xFF, "", 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10231 {
+    SELECT REPLACE(_latin1 0xFF, "", -999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10234 {
+    SELECT REPLACE(_latin1 0xFF, "", _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-10235 {
+    SELECT REPLACE(_latin1 0xFF, "a", "Å å");
+}
+expect {
+    ÿ
+}
+
+test t-10236 {
+    SELECT REPLACE(_latin1 0xFF, "a", NULL);
+}
+expect {
+    NULL
+}
+
+test t-10240 {
+    SELECT REPLACE(_latin1 0xFF, "a", 1);
+}
+expect {
+    ÿ
+}
+
+test t-10243 {
+    SELECT REPLACE(_latin1 0xFF, "a", 0xAACC);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10246 {
+    SELECT REPLACE(_latin1 0xFF, "a", "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10247 {
+    SELECT REPLACE(_latin1 0xFF, "a", "한국어 시험");
+}
+expect error {
+}
+
+test t-10253 {
+    SELECT REPLACE(_latin1 0xFF, "a", -999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10256 {
+    SELECT REPLACE(_latin1 0xFF, "a", _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-10266 {
+    SELECT REPLACE(_latin1 0xFF, "abc", 3.1415926);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10267 {
+    SELECT REPLACE(_latin1 0xFF, "abc", "中文测试");
+}
+expect error {
+}
+
+test t-10274 {
+    SELECT REPLACE(_latin1 0xFF, "abc", 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10276 {
+    SELECT REPLACE(_latin1 0xFF, "abc", _binary 'Müller' );
+}
+expect {
+    ÿ
+}
+
+test t-10277 {
+    SELECT REPLACE(_latin1 0xFF, "abc", _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ
+}
+
+test t-10282 {
+    SELECT REPLACE(_latin1 0xFF, 1, "a");
+}
+expect {
+    ÿ
+}
+
+test t-10287 {
+    SELECT REPLACE(_latin1 0xFF, 1, 0xAACC);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10290 {
+    SELECT REPLACE(_latin1 0xFF, 1, "日本語テスト");
+}
+expect error {
+}
+
+test t-10293 {
+    SELECT REPLACE(_latin1 0xFF, 1, '123');
+}
+expect {
+    ÿ
+}
+
+test t-10296 {
+    SELECT REPLACE(_latin1 0xFF, 1, 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10302 {
+    SELECT REPLACE(_latin1 0xFF, -1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-10303 {
+    SELECT REPLACE(_latin1 0xFF, -1, "");
+}
+expect {
+    ÿ
+}
+
+test t-10306 {
+    SELECT REPLACE(_latin1 0xFF, -1, 1);
+}
+expect {
+    ÿ
+}
+
+test t-10318 {
+    SELECT REPLACE(_latin1 0xFF, -1, 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10322 {
+    SELECT REPLACE(_latin1 0xFF, -1, _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-10325 {
+    SELECT REPLACE(_latin1 0xFF, 0123, "");
+}
+expect {
+    ÿ
+}
+
+test t-10328 {
+    SELECT REPLACE(_latin1 0xFF, 0123, 1);
+}
+expect {
+    ÿ
+}
+
+test t-10330 {
+    SELECT REPLACE(_latin1 0xFF, 0123, 0123);
+}
+expect {
+    ÿ
+}
+
+test t-10332 {
+    SELECT REPLACE(_latin1 0xFF, 0123, 3.1415926);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10334 {
+    SELECT REPLACE(_latin1 0xFF, 0123, "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10335 {
+    SELECT REPLACE(_latin1 0xFF, 0123, "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10336 {
+    SELECT REPLACE(_latin1 0xFF, 0123, "😊😂🤢");
+}
+expect error {
+}
+
+test t-10338 {
+    SELECT REPLACE(_latin1 0xFF, 0123, 9223372036854775807);
+}
+expect {
+    ÿ
+}
+
+test t-10339 {
+    SELECT REPLACE(_latin1 0xFF, 0123, -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-10341 {
+    SELECT REPLACE(_latin1 0xFF, 0123, -999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10348 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, "a");
+}
+expect {
+    ÿ
+}
+
+test t-10349 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, "abc");
+}
+expect {
+    ÿ
+}
+
+test t-10353 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, 0xAACC);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10356 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10357 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10358 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, "😊😂🤢");
+}
+expect error {
+}
+
+test t-10359 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, '123');
+}
+expect {
+    ÿ
+}
+
+test t-10365 {
+    SELECT REPLACE(_latin1 0xFF, 0xAACC, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ
+}
+
+test t-10367 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, "Å å");
+}
+expect {
+    ÿ
+}
+
+test t-10368 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, NULL);
+}
+expect {
+    NULL
+}
+
+test t-10375 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, 0xAACC);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10378 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, "日本語テスト");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10379 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10380 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, "😊😂🤢");
+}
+expect error {
+}
+
+test t-10381 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, '123');
+}
+expect {
+    ÿ
+}
+
+test t-10384 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10385 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, -999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10386 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, _binary 'Müller' );
+}
+expect {
+    ÿ
+}
+
+test t-10387 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ
+}
+
+test t-10388 {
+    SELECT REPLACE(_latin1 0xFF, 3.1415926, _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10392 {
+    SELECT REPLACE(_latin1 0xFF, "中文测试", "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10393 {
+    SELECT REPLACE(_latin1 0xFF, "中文测试", "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10397 {
+    SELECT REPLACE(_latin1 0xFF, "中文测试", 0xAACC);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10401 {
+    SELECT REPLACE(_latin1 0xFF, "中文测试", "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10402 {
+    SELECT REPLACE(_latin1 0xFF, "中文测试", "😊😂🤢");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10409 {
+    SELECT REPLACE(_latin1 0xFF, "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10412 {
+    SELECT REPLACE(_latin1 0xFF, "日本語テスト", NULL);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10414 {
+    SELECT REPLACE(_latin1 0xFF, "日本語テスト", "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10417 {
+    SELECT REPLACE(_latin1 0xFF, "日本語テスト", -1);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10418 {
+    SELECT REPLACE(_latin1 0xFF, "日本語テスト", 0123);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10425 {
+    SELECT REPLACE(_latin1 0xFF, "日本語テスト", '123');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10428 {
+    SELECT REPLACE(_latin1 0xFF, "日本語テスト", 999999999999999999999999);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10433 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", "Å å");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10437 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10441 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", 0xAACC);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10447 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", '123');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10451 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", -999999999999999999999999);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10452 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", _binary 'Müller' );
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10454 {
+    SELECT REPLACE(_latin1 0xFF, "한국어 시험", _latin1 0xFF);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10455 {
+    SELECT REPLACE(_latin1 0xFF, "😊😂🤢", "Å å");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10459 {
+    SELECT REPLACE(_latin1 0xFF, "😊😂🤢", "abc");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10465 {
+    SELECT REPLACE(_latin1 0xFF, "😊😂🤢", "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10471 {
+    SELECT REPLACE(_latin1 0xFF, "😊😂🤢", -9223372036854775808);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10473 {
+    SELECT REPLACE(_latin1 0xFF, "😊😂🤢", -999999999999999999999999);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10474 {
+    SELECT REPLACE(_latin1 0xFF, "😊😂🤢", _binary 'Müller' );
+}
+expect error {
+}
+
+test t-10477 {
+    SELECT REPLACE(_latin1 0xFF, '123', "Å å");
+}
+expect {
+    ÿ
+}
+
+test t-10478 {
+    SELECT REPLACE(_latin1 0xFF, '123', NULL);
+}
+expect {
+    NULL
+}
+
+test t-10479 {
+    SELECT REPLACE(_latin1 0xFF, '123', "");
+}
+expect {
+    ÿ
+}
+
+test t-10485 {
+    SELECT REPLACE(_latin1 0xFF, '123', 0xAACC);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10489 {
+    SELECT REPLACE(_latin1 0xFF, '123', "한국어 시험");
+}
+expect error {
+}
+
+test t-10493 {
+    SELECT REPLACE(_latin1 0xFF, '123', -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-10504 {
+    SELECT REPLACE(_latin1 0xFF, 9223372036854775807, 1);
+}
+expect {
+    ÿ
+}
+
+test t-10505 {
+    SELECT REPLACE(_latin1 0xFF, 9223372036854775807, -1);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10509 {
+    SELECT REPLACE(_latin1 0xFF, 9223372036854775807, "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10511 {
+    SELECT REPLACE(_latin1 0xFF, 9223372036854775807, "한국어 시험");
+}
+expect error {
+}
+
+test t-10514 {
+    SELECT REPLACE(_latin1 0xFF, 9223372036854775807, 9223372036854775807);
+}
+expect {
+    ÿ
+}
+
+test t-10521 {
+    SELECT REPLACE(_latin1 0xFF, -9223372036854775808, "Å å");
+}
+expect {
+    ÿ
+}
+
+test t-10523 {
+    SELECT REPLACE(_latin1 0xFF, -9223372036854775808, "");
+}
+expect {
+    ÿ
+}
+
+test t-10524 {
+    SELECT REPLACE(_latin1 0xFF, -9223372036854775808, "a");
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE6\x97\xA5\xE6\x9C\xAC...' from utf8mb4 to latin1
+test t-10532 {
+    SELECT REPLACE(_latin1 0xFF, -9223372036854775808, "日本語テスト");
+}
+expect error {
+}
+
+test t-10539 {
+    SELECT REPLACE(_latin1 0xFF, -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10550 {
+    SELECT REPLACE(_latin1 0xFF, 999999999999999999999999, 0123);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10553 {
+    SELECT REPLACE(_latin1 0xFF, 999999999999999999999999, "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10556 {
+    SELECT REPLACE(_latin1 0xFF, 999999999999999999999999, "😊😂🤢");
+}
+expect error {
+}
+
+test t-10559 {
+    SELECT REPLACE(_latin1 0xFF, 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-10562 {
+    SELECT REPLACE(_latin1 0xFF, 999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    ÿ
+}
+
+test t-10567 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, "");
+}
+expect {
+    ÿ
+}
+
+test t-10568 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, "a");
+}
+expect {
+    ÿ
+}
+
+test t-10572 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, 0123);
+}
+expect {
+    ÿ
+}
+
+test t-10574 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, 3.1415926);
+}
+expect {
+    ÿ
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10575 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10577 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, "한국어 시험");
+}
+expect error {
+}
+
+test t-10579 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, '123');
+}
+expect {
+    ÿ
+}
+
+test t-10581 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-10584 {
+    SELECT REPLACE(_latin1 0xFF, -999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    ÿ
+}
+
+test t-10589 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , "");
+}
+expect {
+    ÿ
+}
+
+test t-10591 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , "abc");
+}
+expect {
+    ÿ
+}
+
+test t-10596 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , 3.1415926);
+}
+expect {
+    ÿ
+}
+
+test t-10603 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-10604 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10605 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , -999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10608 {
+    SELECT REPLACE(_latin1 0xFF, _binary 'Müller' , _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-10610 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10619 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10621 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10622 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect error {
+}
+
+test t-10624 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', 9223372036854775807);
+}
+expect {
+    ÿ
+}
+
+test t-10626 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-10630 {
+    SELECT REPLACE(_latin1 0xFF, _utf8mb4 'abcABCÅå', _latin1 0xFF);
+}
+expect {
+    ÿ
+}
+
+test t-10631 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-10632 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, NULL);
+}
+expect {
+    NULL
+}
+
+test t-10633 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, "");
+}
+expect {
+    
+}
+
+test t-10635 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, "abc");
+}
+expect {
+    abc
+}
+
+test t-10637 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, -1);
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10641 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, "中文测试");
+}
+expect error {
+}
+
+test t-10646 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-10649 {
+    SELECT REPLACE(_latin1 0xFF, _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}

@@ -1,0 +1,364 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-212523 {
+    SELECT if(_latin1 'FOO', 0xFF, 255);
+}
+expect {
+    255
+}
+
+test t-212625 {
+    SELECT if(_latin1 'FOO', 255, _binary '64');
+}
+expect {
+    64
+}
+
+test t-212724 {
+    SELECT if(_latin1 'FOO', 1.1, 9e0);
+}
+expect {
+    9
+}
+
+test t-212729 {
+    SELECT if(_latin1 'FOO', 1.1, -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-212888 {
+    SELECT if(_latin1 'FOO', 7, 7);
+}
+expect {
+    7
+}
+
+test t-212911 {
+    SELECT if(_latin1 'FOO', 7, -9223372036854775809);
+}
+expect {
+    -9223372036854775809
+}
+
+test t-212925 {
+    SELECT if(_latin1 'FOO', 7, _binary '64');
+}
+expect {
+    64
+}
+
+test t-213015 {
+    SELECT if(_latin1 'FOO', 13, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-213039 {
+    SELECT if(_latin1 'FOO', 13, "1abcd");
+}
+expect {
+    1abcd
+}
+
+test t-213055 {
+    SELECT if(_latin1 'FOO', 13, 'BAR');
+}
+expect {
+    BAR
+}
+
+test t-213074 {
+    SELECT if(_latin1 'FOO', 1.5, '-1.5');
+}
+expect {
+    -1.5
+}
+
+test t-213075 {
+    SELECT if(_latin1 'FOO', 1.5, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-213167 {
+    SELECT if(_latin1 'FOO', -1.5, _binary X'40');
+}
+expect {
+    @
+}
+
+test t-213180 {
+    SELECT if(_latin1 'FOO', '1.5', 0);
+}
+expect {
+    0
+}
+
+test t-213298 {
+    SELECT if(_latin1 'FOO', '-1.5', _latin1 'foo');
+}
+expect {
+    foo
+}
+
+test t-213308 {
+    SELECT if(_latin1 'FOO', 0.0e0, 7);
+}
+expect {
+    7
+}
+
+test t-213312 {
+    SELECT if(_latin1 'FOO', 0.0e0, -1.5);
+}
+expect {
+    -1.5
+}
+
+test t-213519 {
+    SELECT if(_latin1 'FOO', 1.5e0, "1abcd");
+}
+expect {
+    1abcd
+}
+
+test t-213540 {
+    SELECT if(_latin1 'FOO', -1.5e0, 0);
+}
+expect {
+    0
+}
+
+test t-213556 {
+    SELECT if(_latin1 'FOO', -1.5e0, 1.0e0);
+}
+expect {
+    1
+}
+
+test t-213610 {
+    SELECT if(_latin1 'FOO', 1.1e0, 13);
+}
+expect {
+    13
+}
+
+test t-213611 {
+    SELECT if(_latin1 'FOO', 1.1e0, 1.5);
+}
+expect {
+    1.5
+}
+
+test t-213675 {
+    SELECT if(_latin1 'FOO', -1e0, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-213845 {
+    SELECT if(_latin1 'FOO', 9e0, 1.1);
+}
+expect {
+    1.1
+}
+
+test t-214029 {
+    SELECT if(_latin1 'FOO', 9223372036854775807, 9);
+}
+expect {
+    9
+}
+
+test t-214057 {
+    SELECT if(_latin1 'FOO', 9223372036854775807, X'ff');
+}
+expect {
+    �
+}
+
+test t-214088 {
+    SELECT if(_latin1 'FOO', 9223372036854775808, 7);
+}
+expect {
+    7
+}
+
+test t-214094 {
+    SELECT if(_latin1 'FOO', 9223372036854775808, '-1.5');
+}
+expect {
+    -1.5
+}
+
+test t-214214 {
+    SELECT if(_latin1 'FOO', 18446744073709551616, '-1.5');
+}
+expect {
+    -1.5
+}
+
+test t-214232 {
+    SELECT if(_latin1 'FOO', 18446744073709551616, "foobar");
+}
+expect {
+    foobar
+}
+
+test t-214348 {
+    SELECT if(_latin1 'FOO', "foobar", 9223372036854775808);
+}
+expect {
+    9223372036854775808
+}
+
+test t-214364 {
+    SELECT if(_latin1 'FOO', "foobar", '64');
+}
+expect {
+    64
+}
+
+test t-214423 {
+    SELECT if(_latin1 'FOO', "foobar1234", 64);
+}
+expect {
+    64
+}
+
+test t-214541 {
+    SELECT if(_latin1 'FOO', 0x1, _binary "foobar");
+}
+expect {
+    foobar
+}
+
+test t-214639 {
+    SELECT if(_latin1 'FOO', X'ff', -1.5e0);
+}
+expect {
+    -1.5
+}
+
+test t-214693 {
+    SELECT if(_latin1 'FOO', X'00', '1.5');
+}
+expect {
+    1.5
+}
+
+test t-214700 {
+    SELECT if(_latin1 'FOO', X'00', 1.1e0);
+}
+expect {
+    1.1
+}
+
+test t-214814 {
+    SELECT if(_latin1 'FOO', NULL, '-1.5');
+}
+expect {
+    -1.5
+}
+
+test t-214837 {
+    SELECT if(_latin1 'FOO', NULL, X'ff');
+}
+expect {
+    �
+}
+
+test t-214902 {
+    SELECT if(_latin1 'FOO', _binary "foobar", _binary "foobar1234");
+}
+expect {
+    foobar1234
+}
+
+test t-215007 {
+    SELECT if(_latin1 'FOO', 64, 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-215044 {
+    SELECT if(_latin1 'FOO', '64', 1.0);
+}
+expect {
+    1.0
+}
+
+test t-215222 {
+    SELECT if(_latin1 'FOO', _binary X'40', 0xFF);
+}
+expect {
+    �
+}
+
+test t-215228 {
+    SELECT if(_latin1 'FOO', _binary X'40', 7);
+}
+expect {
+    7
+}
+
+test t-215536 {
+    SELECT if(_latin1 'FOO', 'foo', 1.0e0);
+}
+expect {
+    1
+}
+
+test t-215549 {
+    SELECT if(_latin1 'FOO', 'foo', -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-215608 {
+    SELECT if(_latin1 'FOO', 'bar', 9223372036854775808);
+}
+expect {
+    9223372036854775808
+}
+
+test t-215712 {
+    SELECT if(_latin1 'FOO', 'BAR', -1.5);
+}
+expect {
+    -1.5
+}
+
+test t-215714 {
+    SELECT if(_latin1 'FOO', 'BAR', '-1.5');
+}
+expect {
+    -1.5
+}
+
+test t-215763 {
+    SELECT if(_latin1 'FOO', 'foo' collate utf8mb4_0900_as_cs, 255);
+}
+expect {
+    255
+}
+
+test t-215963 {
+    SELECT if(_latin1 'FOO', _latin1 'FOO', 7e0);
+}
+expect {
+    7
+}

@@ -1,0 +1,1918 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-486 {
+    SELECT CHAR(0, 0xFF, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-3063 {
+    SELECT CHAR(0, 1.5e0, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-3889 {
+    SELECT CHAR(0, 7e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-4443 {
+    SELECT CHAR(0, 9223372036854775807, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-5253 {
+    SELECT CHAR(0, "foobar", -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-8587 {
+    SELECT CHAR(1, 1.0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-9072 {
+    SELECT CHAR(1, -255, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-10369 {
+    SELECT CHAR(1, 0.0e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-11409 {
+    SELECT CHAR(1, -255e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-11571 {
+    SELECT CHAR(1, 7e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-13917 {
+    SELECT CHAR(1, X'ff', cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-14727 {
+    SELECT CHAR(1, _binary "foobar1234", cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-15877 {
+    SELECT CHAR(-1, 1, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-16148 {
+    SELECT CHAR(-1, 255, time'00:00:59.2132234');
+}
+expect {
+    �����;
+}
+
+test t-16583 {
+    SELECT CHAR(-1, -1, NULL - 1);
+}
+expect {
+    ��������
+}
+
+test t-16591 {
+    SELECT CHAR(-1, -1, 18446744073709551615);
+}
+expect {
+    ������������
+}
+
+test t-16609 {
+    SELECT CHAR(-1, -1, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    �����������c
+}
+
+test t-16624 {
+    SELECT CHAR(-1, -1, '20000101103458.1234foo');
+}
+expect {
+    �����������b
+}
+
+test t-16666 {
+    SELECT CHAR(-1, -1, cast('-1.1' as json));
+}
+expect {
+    ������������
+}
+
+test t-17065 {
+    SELECT CHAR(-1, 9, NULL / NULL);
+}
+expect raw {
+����	
+}
+
+test t-17115 {
+    SELECT CHAR(-1, 9, time '-10:04:58');
+}
+expect {
+    ����	��w�
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-17334 {
+    SELECT CHAR(-1, 13, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-17585 {
+    SELECT CHAR(-1, -1.5, 20000101103458.123456);
+}
+expect {
+    �����������b
+}
+
+test t-17905 {
+    SELECT CHAR(-1, '-1.5', timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    �����������c
+}
+
+test t-18356 {
+    SELECT CHAR(-1, 255.0, NULL * 1);
+}
+expect {
+    �����
+}
+
+test t-18652 {
+    SELECT CHAR(-1, -1.5e0, -1.7e0);
+}
+expect {
+    ������������
+}
+
+test t-18681 {
+    SELECT CHAR(-1, -1.5e0, 1 * NULL);
+}
+expect {
+    ��������
+}
+
+test t-18736 {
+    SELECT CHAR(-1, -1.5e0, time '-31:34:58');
+}
+expect {
+    ����������7�
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-18954 {
+    SELECT CHAR(-1, 1.1e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-19008 {
+    SELECT CHAR(-1, -1e0, 1 / NULL);
+}
+expect {
+    ��������
+}
+
+test t-19013 {
+    SELECT CHAR(-1, -1e0, NULL - 1);
+}
+expect {
+    ��������
+}
+
+test t-19482 {
+    SELECT CHAR(-1, 9e0, X'ff');
+}
+expect {
+    ����	�
+}
+
+test t-19497 {
+    SELECT CHAR(-1, 9e0, 1 + NULL);
+}
+expect raw {
+����	
+}
+
+test t-19501 {
+    SELECT CHAR(-1, 9e0, NULL - NULL);
+}
+expect raw {
+����	
+}
+
+test t-19528 {
+    SELECT CHAR(-1, 9e0, 20000101103458.1234);
+}
+expect {
+    ����	���b
+}
+
+test t-19541 {
+    SELECT CHAR(-1, 9e0, '20000101103458.123456foo');
+}
+expect {
+    ����	���b
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-19602 {
+    SELECT CHAR(-1, 9e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-19777 {
+    SELECT CHAR(-1, 18446744073709551615, ' 255 ');
+}
+expect {
+    ���������
+}
+
+test t-19817 {
+    SELECT CHAR(-1, 18446744073709551615, NULL / 1);
+}
+expect {
+    ��������
+}
+
+test t-19819 {
+    SELECT CHAR(-1, 18446744073709551615, NULL / NULL);
+}
+expect {
+    ��������
+}
+
+test t-19874 {
+    SELECT CHAR(-1, 18446744073709551615, time'00:00:59.2132234');
+}
+expect {
+    ��������;
+}
+
+test t-19987 {
+    SELECT CHAR(-1, 9223372036854775807, NULL - NULL);
+}
+expect {
+    ��������
+}
+
+test t-20555 {
+    SELECT CHAR(-1, 18446744073709551616, cast('9223372036854775807' as json));
+}
+expect {
+    ������������
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-20575 {
+    SELECT CHAR(-1, 18446744073709551616, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-20899 {
+    SELECT CHAR(-1, "foobar", cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-21394 {
+    SELECT CHAR(-1, -0x1, 255);
+}
+expect {
+    ���������
+}
+
+test t-21406 {
+    SELECT CHAR(-1, -0x1, -1.7e0);
+}
+expect {
+    ������������
+}
+
+test t-21441 {
+    SELECT CHAR(-1, -0x1, 1 + NULL);
+}
+expect {
+    ��������
+}
+
+test t-21448 {
+    SELECT CHAR(-1, -0x1, 0xFF666F6F626172);
+}
+expect {
+    ��������obar
+}
+
+test t-21495 {
+    SELECT CHAR(-1, -0x1, time '-101:34:58');
+}
+expect {
+    �����������.
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-21615 {
+    SELECT CHAR(-1, X'ff', -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-21646 {
+    SELECT CHAR(-1, X'ff', '20000101103458.1234foo');
+}
+expect {
+    ��������b
+}
+
+test t-22042 {
+    SELECT CHAR(-1, NULL, 255);
+}
+expect {
+    �����
+}
+
+test t-22169 {
+    SELECT CHAR(-1, NULL, cast(9223372036854775807 as json));
+}
+expect {
+    ��������
+}
+
+test t-22176 {
+    SELECT CHAR(-1, NULL, cast('18446744073709551615' as json));
+}
+expect {
+    ��������
+}
+
+test t-22607 {
+    SELECT CHAR(-1, 64, 20000101103458.123456);
+}
+expect {
+    ����@���b
+}
+
+test t-22660 {
+    SELECT CHAR(-1, 64, cast('-1.1' as json));
+}
+expect {
+    ����@����
+}
+
+test t-22712 {
+    SELECT CHAR(-1, '64', '-1.5');
+}
+expect {
+    ����@����
+}
+
+test t-22824 {
+    SELECT CHAR(-1, '64', cast('18446744073709551615' as json));
+}
+expect {
+    ����@����
+}
+
+test t-22888 {
+    SELECT CHAR(-1, _binary '64', x'09');
+}
+expect raw {
+����@	
+}
+
+test t-23055 {
+    SELECT CHAR(-1, X'40', 1 * NULL);
+}
+expect {
+    ����@
+}
+
+test t-23059 {
+    SELECT CHAR(-1, X'40', NULL / NULL);
+}
+expect {
+    ����@
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-23490 {
+    SELECT CHAR('1.5', 0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-27771 {
+    SELECT CHAR('1.5', 9223372036854775807, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-28659 {
+    SELECT CHAR('1.5', "foobar", cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-29553 {
+    SELECT CHAR('1.5', X'00', -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-29970 {
+    SELECT CHAR('1.5', NULL, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-30133 {
+    SELECT CHAR('1.5', _binary "foobar", cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-31450 {
+    SELECT CHAR(NULL, 0xFF, -1.7e0);
+}
+expect {
+    �����
+}
+
+test t-31496 {
+    SELECT CHAR(NULL, 0xFF, 18446744073709540000e0);
+}
+expect {
+    �����
+}
+
+test t-31537 {
+    SELECT CHAR(NULL, 0xFF, time'00:00:59.01011');
+}
+expect {
+    �;
+}
+
+test t-32091 {
+    SELECT CHAR(NULL, -1, ' 255 foo');
+}
+expect {
+    �����
+}
+
+test t-32126 {
+    SELECT CHAR(NULL, -1, NULL * 1);
+}
+expect {
+    ����
+}
+
+test t-32162 {
+    SELECT CHAR(NULL, -1, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    �����T��
+}
+
+test t-32164 {
+    SELECT CHAR(NULL, -1, 20000101103458.1234);
+}
+expect {
+    �������b
+}
+
+test t-32171 {
+    SELECT CHAR(NULL, -1, '20000101103458.123456');
+}
+expect {
+    �������b
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-32562 {
+    SELECT CHAR(NULL, 7, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-32871 {
+    SELECT CHAR(NULL, 13, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-33074 {
+    SELECT CHAR(NULL, -1.5, -1.5);
+}
+expect {
+    ��������
+}
+
+test t-33143 {
+    SELECT CHAR(NULL, -1.5, '20000101103458.123456');
+}
+expect {
+    �������b
+}
+
+test t-33419 {
+    SELECT CHAR(NULL, '-1.5', NULL);
+}
+expect {
+    ����
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-33697 {
+    SELECT CHAR(NULL, 0.0e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-34211 {
+    SELECT CHAR(NULL, -1.5e0, -1.1);
+}
+expect {
+    ��������
+}
+
+test t-34247 {
+    SELECT CHAR(NULL, -1.5e0, 9223372036854775807);
+}
+expect {
+    ��������
+}
+
+test t-34277 {
+    SELECT CHAR(NULL, -1.5e0, '20000101103458.123456');
+}
+expect {
+    �������b
+}
+
+test t-34281 {
+    SELECT CHAR(NULL, -1.5e0, '20000101103458foo');
+}
+expect {
+    �������b
+}
+
+test t-34617 {
+    SELECT CHAR(NULL, -1e0, time '-101:34:58');
+}
+expect {
+    �������.
+}
+
+test t-35045 {
+    SELECT CHAR(NULL, 9e0, NULL / 1);
+}
+expect raw {
+	
+}
+
+test t-35052 {
+    SELECT CHAR(NULL, 9e0, 1 - NULL);
+}
+expect raw {
+	
+}
+
+test t-35086 {
+    SELECT CHAR(NULL, 9e0, '20000101103458.1234');
+}
+expect raw {
+	���b
+}
+
+test t-35092 {
+    SELECT CHAR(NULL, 9e0, '20000101103458.1234foo');
+}
+expect raw {
+	���b
+}
+
+test t-35401 {
+    SELECT CHAR(NULL, 18446744073709551615, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    �������c
+}
+
+test t-35416 {
+    SELECT CHAR(NULL, 18446744073709551615, '20000101103458.1234foo');
+}
+expect {
+    �������b
+}
+
+test t-35458 {
+    SELECT CHAR(NULL, 18446744073709551615, cast('-1.1' as json));
+}
+expect {
+    ��������
+}
+
+test t-35546 {
+    SELECT CHAR(NULL, 9223372036854775807, 18446744073709540000e0);
+}
+expect {
+    ��������
+}
+
+test t-35571 {
+    SELECT CHAR(NULL, 9223372036854775807, '20000101103458');
+}
+expect {
+    �������b
+}
+
+test t-36957 {
+    SELECT CHAR(NULL, -0x1, -1.1e0);
+}
+expect {
+    ��������
+}
+
+test t-37072 {
+    SELECT CHAR(NULL, -0x1, cast(-1.1 as json));
+}
+expect {
+    ��������
+}
+
+test t-37153 {
+    SELECT CHAR(NULL, X'ff', NULL / NULL);
+}
+expect {
+    �
+}
+
+test t-37156 {
+    SELECT CHAR(NULL, X'ff', NULL + NULL);
+}
+expect {
+    �
+}
+
+test t-37159 {
+    SELECT CHAR(NULL, X'ff', NULL - NULL);
+}
+expect {
+    �
+}
+
+test t-37234 {
+    SELECT CHAR(NULL, X'ff', cast(-1.1 as json));
+}
+expect {
+    �����
+}
+
+test t-37670 {
+    SELECT CHAR(NULL, NULL, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    �T��
+}
+
+test t-38126 {
+    SELECT CHAR(NULL, 64, NULL + 1);
+}
+expect {
+    @
+}
+
+test t-38165 {
+    SELECT CHAR(NULL, 64, '20000101103458.123456');
+}
+expect {
+    @���b
+}
+
+test t-38316 {
+    SELECT CHAR(NULL, '64', timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    @���b
+}
+
+test t-38407 {
+    SELECT CHAR(NULL, _binary '64', ' 255 ');
+}
+expect {
+    @�
+}
+
+test t-38700 {
+    SELECT CHAR(NULL, X'40', cast('18446744073709551615' as json));
+}
+expect {
+    @����
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-41541 {
+    SELECT CHAR('ABC', 1.0e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-43255 {
+    SELECT CHAR('ABC', 18446744073709551615, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-44388 {
+    SELECT CHAR('ABC', "foobar1234", cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-45993 {
+    SELECT CHAR('ABC', 64, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-48115 {
+    SELECT CHAR(1.5e0, 7, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-48507 {
+    SELECT CHAR(1.5e0, 1.5, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-49248 {
+    SELECT CHAR(1.5e0, 0.0e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-50221 {
+    SELECT CHAR(1.5e0, -1e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-50289 {
+    SELECT CHAR(1.5e0, -255e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-52164 {
+    SELECT CHAR(1.5e0, "foobar1234", cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-52473 {
+    SELECT CHAR(1.5e0, 0x1, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-52974 {
+    SELECT CHAR(1.5e0, X'00', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-54795 {
+    SELECT CHAR(-1.5e0, 0xFF, 0xff);
+}
+expect {
+    ������
+}
+
+test t-54800 {
+    SELECT CHAR(-1.5e0, 0xFF, b'1001');
+}
+expect raw {
+�����	
+}
+
+test t-54839 {
+    SELECT CHAR(-1.5e0, 0xFF, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    ��������b
+}
+
+test t-54842 {
+    SELECT CHAR(-1.5e0, 0xFF, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    ������T��
+}
+
+test t-54850 {
+    SELECT CHAR(-1.5e0, 0xFF, '20000101103458.1234');
+}
+expect {
+    ��������b
+}
+
+test t-55505 {
+    SELECT CHAR(-1.5e0, -1, '20000101103458.123456foo');
+}
+expect {
+    �����������b
+}
+
+test t-55548 {
+    SELECT CHAR(-1.5e0, -1, cast('18446744073709551615' as json));
+}
+expect {
+    ������������
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-55635 {
+    SELECT CHAR(-1.5e0, -255, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-55729 {
+    SELECT CHAR(-1.5e0, -255, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-56027 {
+    SELECT CHAR(-1.5e0, 9, cast(9223372036854775807 as json));
+}
+expect {
+    ����	����
+}
+
+test t-56486 {
+    SELECT CHAR(-1.5e0, -1.5, time'00:00:59.2132234');
+}
+expect {
+    ��������;
+}
+
+test t-56726 {
+    SELECT CHAR(-1.5e0, '-1.5', -1.5);
+}
+expect {
+    ������������
+}
+
+test t-56730 {
+    SELECT CHAR(-1.5e0, '-1.5', -1.7);
+}
+expect {
+    ������������
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-57025 {
+    SELECT CHAR(-1.5e0, 0.0e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-57201 {
+    SELECT CHAR(-1.5e0, 255.0, ' 255 foo');
+}
+expect {
+    ������
+}
+
+test t-57246 {
+    SELECT CHAR(-1.5e0, 255.0, 1 - NULL);
+}
+expect {
+    �����
+}
+
+test t-57553 {
+    SELECT CHAR(-1.5e0, -1.5e0, 0b1001);
+}
+expect raw {
+��������	
+}
+
+test t-57595 {
+    SELECT CHAR(-1.5e0, -1.5e0, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    �����������c
+}
+
+test t-57615 {
+    SELECT CHAR(-1.5e0, -1.5e0, time '-10:04:58');
+}
+expect {
+    ����������w�
+}
+
+test t-57648 {
+    SELECT CHAR(-1.5e0, -1.5e0, cast(18446744073709551615 as json));
+}
+expect {
+    ������������
+}
+
+test t-57853 {
+    SELECT CHAR(-1.5e0, -1e0, -1.5e0);
+}
+expect {
+    ������������
+}
+
+test t-57855 {
+    SELECT CHAR(-1.5e0, -1e0, -1.1e0);
+}
+expect {
+    ������������
+}
+
+test t-57863 {
+    SELECT CHAR(-1.5e0, -1e0, -1.1);
+}
+expect {
+    ������������
+}
+
+test t-58372 {
+    SELECT CHAR(-1.5e0, 9e0, NULL * NULL);
+}
+expect raw {
+����	
+}
+
+test t-58403 {
+    SELECT CHAR(-1.5e0, 9e0, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    ����	���b
+}
+
+test t-58413 {
+    SELECT CHAR(-1.5e0, 9e0, '20000101103458');
+}
+expect {
+    ����	���b
+}
+
+test t-58421 {
+    SELECT CHAR(-1.5e0, 9e0, '20000101103458.123456foo');
+}
+expect {
+    ����	���b
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-58482 {
+    SELECT CHAR(-1.5e0, 9e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-58683 {
+    SELECT CHAR(-1.5e0, 18446744073709551615, 0xff);
+}
+expect {
+    ���������
+}
+
+test t-58744 {
+    SELECT CHAR(-1.5e0, 18446744073709551615, '20000101103458.1234foo');
+}
+expect {
+    �����������b
+}
+
+test t-58871 {
+    SELECT CHAR(-1.5e0, 9223372036854775807, 9223372036854775807);
+}
+expect {
+    ������������
+}
+
+test t-59305 {
+    SELECT CHAR(-1.5e0, 18446744073709551616, ' 255 ');
+}
+expect {
+    ���������
+}
+
+test t-59350 {
+    SELECT CHAR(-1.5e0, 18446744073709551616, NULL + NULL);
+}
+expect {
+    ��������
+}
+
+test t-59392 {
+    SELECT CHAR(-1.5e0, 18446744073709551616, '20000101103458.1234foo');
+}
+expect {
+    �����������b
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-59439 {
+    SELECT CHAR(-1.5e0, 18446744073709551616, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-60296 {
+    SELECT CHAR(-1.5e0, -0x1, '-1.5');
+}
+expect {
+    ������������
+}
+
+test t-60323 {
+    SELECT CHAR(-1.5e0, -0x1, NULL - 1);
+}
+expect {
+    ��������
+}
+
+test t-60365 {
+    SELECT CHAR(-1.5e0, -0x1, '20000101103458.123456foo');
+}
+expect {
+    �����������b
+}
+
+test t-60370 {
+    SELECT CHAR(-1.5e0, -0x1, time '-31:34:58');
+}
+expect {
+    ����������7�
+}
+
+test t-60997 {
+    SELECT CHAR(-1.5e0, NULL, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    �������c
+}
+
+test t-61498 {
+    SELECT CHAR(-1.5e0, 64, '20000101103458.1234foo');
+}
+expect {
+    ����@���b
+}
+
+test t-61536 {
+    SELECT CHAR(-1.5e0, 64, cast(18446744073709551615 as json));
+}
+expect {
+    ����@����
+}
+
+test t-61766 {
+    SELECT CHAR(-1.5e0, _binary '64', b'1001');
+}
+expect raw {
+����@	
+}
+
+test t-61767 {
+    SELECT CHAR(-1.5e0, _binary '64', 0x9);
+}
+expect raw {
+����@	
+}
+
+test t-61828 {
+    SELECT CHAR(-1.5e0, _binary '64', time '-31:34:58');
+}
+expect {
+    ����@��7�
+}
+
+test t-61973 {
+    SELECT CHAR(-1.5e0, X'40', 20000101103458.123456);
+}
+expect {
+    ����@���b
+}
+
+test t-61995 {
+    SELECT CHAR(-1.5e0, X'40', time '-101:34:58');
+}
+expect {
+    ����@���.
+}
+
+test t-61998 {
+    SELECT CHAR(-1.5e0, X'40', '101:34:58');
+}
+expect {
+    ����@e
+}
+
+test t-62554 {
+    SELECT CHAR(9223372036854775810.4, 0xFF, -1.7e0);
+}
+expect {
+    ���������
+}
+
+test t-62594 {
+    SELECT CHAR(9223372036854775810.4, 0xFF, 0xFF666F6F626172FF);
+}
+expect {
+    �����bar�
+}
+
+test t-62783 {
+    SELECT CHAR(9223372036854775810.4, 255, 20000101103458.123456);
+}
+expect {
+    ��������b
+}
+
+test t-62799 {
+    SELECT CHAR(9223372036854775810.4, 255, time '-10:04:58');
+}
+expect {
+    �������w�
+}
+
+test t-62831 {
+    SELECT CHAR(9223372036854775810.4, 255, cast(9223372036854775807 as json));
+}
+expect {
+    ���������
+}
+
+test t-63275 {
+    SELECT CHAR(9223372036854775810.4, -1, '20000101103458.123456');
+}
+expect {
+    �����������b
+}
+
+test t-63318 {
+    SELECT CHAR(9223372036854775810.4, -1, cast(18446744073709551615 as json));
+}
+expect {
+    ������������
+}
+
+test t-63713 {
+    SELECT CHAR(9223372036854775810.4, 9, NULL);
+}
+expect raw {
+����	
+}
+
+test t-63752 {
+    SELECT CHAR(9223372036854775810.4, 9, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    ����	�T��
+}
+
+test t-63802 {
+    SELECT CHAR(9223372036854775810.4, 9, cast(-1.1 as json));
+}
+expect {
+    ����	����
+}
+
+test t-64204 {
+    SELECT CHAR(9223372036854775810.4, -1.5, NULL * NULL);
+}
+expect {
+    ��������
+}
+
+test t-64236 {
+    SELECT CHAR(9223372036854775810.4, -1.5, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    �����������b
+}
+
+test t-64246 {
+    SELECT CHAR(9223372036854775810.4, -1.5, '20000101103458.1234');
+}
+expect {
+    �����������b
+}
+
+test t-64518 {
+    SELECT CHAR(9223372036854775810.4, '-1.5', X'ff');
+}
+expect {
+    ���������
+}
+
+test t-64520 {
+    SELECT CHAR(9223372036854775810.4, '-1.5', b'1001');
+}
+expect raw {
+��������	
+}
+
+test t-64538 {
+    SELECT CHAR(9223372036854775810.4, '-1.5', 0xFF666F6F626172FF);
+}
+expect {
+    ��������bar�
+}
+
+test t-64582 {
+    SELECT CHAR(9223372036854775810.4, '-1.5', time '-31:34:58');
+}
+expect {
+    ����������7�
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-64707 {
+    SELECT CHAR(9223372036854775810.4, 0.0e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-64991 {
+    SELECT CHAR(9223372036854775810.4, 255.0, -1.1);
+}
+expect {
+    ���������
+}
+
+test t-65063 {
+    SELECT CHAR(9223372036854775810.4, 255.0, '20000101103458.123456foo');
+}
+expect {
+    ��������b
+}
+
+test t-65353 {
+    SELECT CHAR(9223372036854775810.4, -1.5e0, 18446744073709551615);
+}
+expect {
+    ������������
+}
+
+test t-65386 {
+    SELECT CHAR(9223372036854775810.4, -1.5e0, '20000101103458.1234foo');
+}
+expect {
+    �����������b
+}
+
+test t-66142 {
+    SELECT CHAR(9223372036854775810.4, 9e0, x'09');
+}
+expect raw {
+����		
+}
+
+test t-66158 {
+    SELECT CHAR(9223372036854775810.4, 9e0, 0xFF666F6F626172FF);
+}
+expect {
+    ����	bar�
+}
+
+test t-66513 {
+    SELECT CHAR(9223372036854775810.4, 18446744073709551615, '20000101103458');
+}
+expect {
+    �����������b
+}
+
+test t-66667 {
+    SELECT CHAR(9223372036854775810.4, 9223372036854775807, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    �����������c
+}
+
+test t-66696 {
+    SELECT CHAR(9223372036854775810.4, 9223372036854775807, '101:34:58');
+}
+expect {
+    ��������e
+}
+
+test t-67089 {
+    SELECT CHAR(9223372036854775810.4, 18446744073709551616, -1.1e0);
+}
+expect {
+    ������������
+}
+
+test t-68069 {
+    SELECT CHAR(9223372036854775810.4, -0x1, -1.1);
+}
+expect {
+    ������������
+}
+
+test t-68221 {
+    SELECT CHAR(9223372036854775810.4, X'ff', -1.5e0);
+}
+expect {
+    ���������
+}
+
+test t-68267 {
+    SELECT CHAR(9223372036854775810.4, X'ff', 9223372036854775807);
+}
+expect {
+    ���������
+}
+
+test t-68307 {
+    SELECT CHAR(9223372036854775810.4, X'ff', time '-10:04:58');
+}
+expect {
+    �������w�
+}
+
+test t-68734 {
+    SELECT CHAR(9223372036854775810.4, NULL, x'09');
+}
+expect raw {
+����	
+}
+
+test t-69288 {
+    SELECT CHAR(9223372036854775810.4, 64, '101:34:58');
+}
+expect {
+    ����@e
+}
+
+test t-69368 {
+    SELECT CHAR(9223372036854775810.4, '64', '-1.5');
+}
+expect {
+    ����@����
+}
+
+test t-69446 {
+    SELECT CHAR(9223372036854775810.4, '64', time'00:00:59.2132234');
+}
+expect {
+    ����@;
+}
+
+test t-69560 {
+    SELECT CHAR(9223372036854775810.4, _binary '64', 0xFF666F6F626172FF);
+}
+expect {
+    ����@bar�
+}
+
+test t-69747 {
+    SELECT CHAR(9223372036854775810.4, X'40', 20000101103458);
+}
+expect {
+    ����@���b
+}
+
+test t-69803 {
+    SELECT CHAR(9223372036854775810.4, X'40', cast('9223372036854775807' as json));
+}
+expect {
+    ����@����
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-69823 {
+    SELECT CHAR(9223372036854775810.4, X'40', cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-69969 {
+    SELECT CHAR(9223372036854775810.4, _binary X'40', cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-70146 {
+    SELECT CHAR(-9223372036854775810.4, 0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-70455 {
+    SELECT CHAR(-9223372036854775810.4, 0xFF, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-70539 {
+    SELECT CHAR(-9223372036854775810.4, 255, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-74197 {
+    SELECT CHAR(-9223372036854775810.4, 13e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-75330 {
+    SELECT CHAR(-9223372036854775810.4, "foobar", cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-75561 {
+    SELECT CHAR(-9223372036854775810.4, "0", -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-76141 {
+    SELECT CHAR(-9223372036854775810.4, X'ff', cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-78963 {
+    SELECT CHAR(3.141592653589793, -255, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-80907 {
+    SELECT CHAR(3.141592653589793, -1.5e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-82443 {
+    SELECT CHAR(3.141592653589793, 9223372036854775808, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-82620 {
+    SELECT CHAR(3.141592653589793, -9223372036854775808, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-82783 {
+    SELECT CHAR(3.141592653589793, 18446744073709551616, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-83985 {
+    SELECT CHAR(3.141592653589793, X'00', -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-85974 {
+    SELECT CHAR(1.7976931348623157e308, 0xFF, '101:34:58');
+}
+expect {
+    �����e
+}
+
+test t-85998 {
+    SELECT CHAR(1.7976931348623157e308, 0xFF, cast(18446744073709551615 as json));
+}
+expect {
+    ���������
+}
+
+test t-86066 {
+    SELECT CHAR(1.7976931348623157e308, 255, b'1001');
+}
+expect raw {
+�����	
+}
+
+test t-86067 {
+    SELECT CHAR(1.7976931348623157e308, 255, 0x9);
+}
+expect raw {
+�����	
+}
+
+test t-86127 {
+    SELECT CHAR(1.7976931348623157e308, 255, time '-10:04:58');
+}
+expect {
+    �������w�
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-86347 {
+    SELECT CHAR(1.7976931348623157e308, 1.0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-87038 {
+    SELECT CHAR(1.7976931348623157e308, 9, b'1001');
+}
+expect raw {
+����		
+}
+
+test t-87077 {
+    SELECT CHAR(1.7976931348623157e308, 9, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    ����	���b
+}
+
+test t-87523 {
+    SELECT CHAR(1.7976931348623157e308, -1.5, 0b1001);
+}
+expect raw {
+��������	
+}
+
+test t-87590 {
+    SELECT CHAR(1.7976931348623157e308, -1.5, time'00:00:59.2132234');
+}
+expect {
+    ��������;
+}
+
+test t-87864 {
+    SELECT CHAR(1.7976931348623157e308, '-1.5', 1 - NULL);
+}
+expect {
+    ��������
+}
+
+test t-88336 {
+    SELECT CHAR(1.7976931348623157e308, 255.0, x'09');
+}
+expect raw {
+�����	
+}
+
+test t-88346 {
+    SELECT CHAR(1.7976931348623157e308, 255.0, NULL + 1);
+}
+expect {
+    �����
+}
+
+test t-88384 {
+    SELECT CHAR(1.7976931348623157e308, 255.0, '20000101103458.1234');
+}
+expect {
+    ��������b
+}
+
+test t-88995 {
+    SELECT CHAR(1.7976931348623157e308, -1e0, 1 + NULL);
+}
+expect {
+    ��������
+}
+
+test t-89477 {
+    SELECT CHAR(1.7976931348623157e308, 9e0, NULL / 1);
+}
+expect raw {
+����	
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-89571 {
+    SELECT CHAR(1.7976931348623157e308, 9e0, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-89895 {
+    SELECT CHAR(1.7976931348623157e308, 18446744073709551615, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-90003 {
+    SELECT CHAR(1.7976931348623157e308, 9223372036854775807, '20000101103458');
+}
+expect {
+    �����������b
+}
+
+test t-90415 {
+    SELECT CHAR(1.7976931348623157e308, 18446744073709551616, -1.5e0);
+}
+expect {
+    ������������
+}
+
+test t-90422 {
+    SELECT CHAR(1.7976931348623157e308, 18446744073709551616, -1.5);
+}
+expect {
+    ������������
+}
+
+test t-90540 {
+    SELECT CHAR(1.7976931348623157e308, 18446744073709551616, cast('18446744073709551615' as json));
+}
+expect {
+    ������������
+}
+
+test t-91424 {
+    SELECT CHAR(1.7976931348623157e308, -0x1, NULL + 1);
+}
+expect {
+    ��������
+}
+
+test t-91435 {
+    SELECT CHAR(1.7976931348623157e308, -0x1, 18446744073709551615);
+}
+expect {
+    ������������
+}
+
+test t-91506 {
+    SELECT CHAR(1.7976931348623157e308, -0x1, cast(18446744073709551615 as json));
+}
+expect {
+    ������������
+}
+
+test t-91511 {
+    SELECT CHAR(1.7976931348623157e308, -0x1, cast('9223372036854775807' as json));
+}
+expect {
+    ������������
+}
+
+test t-91559 {
+    SELECT CHAR(1.7976931348623157e308, X'ff', -1.1);
+}
+expect {
+    ���������
+}
+
+test t-91595 {
+    SELECT CHAR(1.7976931348623157e308, X'ff', 9223372036854775807);
+}
+expect {
+    ���������
+}
+
+test t-91598 {
+    SELECT CHAR(1.7976931348623157e308, X'ff', 18446744073709540000e0);
+}
+expect {
+    ���������
+}
+
+test t-92104 {
+    SELECT CHAR(1.7976931348623157e308, NULL, 20000101103458.1234);
+}
+expect {
+    �������b
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-92163 {
+    SELECT CHAR(1.7976931348623157e308, NULL, cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-92409 {
+    SELECT CHAR(1.7976931348623157e308, _binary "foobar1234", -18446744073709540000e0);
+}
+expect error {
+}
+
+test t-92524 {
+    SELECT CHAR(1.7976931348623157e308, 64, -1.7e0);
+}
+expect {
+    ����@����
+}
+
+test t-92558 {
+    SELECT CHAR(1.7976931348623157e308, 64, NULL + 1);
+}
+expect {
+    ����@
+}
+
+test t-92561 {
+    SELECT CHAR(1.7976931348623157e308, 64, NULL - 1);
+}
+expect {
+    ����@
+}
+
+test t-92616 {
+    SELECT CHAR(1.7976931348623157e308, 64, '101:34:58');
+}
+expect {
+    ����@e
+}
+
+test t-92845 {
+    SELECT CHAR(1.7976931348623157e308, _binary '64', -1.5e0);
+}
+expect {
+    ����@����
+}
+
+test t-92855 {
+    SELECT CHAR(1.7976931348623157e308, _binary '64', -1.1);
+}
+expect {
+    ����@����
+}
+
+test t-92880 {
+    SELECT CHAR(1.7976931348623157e308, _binary '64', 1 / NULL);
+}
+expect {
+    ����@
+}
+
+test t-92884 {
+    SELECT CHAR(1.7976931348623157e308, _binary '64', NULL + NULL);
+}
+expect {
+    ����@
+}
+
+test t-93087 {
+    SELECT CHAR(1.7976931348623157e308, X'40', '20000101103458foo');
+}
+expect {
+    ����@���b
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-93543 {
+    SELECT CHAR(1.401298464324817e-45, 1, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-94029 {
+    SELECT CHAR(1.401298464324817e-45, 1.0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-96945 {
+    SELECT CHAR(1.401298464324817e-45, -255e0, -18446744073709540000e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-97200 {
+    SELECT CHAR(1.401298464324817e-45, 7e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-97362 {
+    SELECT CHAR(1.401298464324817e-45, 9e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-100927 {
+    SELECT CHAR(1.401298464324817e-45, X'40', cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-101898 {
+    SELECT CHAR(5e-324, 1.0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-103680 {
+    SELECT CHAR(5e-324, 0.0e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-104166 {
+    SELECT CHAR(5e-324, 1.5e0, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-104721 {
+    SELECT CHAR(5e-324, -255e0, -18446744073709540000e0);
+}
+expect error {
+}

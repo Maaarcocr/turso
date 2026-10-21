@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-1 {
+    SELECT STRCMP('foobar', 'FOOBAR');
+}
+expect {
+    0
+}
+
+test t-15 {
+    SELECT STRCMP('foobar', '12$4');
+}
+expect {
+    1
+}
+
+test t-16 {
+    SELECT STRCMP('foobar', _utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-18 {
+    SELECT STRCMP('foobar', _utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-36 {
+    SELECT STRCMP('foobar', '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-58 {
+    SELECT STRCMP('foobar', _binary 'foobar');
+}
+expect {
+    0
+}
+
+test t-66 {
+    SELECT STRCMP('foobar', b'1001');
+}
+expect {
+    1
+}
+
+test t-78 {
+    SELECT STRCMP('foobar', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-92 {
+    SELECT STRCMP('foobar', JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+test t-96 {
+    SELECT STRCMP('foobar', time '32:34:58');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'foobar'
+test t-105 {
+    SELECT STRCMP('foobar', timestamp '2000-01-01 10:34:58');
+}
+expect error {
+}
+
+test t-112 {
+    SELECT STRCMP('foobar', 20000101);
+}
+expect {
+    1
+}
+
+test t-134 {
+    SELECT STRCMP('foobar', time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-147 {
+    SELECT STRCMP('foobar', cast(1 as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-169 {
+    SELECT STRCMP('foobar', cast('invalid' as json));
+}
+expect error {
+}
+
+test t-177 {
+    SELECT STRCMP('foobar', cast('["ab"]' as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-184 {
+    SELECT STRCMP('foobar', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-205 {
+    SELECT STRCMP('FOOBAR', '12_4');
+}
+expect {
+    1
+}
+
+test t-240 {
+    SELECT STRCMP('FOOBAR', -1.5);
+}
+expect {
+    1
+}
+
+test t-242 {
+    SELECT STRCMP('FOOBAR', 1.7);
+}
+expect {
+    1
+}
+
+test t-249 {
+    SELECT STRCMP('FOOBAR', '');
+}
+expect {
+    1
+}
+
+test t-252 {
+    SELECT STRCMP('FOOBAR', 0x1);
+}
+expect {
+    1
+}
+
+test t-258 {
+    SELECT STRCMP('FOOBAR', b'1001');
+}
+expect {
+    1
+}
+
+test t-283 {
+    SELECT STRCMP('FOOBAR', -18446744073709540000e0);
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATE value: 'FOOBAR'
+test t-296 {
+    SELECT STRCMP('FOOBAR', date '2000-01-01');
+}
+expect error {
+}
+
+test t-306 {
+    SELECT STRCMP('FOOBAR', 103458.123456);
+}
+expect {
+    1
+}
+
+test t-307 {
+    SELECT STRCMP('FOOBAR', '20000101103458');
+}
+expect {
+    1
+}
+
+test t-319 {
+    SELECT STRCMP('FOOBAR', time '-10:04:58');
+}
+expect {
+    1
+}
+
+test t-332 {
+    SELECT STRCMP('FOOBAR', '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-401 {
+    SELECT STRCMP('1234', _utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    1
+}
+
+test t-402 {
+    SELECT STRCMP('1234', _utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-405 {
+    SELECT STRCMP('1234', _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    1
+}
+
+test t-408 {
+    SELECT STRCMP('1234', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-412 {
+    SELECT STRCMP('1234', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-422 {
+    SELECT STRCMP('1234', 0.0e0);
+}
+expect {
+    1
+}
+
+test t-435 {
+    SELECT STRCMP('1234', -1.1);
+}
+expect {
+    1
+}
+
+test t-470 {
+    SELECT STRCMP('1234', 0xFF666F6F626172);
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '1234'
+test t-492 {
+    SELECT STRCMP('1234', timestamp '2024-12-30 10:34:58');
+}
+expect error {
+}
+
+test t-501 {
+    SELECT STRCMP('1234', '20000101103458.123456');
+}
+expect {
+    -1
+}
+
+test t-515 {
+    SELECT STRCMP('1234', time'00:00:59.01011');
+}
+expect {
+    1
+}
+
+test t-535 {
+    SELECT STRCMP('1234', cast('[]' as json));
+}
+expect {
+    -1
+}
+
+test t-558 {
+    SELECT STRCMP('1234', cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-564 {
+    SELECT STRCMP('1234', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-566 {
+    SELECT STRCMP('1234', cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-573 {
+    SELECT STRCMP('1234', cast(time '12:34:56' as json));
+}
+expect {
+    1
+}
+
+test t-632 {
+    SELECT STRCMP(1234, _utf8 'foobar');
+}
+expect {
+    -1
+}
+
+test t-683 {
+    SELECT STRCMP(1234, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    -1
+}
+
+test t-691 {
+    SELECT STRCMP(1234, '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-695 {
+    SELECT STRCMP(1234, '103458');
+}
+expect {
+    1
+}
+
+test t-696 {
+    SELECT STRCMP(1234, '103458.123456');
+}
+expect {
+    1
+}
+
+test t-712 {
+    SELECT STRCMP(1234, '101:34:58');
+}
+expect {
+    1
+}
+
+test t-726 {
+    SELECT STRCMP(1234, cast('\{\}' as json));
+}
+expect {
+    -1
+}
+
+test t-758 {
+    SELECT STRCMP(1234, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-789 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+test t-790 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-793 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-802 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, ' 1 ');
+}
+expect {
+    1
+}
+
+test t-806 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-821 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, '1.5');
+}
+expect {
+    1
+}
+
+test t-847 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-856 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-905 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, '5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-917 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, cast(false as json));
+}
+expect {
+    1
+}
+
+test t-925 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs, cast(1.1 as json));
+}
+expect {
+    1
+}
+
+test t-974 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, '12x4');
+}
+expect {
+    1
+}
+
+test t-982 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-1000 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, 1.5e0);
+}
+expect {
+    1
+}
+
+test t-1017 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, '');
+}
+expect {
+    1
+}
+
+test t-1019 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, 0x0);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-1021 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, 0xff);
+}
+expect error {
+}
+
+test t-1026 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, b'1001');
+}
+expect {
+    1
+}
+
+test t-1042 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-1049 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, 18446744073709551615);
+}
+expect {
+    1
+}
+
+test t-1050 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, 18446744073709540000e0);
+}
+expect {
+    1
+}
+
+test t-1053 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, JSON_ARRAY());
+}
+expect {
+    1
+}
+
+test t-1058 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, time '5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-1120 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, cast(18446744073709551615 as json));
+}
+expect {
+    1
+}
+
+test t-1151 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs, cast(time '5 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-1153 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 'FOOBAR');
+}
+expect {
+    0
+}
+
+test t-1155 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 1234);
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'strcmp'
+test t-1170 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-1171 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+test t-1184 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 255);
+}
+expect {
+    1
+}
+
+test t-1211 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 0x0);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-1213 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 0xff);
+}
+expect error {
+}
+
+test t-1217 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 0b1001);
+}
+expect {
+    1
+}
+
+test t-1235 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, NULL - NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-1236 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 0xFF666F6F626172FF);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-1238 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, 0xFF666F6F626172);
+}
+expect error {
+}
+
+test t-1243 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, -18446744073709540000e0);
+}
+expect {
+    1
+}
+
+test t-1244 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, JSON_OBJECT());
+}
+expect {
+    1
+}
+
+test t-1246 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, time '10:04:58');
+}
+expect {
+    1
+}
+
+test t-1254 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, time '130:34:58.6');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'foobar'
+test t-1259 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, timestamp '2000-01-01 10:34:58.978654');
+}
+expect error {
+}
+
+test t-1281 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, time '-32:34:58');
+}
+expect {
+    1
+}
+
+test t-1293 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, '0000-01-03');
+}
+expect {
+    1
+}
+
+test t-1297 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, '3001-02-18 23:59:59');
+}
+expect {
+    1
+}
+
+test t-1301 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast(false as json));
+}
+expect {
+    1
+}
+
+test t-1306 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast('false' as json));
+}
+expect {
+    1
+}
+
+test t-1310 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-1311 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast(9223372036854775807 as json));
+}
+expect {
+    1
+}
+
+test t-1314 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast('2' as json));
+}
+expect {
+    1
+}
+
+test t-1315 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast('1.1' as json));
+}
+expect {
+    1
+}
+
+test t-1319 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast('"foo"' as json));
+}
+expect {
+    1
+}
+
+test t-1324 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-1328 {
+    SELECT STRCMP(_utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci, cast('["a"]' as json));
+}
+expect {
+    1
+}
+
+test t-1356 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, '12%');
+}
+expect {
+    1
+}
+
+test t-1376 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, 255);
+}
+expect {
+    1
+}
+
+test t-1379 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, ' 255 ');
+}
+expect {
+    1
+}
+
+test t-1419 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-1422 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-1423 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-1430 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, 0xFF666F6F626172);
+}
+expect error {
+}
+
+test t-1453 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, 20000101103458);
+}
+expect {
+    1
+}
+
+test t-1454 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, 20000101103458.1234);
+}
+expect {
+    1
+}
+
+test t-1471 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, time '-10:04:58');
+}
+expect {
+    1
+}
+
+test t-1490 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, cast(0 as json));
+}
+expect {
+    1
+}
+
+test t-1498 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, cast('false' as json));
+}
+expect {
+    1
+}
+
+test t-1515 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, cast(_binary '"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-1521 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, cast('["ab"]' as json));
+}
+expect {
+    1
+}
+
+test t-1525 {
+    SELECT STRCMP(_utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    1
+}
+
+test t-1545 {
+    SELECT STRCMP('foo%', 'FOO%');
+}
+expect {
+    0
+}
+
+test t-1554 {
+    SELECT STRCMP('foo%', _utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-1573 {
+    SELECT STRCMP('foo%', ' 255 foo');
+}
+expect {
+    1
+}
+
+test t-1578 {
+    SELECT STRCMP('foo%', 1.1e0);
+}
+expect {
+    1
+}
+
+test t-1594 {
+    SELECT STRCMP('foo%', _binary 'foobar');
+}
+expect {
+    -1
+}
+
+test t-1597 {
+    SELECT STRCMP('foo%', 0xff);
+}
+expect {
+    -1
+}
+
+test t-1612 {
+    SELECT STRCMP('foo%', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-1625 {
+    SELECT STRCMP('foo%', 18446744073709551615);
+}
+expect {
+    1
+}
+
+test t-1653 {
+    SELECT STRCMP('foo%', '20000101103458.123456');
+}
+expect {
+    1
+}
+
+test t-1688 {
+    SELECT STRCMP('foo%', cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-1689 {
+    SELECT STRCMP('foo%', cast('true' as json));
+}
+expect {
+    -1
+}
+
+test t-1741 {
+    SELECT STRCMP('FOO%', '12_4');
+}
+expect {
+    1
+}
+
+test t-1750 {
+    SELECT STRCMP('FOO%', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-1752 {
+    SELECT STRCMP('FOO%', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-1754 {
+    SELECT STRCMP('FOO%', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-1760 {
+    SELECT STRCMP('FOO%', 255);
+}
+expect {
+    1
+}
+
+test t-1764 {
+    SELECT STRCMP('FOO%', '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-1767 {
+    SELECT STRCMP('FOO%', 1.0e0);
+}
+expect {
+    1
+}
+
+test t-1807 {
+    SELECT STRCMP('FOO%', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-1828 {
+    SELECT STRCMP('FOO%', time '31:34:58.4');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'FOO%'
+test t-1835 {
+    SELECT STRCMP('FOO%', timestamp '2000-01-01 10:34:58.978654');
+}
+expect error {
+}
+
+test t-1838 {
+    SELECT STRCMP('FOO%', 20000101103458.1234);
+}
+expect {
+    1
+}
+
+test t-1845 {
+    SELECT STRCMP('FOO%', '20000101103458.123456');
+}
+expect {
+    1
+}
+
+test t-1849 {
+    SELECT STRCMP('FOO%', '20000101103458foo');
+}
+expect {
+    1
+}
+
+test t-1872 {
+    SELECT STRCMP('FOO%', '3001-02-19 00:00:00');
+}
+expect {
+    1
+}
+
+test t-1877 {
+    SELECT STRCMP('FOO%', cast(false as json));
+}
+expect {
+    -1
+}
+
+test t-1896 {
+    SELECT STRCMP('FOO%', cast('"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-1908 {
+    SELECT STRCMP('FOO%', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-1936 {
+    SELECT STRCMP('foo_ar', _utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-1952 {
+    SELECT STRCMP('foo_ar', 255);
+}
+expect {
+    1
+}
+
+test t-1991 {
+    SELECT STRCMP('foo_ar', false);
+}
+expect {
+    1
+}
+
+test t-1995 {
+    SELECT STRCMP('foo_ar', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-2008 {
+    SELECT STRCMP('foo_ar', -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2060 {
+    SELECT STRCMP('foo_ar', '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-2072 {
+    SELECT STRCMP('foo_ar', cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-2078 {
+    SELECT STRCMP('foo_ar', cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-2083 {
+    SELECT STRCMP('foo_ar', cast('1.1' as json));
+}
+expect {
+    1
+}
+
+test t-2088 {
+    SELECT STRCMP('foo_ar', cast('"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-2093 {
+    SELECT STRCMP('foo_ar', cast(0x666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-2096 {
+    SELECT STRCMP('foo_ar', cast('["a"]' as json));
+}
+expect {
+    1
+}
+
+test t-2108 {
+    SELECT STRCMP('foo_ar', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-2109 {
+    SELECT STRCMP('foo_ar', cast(time '12:34:56' as json));
+}
+expect {
+    1
+}
+
+test t-2155 {
+    SELECT STRCMP('FOO_AR', -1.1e0);
+}
+expect {
+    1
+}
+
+test t-2176 {
+    SELECT STRCMP('FOO_AR', X'ff');
+}
+expect {
+    -1
+}
+
+test t-2181 {
+    SELECT STRCMP('FOO_AR', NULL);
+}
+expect {
+    NULL
+}
+
+test t-2188 {
+    SELECT STRCMP('FOO_AR', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-2194 {
+    SELECT STRCMP('FOO_AR', 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-2207 {
+    SELECT STRCMP('FOO_AR', time '31:34:58');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'FOO_AR'
+test t-2217 {
+    SELECT STRCMP('FOO_AR', timestamp '2000-01-01 10:34:58');
+}
+expect error {
+}
+
+test t-2221 {
+    SELECT STRCMP('FOO_AR', 20000101103458);
+}
+expect {
+    1
+}
+
+test t-2225 {
+    SELECT STRCMP('FOO_AR', 103458);
+}
+expect {
+    1
+}
+
+test t-2226 {
+    SELECT STRCMP('FOO_AR', 103458.123456);
+}
+expect {
+    1
+}
+
+test t-2227 {
+    SELECT STRCMP('FOO_AR', '20000101103458');
+}
+expect {
+    1
+}
+
+test t-2235 {
+    SELECT STRCMP('FOO_AR', '20000101103458.123456foo');
+}
+expect {
+    1
+}
+
+test t-2237 {
+    SELECT STRCMP('FOO_AR', '103458foo');
+}
+expect {
+    1
+}
+
+test t-2275 {
+    SELECT STRCMP('FOO_AR', cast('1.1' as json));
+}
+expect {
+    1
+}
+
+test t-2289 {
+    SELECT STRCMP('FOO_AR', cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-2309 {
+    SELECT STRCMP('12%', _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-2326 {
+    SELECT STRCMP('12%', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-2329 {
+    SELECT STRCMP('12%', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-2334 {
+    SELECT STRCMP('12%', 0);
+}
+expect {
+    1
+}
+
+test t-2346 {
+    SELECT STRCMP('12%', 1.1e0);
+}
+expect {
+    1
+}
+
+test t-2361 {
+    SELECT STRCMP('12%', '');
+}
+expect {
+    1
+}
+
+test t-2370 {
+    SELECT STRCMP('12%', b'1001');
+}
+expect {
+    1
+}
+
+test t-2386 {
+    SELECT STRCMP('12%', 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-2388 {
+    SELECT STRCMP('12%', 0xFF666F6F626172FF);
+}
+expect {
+    -1
+}
+
+test t-2389 {
+    SELECT STRCMP('12%', 0x666F6F626172FF);
+}
+expect {
+    -1
+}
+
+test t-2396 {
+    SELECT STRCMP('12%', JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '12%'
+test t-2410 {
+    SELECT STRCMP('12%', timestamp '2000-01-01 10:34:58.123456');
+}
+expect error {
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '12%'
+test t-2412 {
+    SELECT STRCMP('12%', timestamp '2024-12-30 10:34:58');
+}
+expect error {
+}
+
+test t-2419 {
+    SELECT STRCMP('12%', '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-2424 {
+    SELECT STRCMP('12%', '103458.123456');
+}
+expect {
+    1
+}
+
+test t-2426 {
+    SELECT STRCMP('12%', '20000101103458.1234foo');
+}
+expect {
+    -1
+}
+
+test t-2433 {
+    SELECT STRCMP('12%', time '-32:34:58');
+}
+expect {
+    1
+}
+
+test t-2435 {
+    SELECT STRCMP('12%', time'00:00:59.01011');
+}
+expect {
+    1
+}
+
+test t-2466 {
+    SELECT STRCMP('12%', cast('2' as json));
+}
+expect {
+    -1
+}
+
+test t-2477 {
+    SELECT STRCMP('12%', cast(0x666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-2480 {
+    SELECT STRCMP('12%', cast('["a"]' as json));
+}
+expect {
+    -1
+}
+
+test t-2483 {
+    SELECT STRCMP('12%', cast('["ab", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-2487 {
+    SELECT STRCMP('12%', cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1
+}
+
+test t-2494 {
+    SELECT STRCMP('12%', cast(time '12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-2501 {
+    SELECT STRCMP('12_4', _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-2515 {
+    SELECT STRCMP('12_4', _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-2522 {
+    SELECT STRCMP('12_4', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-2526 {
+    SELECT STRCMP('12_4', 0);
+}
+expect {
+    1
+}
+
+test t-2532 {
+    SELECT STRCMP('12_4', '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-2545 {
+    SELECT STRCMP('12_4', 1.1);
+}
+expect {
+    1
+}
+
+test t-2574 {
+    SELECT STRCMP('12_4', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-2586 {
+    SELECT STRCMP('12_4', 18446744073709540000e0);
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '12_4'
+test t-2603 {
+    SELECT STRCMP('12_4', timestamp '2000-01-01 10:34:58.978654');
+}
+expect error {
+}
+
+test t-2615 {
+    SELECT STRCMP('12_4', '103458');
+}
+expect {
+    1
+}
+
+test t-2617 {
+    SELECT STRCMP('12_4', '20000101103458foo');
+}
+expect {
+    -1
+}
+
+test t-2668 {
+    SELECT STRCMP('12_4', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-2672 {
+    SELECT STRCMP('12_4', cast('["a"]' as json));
+}
+expect {
+    -1
+}
+
+test t-2712 {
+    SELECT STRCMP('12x4', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-2738 {
+    SELECT STRCMP('12x4', 1.7);
+}
+expect {
+    1
+}
+
+test t-2741 {
+    SELECT STRCMP('12x4', '1.5');
+}
+expect {
+    1
+}
+
+test t-2754 {
+    SELECT STRCMP('12x4', b'1001');
+}
+expect {
+    1
+}
+
+test t-2759 {
+    SELECT STRCMP('12x4', false);
+}
+expect {
+    1
+}
+
+test t-2765 {
+    SELECT STRCMP('12x4', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-2768 {
+    SELECT STRCMP('12x4', NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-2774 {
+    SELECT STRCMP('12x4', 0xFF666F6F626172);
+}
+expect {
+    -1
+}
+
+test t-2805 {
+    SELECT STRCMP('12x4', '20000101103458.123456');
+}
+expect {
+    -1
+}
+
+test t-2839 {
+    SELECT STRCMP('12x4', cast('[]' as json));
+}
+expect {
+    -1
+}
+
+test t-2840 {
+    SELECT STRCMP('12x4', cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-2908 {
+    SELECT STRCMP('12$4', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-2912 {
+    SELECT STRCMP('12$4', 255);
+}
+expect {
+    -1
+}
+
+test t-2919 {
+    SELECT STRCMP('12$4', 1.0e0);
+}
+expect {
+    1
+}
+
+test t-2934 {
+    SELECT STRCMP('12$4', '-1.5');
+}
+expect {
+    1
+}
+
+test t-2946 {
+    SELECT STRCMP('12$4', b'1001');
+}
+expect {
+    1
+}
+
+test t-2956 {
+    SELECT STRCMP('12$4', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-2958 {
+    SELECT STRCMP('12$4', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-3010 {
+    SELECT STRCMP('12$4', time'00:00:01.0000');
+}
+expect {
+    1
+}
+
+test t-3018 {
+    SELECT STRCMP('12$4', '2000-01-01');
+}
+expect {
+    -1
+}
+
+test t-3032 {
+    SELECT STRCMP('12$4', cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-3037 {
+    SELECT STRCMP('12$4', cast(1.1 as json));
+}
+expect {
+    1
+}
+
+test t-3042 {
+    SELECT STRCMP('12$4', cast('2' as json));
+}
+expect {
+    -1
+}
+
+test t-3044 {
+    SELECT STRCMP('12$4', cast('-1.1' as json));
+}
+expect {
+    1
+}
+
+test t-3050 {
+    SELECT STRCMP('12$4', cast(_binary' "foo"' as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-3064 {
+    SELECT STRCMP('12$4', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-3066 {
+    SELECT STRCMP('12$4', cast(date '2000-01-01' as json));
+}
+expect {
+    1
+}
+
+test t-3071 {
+    SELECT STRCMP('12$4', cast(time '5 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-3083 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, 'FOO_AR');
+}
+expect {
+    -1
+}
+
+test t-3086 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, '12x4');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-3089 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+test t-3116 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, -1.7e0);
+}
+expect {
+    1
+}
+
+test t-3122 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, 1.7);
+}
+expect {
+    1
+}
+
+test t-3126 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, '-1.5');
+}
+expect {
+    1
+}
+
+test t-3139 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, 0x9);
+}
+expect {
+    1
+}
+
+test t-3146 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-3154 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-3175 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, time '5 10:34:58.9');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '12_4'
+test t-3178 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, timestamp '2000-01-01 10:34:58.123456');
+}
+expect error {
+}
+
+test t-3193 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, '20000101103458foo');
+}
+expect {
+    -1
+}
+
+test t-3195 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-3200 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, time '-31:34:58');
+}
+expect {
+    1
+}
+
+test t-3207 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, '10:04:58');
+}
+expect {
+    1
+}
+
+test t-3217 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, '3001-02-18 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-3252 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    1
+}
+
+test t-3263 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs, cast(time '5 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-3273 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, 'FOO%');
+}
+expect {
+    -1
+}
+
+test t-3277 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, '12_4');
+}
+expect {
+    0
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'strcmp'
+test t-3288 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-3304 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, 1.5e0);
+}
+expect {
+    1
+}
+
+test t-3313 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, 1.1);
+}
+expect {
+    1
+}
+
+test t-3343 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-3344 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-3397 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, time '-101:34:58');
+}
+expect {
+    1
+}
+
+test t-3402 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, '2000-01-01');
+}
+expect {
+    -1
+}
+
+test t-3404 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-3420 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, cast(2 as json));
+}
+expect {
+    -1
+}
+
+test t-3421 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, cast(1.1 as json));
+}
+expect {
+    1
+}
+
+test t-3441 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, cast('["ab"]' as json));
+}
+expect {
+    1
+}
+
+test t-3447 {
+    SELECT STRCMP(_utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    1
+}
+
+test t-3456 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, 'foobar');
+}
+expect {
+    -1
+}
+
+test t-3481 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-3494 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-3503 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, 1.5);
+}
+expect {
+    1
+}
+
+test t-3514 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, _binary 'foobar');
+}
+expect {
+    -1
+}
+
+test t-3519 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, X'01');
+}
+expect {
+    1
+}
+
+test t-3544 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-3546 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, 18446744073709540000e0);
+}
+expect {
+    1
+}
+
+test t-3571 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-3577 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, '20000101103458foo');
+}
+expect {
+    -1
+}
+
+test t-3596 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-3597 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, '0000-01-03');
+}
+expect {
+    1
+}
+
+test t-3610 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, cast('false' as json));
+}
+expect {
+    -1
+}
+
+test t-3622 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, cast('18446744073709551615' as json));
+}
+expect {
+    -1
+}
+
+test t-3632 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, cast('["a"]' as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-3641 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs, cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'strcmp'
+test t-3652 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'strcmp'
+test t-3673 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-3681 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, ' 0 ');
+}
+expect {
+    1
+}
+
+test t-3689 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, -1.5e0);
+}
+expect {
+    1
+}
+
+test t-3702 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, '-1.5');
+}
+expect {
+    1
+}
+
+test t-3704 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, _utf8 'foobar');
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-3709 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, 0xff);
+}
+expect error {
+}
+
+test t-3726 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-3736 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-3738 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, 18446744073709540000e0);
+}
+expect {
+    1
+}
+
+test t-3749 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, time '32:34:58.5');
+}
+expect {
+    -1
+}
+
+test t-3766 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, '20000101');
+}
+expect {
+    -1
+}
+
+test t-3768 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, '103458.123456');
+}
+expect {
+    1
+}
+
+test t-3816 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, cast('"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-3829 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    1
+}
+
+test t-3837 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, cast(time '12:34:56' as json));
+}
+expect {
+    1
+}
+
+test t-3838 {
+    SELECT STRCMP(_utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci, cast(time '12:34:58' as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-3859 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-3861 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+test t-3863 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-3881 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, -1.5e0);
+}
+expect {
+    1
+}
+
+test t-3915 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, NULL / 1);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-3924 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, 0xFF666F6F626172FF);
+}
+expect error {
+}
+
+# mysql-error: 1525 HY000 Incorrect DATE value: '12$4'
+test t-3944 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, date '2000-01-01');
+}
+expect error {
+}
+
+test t-3968 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, time '-31:34:58');
+}
+expect {
+    1
+}
+
+test t-3978 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, '2000-01-01');
+}
+expect {
+    -1
+}
+
+test t-3985 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, '3001-02-18 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-4001 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast('1' as json));
+}
+expect {
+    1
+}
+
+test t-4005 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast('9223372036854775807' as json));
+}
+expect {
+    -1
+}
+
+test t-4007 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast('"foo"' as json));
+}
+expect {
+    1
+}
+
+test t-4013 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast(0x666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-4014 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-4015 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast(0b001 as json));
+}
+expect {
+    1
+}
+
+test t-4021 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    1
+}
+
+test t-4032 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, 'foobar');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,EXPLICIT) and (utf8mb4_0900_as_ci,EXPLICIT) for operation 'strcmp'
+test t-4060 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-4071 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, 1.0e0);
+}
+expect {
+    1
+}
+
+test t-4076 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, -1.7e0);
+}
+expect {
+    1
+}
+
+test t-4099 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, 0x9);
+}
+expect {
+    1
+}
+
+test t-4128 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, time '32:34:58');
+}
+expect {
+    -1
+}
+
+test t-4141 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, 20000101103458);
+}
+expect {
+    -1
+}
+
+test t-4204 {
+    SELECT STRCMP(_utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-4237 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, '12_4');
+}
+expect {
+    1
+}
+
+test t-4240 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_as_ci,EXPLICIT) for operation 'strcmp'
+test t-4252 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-4257 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, ' 0 ');
+}
+expect {
+    1
+}
+
+test t-4274 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, 1.7);
+}
+expect {
+    1
+}
+
+test t-4290 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, b'1001');
+}
+expect {
+    1
+}
+
+test t-4298 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-4313 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, 18446744073709551615);
+}
+expect {
+    1
+}
+
+test t-4320 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, time '32:34:58');
+}
+expect {
+    1
+}
+
+test t-4322 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, time '5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-4346 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, '20000101103458.1234foo');
+}
+expect {
+    1
+}
+
+test t-4357 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, time '-101:34:58');
+}
+expect {
+    1
+}
+
+test t-4394 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, cast(_binary' "foo"' as json));
+}
+expect {
+    1
+}
+
+test t-4398 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-4400 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, cast('["a"]' as json));
+}
+expect {
+    1
+}
+
+test t-4415 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs, cast(time '5 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-4417 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-4421 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-4430 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, '12x4');
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_as_ci,EXPLICIT) for operation 'strcmp'
+test t-4444 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_as_ci,EXPLICIT) for operation 'strcmp'
+test t-4445 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-4464 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, -1.5);
+}
+expect {
+    1
+}
+
+test t-4492 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, 1 / NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-4502 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, 0xFF666F6F626172);
+}
+expect error {
+}
+
+test t-4503 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-4550 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-4559 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, '1970-01-01 00:00:01');
+}
+expect {
+    1
+}
+
+test t-4564 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, cast(true as json));
+}
+expect {
+    -1
+}
+
+test t-4581 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, cast('9223372036854775807' as json));
+}
+expect {
+    1
+}
+
+test t-4590 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-4595 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_cs, cast('["ab", "ef"]' as json));
+}
+expect {
+    1
+}
+
+test t-4609 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-4638 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, 0);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-4672 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, X'ff');
+}
+expect error {
+}
+
+test t-4676 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, x'09');
+}
+expect {
+    1
+}
+
+test t-4678 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, true);
+}
+expect {
+    1
+}
+
+test t-4683 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, NULL / 1);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-4694 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, 0xFF666F6F626172);
+}
+expect error {
+}
+
+test t-4701 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, JSON_ARRAY());
+}
+expect {
+    1
+}
+
+test t-4705 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, time '130:34:58');
+}
+expect {
+    1
+}
+
+test t-4711 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, time '5 10:34:58.9');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'foo_ar'
+test t-4716 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, timestamp '2024-12-30 10:34:58');
+}
+expect error {
+}
+
+test t-4734 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, '103458.123456foo');
+}
+expect {
+    1
+}
+
+test t-4740 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, time'00:00:59.2132234');
+}
+expect {
+    1
+}
+
+test t-4758 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, cast('\{\}' as json));
+}
+expect {
+    1
+}
+
+test t-4766 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-4782 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-4785 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs, cast('["ab"]' as json));
+}
+expect {
+    1
+}
+
+test t-4803 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, 1234);
+}
+expect {
+    1
+}
+
+test t-4815 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, '12$4');
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-4819 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+test t-4834 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, ' 1 ');
+}
+expect {
+    1
+}
+
+test t-4836 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-4838 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-4840 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, 1.5e0);
+}
+expect {
+    1
+}
+
+test t-4841 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, -1.5e0);
+}
+expect {
+    1
+}
+
+test t-4844 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, -1.7e0);
+}
+expect {
+    1
+}
+
+test t-4858 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, _binary 'foobar');
+}
+expect {
+    -1
+}
+
+test t-4860 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, 0x1);
+}
+expect {
+    1
+}
+
+test t-4865 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, 0b1001);
+}
+expect {
+    1
+}
+
+test t-4868 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, x'09');
+}
+expect {
+    1
+}
+
+test t-4875 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-4880 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-4887 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-4900 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, time '31:34:58.4');
+}
+expect {
+    1
+}
+
+test t-4915 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, '20000101103458');
+}
+expect {
+    1
+}
+
+test t-4921 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, '20000101103458foo');
+}
+expect {
+    1
+}
+
+test t-4926 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, '103458.123456foo');
+}
+expect {
+    1
+}
+
+test t-4927 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, time '-10:04:58');
+}
+expect {
+    1
+}
+
+test t-4940 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-4947 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, cast(1 as json));
+}
+expect {
+    1
+}
+
+test t-4956 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, cast(2 as json));
+}
+expect {
+    1
+}
+
+test t-4966 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs, cast('18446744073709551615' as json));
+}
+expect {
+    1
+}
+
+test t-5004 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, '12%');
+}
+expect {
+    1
+}
+
+test t-5006 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, '12x4');
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'strcmp'
+test t-5014 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-5034 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, 1.1e0);
+}
+expect {
+    1
+}
+
+test t-5036 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, -1.7e0);
+}
+expect {
+    1
+}
+
+test t-5061 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, NULL);
+}
+expect {
+    NULL
+}
+
+test t-5091 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, time '10:04:58.1');
+}
+expect {
+    1
+}
+
+test t-5093 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, time '32:34:58.5');
+}
+expect {
+    1
+}
+
+test t-5105 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, 103458);
+}
+expect {
+    1
+}
+
+test t-5130 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, '2000-01-01');
+}
+expect {
+    1
+}
+
+test t-5134 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, '1969-02-18');
+}
+expect {
+    1
+}
+
+test t-5148 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, cast(2 as json));
+}
+expect {
+    1
+}
+
+test t-5158 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, cast('18446744073709551615' as json));
+}
+expect {
+    1
+}
+
+test t-5180 {
+    SELECT STRCMP(_utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-5199 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, '12$4');
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'strcmp'
+test t-5209 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-5220 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-5229 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect {
+    1
+}
+
+test t-5244 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, 0x1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-5245 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, 0xff);
+}
+expect error {
+}
+
+test t-5253 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, NULL);
+}
+expect {
+    NULL
+}
+
+test t-5255 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, false);
+}
+expect {
+    1
+}
+
+test t-5272 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-5280 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, time '32:34:58');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'FOO%'
+test t-5290 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, timestamp '2000-01-01 10:34:58.123456');
+}
+expect error {
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'FOO%'
+test t-5291 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, timestamp '2000-01-01 10:34:58.978654');
+}
+expect error {
+}
+
+test t-5297 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, 103458);
+}
+expect {
+    1
+}
+
+test t-5304 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, '103458.123456');
+}
+expect {
+    1
+}
+
+test t-5315 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, time'00:00:59.01011');
+}
+expect {
+    1
+}
+
+test t-5324 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-5333 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast(false as json));
+}
+expect {
+    1
+}
+
+test t-5347 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast('1.1' as json));
+}
+expect {
+    1
+}
+
+test t-5350 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast('18446744073709551615' as json));
+}
+expect {
+    1
+}
+
+test t-5356 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-5360 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast('["a"]' as json));
+}
+expect {
+    1
+}
+
+test t-5364 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    1
+}
+
+test t-5366 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    1
+}
+
+test t-5372 {
+    SELECT STRCMP(_utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-5390 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, '12x4');
+}
+expect {
+    1
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-5393 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'strcmp'
+test t-5397 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+test t-5404 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-5408 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, 255);
+}
+expect {
+    1
+}
+
+test t-5410 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, ' 1 ');
+}
+expect {
+    1
+}
+
+test t-5411 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, ' 255 ');
+}
+expect {
+    1
+}
+
+test t-5434 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, _binary 'foobar');
+}
+expect {
+    -1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFFfooba...' from binary to utf8mb4
+test t-5460 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, 0xFF666F6F626172FF);
+}
+expect error {
+}
+
+test t-5492 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, '20000101103458.1234');
+}
+expect {
+    1
+}
+
+test t-5494 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, '20000101');
+}
+expect {
+    1
+}
+
+test t-5510 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-5527 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, cast('[]' as json));
+}
+expect {
+    1
+}
+
+test t-5530 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, cast('false' as json));
+}
+expect {
+    1
+}
+
+test t-5533 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, cast(1.1 as json));
+}
+expect {
+    1
+}
+
+test t-5548 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-5562 {
+    SELECT STRCMP(_utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci, cast(date '2000-01-01' as json));
+}
+expect {
+    1
+}
+
+test t-5605 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, ' 255 foo');
+}
+expect {
+    1
+}
+
+test t-5614 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, 0.000);
+}
+expect {
+    1
+}
+
+test t-5646 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, NULL + 1);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 HY000 Cannot convert string 'foobar...' from binary to utf8mb4
+test t-5653 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, 0x666F6F626172FF);
+}
+expect error {
+}
+
+test t-5671 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, time '5 10:34:58.9');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATE value: 'FOO_AR'
+test t-5672 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, date '2000-01-01');
+}
+expect error {
+}
+
+test t-5682 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, 103458.123456);
+}
+expect {
+    1
+}
+
+test t-5686 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, '20000101');
+}
+expect {
+    1
+}
+
+test t-5692 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, '20000101foo');
+}
+expect {
+    1
+}
+
+test t-5710 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, '1969-02-18');
+}
+expect {
+    1
+}
+
+test t-5711 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, '1970-01-01 00:00:01');
+}
+expect {
+    1
+}
+
+test t-5720 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-5721 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast('true' as json));
+}
+expect {
+    -1
+}
+
+test t-5722 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast('false' as json));
+}
+expect {
+    1
+}
+
+test t-5726 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-5731 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast('1.1' as json));
+}
+expect {
+    1
+}
+
+test t-5732 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast('-1.1' as json));
+}
+expect {
+    1
+}
+
+test t-5742 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-5747 {
+    SELECT STRCMP(_utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci, cast('["ab", "ef"]' as json));
+}
+expect {
+    1
+}
+
+test t-5777 {
+    SELECT STRCMP(0, _utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-5780 {
+    SELECT STRCMP(0, _utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-5784 {
+    SELECT STRCMP(0, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-5802 {
+    SELECT STRCMP(0, 1.1e0);
+}
+expect {
+    -1
+}
+
+test t-5803 {
+    SELECT STRCMP(0, -1.1e0);
+}
+expect {
+    1
+}
+
+test t-5809 {
+    SELECT STRCMP(0, 1.1);
+}
+expect {
+    -1
+}
+
+test t-5820 {
+    SELECT STRCMP(0, 0x1);
+}
+expect {
+    1
+}
+
+test t-5824 {
+    SELECT STRCMP(0, X'ff');
+}
+expect {
+    -1
+}
+
+test t-5827 {
+    SELECT STRCMP(0, 0x9);
+}
+expect {
+    1
+}
+
+test t-5829 {
+    SELECT STRCMP(0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-5835 {
+    SELECT STRCMP(0, NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-5839 {
+    SELECT STRCMP(0, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-5853 {
+    SELECT STRCMP(0, JSON_ARRAY());
+}
+expect {
+    -1
+}
+
+test t-5862 {
+    SELECT STRCMP(0, time '130:34:58.6');
+}
+expect {
+    -1
+}
+
+test t-5886 {
+    SELECT STRCMP(0, '103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-5900 {
+    SELECT STRCMP(0, '0000-02-29');
+}
+expect {
+    -1
+}
+
+test t-5906 {
+    SELECT STRCMP(0, cast(0 as json));
+}
+expect {
+    0
+}
+
+test t-5919 {
+    SELECT STRCMP(0, cast(9223372036854775807 as json));
+}
+expect {
+    -1
+}
+
+test t-5937 {
+    SELECT STRCMP(0, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-5967 {
+    SELECT STRCMP(1, '12$4');
+}
+expect {
+    -1
+}
+
+test t-5976 {
+    SELECT STRCMP(1, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-6021 {
+    SELECT STRCMP(1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-6028 {
+    SELECT STRCMP(1, 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-6031 {
+    SELECT STRCMP(1, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-6035 {
+    SELECT STRCMP(1, NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-6057 {
+    SELECT STRCMP(1, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-6062 {
+    SELECT STRCMP(1, 20000101103458.1234);
+}
+expect {
+    -1
+}
+
+test t-6067 {
+    SELECT STRCMP(1, '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-6072 {
+    SELECT STRCMP(1, '103458.123456');
+}
+expect {
+    -1
+}
+
+test t-6082 {
+    SELECT STRCMP(1, time'00:00:01.0000');
+}
+expect {
+    1
+}
+
+test t-6094 {
+    SELECT STRCMP(1, '1969-02-18');
+}
+expect {
+    -1
+}
+
+test t-6095 {
+    SELECT STRCMP(1, '1970-01-01 00:00:01');
+}
+expect {
+    -1
+}
+
+test t-6128 {
+    SELECT STRCMP(1, cast('["a"]' as json));
+}
+expect {
+    -1
+}
+
+test t-6140 {
+    SELECT STRCMP(1, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-6184 {
+    SELECT STRCMP(255, 1.5e0);
+}
+expect {
+    1
+}
+
+test t-6207 {
+    SELECT STRCMP(255, X'01');
+}
+expect {
+    1
+}
+
+test t-6216 {
+    SELECT STRCMP(255, NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-6251 {
+    SELECT STRCMP(255, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    1
+}
+
+test t-6257 {
+    SELECT STRCMP(255, 103458);
+}
+expect {
+    1
+}
+
+test t-6273 {
+    SELECT STRCMP(255, time '-32:34:58');
+}
+expect {
+    1
+}
+
+test t-6274 {
+    SELECT STRCMP(255, time'00:00:01.0000');
+}
+expect {
+    1
+}
+
+test t-6297 {
+    SELECT STRCMP(255, cast('true' as json));
+}
+expect {
+    -1
+}
+
+test t-6302 {
+    SELECT STRCMP(255, cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-6305 {
+    SELECT STRCMP(255, cast('1' as json));
+}
+expect {
+    1
+}
+
+test t-6318 {
+    SELECT STRCMP(255, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-6333 {
+    SELECT STRCMP(255, cast(time '12:34:56' as json));
+}
+expect {
+    1
+}
+
+test t-6339 {
+    SELECT STRCMP(' 0 ', 1234);
+}
+expect {
+    -1
+}
+
+test t-6362 {
+    SELECT STRCMP(' 0 ', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-6370 {
+    SELECT STRCMP(' 0 ', ' 1 ');
+}
+expect {
+    -1
+}
+
+test t-6405 {
+    SELECT STRCMP(' 0 ', NULL);
+}
+expect {
+    NULL
+}
+
+test t-6420 {
+    SELECT STRCMP(' 0 ', 0xFF666F6F626172FF);
+}
+expect {
+    -1
+}
+
+test t-6438 {
+    SELECT STRCMP(' 0 ', time '130:34:58.6');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: ' 0 '
+test t-6441 {
+    SELECT STRCMP(' 0 ', timestamp '2000-01-01 10:34:58');
+}
+expect error {
+}
+
+test t-6447 {
+    SELECT STRCMP(' 0 ', 20000101103458.123456);
+}
+expect {
+    -1
+}
+
+test t-6459 {
+    SELECT STRCMP(' 0 ', '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-6461 {
+    SELECT STRCMP(' 0 ', '103458foo');
+}
+expect {
+    -1
+}
+
+test t-6466 {
+    SELECT STRCMP(' 0 ', time'00:00:01.0000');
+}
+expect {
+    -1
+}
+
+test t-6467 {
+    SELECT STRCMP(' 0 ', time'00:00:59.01011');
+}
+expect {
+    -1
+}
+
+test t-6480 {
+    SELECT STRCMP(' 0 ', '3001-02-19 00:00:00');
+}
+expect {
+    -1
+}
+
+test t-6493 {
+    SELECT STRCMP(' 0 ', cast(1.1 as json));
+}
+expect {
+    -1
+}
+
+test t-6497 {
+    SELECT STRCMP(' 0 ', cast('1' as json));
+}
+expect {
+    -1
+}
+
+test t-6510 {
+    SELECT STRCMP(' 0 ', cast(0b01 as json));
+}
+expect {
+    -1
+}
+
+test t-6516 {
+    SELECT STRCMP(' 0 ', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-6519 {
+    SELECT STRCMP(' 0 ', cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1
+}
+
+test t-6524 {
+    SELECT STRCMP(' 0 ', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    -1
+}
+
+test t-6538 {
+    SELECT STRCMP(' 1 ', 'foo_ar');
+}
+expect {
+    -1
+}
+
+test t-6555 {
+    SELECT STRCMP(' 1 ', _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-6567 {
+    SELECT STRCMP(' 1 ', 1.0e0);
+}
+expect {
+    -1
+}
+
+test t-6575 {
+    SELECT STRCMP(' 1 ', 1.5);
+}
+expect {
+    -1
+}
+
+test t-6585 {
+    SELECT STRCMP(' 1 ', '');
+}
+expect {
+    1
+}
+
+test t-6590 {
+    SELECT STRCMP(' 1 ', X'00');
+}
+expect {
+    1
+}
+
+test t-6624 {
+    SELECT STRCMP(' 1 ', time '32:34:58');
+}
+expect {
+    -1
+}
+
+test t-6631 {
+    SELECT STRCMP(' 1 ', time '5 10:34:58.9');
+}
+expect {
+    -1
+}
+
+test t-6642 {
+    SELECT STRCMP(' 1 ', 103458.123456);
+}
+expect {
+    -1
+}
+
+test t-6666 {
+    SELECT STRCMP(' 1 ', '2000-01-01');
+}
+expect {
+    -1
+}
+
+test t-6669 {
+    SELECT STRCMP(' 1 ', '0000-01-03');
+}
+expect {
+    -1
+}
+
+test t-6682 {
+    SELECT STRCMP(' 1 ', cast('false' as json));
+}
+expect {
+    -1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-6697 {
+    SELECT STRCMP(' 1 ', cast('invalid' as json));
+}
+expect error {
+}
+
+test t-6707 {
+    SELECT STRCMP(' 1 ', cast('["ab", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-6721 {
+    SELECT STRCMP(' 255 ', 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-6726 {
+    SELECT STRCMP(' 255 ', _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-6728 {
+    SELECT STRCMP(' 255 ', 'foo%');
+}
+expect {
+    -1
+}
+
+test t-6733 {
+    SELECT STRCMP(' 255 ', '12_4');
+}
+expect {
+    -1
+}
+
+test t-6751 {
+    SELECT STRCMP(' 255 ', 1);
+}
+expect {
+    -1
+}
+
+test t-6763 {
+    SELECT STRCMP(' 255 ', -1.1e0);
+}
+expect {
+    -1
+}
+
+test t-6764 {
+    SELECT STRCMP(' 255 ', -1.7e0);
+}
+expect {
+    -1
+}
+
+test t-6776 {
+    SELECT STRCMP(' 255 ', _utf8 'foobar');
+}
+expect {
+    -1
+}
+
+test t-6780 {
+    SELECT STRCMP(' 255 ', 0x1);
+}
+expect {
+    1
+}
+
+test t-6785 {
+    SELECT STRCMP(' 255 ', 0b1001);
+}
+expect {
+    1
+}
+
+test t-6789 {
+    SELECT STRCMP(' 255 ', NULL);
+}
+expect {
+    NULL
+}
+
+test t-6794 {
+    SELECT STRCMP(' 255 ', NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-6799 {
+    SELECT STRCMP(' 255 ', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-6814 {
+    SELECT STRCMP(' 255 ', time '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-6817 {
+    SELECT STRCMP(' 255 ', time '130:34:58');
+}
+expect {
+    -1
+}
+
+test t-6818 {
+    SELECT STRCMP(' 255 ', time '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-6834 {
+    SELECT STRCMP(' 255 ', 103458.123456);
+}
+expect {
+    -1
+}
+
+test t-6835 {
+    SELECT STRCMP(' 255 ', '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-6856 {
+    SELECT STRCMP(' 255 ', '101:34:58');
+}
+expect {
+    -1
+}
+
+test t-6861 {
+    SELECT STRCMP(' 255 ', '0000-01-03');
+}
+expect {
+    -1
+}
+
+test t-6862 {
+    SELECT STRCMP(' 255 ', '1969-02-18');
+}
+expect {
+    -1
+}
+
+test t-6874 {
+    SELECT STRCMP(' 255 ', cast('false' as json));
+}
+expect {
+    -1
+}
+
+test t-6882 {
+    SELECT STRCMP(' 255 ', cast('2' as json));
+}
+expect {
+    -1
+}
+
+test t-6915 {
+    SELECT STRCMP('\t1foo\t', 1234);
+}
+expect {
+    -1
+}
+
+test t-6941 {
+    SELECT STRCMP('\t1foo\t', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-6945 {
+    SELECT STRCMP('\t1foo\t', ' 0 ');
+}
+expect {
+    -1
+}
+
+test t-6959 {
+    SELECT STRCMP('\t1foo\t', 1.5);
+}
+expect {
+    -1
+}
+
+test t-6960 {
+    SELECT STRCMP('\t1foo\t', -1.5);
+}
+expect {
+    -1
+}
+
+test t-6961 {
+    SELECT STRCMP('\t1foo\t', 1.1);
+}
+expect {
+    -1
+}
+
+test t-6962 {
+    SELECT STRCMP('\t1foo\t', 1.7);
+}
+expect {
+    -1
+}
+
+test t-6976 {
+    SELECT STRCMP('\t1foo\t', X'ff');
+}
+expect {
+    -1
+}
+
+test t-6990 {
+    SELECT STRCMP('\t1foo\t', NULL + 1);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1525 HY000 Incorrect DATE value: ' 1foo '
+test t-7016 {
+    SELECT STRCMP('\t1foo\t', date '2000-01-01');
+}
+expect error {
+}
+
+test t-7023 {
+    SELECT STRCMP('\t1foo\t', 20000101103458.123456);
+}
+expect {
+    -1
+}
+
+test t-7027 {
+    SELECT STRCMP('\t1foo\t', '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-7033 {
+    SELECT STRCMP('\t1foo\t', '20000101103458foo');
+}
+expect {
+    -1
+}
+
+test t-7035 {
+    SELECT STRCMP('\t1foo\t', '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-7109 {
+    SELECT STRCMP(' 255 foo', _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-7135 {
+    SELECT STRCMP(' 255 foo', 1);
+}
+expect {
+    -1
+}
+
+test t-7144 {
+    SELECT STRCMP(' 255 foo', 1.5e0);
+}
+expect {
+    -1
+}
+
+test t-7149 {
+    SELECT STRCMP(' 255 foo', 0.0);
+}
+expect {
+    -1
+}
+
+test t-7152 {
+    SELECT STRCMP(' 255 foo', -1.5);
+}
+expect {
+    -1
+}
+
+test t-7154 {
+    SELECT STRCMP(' 255 foo', 1.7);
+}
+expect {
+    -1
+}
+
+test t-7162 {
+    SELECT STRCMP(' 255 foo', _binary 'foobar');
+}
+expect {
+    -1
+}
+
+test t-7168 {
+    SELECT STRCMP(' 255 foo', X'ff');
+}
+expect {
+    -1
+}
+
+test t-7173 {
+    SELECT STRCMP(' 255 foo', NULL);
+}
+expect {
+    NULL
+}
+
+test t-7182 {
+    SELECT STRCMP(' 255 foo', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-7192 {
+    SELECT STRCMP(' 255 foo', -9223372036854775808);
+}
+expect {
+    -1
+}
+
+test t-7216 {
+    SELECT STRCMP(' 255 foo', 20000101);
+}
+expect {
+    -1
+}
+
+test t-7220 {
+    SELECT STRCMP(' 255 foo', '20000101103458.1234');
+}
+expect {
+    -1
+}
+
+test t-7241 {
+    SELECT STRCMP(' 255 foo', '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-7242 {
+    SELECT STRCMP(' 255 foo', '2000-01-01');
+}
+expect {
+    -1
+}
+
+test t-7277 {
+    SELECT STRCMP(' 255 foo', cast(0x666F6F626172FF as json));
+}
+expect {
+    -1
+}
+
+test t-7298 {
+    SELECT STRCMP(0.0e0, '1234');
+}
+expect {
+    -1
+}
+
+test t-7306 {
+    SELECT STRCMP(0.0e0, 'foo_ar');
+}
+expect {
+    -1
+}
+
+test t-7307 {
+    SELECT STRCMP(0.0e0, 'FOO_AR');
+}
+expect {
+    -1
+}
+
+test t-7310 {
+    SELECT STRCMP(0.0e0, '12x4');
+}
+expect {
+    -1
+}
+
+test t-7316 {
+    SELECT STRCMP(0.0e0, _utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-7317 {
+    SELECT STRCMP(0.0e0, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-7334 {
+    SELECT STRCMP(0.0e0, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-7336 {
+    SELECT STRCMP(0.0e0, 1.5e0);
+}
+expect {
+    -1
+}
+
+test t-7339 {
+    SELECT STRCMP(0.0e0, -1.1e0);
+}
+expect {
+    1
+}
+
+test t-7352 {
+    SELECT STRCMP(0.0e0, _utf8 'foobar');
+}
+expect {
+    -1
+}
+
+test t-7355 {
+    SELECT STRCMP(0.0e0, 0x0);
+}
+expect {
+    1
+}
+
+test t-7357 {
+    SELECT STRCMP(0.0e0, 0xff);
+}
+expect {
+    -1
+}
+
+test t-7362 {
+    SELECT STRCMP(0.0e0, b'1001');
+}
+expect {
+    1
+}
+
+test t-7391 {
+    SELECT STRCMP(0.0e0, time '31:34:58');
+}
+expect {
+    -1
+}
+
+test t-7411 {
+    SELECT STRCMP(0.0e0, '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-7418 {
+    SELECT STRCMP(0.0e0, '20000101103458.1234foo');
+}
+expect {
+    -1
+}
+
+test t-7419 {
+    SELECT STRCMP(0.0e0, '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-7420 {
+    SELECT STRCMP(0.0e0, '20000101foo');
+}
+expect {
+    -1
+}
+
+test t-7425 {
+    SELECT STRCMP(0.0e0, time '-32:34:58');
+}
+expect {
+    1
+}
+
+test t-7430 {
+    SELECT STRCMP(0.0e0, time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-7448 {
+    SELECT STRCMP(0.0e0, cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-7489 {
+    SELECT STRCMP(1.0e0, 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-7493 {
+    SELECT STRCMP(1.0e0, _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-7503 {
+    SELECT STRCMP(1.0e0, '12$4');
+}
+expect {
+    -1
+}
+
+test t-7526 {
+    SELECT STRCMP(1.0e0, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-7527 {
+    SELECT STRCMP(1.0e0, 1.0e0);
+}
+expect {
+    0
+}
+
+test t-7532 {
+    SELECT STRCMP(1.0e0, -1.7e0);
+}
+expect {
+    1
+}
+
+test t-7535 {
+    SELECT STRCMP(1.0e0, 1.5);
+}
+expect {
+    -1
+}
+
+test t-7538 {
+    SELECT STRCMP(1.0e0, 1.7);
+}
+expect {
+    -1
+}
+
+test t-7541 {
+    SELECT STRCMP(1.0e0, '1.5');
+}
+expect {
+    -1
+}
+
+test t-7542 {
+    SELECT STRCMP(1.0e0, '-1.5');
+}
+expect {
+    1
+}
+
+test t-7545 {
+    SELECT STRCMP(1.0e0, '');
+}
+expect {
+    1
+}
+
+test t-7551 {
+    SELECT STRCMP(1.0e0, X'01');
+}
+expect {
+    1
+}
+
+test t-7553 {
+    SELECT STRCMP(1.0e0, 0b1001);
+}
+expect {
+    1
+}
+
+test t-7564 {
+    SELECT STRCMP(1.0e0, 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-7571 {
+    SELECT STRCMP(1.0e0, NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-7573 {
+    SELECT STRCMP(1.0e0, 0x666F6F626172FF);
+}
+expect {
+    -1
+}
+
+test t-7580 {
+    SELECT STRCMP(1.0e0, JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+test t-7615 {
+    SELECT STRCMP(1.0e0, time '-10:04:58');
+}
+expect {
+    1
+}
+
+test t-7622 {
+    SELECT STRCMP(1.0e0, time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-7628 {
+    SELECT STRCMP(1.0e0, '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-7638 {
+    SELECT STRCMP(1.0e0, cast('\{\}' as json));
+}
+expect {
+    -1
+}
+
+test t-7650 {
+    SELECT STRCMP(1.0e0, cast('2' as json));
+}
+expect {
+    -1
+}
+
+test t-7661 {
+    SELECT STRCMP(1.0e0, cast(0x666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-7662 {
+    SELECT STRCMP(1.0e0, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+test t-7665 {
+    SELECT STRCMP(1.0e0, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-7673 {
+    SELECT STRCMP(1.0e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-7677 {
+    SELECT STRCMP(1.0e0, cast(time '12:34:56' as json));
+}
+expect {
+    1
+}
+
+test t-7678 {
+    SELECT STRCMP(1.0e0, cast(time '12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-7681 {
+    SELECT STRCMP(1.5e0, 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-7698 {
+    SELECT STRCMP(1.5e0, _utf8mb4 '12x4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-7709 {
+    SELECT STRCMP(1.5e0, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-7731 {
+    SELECT STRCMP(1.5e0, -1.1);
+}
+expect {
+    1
+}
+
+test t-7740 {
+    SELECT STRCMP(1.5e0, 0x1);
+}
+expect {
+    1
+}
+
+test t-7778 {
+    SELECT STRCMP(1.5e0, time '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-7789 {
+    SELECT STRCMP(1.5e0, 20000101103458);
+}
+expect {
+    -1
+}
+
+test t-7804 {
+    SELECT STRCMP(1.5e0, '20000101foo');
+}
+expect {
+    -1
+}
+
+test t-7819 {
+    SELECT STRCMP(1.5e0, '2000-01-01 12:34:58');
+}
+expect {
+    -1
+}
+
+test t-7822 {
+    SELECT STRCMP(1.5e0, '1969-02-18');
+}
+expect {
+    -1
+}
+
+test t-7823 {
+    SELECT STRCMP(1.5e0, '1970-01-01 00:00:01');
+}
+expect {
+    -1
+}
+
+test t-7837 {
+    SELECT STRCMP(1.5e0, cast(1.1 as json));
+}
+expect {
+    1
+}
+
+test t-7857 {
+    SELECT STRCMP(1.5e0, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-7859 {
+    SELECT STRCMP(1.5e0, cast('["ab", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-7866 {
+    SELECT STRCMP(1.5e0, cast(date '2000-01-01' as json));
+}
+expect {
+    1
+}
+
+test t-7873 {
+    SELECT STRCMP(-1.5e0, 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-7885 {
+    SELECT STRCMP(-1.5e0, '12_4');
+}
+expect {
+    -1
+}
+
+test t-7893 {
+    SELECT STRCMP(-1.5e0, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-7932 {
+    SELECT STRCMP(-1.5e0, 0x1);
+}
+expect {
+    1
+}
+
+test t-7959 {
+    SELECT STRCMP(-1.5e0, 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-7971 {
+    SELECT STRCMP(-1.5e0, time '10:04:58.1');
+}
+expect {
+    -1
+}
+
+test t-7988 {
+    SELECT STRCMP(-1.5e0, '20000101103458.1234');
+}
+expect {
+    -1
+}
+
+test t-8072 {
+    SELECT STRCMP(1.1e0, 'foo%');
+}
+expect {
+    -1
+}
+
+test t-8076 {
+    SELECT STRCMP(1.1e0, '12%');
+}
+expect {
+    -1
+}
+
+test t-8084 {
+    SELECT STRCMP(1.1e0, _utf8mb4 '12$4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-8093 {
+    SELECT STRCMP(1.1e0, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-8094 {
+    SELECT STRCMP(1.1e0, 0);
+}
+expect {
+    1
+}
+
+test t-8099 {
+    SELECT STRCMP(1.1e0, ' 255 ');
+}
+expect {
+    1
+}
+
+test t-8110 {
+    SELECT STRCMP(1.1e0, 0.000);
+}
+expect {
+    1
+}
+
+test t-8153 {
+    SELECT STRCMP(1.1e0, 18446744073709551615);
+}
+expect {
+    -1
+}
+
+test t-8154 {
+    SELECT STRCMP(1.1e0, 18446744073709540000e0);
+}
+expect {
+    -1
+}
+
+test t-8188 {
+    SELECT STRCMP(1.1e0, '20000101foo');
+}
+expect {
+    -1
+}
+
+test t-8196 {
+    SELECT STRCMP(1.1e0, time'00:00:59.2132234');
+}
+expect {
+    1
+}
+
+test t-8204 {
+    SELECT STRCMP(1.1e0, '0000-02-29');
+}
+expect {
+    1
+}
+
+test t-8211 {
+    SELECT STRCMP(1.1e0, cast(1 as json));
+}
+expect {
+    1
+}
+
+test t-8213 {
+    SELECT STRCMP(1.1e0, cast(false as json));
+}
+expect {
+    -1
+}
+
+test t-8235 {
+    SELECT STRCMP(1.1e0, cast(_binary '"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-8241 {
+    SELECT STRCMP(1.1e0, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-8242 {
+    SELECT STRCMP(1.1e0, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-8260 {
+    SELECT STRCMP(-1.1e0, _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-8278 {
+    SELECT STRCMP(-1.1e0, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-8289 {
+    SELECT STRCMP(-1.1e0, ' 0 ');
+}
+expect {
+    1
+}
+
+test t-8290 {
+    SELECT STRCMP(-1.1e0, ' 1 ');
+}
+expect {
+    1
+}
+
+test t-8305 {
+    SELECT STRCMP(-1.1e0, 1.1);
+}
+expect {
+    -1
+}
+
+test t-8315 {
+    SELECT STRCMP(-1.1e0, 0x0);
+}
+expect {
+    1
+}
+
+test t-8335 {
+    SELECT STRCMP(-1.1e0, 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-8337 {
+    SELECT STRCMP(-1.1e0, NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-8367 {
+    SELECT STRCMP(-1.1e0, 20000101103458.123456);
+}
+expect {
+    -1
+}
+
+test t-8372 {
+    SELECT STRCMP(-1.1e0, '20000101103458.1234');
+}
+expect {
+    -1
+}
+
+test t-8379 {
+    SELECT STRCMP(-1.1e0, '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-8400 {
+    SELECT STRCMP(-1.1e0, '3001-02-19 00:00:00');
+}
+expect {
+    -1
+}
+
+test t-8433 {
+    SELECT STRCMP(-1.1e0, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-8438 {
+    SELECT STRCMP(-1.1e0, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-8441 {
+    SELECT STRCMP(-1.1e0, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-8451 {
+    SELECT STRCMP(-1.7e0, 1234);
+}
+expect {
+    -1
+}
+
+test t-8484 {
+    SELECT STRCMP(-1.7e0, '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-8492 {
+    SELECT STRCMP(-1.7e0, -1.7e0);
+}
+expect {
+    0
+}
+
+test t-8501 {
+    SELECT STRCMP(-1.7e0, '1.5');
+}
+expect {
+    -1
+}
+
+test t-8520 {
+    SELECT STRCMP(-1.7e0, NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-8534 {
+    SELECT STRCMP(-1.7e0, 0xFF666F6F626172);
+}
+expect {
+    -1
+}
+
+test t-8537 {
+    SELECT STRCMP(-1.7e0, 18446744073709551615);
+}
+expect {
+    -1
+}
+
+test t-8542 {
+    SELECT STRCMP(-1.7e0, time '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-8543 {
+    SELECT STRCMP(-1.7e0, time '31:34:58');
+}
+expect {
+    -1
+}
+
+test t-8564 {
+    SELECT STRCMP(-1.7e0, '20000101103458.1234');
+}
+expect {
+    -1
+}
+
+test t-8590 {
+    SELECT STRCMP(-1.7e0, '1969-02-18');
+}
+expect {
+    -1
+}
+
+test t-8595 {
+    SELECT STRCMP(-1.7e0, cast(1 as json));
+}
+expect {
+    -1
+}
+
+test t-8606 {
+    SELECT STRCMP(-1.7e0, cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-8608 {
+    SELECT STRCMP(-1.7e0, cast(18446744073709551615 as json));
+}
+expect {
+    -1
+}
+
+test t-8612 {
+    SELECT STRCMP(-1.7e0, cast('-1.1' as json));
+}
+expect {
+    1
+}
+
+test t-8616 {
+    SELECT STRCMP(-1.7e0, cast('"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-8635 {
+    SELECT STRCMP(-1.7e0, cast(date '2000-01-02' as json));
+}
+expect {
+    1
+}
+
+test t-8680 {
+    SELECT STRCMP(0.0, 1.5e0);
+}
+expect {
+    -1
+}
+
+test t-8688 {
+    SELECT STRCMP(0.0, -1.5);
+}
+expect {
+    1
+}
+
+test t-8714 {
+    SELECT STRCMP(0.0, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-8732 {
+    SELECT STRCMP(0.0, JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+test t-8757 {
+    SELECT STRCMP(0.0, '20000101103458.123456');
+}
+expect {
+    -1
+}
+
+test t-8759 {
+    SELECT STRCMP(0.0, '103458');
+}
+expect {
+    -1
+}
+
+test t-8798 {
+    SELECT STRCMP(0.0, cast(-1.1 as json));
+}
+expect {
+    1
+}
+
+test t-8816 {
+    SELECT STRCMP(0.0, cast('["a"]' as json));
+}
+expect {
+    -1
+}
+
+test t-8859 {
+    SELECT STRCMP(0.000, _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-8863 {
+    SELECT STRCMP(0.000, 1);
+}
+expect {
+    -1
+}
+
+test t-8875 {
+    SELECT STRCMP(0.000, -1.1e0);
+}
+expect {
+    1
+}
+
+test t-8880 {
+    SELECT STRCMP(0.000, -1.5);
+}
+expect {
+    1
+}
+
+test t-8885 {
+    SELECT STRCMP(0.000, '1.5');
+}
+expect {
+    -1
+}
+
+test t-8891 {
+    SELECT STRCMP(0.000, 0x0);
+}
+expect {
+    1
+}
+
+test t-8899 {
+    SELECT STRCMP(0.000, 0x9);
+}
+expect {
+    1
+}
+
+test t-8902 {
+    SELECT STRCMP(0.000, true);
+}
+expect {
+    -1
+}
+
+test t-8912 {
+    SELECT STRCMP(0.000, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-8914 {
+    SELECT STRCMP(0.000, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-8923 {
+    SELECT STRCMP(0.000, -18446744073709540000e0);
+}
+expect {
+    1
+}
+
+test t-8966 {
+    SELECT STRCMP(0.000, time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-8991 {
+    SELECT STRCMP(0.000, cast(9223372036854775807 as json));
+}
+expect {
+    -1
+}
+
+test t-9004 {
+    SELECT STRCMP(0.000, cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1
+}
+
+test t-9008 {
+    SELECT STRCMP(0.000, cast('["a"]' as json));
+}
+expect {
+    -1
+}
+
+test t-9015 {
+    SELECT STRCMP(0.000, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1
+}
+
+test t-9040 {
+    SELECT STRCMP(1.5, _utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-9045 {
+    SELECT STRCMP(1.5, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-9055 {
+    SELECT STRCMP(1.5, 1);
+}
+expect {
+    1
+}
+
+test t-9061 {
+    SELECT STRCMP(1.5, ' 255 foo');
+}
+expect {
+    1
+}
+
+test t-9077 {
+    SELECT STRCMP(1.5, '1.5');
+}
+expect {
+    0
+}
+
+test t-9108 {
+    SELECT STRCMP(1.5, 0xFF666F6F626172FF);
+}
+expect {
+    -1
+}
+
+test t-9141 {
+    SELECT STRCMP(1.5, '20000101103458.123456');
+}
+expect {
+    -1
+}
+
+test t-9157 {
+    SELECT STRCMP(1.5, time '-101:34:58');
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-9193 {
+    SELECT STRCMP(1.5, cast('invalid' as json));
+}
+expect error {
+}
+
+test t-9201 {
+    SELECT STRCMP(1.5, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-9206 {
+    SELECT STRCMP(1.5, cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-9216 {
+    SELECT STRCMP(-1.5, 'foobar');
+}
+expect {
+    -1
+}
+
+test t-9232 {
+    SELECT STRCMP(-1.5, _utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-9235 {
+    SELECT STRCMP(-1.5, _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-9242 {
+    SELECT STRCMP(-1.5, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9243 {
+    SELECT STRCMP(-1.5, _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9261 {
+    SELECT STRCMP(-1.5, 0.0);
+}
+expect {
+    -1
+}
+
+test t-9268 {
+    SELECT STRCMP(-1.5, -1.7);
+}
+expect {
+    -1
+}
+
+test t-9278 {
+    SELECT STRCMP(-1.5, X'00');
+}
+expect {
+    1
+}
+
+test t-9279 {
+    SELECT STRCMP(-1.5, X'01');
+}
+expect {
+    1
+}
+
+test t-9298 {
+    SELECT STRCMP(-1.5, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-9311 {
+    SELECT STRCMP(-1.5, time '31:34:58');
+}
+expect {
+    -1
+}
+
+test t-9312 {
+    SELECT STRCMP(-1.5, time '32:34:58');
+}
+expect {
+    -1
+}
+
+test t-9327 {
+    SELECT STRCMP(-1.5, 20000101103458.123456);
+}
+expect {
+    -1
+}
+
+test t-9336 {
+    SELECT STRCMP(-1.5, '103458.123456');
+}
+expect {
+    -1
+}
+
+test t-9363 {
+    SELECT STRCMP(-1.5, cast(1 as json));
+}
+expect {
+    -1
+}
+
+test t-9365 {
+    SELECT STRCMP(-1.5, cast(false as json));
+}
+expect {
+    -1
+}
+
+test t-9369 {
+    SELECT STRCMP(-1.5, cast('true' as json));
+}
+expect {
+    -1
+}
+
+test t-9377 {
+    SELECT STRCMP(-1.5, cast('1' as json));
+}
+expect {
+    -1
+}
+
+test t-9383 {
+    SELECT STRCMP(-1.5, cast('"foo"' as json));
+}
+expect {
+    1
+}
+
+test t-9387 {
+    SELECT STRCMP(-1.5, cast(_binary '"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-9395 {
+    SELECT STRCMP(-1.5, cast('["ab", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-9407 {
+    SELECT STRCMP(-1.5, cast(time '5 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-9411 {
+    SELECT STRCMP(1.1, 1234);
+}
+expect {
+    -1
+}
+
+test t-9412 {
+    SELECT STRCMP(1.1, _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-9417 {
+    SELECT STRCMP(1.1, 'FOO%');
+}
+expect {
+    -1
+}
+
+test t-9418 {
+    SELECT STRCMP(1.1, 'foo_ar');
+}
+expect {
+    -1
+}
+
+test t-9437 {
+    SELECT STRCMP(1.1, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9442 {
+    SELECT STRCMP(1.1, ' 1 ');
+}
+expect {
+    1
+}
+
+test t-9443 {
+    SELECT STRCMP(1.1, ' 255 ');
+}
+expect {
+    1
+}
+
+test t-9447 {
+    SELECT STRCMP(1.1, 1.0e0);
+}
+expect {
+    1
+}
+
+test t-9460 {
+    SELECT STRCMP(1.1, -1.7);
+}
+expect {
+    1
+}
+
+test t-9462 {
+    SELECT STRCMP(1.1, '-1.5');
+}
+expect {
+    1
+}
+
+test t-9472 {
+    SELECT STRCMP(1.1, X'ff');
+}
+expect {
+    -1
+}
+
+test t-9485 {
+    SELECT STRCMP(1.1, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-9490 {
+    SELECT STRCMP(1.1, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-9495 {
+    SELECT STRCMP(1.1, 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-9509 {
+    SELECT STRCMP(1.1, time '32:34:58.5');
+}
+expect {
+    -1
+}
+
+test t-9514 {
+    SELECT STRCMP(1.1, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    -1
+}
+
+test t-9526 {
+    SELECT STRCMP(1.1, '20000101');
+}
+expect {
+    -1
+}
+
+test t-9527 {
+    SELECT STRCMP(1.1, '103458');
+}
+expect {
+    -1
+}
+
+test t-9531 {
+    SELECT STRCMP(1.1, '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-9535 {
+    SELECT STRCMP(1.1, time '-10:04:58');
+}
+expect {
+    1
+}
+
+test t-9538 {
+    SELECT STRCMP(1.1, time'00:00:01.0000');
+}
+expect {
+    1
+}
+
+test t-9562 {
+    SELECT STRCMP(1.1, cast('false' as json));
+}
+expect {
+    -1
+}
+
+test t-9568 {
+    SELECT STRCMP(1.1, cast(18446744073709551615 as json));
+}
+expect {
+    -1
+}
+
+test t-9585 {
+    SELECT STRCMP(1.1, cast('["ab"]' as json));
+}
+expect {
+    -1
+}
+
+test t-9586 {
+    SELECT STRCMP(1.1, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-9599 {
+    SELECT STRCMP(1.1, cast(time '5 12:34:58' as json));
+}
+expect {
+    1
+}
+
+test t-9602 {
+    SELECT STRCMP(1.7, '1234');
+}
+expect {
+    -1
+}
+
+test t-9606 {
+    SELECT STRCMP(1.7, _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9610 {
+    SELECT STRCMP(1.7, 'foo_ar');
+}
+expect {
+    -1
+}
+
+test t-9615 {
+    SELECT STRCMP(1.7, '12$4');
+}
+expect {
+    -1
+}
+
+test t-9619 {
+    SELECT STRCMP(1.7, _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-9628 {
+    SELECT STRCMP(1.7, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9630 {
+    SELECT STRCMP(1.7, 0);
+}
+expect {
+    1
+}
+
+test t-9669 {
+    SELECT STRCMP(1.7, NULL);
+}
+expect {
+    NULL
+}
+
+test t-9671 {
+    SELECT STRCMP(1.7, false);
+}
+expect {
+    1
+}
+
+test t-9691 {
+    SELECT STRCMP(1.7, -18446744073709540000e0);
+}
+expect {
+    1
+}
+
+test t-9695 {
+    SELECT STRCMP(1.7, time '31:34:58');
+}
+expect {
+    -1
+}
+
+test t-9700 {
+    SELECT STRCMP(1.7, time '31:34:58.4');
+}
+expect {
+    -1
+}
+
+test t-9708 {
+    SELECT STRCMP(1.7, timestamp '2024-12-30 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-9712 {
+    SELECT STRCMP(1.7, 20000101);
+}
+expect {
+    -1
+}
+
+test t-9735 {
+    SELECT STRCMP(1.7, '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-9737 {
+    SELECT STRCMP(1.7, '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-9762 {
+    SELECT STRCMP(1.7, cast('2' as json));
+}
+expect {
+    -1
+}
+
+test t-9768 {
+    SELECT STRCMP(1.7, cast('"bar"' as json));
+}
+expect {
+    1
+}
+
+test t-9774 {
+    SELECT STRCMP(1.7, cast(0b01 as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-9785 {
+    SELECT STRCMP(1.7, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-9800 {
+    SELECT STRCMP(-1.1, 'foo%');
+}
+expect {
+    -1
+}
+
+test t-9802 {
+    SELECT STRCMP(-1.1, 'foo_ar');
+}
+expect {
+    -1
+}
+
+test t-9818 {
+    SELECT STRCMP(-1.1, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9819 {
+    SELECT STRCMP(-1.1, _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9821 {
+    SELECT STRCMP(-1.1, _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-9822 {
+    SELECT STRCMP(-1.1, 0);
+}
+expect {
+    -1
+}
+
+test t-9836 {
+    SELECT STRCMP(-1.1, -1.7e0);
+}
+expect {
+    -1
+}
+
+test t-9870 {
+    SELECT STRCMP(-1.1, NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-9908 {
+    SELECT STRCMP(-1.1, '20000101103458.1234');
+}
+expect {
+    -1
+}
+
+test t-9910 {
+    SELECT STRCMP(-1.1, '20000101');
+}
+expect {
+    -1
+}
+
+test t-9931 {
+    SELECT STRCMP(-1.1, '2000-01-01 12:34:58');
+}
+expect {
+    -1
+}
+
+test t-9936 {
+    SELECT STRCMP(-1.1, '3001-02-19 00:00:00');
+}
+expect {
+    -1
+}
+
+test t-9941 {
+    SELECT STRCMP(-1.1, cast(false as json));
+}
+expect {
+    -1
+}
+
+test t-10020 {
+    SELECT STRCMP(-1.7, '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-10033 {
+    SELECT STRCMP(-1.7, 1.1);
+}
+expect {
+    -1
+}
+
+test t-10038 {
+    SELECT STRCMP(-1.7, '-1.5');
+}
+expect {
+    1
+}
+
+test t-10049 {
+    SELECT STRCMP(-1.7, 0b1001);
+}
+expect {
+    1
+}
+
+test t-10060 {
+    SELECT STRCMP(-1.7, 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-10064 {
+    SELECT STRCMP(-1.7, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-10096 {
+    SELECT STRCMP(-1.7, 20000101);
+}
+expect {
+    -1
+}
+
+test t-10116 {
+    SELECT STRCMP(-1.7, time'00:00:59.2132234');
+}
+expect {
+    -1
+}
+
+test t-10121 {
+    SELECT STRCMP(-1.7, '5 10:34:58');
+}
+expect {
+    -1
+}
+
+test t-10163 {
+    SELECT STRCMP(-1.7, cast('["ab", "ef"]' as json));
+}
+expect {
+    -1
+}
+
+test t-10167 {
+    SELECT STRCMP(-1.7, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1
+}
+
+test t-10170 {
+    SELECT STRCMP(-1.7, cast(date '2000-01-01' as json));
+}
+expect {
+    1
+}
+
+test t-10182 {
+    SELECT STRCMP('1.5', _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10201 {
+    SELECT STRCMP('1.5', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-10203 {
+    SELECT STRCMP('1.5', _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10206 {
+    SELECT STRCMP('1.5', 0);
+}
+expect {
+    1
+}
+
+test t-10230 {
+    SELECT STRCMP('1.5', '-1.5');
+}
+expect {
+    1
+}
+
+test t-10232 {
+    SELECT STRCMP('1.5', _utf8 'foobar');
+}
+expect {
+    -1
+}
+
+test t-10234 {
+    SELECT STRCMP('1.5', _binary 'foobar');
+}
+expect {
+    -1
+}
+
+test t-10239 {
+    SELECT STRCMP('1.5', X'01');
+}
+expect {
+    1
+}
+
+test t-10264 {
+    SELECT STRCMP('1.5', -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-10279 {
+    SELECT STRCMP('1.5', time '5 10:34:58.9');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATE value: '1.5'
+test t-10280 {
+    SELECT STRCMP('1.5', date '2000-01-01');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-10345 {
+    SELECT STRCMP('1.5', cast('invalid' as json));
+}
+expect error {
+}
+
+test t-10375 {
+    SELECT STRCMP('-1.5', _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10379 {
+    SELECT STRCMP('-1.5', 'FOO_AR');
+}
+expect {
+    -1
+}
+
+test t-10385 {
+    SELECT STRCMP('-1.5', _utf8mb4 '12_4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-10387 {
+    SELECT STRCMP('-1.5', _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-10392 {
+    SELECT STRCMP('-1.5', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-10395 {
+    SELECT STRCMP('-1.5', _utf8mb4 'FOO%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10406 {
+    SELECT STRCMP('-1.5', 0.0e0);
+}
+expect {
+    -1
+}
+
+test t-10428 {
+    SELECT STRCMP('-1.5', 0x1);
+}
+expect {
+    1
+}
+
+test t-10442 {
+    SELECT STRCMP('-1.5', NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-10444 {
+    SELECT STRCMP('-1.5', 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-10446 {
+    SELECT STRCMP('-1.5', NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-10456 {
+    SELECT STRCMP('-1.5', -9223372036854775808);
+}
+expect {
+    -1
+}
+
+test t-10459 {
+    SELECT STRCMP('-1.5', -18446744073709540000e0);
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '-1.5'
+test t-10473 {
+    SELECT STRCMP('-1.5', timestamp '2000-01-01 10:34:58');
+}
+expect error {
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: '-1.5'
+test t-10476 {
+    SELECT STRCMP('-1.5', timestamp '2024-12-30 10:34:58');
+}
+expect error {
+}
+
+test t-10480 {
+    SELECT STRCMP('-1.5', 20000101);
+}
+expect {
+    -1
+}
+
+test t-10484 {
+    SELECT STRCMP('-1.5', '20000101103458.1234');
+}
+expect {
+    -1
+}
+
+test t-10489 {
+    SELECT STRCMP('-1.5', '20000101103458foo');
+}
+expect {
+    -1
+}
+
+test t-10490 {
+    SELECT STRCMP('-1.5', '20000101103458.1234foo');
+}
+expect {
+    -1
+}
+
+test t-10491 {
+    SELECT STRCMP('-1.5', '20000101103458.123456foo');
+}
+expect {
+    -1
+}
+
+test t-10493 {
+    SELECT STRCMP('-1.5', '103458foo');
+}
+expect {
+    -1
+}
+
+test t-10495 {
+    SELECT STRCMP('-1.5', time '-10:04:58');
+}
+expect {
+    -1
+}
+
+test t-10503 {
+    SELECT STRCMP('-1.5', '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-10533 {
+    SELECT STRCMP('-1.5', cast('9223372036854775807' as json));
+}
+expect {
+    -1
+}
+
+test t-10539 {
+    SELECT STRCMP('-1.5', cast(_binary '"bar"' as json));
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-10553 {
+    SELECT STRCMP('-1.5', cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-10752 {
+    SELECT STRCMP(_utf8 'foobar', 'foobar');
+}
+expect {
+    0
+}
+
+test t-10773 {
+    SELECT STRCMP(_utf8 'foobar', _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    1
+}
+
+test t-10776 {
+    SELECT STRCMP(_utf8 'foobar', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-10777 {
+    SELECT STRCMP(_utf8 'foobar', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-10781 {
+    SELECT STRCMP(_utf8 'foobar', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    1
+}
+
+test t-10785 {
+    SELECT STRCMP(_utf8 'foobar', ' 0 ');
+}
+expect {
+    1
+}
+
+test t-10787 {
+    SELECT STRCMP(_utf8 'foobar', ' 255 ');
+}
+expect {
+    1
+}
+
+test t-10788 {
+    SELECT STRCMP(_utf8 'foobar', '\t1foo\t');
+}
+expect {
+    1
+}
+
+test t-10799 {
+    SELECT STRCMP(_utf8 'foobar', 1.5);
+}
+expect {
+    1
+}
+
+test t-10811 {
+    SELECT STRCMP(_utf8 'foobar', 0x0);
+}
+expect {
+    1
+}
+
+test t-10815 {
+    SELECT STRCMP(_utf8 'foobar', X'01');
+}
+expect {
+    1
+}
+
+test t-10820 {
+    SELECT STRCMP(_utf8 'foobar', x'09');
+}
+expect {
+    1
+}
+
+test t-10832 {
+    SELECT STRCMP(_utf8 'foobar', NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-10844 {
+    SELECT STRCMP(_utf8 'foobar', JSON_OBJECT());
+}
+expect {
+    -1
+}
+
+test t-10848 {
+    SELECT STRCMP(_utf8 'foobar', time '32:34:58');
+}
+expect {
+    1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: 'foobar'
+test t-10858 {
+    SELECT STRCMP(_utf8 'foobar', timestamp '2000-01-01 10:34:58.123456');
+}
+expect error {
+}
+
+test t-10862 {
+    SELECT STRCMP(_utf8 'foobar', 20000101103458.1234);
+}
+expect {
+    1
+}
+
+test t-10886 {
+    SELECT STRCMP(_utf8 'foobar', time '-5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-10890 {
+    SELECT STRCMP(_utf8 'foobar', '2000-01-01');
+}
+expect {
+    1
+}
+
+test t-10896 {
+    SELECT STRCMP(_utf8 'foobar', '3001-02-19 00:00:00');
+}
+expect {
+    1
+}
+
+test t-10905 {
+    SELECT STRCMP(_utf8 'foobar', cast('true' as json));
+}
+expect {
+    -1
+}
+
+test t-10913 {
+    SELECT STRCMP(_utf8 'foobar', cast('1' as json));
+}
+expect {
+    1
+}
+
+test t-10930 {
+    SELECT STRCMP(_utf8 'foobar', cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    1
+}
+
+test t-10950 {
+    SELECT STRCMP('', _utf8mb4 'foobar' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10952 {
+    SELECT STRCMP('', 'foo%');
+}
+expect {
+    -1
+}
+
+test t-10956 {
+    SELECT STRCMP('', '12%');
+}
+expect {
+    -1
+}
+
+test t-10965 {
+    SELECT STRCMP('', _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-10969 {
+    SELECT STRCMP('', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-10970 {
+    SELECT STRCMP('', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10973 {
+    SELECT STRCMP('', _utf8mb4 'FOO_AR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-10976 {
+    SELECT STRCMP('', 255);
+}
+expect {
+    -1
+}
+
+test t-11037 {
+    SELECT STRCMP('', JSON_ARRAY());
+}
+expect {
+    -1
+}
+
+test t-11061 {
+    SELECT STRCMP('', '20000101103458.123456');
+}
+expect {
+    -1
+}
+
+test t-11064 {
+    SELECT STRCMP('', '103458.123456');
+}
+expect {
+    -1
+}
+
+test t-11068 {
+    SELECT STRCMP('', '20000101foo');
+}
+expect {
+    -1
+}
+
+test t-11073 {
+    SELECT STRCMP('', time '-32:34:58');
+}
+expect {
+    -1
+}
+
+test t-11079 {
+    SELECT STRCMP('', '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-11089 {
+    SELECT STRCMP('', '3001-02-18 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-11090 {
+    SELECT STRCMP('', cast(0 as json));
+}
+expect {
+    -1
+}
+
+test t-11102 {
+    SELECT STRCMP('', cast(-1.1 as json));
+}
+expect {
+    -1
+}
+
+test t-11110 {
+    SELECT STRCMP('', cast('18446744073709551615' as json));
+}
+expect {
+    -1
+}
+
+test t-11112 {
+    SELECT STRCMP('', cast('"bar"' as json));
+}
+expect {
+    -1
+}
+
+test t-11124 {
+    SELECT STRCMP('', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-11134 {
+    SELECT STRCMP('', cast(time '12:34:58' as json));
+}
+expect {
+    -1
+}
+
+test t-11160 {
+    SELECT STRCMP(_binary 'foobar', _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    1
+}
+
+test t-11162 {
+    SELECT STRCMP(_binary 'foobar', _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    1
+}
+
+test t-11166 {
+    SELECT STRCMP(_binary 'foobar', 0);
+}
+expect {
+    1
+}
+
+test t-11177 {
+    SELECT STRCMP(_binary 'foobar', -1.5e0);
+}
+expect {
+    1
+}
+
+test t-11187 {
+    SELECT STRCMP(_binary 'foobar', -1.1);
+}
+expect {
+    1
+}
+
+test t-11207 {
+    SELECT STRCMP(_binary 'foobar', false);
+}
+expect {
+    1
+}
+
+test t-11213 {
+    SELECT STRCMP(_binary 'foobar', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-11220 {
+    SELECT STRCMP(_binary 'foobar', 0xFF666F6F626172FF);
+}
+expect {
+    -1
+}
+
+test t-11230 {
+    SELECT STRCMP(_binary 'foobar', time '10:04:58');
+}
+expect {
+    1
+}
+
+test t-11261 {
+    SELECT STRCMP(_binary 'foobar', '103458foo');
+}
+expect {
+    1
+}
+
+test t-11273 {
+    SELECT STRCMP(_binary 'foobar', '5 10:34:58');
+}
+expect {
+    1
+}
+
+test t-11285 {
+    SELECT STRCMP(_binary 'foobar', cast(false as json));
+}
+expect {
+    1
+}
+
+test t-11286 {
+    SELECT STRCMP(_binary 'foobar', cast('\{\}' as json));
+}
+expect {
+    -1
+}
+
+test t-11296 {
+    SELECT STRCMP(_binary 'foobar', cast(18446744073709551615 as json));
+}
+expect {
+    1
+}
+
+test t-11316 {
+    SELECT STRCMP(_binary 'foobar', cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test t-11319 {
+    SELECT STRCMP(_binary 'foobar', cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    -1
+}
+
+test t-11331 {
+    SELECT STRCMP(0x0, 1234);
+}
+expect {
+    -1
+}
+
+test t-11347 {
+    SELECT STRCMP(0x0, _utf8mb4 '12x4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-11349 {
+    SELECT STRCMP(0x0, _utf8mb4 '12$4' COLLATE utf8mb4_0900_ai_ci);
+}
+expect {
+    -1
+}
+
+test t-11352 {
+    SELECT STRCMP(0x0, _utf8mb4 'foo_ar' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-11361 {
+    SELECT STRCMP(0x0, ' 0 ');
+}
+expect {
+    -1
+}
+
+test t-11365 {
+    SELECT STRCMP(0x0, ' 255 foo');
+}
+expect {
+    -1
+}
+
+test t-11367 {
+    SELECT STRCMP(0x0, 1.0e0);
+}
+expect {
+    -1
+}
+
+test t-11380 {
+    SELECT STRCMP(0x0, -1.7);
+}
+expect {
+    -1
+}
+
+test t-11402 {
+    SELECT STRCMP(0x0, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: ''
+test t-11434 {
+    SELECT STRCMP(0x0, timestamp '2000-01-01 10:34:58.123456');
+}
+expect error {
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: ''
+test t-11436 {
+    SELECT STRCMP(0x0, timestamp '2024-12-30 10:34:58');
+}
+expect error {
+}
+
+test t-11448 {
+    SELECT STRCMP(0x0, '103458.123456');
+}
+expect {
+    -1
+}
+
+test t-11455 {
+    SELECT STRCMP(0x0, time '-10:04:58');
+}
+expect {
+    -1
+}
+
+test t-11460 {
+    SELECT STRCMP(0x0, time'00:00:59.2132234');
+}
+expect {
+    -1
+}
+
+test t-11463 {
+    SELECT STRCMP(0x0, '10:04:58');
+}
+expect {
+    -1
+}
+
+test t-11471 {
+    SELECT STRCMP(0x0, '1970-01-01 00:00:01');
+}
+expect {
+    -1
+}
+
+test t-11473 {
+    SELECT STRCMP(0x0, '3001-02-18 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-11515 {
+    SELECT STRCMP(0x0, cast(date '2000-01-02' as json));
+}
+expect {
+    -1
+}
+
+test t-11522 {
+    SELECT STRCMP(0x1, '1234');
+}
+expect {
+    -1
+}
+
+test t-11527 {
+    SELECT STRCMP(0x1, _utf8mb4 'FOOBAR' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-11546 {
+    SELECT STRCMP(0x1, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-11565 {
+    SELECT STRCMP(0x1, 0.0);
+}
+expect {
+    -1
+}
+
+test t-11574 {
+    SELECT STRCMP(0x1, '-1.5');
+}
+expect {
+    -1
+}
+
+test t-11590 {
+    SELECT STRCMP(0x1, true);
+}
+expect {
+    -1
+}
+
+test t-11597 {
+    SELECT STRCMP(0x1, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-11600 {
+    SELECT STRCMP(0x1, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-11607 {
+    SELECT STRCMP(0x1, 9223372036854775807);
+}
+expect {
+    -1
+}
+
+test t-11622 {
+    SELECT STRCMP(0x1, time '130:34:58.6');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1525 HY000 Incorrect DATETIME value: ''
+test t-11628 {
+    SELECT STRCMP(0x1, timestamp '2024-12-30 10:34:58');
+}
+expect error {
+}
+
+test t-11635 {
+    SELECT STRCMP(0x1, '20000101103458');
+}
+expect {
+    -1
+}
+
+test t-11653 {
+    SELECT STRCMP(0x1, time '-101:34:58');
+}
+expect {
+    -1
+}
+
+test t-11672 {
+    SELECT STRCMP(0x1, cast('null' as json));
+}
+expect {
+    -1
+}
+
+test t-11674 {
+    SELECT STRCMP(0x1, cast('false' as json));
+}
+expect {
+    -1
+}
+
+test t-11684 {
+    SELECT STRCMP(0x1, cast('-1.1' as json));
+}
+expect {
+    -1
+}
+
+test t-11709 {
+    SELECT STRCMP(0x1, cast(time '12:34:56' as json));
+}
+expect {
+    -1
+}
+
+test t-11710 {
+    SELECT STRCMP(0x1, cast(time '12:34:58' as json));
+}
+expect {
+    -1
+}
+
+test t-11724 {
+    SELECT STRCMP(0xff, '12%');
+}
+expect {
+    1
+}
+
+test t-11726 {
+    SELECT STRCMP(0xff, '12x4');
+}
+expect {
+    1
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-11728 {
+    SELECT STRCMP(0xff, _utf8mb4 '12_4' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xFF' from binary to utf8mb4
+test t-11734 {
+    SELECT STRCMP(0xff, _utf8mb4 'foo%' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-11750 {
+    SELECT STRCMP(0xff, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-11756 {
+    SELECT STRCMP(0xff, -1.7e0);
+}
+expect {
+    1
+}

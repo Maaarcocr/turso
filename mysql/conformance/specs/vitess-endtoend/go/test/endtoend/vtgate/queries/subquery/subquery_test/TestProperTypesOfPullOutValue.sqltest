@@ -1,0 +1,66 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/subquery/subquery_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE user
+(
+    id   INT PRIMARY KEY,
+    name VARCHAR(100)
+);
+}
+
+setup s2 {
+    CREATE TABLE user_extra
+(
+    user_id    INT,
+    extra_info VARCHAR(100),
+    PRIMARY KEY (user_id, extra_info)
+);
+}
+
+setup s3 {
+    CREATE TABLE user_extra
+(
+    user_id    INT,
+    extra_info VARCHAR(100),
+    PRIMARY KEY (user_id, extra_info)
+);
+    INSERT INTO user (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie'), (4, 'David'), (5, 'Eve'), (6, 'Frank'), (7, 'Grace'), (8, 'Hannah'), (9, 'Ivy'), (10, 'Jack');
+    INSERT INTO user_extra (user_id, extra_info) VALUES (1, 'info1'), (2, 'info1'), (3, 'info1'), (3, 'info2'), (4, 'info1'), (5, 'info1'), (6, 'info1'), (7, 'info1'), (8, 'info1');
+}
+
+@setup s1
+test l236 {
+    INSERT INTO user (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie'), (4, 'David'), (5, 'Eve'), (6, 'Frank'), (7, 'Grace'), (8, 'Hannah'), (9, 'Ivy'), (10, 'Jack');
+}
+expect unordered {
+}
+
+@setup s2
+test l237 {
+    INSERT INTO user_extra (user_id, extra_info) VALUES (1, 'info1'), (2, 'info1'), (3, 'info1'), (3, 'info2'), (4, 'info1'), (5, 'info1'), (6, 'info1'), (7, 'info1'), (8, 'info1');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l239 {
+    select (select sum(id) from user) from user_extra;
+}
+expect unordered {
+    55
+    55
+    55
+    55
+    55
+    55
+    55
+    55
+    55
+}

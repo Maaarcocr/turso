@@ -1,0 +1,142 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table all_types
+(
+    id                 bigint not null,
+    msg                varchar(64),
+    keyspace_id        bigint(20) unsigned,
+    tinyint_unsigned   TINYINT,
+    bool_signed        BOOL,
+    smallint_unsigned  SMALLINT,
+    mediumint_unsigned MEDIUMINT,
+    int_unsigned       INT,
+    float_unsigned     FLOAT(10, 2),
+    double_unsigned    DOUBLE(16, 2),
+    decimal_unsigned   DECIMAL,
+    t_date             DATE,
+    t_datetime         DATETIME,
+    t_datetime_micros  DATETIME(6),
+    t_time             TIME,
+    t_timestamp        TIMESTAMP,
+    c8                 bit(8)  DEFAULT NULL,
+    c16                bit(16) DEFAULT NULL,
+    c24                bit(24) DEFAULT NULL,
+    c32                bit(32) DEFAULT NULL,
+    c40                bit(40) DEFAULT NULL,
+    c48                bit(48) DEFAULT NULL,
+    c56                bit(56) DEFAULT NULL,
+    c63                bit(63) DEFAULT NULL,
+    c64                bit(64) DEFAULT NULL,
+    json_col           JSON,
+    text_col           TEXT,
+    data               longblob,
+    tinyint_min        TINYINT,
+    tinyint_max        TINYINT,
+    tinyint_pos        TINYINT,
+    tinyint_neg        TINYINT,
+    smallint_min       SMALLINT,
+    smallint_max       SMALLINT,
+    smallint_pos       SMALLINT,
+    smallint_neg       SMALLINT,
+    medint_min         MEDIUMINT,
+    medint_max         MEDIUMINT,
+    medint_pos         MEDIUMINT,
+    medint_neg         MEDIUMINT,
+    int_min            INT,
+    int_max            INT,
+    int_pos            INT,
+    int_neg            INT,
+    bigint_min         BIGINT,
+    bigint_max         BIGINT,
+    bigint_pos         BIGINT,
+    bigint_neg         BIGINT,
+    primary key (id)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine=InnoDB;
+    create table all_types
+(
+    id                 bigint not null,
+    msg                varchar(64),
+    keyspace_id        bigint(20) unsigned,
+    tinyint_unsigned   TINYINT,
+    bool_signed        BOOL,
+    smallint_unsigned  SMALLINT,
+    mediumint_unsigned MEDIUMINT,
+    int_unsigned       INT,
+    float_unsigned     FLOAT(10, 2),
+    double_unsigned    DOUBLE(16, 2),
+    decimal_unsigned   DECIMAL,
+    t_date             DATE,
+    t_datetime         DATETIME,
+    t_datetime_micros  DATETIME(6),
+    t_time             TIME,
+    t_timestamp        TIMESTAMP,
+    c8                 bit(8)  DEFAULT NULL,
+    c16                bit(16) DEFAULT NULL,
+    c24                bit(24) DEFAULT NULL,
+    c32                bit(32) DEFAULT NULL,
+    c40                bit(40) DEFAULT NULL,
+    c48                bit(48) DEFAULT NULL,
+    c56                bit(56) DEFAULT NULL,
+    c63                bit(63) DEFAULT NULL,
+    c64                bit(64) DEFAULT NULL,
+    json_col           JSON,
+    text_col           TEXT,
+    data               longblob,
+    tinyint_min        TINYINT,
+    tinyint_max        TINYINT,
+    tinyint_pos        TINYINT,
+    tinyint_neg        TINYINT,
+    smallint_min       SMALLINT,
+    smallint_max       SMALLINT,
+    smallint_pos       SMALLINT,
+    smallint_neg       SMALLINT,
+    medint_min         MEDIUMINT,
+    medint_max         MEDIUMINT,
+    medint_pos         MEDIUMINT,
+    medint_neg         MEDIUMINT,
+    int_min            INT,
+    int_max            INT,
+    int_pos            INT,
+    int_neg            INT,
+    bigint_min         BIGINT,
+    bigint_max         BIGINT,
+    bigint_pos         BIGINT,
+    bigint_neg         BIGINT,
+    primary key (id)
+) Engine = InnoDB;
+    insert into all_types(id, int_unsigned) values (1, 1), (2, 2), (3,3), (4,4), (10,5), (20, 6);
+    prepare prep_pk from 'SELECT t1.id from all_types t1 join all_types t2 on t1.int_unsigned = (case when t2.int_unsigned in (1, 2, 3) then 1 when t2.int_unsigned = 4 then 10 else 20 end)';
+}
+
+@setup s1
+test l980 {
+    insert into all_types(id, int_unsigned) values (1, 1), (2, 2), (3,3), (4,4), (10,5), (20, 6);
+}
+expect unordered {
+}
+
+@setup s2
+test l982 {
+    execute prep_pk;
+}
+expect unordered {
+    1
+    1
+    1
+}

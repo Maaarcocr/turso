@@ -1,0 +1,161 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT RTRIM(" Å å" );
+}
+expect raw {
+ Å å
+}
+
+test t-1 {
+    SELECT RTRIM(NULL);
+}
+expect {
+    NULL
+}
+
+test t-2 {
+    SELECT RTRIM("");
+}
+expect {
+    
+}
+
+test t-3 {
+    SELECT RTRIM("a");
+}
+expect {
+    a
+}
+
+test t-4 {
+    SELECT RTRIM("abc");
+}
+expect {
+    abc
+}
+
+test t-5 {
+    SELECT RTRIM('abca');
+}
+expect {
+    abca
+}
+
+test t-6 {
+    SELECT RTRIM('aabcaa');
+}
+expect {
+    aabcaa
+}
+
+test t-7 {
+    SELECT RTRIM(1);
+}
+expect {
+    1
+}
+
+test t-8 {
+    SELECT RTRIM(-1);
+}
+expect {
+    -1
+}
+
+test t-9 {
+    SELECT RTRIM(0123);
+}
+expect {
+    123
+}
+
+test t-10 {
+    SELECT RTRIM(0xAACC);
+}
+expect {
+    ��
+}
+
+test t-11 {
+    SELECT RTRIM(3.1415926);
+}
+expect {
+    3.1415926
+}
+
+test t-12 {
+    SELECT RTRIM(" 中文测试");
+}
+expect raw {
+ 中文测试
+}
+
+test t-13 {
+    SELECT RTRIM("日本語テスト ");
+}
+expect {
+    日本語テスト
+}
+
+test t-14 {
+    SELECT RTRIM("한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-16 {
+    SELECT RTRIM('123');
+}
+expect {
+    123
+}
+
+test t-17 {
+    SELECT RTRIM(9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-18 {
+    SELECT RTRIM(-9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-19 {
+    SELECT RTRIM(999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-20 {
+    SELECT RTRIM(-999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-23 {
+    SELECT RTRIM(_utf8mb4 0xC2A078C2A0);
+}
+expect raw {
+ x 
+}
+
+test t-24 {
+    SELECT RTRIM(_latin1 0xA078A0);
+}
+expect raw {
+ x 
+}

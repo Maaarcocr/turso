@@ -1,0 +1,314 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/random/random_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE emp (
+ EMPNO bigint NOT NULL,
+ ENAME VARCHAR(10),
+ JOB VARCHAR(9),
+ MGR bigint,
+ HIREDATE DATE,
+ SAL bigint,
+ COMM bigint,
+ DEPTNO bigint,
+ GRADE ENUM('A', 'B', 'C', 'D', 'E'),
+ SKILLS SET('sql', 'go', 'java', 'python'),
+ META JSON,
+ PRIMARY KEY (EMPNO)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+}
+
+setup s2 {
+    CREATE TABLE dept (
+ DEPTNO bigint,
+ DNAME VARCHAR(14),
+ LOC VARCHAR(13),
+ PRIMARY KEY (DEPTNO)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+}
+
+setup s3 {
+    CREATE TABLE dept (
+ DEPTNO bigint,
+ DNAME VARCHAR(14),
+ LOC VARCHAR(13),
+ PRIMARY KEY (DEPTNO)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+}
+
+@setup s1
+test l303 {
+    select sum(tbl1.sal) as caggr1 from emp as tbl0, emp as tbl1 group by tbl1.ename order by tbl1.ename asc;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+test l304 {
+    select count(*), count(*), count(*) from dept as tbl0, emp as tbl1 where tbl0.deptno = tbl1.deptno group by tbl1.empno order by tbl1.empno;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+test l305 {
+    select count(tbl0.deptno) from dept as tbl0, emp as tbl1 group by tbl1.job order by tbl1.job limit 3;
+}
+expect {
+}
+
+@setup s1
+test l306 {
+    select count(*), count(*) from emp as tbl0 group by tbl0.empno order by tbl0.empno;
+}
+expect {
+}
+
+@setup s3
+test l307 {
+    select distinct count(*), tbl0.loc from dept as tbl0 group by tbl0.loc;
+}
+expect unordered {
+}
+
+@setup s3
+test l308 {
+    select distinct count(*) from dept as tbl0 group by tbl0.loc;
+}
+expect unordered {
+}
+
+@setup s1
+test l309 {
+    select sum(tbl1.comm) from emp as tbl0, emp as tbl1;
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+test l310 {
+    select tbl1.mgr, tbl1.mgr, count(*) from emp as tbl1 group by tbl1.mgr;
+}
+expect unordered {
+}
+
+@setup s1
+test l311 {
+    select tbl1.mgr, tbl1.mgr, count(*) from emp as tbl0, emp as tbl1 group by tbl1.mgr;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l312 {
+    select count(*), count(*), count(tbl0.comm) from emp as tbl0, emp as tbl1 join dept as tbl2;
+}
+expect unordered {
+    0|0|0
+}
+
+@setup s3
+test l313 {
+    select count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0, dept as tbl1;
+}
+expect unordered {
+    0|0
+}
+
+@setup s3
+test l314 {
+    select count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0;
+}
+expect unordered {
+    0
+}
+
+@setup s3
+test l315 {
+    select min(tbl0.loc) from dept as tbl0;
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+test l316 {
+    select tbl1.empno, max(tbl1.job) from dept as tbl0, emp as tbl1 group by tbl1.empno;
+}
+expect unordered {
+}
+
+@setup s1
+test l317 {
+    select tbl1.ename, max(tbl0.comm) from emp as tbl0, emp as tbl1 group by tbl1.ename;
+}
+expect unordered {
+}
+
+@setup s3
+test l318 {
+    select tbl0.dname, tbl0.dname, min(tbl0.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl0.dname;
+}
+expect unordered {
+}
+
+@setup s3
+test l319 {
+    select tbl0.dname, min(tbl1.deptno) from dept as tbl0, dept as tbl1 group by tbl0.dname, tbl1.dname;
+}
+expect unordered {
+}
+
+@setup s1
+test l320 {
+    select max(tbl0.hiredate) from emp as tbl0;
+}
+expect unordered {
+    NULL
+}
+
+@setup s3
+test l321 {
+    select min(tbl0.deptno) as caggr0, count(*) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.loc = tbl1.dname;
+}
+expect unordered {
+    NULL|0
+}
+
+@setup s3
+test l322 {
+    select count(tbl1.loc) as caggr0 from dept as tbl1 left join dept as tbl2 on tbl1.loc = tbl2.loc where (tbl2.deptno);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l323 {
+    select sum(tbl1.ename), min(tbl0.empno) from emp as tbl0, emp as tbl1 left join dept as tbl2 on tbl1.job = tbl2.loc and tbl1.comm = tbl2.deptno where ('trout') and tbl0.deptno = tbl1.comm;
+}
+expect unordered {
+    NULL|NULL
+}
+
+@setup s1
+@setup s2
+test l324 {
+    select distinct max(tbl0.deptno), count(tbl0.job) from emp as tbl0, dept as tbl1 left join dept as tbl2 on tbl1.dname = tbl2.loc and tbl1.dname = tbl2.loc where (tbl2.loc) and tbl0.deptno = tbl1.deptno;
+}
+expect unordered {
+    NULL|0
+}
+
+@setup s3
+test l325 {
+    select count(*), count(*) from (select count(*) from dept as tbl0 group by tbl0.deptno) as tbl0;
+}
+expect unordered {
+    0|0
+}
+
+@setup s1
+@setup s2
+test l326 {
+    select distinct max(tbl0.dname) as caggr0, 'cattle' as crandom0 from dept as tbl0, emp as tbl1 where tbl0.deptno != tbl1.sal group by tbl1.comm;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l327 {
+    select -26 in (tbl2.mgr, -8, tbl0.deptno) as crandom0 from dept as tbl0, emp as tbl1 left join emp as tbl2 on tbl2.ename;
+}
+expect unordered {
+}
+
+@setup s3
+test l328 {
+    select max(tbl1.dname) as caggr1 from dept as tbl0, dept as tbl1 group by tbl1.dname order by tbl1.dname asc;
+}
+expect {
+}
+
+@setup s1
+test l329 {
+    select distinct tbl1.hiredate as cgroup0, count(tbl1.mgr) as caggr0 from emp as tbl1 group by tbl1.hiredate, tbl1.ename;
+}
+expect unordered {
+}
+
+@setup s1
+test l330 {
+    select distinct 347 as crandom0 from emp as tbl0;
+}
+expect unordered {
+}
+
+@setup s3
+test l331 {
+    select distinct count(*) from dept as tbl0 group by tbl0.deptno;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l332 {
+    select count(*) from dept as tbl1 join (select count(*) from emp as tbl0, dept as tbl1 group by tbl1.loc) as tbl2;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l333 {
+    select (select count(*) from emp as tbl0) from emp as tbl0;
+}
+expect unordered {
+}
+
+@setup s3
+test l334 {
+    select count(tbl1.dname) as caggr1 from dept as tbl0 left join dept as tbl1 on tbl1.dname > tbl1.loc where tbl1.loc <=> tbl1.dname group by tbl1.dname order by tbl1.dname asc;
+}
+expect {
+}
+
+@setup s3
+test l335 {
+    select count(*) from (select count(*) from dept as tbl0) as tbl0;
+}
+expect unordered {
+    1
+}
+
+@setup s3
+test l336 {
+    select count(*), count(*) from (select count(*) from dept as tbl0) as tbl0, dept as tbl1;
+}
+expect unordered {
+    0|0
+}
+
+@setup s1
+test l337 {
+    select distinct case max(tbl0.ename) when min(tbl0.job) then 'sole' else count(case when false then -27 when 'gazelle' then tbl0.deptno end) end as caggr0 from emp as tbl0;
+}
+expect unordered {
+    0
+}

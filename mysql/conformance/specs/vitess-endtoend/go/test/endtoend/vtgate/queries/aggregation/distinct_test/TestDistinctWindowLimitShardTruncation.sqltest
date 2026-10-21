@@ -1,0 +1,98 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/distinct_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE emp (
+    empno bigint NOT NULL,
+    ename VARCHAR(10),
+    job VARCHAR(9),
+    mgr bigint,
+    hiredate DATE,
+    sal bigint,
+    comm bigint,
+    deptno bigint,
+    PRIMARY KEY (empno)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+}
+
+setup s2 {
+    INSERT INTO emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES
+		(101, 'A1', 'Analyst', NULL, '2024-01-01', 1000, NULL, 10),
+		(102, 'A2', 'Analyst', NULL, '2024-01-02', 1000, NULL, 10),
+		(103, 'A3', 'Analyst', NULL, '2024-01-03', 1000, NULL, 10),
+		(201, 'B1', 'Clerk',   NULL, '2024-02-01', 2000, NULL, 20),
+		(202, 'B2', 'Clerk',   NULL, '2024-02-02', 2000, NULL, 20),
+		(203, 'B3', 'Clerk',   NULL, '2024-02-03', 2000, NULL, 20),
+		(501, 'C1', 'Manager', NULL, '2024-03-01', 3000, NULL, 5),
+		(502, 'C2', 'Manager', NULL, '2024-03-02', 3000, NULL, 5),
+		(503, 'C3', 'Manager', NULL, '2024-03-03', 3000, NULL, 5);
+}
+
+@setup s1
+test l84 {
+    INSERT INTO emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES
+		(101, 'A1', 'Analyst', NULL, '2024-01-01', 1000, NULL, 10),
+		(102, 'A2', 'Analyst', NULL, '2024-01-02', 1000, NULL, 10),
+		(103, 'A3', 'Analyst', NULL, '2024-01-03', 1000, NULL, 10),
+		(201, 'B1', 'Clerk',   NULL, '2024-02-01', 2000, NULL, 20),
+		(202, 'B2', 'Clerk',   NULL, '2024-02-02', 2000, NULL, 20),
+		(203, 'B3', 'Clerk',   NULL, '2024-02-03', 2000, NULL, 20),
+		(501, 'C1', 'Manager', NULL, '2024-03-01', 3000, NULL, 5),
+		(502, 'C2', 'Manager', NULL, '2024-03-02', 3000, NULL, 5),
+		(503, 'C3', 'Manager', NULL, '2024-03-03', 3000, NULL, 5);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l95 {
+    SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3;
+}
+expect {
+    503|2024-03-03|5
+    103|2024-01-03|10
+    203|2024-02-03|20
+}
+
+@setup s1
+@setup s2
+test l111 {
+    SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate ASC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3 OFFSET 0
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3 OFFSET 1;
+}
+expect {
+    101|2024-01-01|10
+    201|2024-02-01|20
+}

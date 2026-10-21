@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-28885 {
+    SELECT LEAST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, "1", CAST(2 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-28888 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), "1", _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    1
+}
+
+test t-28889 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, "1", CAST(2 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-29048 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _binary '0', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-29053 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _binary '0', CAST(2 AS UNSIGNED));
+}
+expect {
+    0
+}
+
+test t-29109 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '-1', CAST(2 AS UNSIGNED));
+}
+expect {
+    -1
+}
+
+test t-29112 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _binary '-1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    -1
+}
+
+test t-29151 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _binary '1', CAST(2 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-29267 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29283 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29319 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-29320 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29321 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-29334 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2
+}
+
+test t-29339 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect {
+    120:59:59
+}
+
+test t-29368 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29447 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-29469 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29483 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29531 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-29535 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, CAST(2 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-29564 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2
+}
+
+test t-29581 {
+    SELECT LEAST(date'2023-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+test t-29618 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2
+}
+
+test t-29637 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+test t-29656 {
+    SELECT LEAST(CAST(2 AS UNSIGNED), date'2023-02-01', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2
+}
+
+test t-29693 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', 'foobar', CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-29706 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), 'foobar', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    420
+}
+
+test t-29730 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), 'foobar', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    420
+}
+
+test t-29733 {
+    SELECT LEAST(date'2024-02-18', 'foobar', CAST(420 AS UNSIGNED));
+}
+expect {
+    2024-02-18
+}
+
+test t-29736 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), 'foobar', date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-29738 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), 'foobar', timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-29754 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), 'FOOBAR', _utf8mb4 'FOOBAR');
+}
+expect {
+    420
+}
+
+test t-29777 {
+    SELECT LEAST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 'FOOBAR', CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-29778 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), 'FOOBAR', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    420
+}
+
+test t-29853 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, "0", CAST(420 AS UNSIGNED));
+}
+expect {
+    0
+}
+
+test t-29861 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', "0", CAST(420 AS UNSIGNED));
+}
+expect {
+    0
+}
+
+test t-29907 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, "-1", CAST(420 AS UNSIGNED));
+}
+expect {
+    -1
+}
+
+test t-29913 {
+    SELECT LEAST(date'2024-02-18', "-1", CAST(420 AS UNSIGNED));
+}
+expect {
+    -1
+}
+
+test t-29969 {
+    SELECT LEAST(date'2024-02-18', "1", CAST(420 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-30007 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar', CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-30009 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar', CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-30018 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'foobar', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    420
+}
+
+test t-30031 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'foobar', CAST(420 AS UNSIGNED));
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-30053 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-30068 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'FOOBAR', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    420
+}
+
+test t-30089 {
+    SELECT LEAST(_binary '-1', _binary '0', CAST(420 AS UNSIGNED));
+}
+expect {
+    -1
+}
+
+test t-30100 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _binary '0', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-30117 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '0', CAST(420 AS UNSIGNED));
+}
+expect {
+    0
+}
+
+test t-30121 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _binary '0', CAST(420 AS UNSIGNED));
+}
+expect {
+    0
+}
+
+test t-30169 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _binary '-1', CAST(420 AS UNSIGNED));
+}
+expect {
+    -1
+}
+
+test t-30173 {
+    SELECT LEAST(date'2024-02-18', _binary '-1', CAST(420 AS UNSIGNED));
+}
+expect {
+    -1
+}
+
+test t-30174 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _binary '-1', date'2023-02-01');
+}
+expect {
+    -1
+}
+
+test t-30221 {
+    SELECT LEAST(date'2023-02-01', _binary '1', CAST(420 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-30223 {
+    SELECT LEAST(date'2100-02-01', _binary '1', CAST(420 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-30350 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-30386 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-30391 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-30415 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-30433 {
+    SELECT LEAST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-30440 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-30443 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-30455 {
+    SELECT LEAST(date'2023-02-01', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect {
+    2023-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-30475 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-30481 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-30494 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-30501 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-30507 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-30519 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect {
+    2100-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-30535 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED));
+}
+expect error {
+}
+
+test t-30574 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-30578 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-30666 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    420
+}
+
+test t-30670 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-30673 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, CAST(420 AS UNSIGNED));
+}
+expect {
+    2100-02-01
+}
+
+test t-30684 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-30689 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, CAST(420 AS UNSIGNED));
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-30702 {
+    SELECT LEAST(CAST(420 AS UNSIGNED), date'2024-02-18', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2024-02-18
+}
+
+test t-30723 {
+    SELECT LEAST(time'23:59:59.5432', date'2100-02-01', CAST(420 AS UNSIGNED));
+}
+expect {
+    2100-02-01
+}
+
+test t-30743 {
+    SELECT LEAST("1", 'FOOBAR', 'foobar');
+}
+expect {
+    1
+}
+
+test t-30794 {
+    SELECT LEAST('foobar', 'FOOBAR', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-30821 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, "0", 'foobar');
+}
+expect {
+    0
+}
+
+test t-30830 {
+    SELECT LEAST('foobar', "0", _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-30850 {
+    SELECT LEAST('foobar', "0", date'2100-02-01');
+}
+expect {
+    0
+}
+
+test t-30852 {
+    SELECT LEAST('foobar', "0", timestamp'2020-12-31 23:59:59');
+}
+expect {
+    0
+}
+
+test t-30855 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', "0", 'foobar');
+}
+expect {
+    0
+}
+
+test t-30907 {
+    SELECT LEAST(date'2023-02-01', "-1", 'foobar');
+}
+expect {
+    -1
+}
+
+test t-30919 {
+    SELECT LEAST(_utf8mb4 'foobar', "1", 'foobar');
+}
+expect {
+    1
+}
+
+test t-30938 {
+    SELECT LEAST('foobar', "1", _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    1
+}
+
+test t-30989 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar', 'foobar');
+}
+expect {
+    aBC
+}
+
+test t-31223 {
+    SELECT LEAST(time'120:59:59', _binary '1', 'foobar');
+}
+expect {
+    1
+}
+
+test t-31350 {
+    SELECT LEAST('foobar', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-31362 {
+    SELECT LEAST('foobar', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-31414 {
+    SELECT LEAST('foobar', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-31420 {
+    SELECT LEAST('foobar', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-31433 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect error {
+}
+
+test t-31449 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    2100-02-01
+}
+
+test t-31481 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    2100-02-01
+}
+
+test t-31482 {
+    SELECT LEAST('foobar', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-31485 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-31498 {
+    SELECT LEAST('foobar', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-31507 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    2024-02-18
+}
+
+test t-31516 {
+    SELECT LEAST('foobar', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-31525 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-31529 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-31530 {
+    SELECT LEAST('foobar', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-31543 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-31553 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect error {
+}
+
+test t-31567 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-31585 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 'foobar');
+}
+expect {
+    2024-02-18
+}
+
+test t-31632 {
+    SELECT LEAST('foobar', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-31633 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, 'foobar');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-31696 {
+    SELECT LEAST('foobar', date'2024-02-18', time'23:59:59.5432');
+}
+expect {
+    2024-02-18
+}
+
+test t-31703 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', date'2023-02-01', 'foobar');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-31706 {
+    SELECT LEAST('foobar', date'2023-02-01', time'23:59:59.5432');
+}
+expect {
+    2023-02-01
+}
+
+test t-31791 {
+    SELECT LEAST("1", "-1", 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-31822 {
+    SELECT LEAST('FOOBAR', "-1", _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-31823 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, "-1", 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-31825 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, "-1", 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-31837 {
+    SELECT LEAST(date'2023-02-01', "-1", 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-31854 {
+    SELECT LEAST('FOOBAR', "1", _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-31885 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, "1", 'FOOBAR');
+}
+expect {
+    1
+}
+
+test t-31893 {
+    SELECT LEAST(date'2023-02-01', "1", 'FOOBAR');
+}
+expect {
+    1
+}
+
+test t-31899 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', "1", 'FOOBAR');
+}
+expect {
+    1
+}
+
+test t-31935 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'foobar', 'FOOBAR');
+}
+expect {
+    foobar
+}
+
+test t-31982 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'FOOBAR', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    FOOBAR
+}
+
+test t-31995 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'FOOBAR', 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-32007 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'FOOBAR', 'FOOBAR');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-32039 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '0', 'FOOBAR');
+}
+expect {
+    0
+}
+
+test t-32066 {
+    SELECT LEAST('FOOBAR', _binary '-1', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-32097 {
+    SELECT LEAST(date'2023-02-01', _binary '-1', 'FOOBAR');
+}
+expect {
+    -1
+}
+
+test t-32131 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _binary '1', 'FOOBAR');
+}
+expect {
+    1
+}
+
+test t-32142 {
+    SELECT LEAST('FOOBAR', _binary '1', date'2023-02-01');
+}
+expect {
+    1
+}
+
+test t-32250 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Abc
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-32262 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-32297 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 'FOOBAR');
+}
+expect error {
+}
+
+test t-32310 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-32396 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-32411 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 'FOOBAR');
+}
+expect {
+    2100-02-01
+}
+
+test t-32468 {
+    SELECT LEAST('FOOBAR', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-32481 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, 'FOOBAR');
+}
+expect error {
+}
+
+test t-32542 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-32580 {
+    SELECT LEAST('FOOBAR', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-32648 {
+    SELECT LEAST('FOOBAR', timestamp'2020-12-31 23:59:59', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-32688 {
+    SELECT LEAST("0", "-1", _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-32692 {
+    SELECT LEAST("0", "-1", _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-32712 {
+    SELECT LEAST("0", "-1", timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    -1
+}
+
+test t-32721 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', "1", "0");
+}
+expect {
+    0
+}
+
+test t-32735 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, "1", "0");
+}
+expect {
+    0
+}
+
+test t-32736 {
+    SELECT LEAST("0", "1", _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-32791 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar', "0");
+}
+expect {
+    0
+}
+
+test t-32851 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', "0");
+}
+expect {
+    0
+}
+
+test t-32862 {
+    SELECT LEAST("0", _utf8mb4 'FOOBAR', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    0
+}
+
+test t-32867 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'FOOBAR', "0");
+}
+expect {
+    0
+}
+
+test t-32890 {
+    SELECT LEAST("0", _binary '0', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-32909 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '0', "0");
+}
+expect {
+    0
+}
+
+test t-32920 {
+    SELECT LEAST("0", _binary '0', date'2100-02-01');
+}
+expect {
+    0
+}
+
+test t-32931 {
+    SELECT LEAST(_binary '1', _binary '-1', "0");
+}
+expect {
+    -1
+}
+
+test t-32989 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _binary '1', "0");
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-33124 {
+    SELECT LEAST("0", _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-33326 {
+    SELECT LEAST("0", _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-33358 {
+    SELECT LEAST("0", _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-33395 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, "0");
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-33425 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, "0");
+}
+expect error {
+}
+
+test t-33439 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, "0");
+}
+expect {
+    0
+}
+
+test t-33464 {
+    SELECT LEAST("0", _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, date'2100-02-01');
+}
+expect {
+    0
+}
+
+test t-33465 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, "0");
+}
+expect {
+    0
+}
+
+test t-33526 {
+    SELECT LEAST("0", timestamp'2025-01-01 00:00:00.123456', time'120:59:59');
+}
+expect {
+    0
+}
+
+test t-33529 {
+    SELECT LEAST(time'120:59:59', time'23:59:59.5432', "0");
+}
+expect {
+    0
+}
+
+test t-33600 {
+    SELECT LEAST("-1", _utf8mb4 'foobar', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-33612 {
+    SELECT LEAST("-1", _utf8mb4 'foobar', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-33655 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', "-1");
+}
+expect {
+    -1
+}
+
+test t-33669 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'FOOBAR', "-1");
+}
+expect {
+    -1
+}
+
+test t-33742 {
+    SELECT LEAST("-1", _binary '-1', _binary '1');
+}
+expect {
+    -1
+}
+
+test t-33756 {
+    SELECT LEAST("-1", _binary '-1', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-33786 {
+    SELECT LEAST("-1", _binary '-1', time'23:59:59.5432');
+}
+expect {
+    -1
+}
+
+test t-33816 {
+    SELECT LEAST("-1", _binary '1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    -1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-33943 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, "-1");
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-33981 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, "-1");
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-34017 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, "-1");
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-34019 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, "-1");
+}
+expect error {
+}
+
+test t-34030 {
+    SELECT LEAST("-1", _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    -1
+}
+
+test t-34042 {
+    SELECT LEAST("-1", _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-34178 {
+    SELECT LEAST("-1", _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    -1
+}
+
+test t-34203 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, "-1");
+}
+expect {
+    -1
+}
+
+test t-34277 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, "-1");
+}
+expect {
+    -1
+}
+
+test t-34282 {
+    SELECT LEAST("-1", _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, time'23:59:59.5432');
+}
+expect {
+    -1
+}
+
+test t-34380 {
+    SELECT LEAST("1", _utf8mb4 'foobar', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    1
+}
+
+test t-34409 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', "1");
+}
+expect {
+    1
+}
+
+test t-34445 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'FOOBAR', "1");
+}
+expect {
+    1
+}
+
+test t-34451 {
+    SELECT LEAST(_binary '1', _binary '0', "1");
+}
+expect {
+    0
+}
+
+test t-34483 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _binary '0', "1");
+}
+expect {
+    0
+}
+
+test t-34492 {
+    SELECT LEAST("1", _binary '0', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    0
+}
+
+test t-34498 {
+    SELECT LEAST("1", _binary '-1', _binary '1');
+}
+expect {
+    -1
+}
+
+test t-34563 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _binary '1', "1");
+}
+expect {
+    1
+}
+
+test t-34580 {
+    SELECT LEAST("1", _binary '1', date'2023-02-01');
+}
+expect {
+    1
+}
+
+test t-34581 {
+    SELECT LEAST(date'2023-02-01', _binary '1', "1");
+}
+expect {
+    1
+}
+
+test t-34750 {
+    SELECT LEAST("1", _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    1
+}
+
+test t-34783 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, "1");
+}
+expect {
+    1
+}
+
+test t-34790 {
+    SELECT LEAST("1", _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, time'120:59:59');
+}
+expect {
+    1
+}
+
+test t-34797 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, "1");
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-34803 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, "1");
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-34836 {
+    SELECT LEAST("1", _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-34859 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, "1");
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-34866 {
+    SELECT LEAST("1", _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-34888 {
+    SELECT LEAST("1", _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-34918 {
+    SELECT LEAST("1", _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-34945 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, "1");
+}
+expect error {
+}
+
+test t-34982 {
+    SELECT LEAST("1", _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    1
+}
+
+test t-35055 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, "1");
+}
+expect {
+    1
+}
+
+test t-35101 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'FOOBAR', _utf8mb4 'foobar');
+}
+expect {
+    -1
+}
+
+test t-35144 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'FOOBAR', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-35152 {
+    SELECT LEAST(_utf8mb4 'foobar', _binary '0', _binary '1');
+}
+expect {
+    0
+}
+
+test t-35153 {
+    SELECT LEAST(_binary '1', _binary '0', _utf8mb4 'foobar');
+}
+expect {
+    0
+}
+
+test t-35158 {
+    SELECT LEAST(_utf8mb4 'foobar', _binary '0', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-35191 {
+    SELECT LEAST(date'2100-02-01', _binary '0', _utf8mb4 'foobar');
+}
+expect {
+    0
+}
+
+test t-35224 {
+    SELECT LEAST(_utf8mb4 'foobar', _binary '-1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-35228 {
+    SELECT LEAST(_utf8mb4 'foobar', _binary '-1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-35277 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _binary '1', _utf8mb4 'foobar');
+}
+expect {
+    1
+}
+
+test t-35391 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar');
+}
+expect {
+    Abc
+}
+
+test t-35408 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-35410 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-35436 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-35454 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-35472 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-35482 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-35510 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-35516 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-35530 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-35578 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-35587 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-35610 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-35640 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-35652 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-35665 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'foobar');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-35678 {
+    SELECT LEAST(_utf8mb4 'foobar', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-35725 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'foobar');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-35743 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'foobar');
+}
+expect {
+    120:59:59
+}
+
+test t-35786 {
+    SELECT LEAST(_utf8mb4 'foobar', date'2100-02-01', time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-35809 {
+    SELECT LEAST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _binary '0', _utf8mb4 'FOOBAR');
+}
+expect {
+    0
+}
+
+test t-35828 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _binary '0', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    0
+}
+
+test t-35838 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _binary '0', date'2023-02-01');
+}
+expect {
+    0
+}
+
+test t-36033 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR');
+}
+expect {
+    Abc
+}
+
+test t-36072 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-36112 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_ai_ci,COERCIBLE) for operation 'least'
+test t-36121 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR');
+}
+expect error {
+}
+
+test t-36141 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR');
+}
+expect {
+    23:59:59.5432
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-36214 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-36227 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR');
+}
+expect {
+    2024-02-18
+}
+
+test t-36266 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_ai_ci,COERCIBLE), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-36296 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-36312 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-36314 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-36393 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'FOOBAR');
+}
+expect {
+    120:59:59
+}
+
+test t-36438 {
+    SELECT LEAST(_utf8mb4 'FOOBAR', timestamp'2020-12-31 23:59:59', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-36484 {
+    SELECT LEAST(_binary '0', _binary '-1', date'2024-02-18');
+}
+expect {
+    -1
+}
+
+test t-36514 {
+    SELECT LEAST(_binary '0', _binary '1', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+test t-36542 {
+    SELECT LEAST(_binary '0', _binary '1', time'120:59:59');
+}
+expect {
+    0
+}
+
+test t-36633 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _binary '0');
+}
+expect {
+    0
+}
+
+test t-36638 {
+    SELECT LEAST(_binary '0', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-36689 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _binary '0');
+}
+expect error {
+}
+
+test t-36694 {
+    SELECT LEAST(_binary '0', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, date'2024-02-18');
+}
+expect {
+    0
+}
+
+test t-36700 {
+    SELECT LEAST(_binary '0', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-36756 {
+    SELECT LEAST(_binary '0', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-36801 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _binary '0');
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-36819 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _binary '0');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-36844 {
+    SELECT LEAST(_binary '0', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-36894 {
+    SELECT LEAST(_binary '0', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-36897 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _binary '0');
+}
+expect error {
+}
+
+test t-36913 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _binary '0');
+}
+expect {
+    0
+}
+
+test t-36916 {
+    SELECT LEAST(_binary '0', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, time'120:59:59');
+}
+expect {
+    0
+}
+
+test t-36937 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _binary '0');
+}
+expect {
+    0
+}
+
+test t-36951 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '0');
+}
+expect {
+    0
+}
+
+test t-36954 {
+    SELECT LEAST(_binary '0', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    0
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-36961 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _binary '0');
+}
+expect error {
+}
+
+test t-36974 {
+    SELECT LEAST(_binary '0', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, time'23:59:59.5432');
+}
+expect {
+    0
+}
+
+test t-37000 {
+    SELECT LEAST(_binary '0', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    0
+}
+
+test t-37016 {
+    SELECT LEAST(_binary '0', date'2024-02-18', time'23:59:59.5432');
+}
+expect {
+    0
+}
+
+test t-37060 {
+    SELECT LEAST(_binary '-1', _binary '1', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-37061 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _binary '1', _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37070 {
+    SELECT LEAST(_binary '-1', _binary '1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    -1
+}
+
+test t-37094 {
+    SELECT LEAST(_binary '-1', _binary '1', time'120:59:59');
+}
+expect {
+    -1
+}
+
+test t-37190 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-37211 {
+    SELECT LEAST(date'2023-02-01', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-37240 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-37242 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-37246 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, date'2024-02-18');
+}
+expect {
+    -1
+}
+
+test t-37253 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37285 {
+    SELECT LEAST(date'2023-02-01', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37296 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+test t-37362 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    -1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-37370 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-37400 {
+    SELECT LEAST(_binary '-1', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-37403 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect error {
+}
+
+test t-37419 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37437 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37440 {
+    SELECT LEAST(_binary '-1', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    -1
+}
+
+test t-37463 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37489 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _binary '-1');
+}
+expect {
+    -1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-37494 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-37508 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, time'23:59:59.5432');
+}
+expect {
+    -1
+}
+
+test t-37537 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37539 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _binary '-1');
+}
+expect {
+    -1
+}
+
+test t-37556 {
+    SELECT LEAST(_binary '-1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, time'23:59:59.5432');
+}
+expect {
+    -1
+}
+
+test t-37701 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _binary '1');
+}
+expect {
+    1
+}
+
+test t-37730 {
+    SELECT LEAST(_binary '1', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-37783 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _binary '1');
+}
+expect error {
+}
+
+test t-37798 {
+    SELECT LEAST(_binary '1', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-37844 {
+    SELECT LEAST(_binary '1', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-37857 {
+    SELECT LEAST(date'2023-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _binary '1');
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-37882 {
+    SELECT LEAST(_binary '1', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-37893 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _binary '1');
+}
+expect {
+    1
+}
+
+test t-37968 {
+    SELECT LEAST(_binary '1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-37976 {
+    SELECT LEAST(_binary '1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-37977 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _binary '1');
+}
+expect error {
+}
+
+test t-37999 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '1');
+}
+expect {
+    1
+}
+
+test t-38015 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '1');
+}
+expect {
+    1
+}
+
+test t-38040 {
+    SELECT LEAST(_binary '1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, date'2023-02-01');
+}
+expect {
+    1
+}
+
+test t-38060 {
+    SELECT LEAST(_binary '1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    1
+}
+
+test t-38084 {
+    SELECT LEAST(_binary '1', date'2023-02-01', time'23:59:59.5432');
+}
+expect {
+    1
+}
+
+test t-38096 {
+    SELECT LEAST(_binary '1', timestamp'2020-12-31 23:59:59', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    1
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-38206 {
+    SELECT LEAST(0x0, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-38211 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 0x0);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-38249 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 0x0);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-38341 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 0x0);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-38480 {
+    SELECT LEAST(0x0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-38591 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 0x1);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-38624 {
+    SELECT LEAST(0x1, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-38698 {
+    SELECT LEAST(0x1, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-38730 {
+    SELECT LEAST(0x1, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-38840 {
+    SELECT LEAST(0x1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,COERCIBLE), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-38842 {
+    SELECT LEAST(0x1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (binary,COERCIBLE) for operation 'least'
+test t-38901 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, 0x1);
+}
+expect error {
+}
+
+test t-38992 {
+    SELECT LEAST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Abc
+}
+
+test t-39089 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2100-02-01
+}
+
+test t-39117 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2024-02-18
+}
+
+test t-39133 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Abc
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39167 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-39187 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    120:59:59
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-39188 {
+    SELECT LEAST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39229 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39239 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39241 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39265 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39285 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39315 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39325 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-39338 {
+    SELECT LEAST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, date'2024-02-18', time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-39350 {
+    SELECT LEAST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, date'2100-02-01', timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-39359 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', timestamp'2020-12-31 23:59:59', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-39405 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    120:59:59
+}
+
+test t-39407 {
+    SELECT LEAST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-39409 {
+    SELECT LEAST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-39413 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-39432 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-39500 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-39524 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-39564 {
+    SELECT LEAST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39601 {
+    SELECT LEAST(time'120:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39613 {
+    SELECT LEAST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39645 {
+    SELECT LEAST(date'2023-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39665 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-39687 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', date'2023-02-01', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2023-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39721 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-39739 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-39741 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-39742 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-39775 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    23:59:59.5432
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-39842 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39865 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-39898 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, date'2100-02-01');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39911 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-39930 {
+    SELECT LEAST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-39941 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-40009 {
+    SELECT LEAST(time'23:59:59.5432', timestamp'2020-12-31 23:59:59', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-40013 {
+    SELECT LEAST(time'23:59:59.5432', timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-40054 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-40058 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-40064 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40119 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40173 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40205 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-40216 {
+    SELECT LEAST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, time'120:59:59');
+}
+expect error {
+}
+
+test t-40277 {
+    SELECT LEAST(time'120:59:59', date'2100-02-01', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    120:59:59
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40301 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-40306 {
+    SELECT LEAST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40415 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-40436 {
+    SELECT LEAST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, time'23:59:59.5432');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-40444 {
+    SELECT LEAST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, date'2024-02-18');
+}
+expect error {
+}
+
+test t-40515 {
+    SELECT LEAST(time'23:59:59.5432', date'2100-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2100-02-01
+}
+
+test t-40545 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2024-02-18
+}
+
+test t-40571 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2024-02-18
+}
+
+test t-40574 {
+    SELECT LEAST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40655 {
+    SELECT LEAST(date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-40696 {
+    SELECT LEAST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, time'120:59:59');
+}
+expect error {
+}
+
+test t-40760 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40783 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40785 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-40814 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40825 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-40860 {
+    SELECT LEAST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, timestamp'2025-01-01 00:00:00.123456');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40875 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40877 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-40897 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', date'2023-02-01', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2023-02-01
+}
+
+test t-40899 {
+    SELECT LEAST(time'23:59:59.5432', date'2023-02-01', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2023-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40923 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'least'
+test t-40930 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-40951 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT) for operation 'least'
+test t-41031 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+test t-41053 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', date'2023-02-01', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2023-02-01
+}
+
+test t-41060 {
+    SELECT LEAST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, date'2100-02-01', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-41071 {
+    SELECT LEAST(time'120:59:59', timestamp'2020-12-31 23:59:59', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    120:59:59
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-41150 {
+    SELECT LEAST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, time'23:59:59.5432');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'least'
+test t-41161 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-41187 {
+    SELECT LEAST(time'23:59:59.5432', date'2023-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    2023-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-41218 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, date'2023-02-01');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'least'
+test t-41246 {
+    SELECT LEAST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, time'120:59:59');
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'least'
+test t-41365 {
+    SELECT LEAST(time'23:59:59.5432', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-41375 {
+    SELECT LEAST(timestamp'2025-01-01 00:00:00.123456', date'2024-02-18', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    2024-02-18
+}
+
+test t-41377 {
+    SELECT LEAST(time'23:59:59.5432', date'2024-02-18', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    2024-02-18
+}
+
+test t-41441 {
+    SELECT LEAST(date'2023-02-01', date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    2023-02-01
+}
+
+test t-41445 {
+    SELECT LEAST(timestamp'2020-12-31 23:59:59', date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-41473 {
+    SELECT LEAST(time'23:59:59.5432', timestamp'2020-12-31 23:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-41533 {
+    SELECT LEAST(time'23:59:59.5432', timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-41535 {
+    SELECT LEAST(time'120:59:59', timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    120:59:59
+}
+
+test t-41549 {
+    SELECT LEAST(time'120:59:59', date'2024-02-18', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    120:59:59
+}
+
+test t-41575 {
+    SELECT LEAST(time'23:59:59.5432', timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-41656 {
+    SELECT GREATEST(NULL, 0.0);
+}
+expect {
+    NULL
+}
+
+test t-41692 {
+    SELECT GREATEST(NULL, _utf8mb4 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-41729 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, NULL);
+}
+expect {
+    NULL
+}
+
+test t-41776 {
+    SELECT GREATEST(0, CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-41806 {
+    SELECT GREATEST(0, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-41825 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, 0);
+}
+expect {
+    ノ東京の
+}
+
+test t-41876 {
+    SELECT GREATEST(-1, "0");
+}
+expect {
+    0
+}
+
+test t-41887 {
+    SELECT GREATEST(_binary '0', -1);
+}
+expect {
+    0
+}
+
+test t-41913 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, -1);
+}
+expect {
+    の東京ノ
+}
+
+test t-41948 {
+    SELECT GREATEST(1, 0.0E0);
+}
+expect {
+    1
+}
+
+test t-41970 {
+    SELECT GREATEST(1, "-1");
+}
+expect {
+    1
+}
+
+test t-41990 {
+    SELECT GREATEST(1, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-41991 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 1);
+}
+expect {
+    aBC
+}
+
+test t-42001 {
+    SELECT GREATEST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 1);
+}
+expect {
+    가
+}
+
+test t-42058 {
+    SELECT GREATEST(0.0, "0");
+}
+expect {
+    0.0
+}
+
+test t-42070 {
+    SELECT GREATEST(0.0, _binary '-1');
+}
+expect {
+    0.0
+}
+
+test t-42074 {
+    SELECT GREATEST(0.0, 0x0);
+}
+expect {
+    0.0
+}
+
+test t-42112 {
+    SELECT GREATEST(0.0, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.0
+}
+
+test t-42120 {
+    SELECT GREATEST(1.0, -1.0);
+}
+expect {
+    1.0
+}
+
+test t-42179 {
+    SELECT GREATEST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    가
+}
+
+test t-42199 {
+    SELECT GREATEST(date'2100-02-01', 1.0);
+}
+expect {
+    2100-02-01
+}
+
+test t-42219 {
+    SELECT GREATEST(-9223372036854775808, -1.0);
+}
+expect {
+    -1.0
+}
+
+test t-42243 {
+    SELECT GREATEST(_binary '0', -1.0);
+}
+expect {
+    0
+}
+
+test t-42258 {
+    SELECT GREATEST(-1.0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-42275 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, -1.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-42334 {
+    SELECT GREATEST(1.0E0, 0x1);
+}
+expect {
+    1
+}
+
+test t-42344 {
+    SELECT GREATEST(1.0E0, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-42355 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, 1.0E0);
+}
+expect {
+    ノ東京の
+}
+
+test t-42359 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, 1.0E0);
+}
+expect {
+    ノ東京の
+}
+
+test t-42363 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, 1.0E0);
+}
+expect {
+    ノ東京の
+}
+
+test t-42366 {
+    SELECT GREATEST(1.0E0, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-42377 {
+    SELECT GREATEST(time'120:59:59', 1.0E0);
+}
+expect {
+    120:59:59
+}
+
+test t-42391 {
+    SELECT GREATEST(CAST(2 AS UNSIGNED), -1.0E0);
+}
+expect {
+    2
+}
+
+test t-42470 {
+    SELECT GREATEST(0.0E0, CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+test t-42483 {
+    SELECT GREATEST("1", 0.0E0);
+}
+expect {
+    1
+}
+
+test t-42511 {
+    SELECT GREATEST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 0.0E0);
+}
+expect {
+    가
+}
+
+test t-42532 {
+    SELECT GREATEST(0.0E0, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-42539 {
+    SELECT GREATEST(time'120:59:59', 0.0E0);
+}
+expect {
+    120:59:59
+}
+
+test t-42550 {
+    SELECT GREATEST(18446744073709551615, CAST(420 AS UNSIGNED));
+}
+expect {
+    18446744073709551615
+}
+
+test t-42668 {
+    SELECT GREATEST(9223372036854775807, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-42680 {
+    SELECT GREATEST(9223372036854775807, date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-42697 {
+    SELECT GREATEST(CAST(1 AS UNSIGNED), -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-42716 {
+    SELECT GREATEST(-9223372036854775808, _binary '0');
+}
+expect {
+    0
+}
+
+test t-42725 {
+    SELECT GREATEST(0x1, -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-42766 {
+    SELECT GREATEST(-9223372036854775808, time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-42807 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, CAST(0 AS UNSIGNED));
+}
+expect {
+    Ꜻ
+}
+
+test t-42842 {
+    SELECT GREATEST(CAST(1 AS UNSIGNED), CAST(420 AS UNSIGNED));
+}
+expect {
+    420
+}
+
+test t-42864 {
+    SELECT GREATEST(CAST(1 AS UNSIGNED), 0x0);
+}
+expect {
+    1
+}
+
+test t-42877 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, CAST(1 AS UNSIGNED));
+}
+expect {
+    Ꜻ
+}
+
+test t-42892 {
+    SELECT GREATEST(CAST(1 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-42960 {
+    SELECT GREATEST(CAST(2 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-42976 {
+    SELECT GREATEST(CAST(2 AS UNSIGNED), time'120:59:59');
+}
+expect {
+    2
+}
+
+test t-42986 {
+    SELECT GREATEST(CAST(420 AS UNSIGNED), "1");
+}
+expect {
+    420
+}
+
+test t-43010 {
+    SELECT GREATEST(CAST(420 AS UNSIGNED), _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-43077 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 'foobar');
+}
+expect {
+    foobar
+}
+
+test t-43090 {
+    SELECT GREATEST('foobar', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-43100 {
+    SELECT GREATEST('foobar', timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-43111 {
+    SELECT GREATEST("-1", 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-43162 {
+    SELECT GREATEST('FOOBAR', timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-43167 {
+    SELECT GREATEST(time'23:59:59.5432', 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-43183 {
+    SELECT GREATEST(_binary '1', "0");
+}
+expect {
+    1
+}
+
+test t-43194 {
+    SELECT GREATEST("0", _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-43235 {
+    SELECT GREATEST(_utf8mb4 'FOOBAR', "-1");
+}
+expect {
+    FOOBAR
+}
+
+test t-43252 {
+    SELECT GREATEST("-1", _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-43289 {
+    SELECT GREATEST(_utf8mb4 'foobar', "1");
+}
+expect {
+    foobar
+}
+
+test t-43292 {
+    SELECT GREATEST("1", _binary '0');
+}
+expect {
+    1
+}
+
+test t-43395 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'foobar');
+}
+expect {
+    foobar
+}
+
+test t-43411 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-43433 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'FOOBAR');
+}
+expect {
+    の東京ノ
+}
+
+test t-43451 {
+    SELECT GREATEST(_binary '-1', _binary '0');
+}
+expect {
+    0
+}
+
+test t-43453 {
+    SELECT GREATEST(_binary '1', _binary '0');
+}
+expect {
+    1
+}
+
+test t-43456 {
+    SELECT GREATEST(_binary '0', 0x1);
+}
+expect {
+    0
+}
+
+test t-43457 {
+    SELECT GREATEST(0x1, _binary '0');
+}
+expect {
+    0
+}
+
+test t-43509 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _binary '-1');
+}
+expect {
+    aBC
+}
+
+test t-43550 {
+    SELECT GREATEST(_binary '1', 0x1);
+}
+expect {
+    1
+}
+
+test t-43560 {
+    SELECT GREATEST(_binary '1', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-43566 {
+    SELECT GREATEST(_binary '1', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ㉮
+}
+
+test t-43600 {
+    SELECT GREATEST(0x0, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-43656 {
+    SELECT GREATEST(0x1, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-43696 {
+    SELECT GREATEST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-43711 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    2100-02-01
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_ci,EXPLICIT) and (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-43808 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT) and (utf8mb4_0900_as_ci,EXPLICIT) for operation 'greatest'
+test t-43837 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-43949 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1267 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) and (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-43951 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-43954 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-44028 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-44041 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-44101 {
+    SELECT GREATEST(-1, 0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44194 {
+    SELECT GREATEST(NULL, 0, time'120:59:59');
+}
+expect {
+    NULL
+}
+
+test t-44197 {
+    SELECT GREATEST(1, -1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44232 {
+    SELECT GREATEST(NULL, -1, "1");
+}
+expect {
+    NULL
+}
+
+test t-44235 {
+    SELECT GREATEST(_utf8mb4 'foobar', -1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44254 {
+    SELECT GREATEST(NULL, -1, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-44276 {
+    SELECT GREATEST(NULL, -1, date'2024-02-18');
+}
+expect {
+    NULL
+}
+
+test t-44312 {
+    SELECT GREATEST(NULL, 1, CAST(2 AS UNSIGNED));
+}
+expect {
+    NULL
+}
+
+test t-44354 {
+    SELECT GREATEST(NULL, 1, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-44359 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44370 {
+    SELECT GREATEST(NULL, 1, date'2023-02-01');
+}
+expect {
+    NULL
+}
+
+test t-44385 {
+    SELECT GREATEST(-1.0, 0.0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44417 {
+    SELECT GREATEST(_utf8mb4 'foobar', 0.0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44455 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, 0.0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44534 {
+    SELECT GREATEST(NULL, 1.0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-44540 {
+    SELECT GREATEST(NULL, 1.0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-44566 {
+    SELECT GREATEST(NULL, -1.0, 18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-44572 {
+    SELECT GREATEST(NULL, -1.0, CAST(0 AS UNSIGNED));
+}
+expect {
+    NULL
+}
+
+test t-44574 {
+    SELECT GREATEST(NULL, -1.0, CAST(1 AS UNSIGNED));
+}
+expect {
+    NULL
+}
+
+test t-44590 {
+    SELECT GREATEST(NULL, -1.0, _utf8mb4 'foobar');
+}
+expect {
+    NULL
+}
+
+test t-44601 {
+    SELECT GREATEST(0x0, -1.0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44666 {
+    SELECT GREATEST(NULL, 1.0E0, 'FOOBAR');
+}
+expect {
+    NULL
+}
+
+test t-44688 {
+    SELECT GREATEST(NULL, 1.0E0, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-44723 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', 1.0E0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44782 {
+    SELECT GREATEST(NULL, -1.0E0, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-44789 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, -1.0E0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-44866 {
+    SELECT GREATEST(NULL, 0.0E0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-44984 {
+    SELECT GREATEST(NULL, 9223372036854775807, "0");
+}
+expect {
+    NULL
+}
+
+test t-44993 {
+    SELECT GREATEST(_utf8mb4 'FOOBAR', 9223372036854775807, NULL);
+}
+expect {
+    NULL
+}
+
+test t-45069 {
+    SELECT GREATEST(_binary '0', -9223372036854775808, NULL);
+}
+expect {
+    NULL
+}
+
+test t-45092 {
+    SELECT GREATEST(NULL, -9223372036854775808, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-45123 {
+    SELECT GREATEST(CAST(2 AS UNSIGNED), CAST(0 AS UNSIGNED), NULL);
+}
+expect {
+    NULL
+}
+
+test t-45141 {
+    SELECT GREATEST(_binary '0', CAST(0 AS UNSIGNED), NULL);
+}
+expect {
+    NULL
+}
+
+test t-45177 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, CAST(0 AS UNSIGNED), NULL);
+}
+expect {
+    NULL
+}
+
+test t-45209 {
+    SELECT GREATEST(_utf8mb4 'FOOBAR', CAST(1 AS UNSIGNED), NULL);
+}
+expect {
+    NULL
+}
+
+test t-45235 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, CAST(1 AS UNSIGNED), NULL);
+}
+expect {
+    NULL
+}
+
+test t-45334 {
+    SELECT GREATEST(NULL, CAST(420 AS UNSIGNED), "0");
+}
+expect {
+    NULL
+}
+
+test t-45417 {
+    SELECT GREATEST(0x1, 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-45470 {
+    SELECT GREATEST(NULL, 'FOOBAR', _binary '0');
+}
+expect {
+    NULL
+}
+
+test t-45513 {
+    SELECT GREATEST(date'2100-02-01', 'FOOBAR', NULL);
+}
+expect {
+    NULL
+}
+
+test t-45550 {
+    SELECT GREATEST(NULL, "0", _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-45616 {
+    SELECT GREATEST(NULL, "-1", _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-45621 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, "-1", NULL);
+}
+expect {
+    NULL
+}
+
+test t-45634 {
+    SELECT GREATEST(NULL, "-1", timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    NULL
+}
+
+test t-45637 {
+    SELECT GREATEST(time'23:59:59.5432', "-1", NULL);
+}
+expect {
+    NULL
+}
+
+test t-45712 {
+    SELECT GREATEST(NULL, _utf8mb4 'foobar', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-45729 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-45826 {
+    SELECT GREATEST(NULL, _binary '0', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-45848 {
+    SELECT GREATEST(NULL, _binary '0', time'23:59:59.5432');
+}
+expect {
+    NULL
+}
+
+test t-45853 {
+    SELECT GREATEST(_binary '1', _binary '-1', NULL);
+}
+expect {
+    NULL
+}
+
+test t-45867 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _binary '-1', NULL);
+}
+expect {
+    NULL
+}
+
+test t-45872 {
+    SELECT GREATEST(NULL, _binary '-1', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+test t-45926 {
+    SELECT GREATEST(NULL, _binary '1', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    NULL
+}
+
+test t-45932 {
+    SELECT GREATEST(NULL, _binary '1', date'2024-02-18');
+}
+expect {
+    NULL
+}
+
+test t-45941 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', _binary '1', NULL);
+}
+expect {
+    NULL
+}
+
+test t-45965 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 0x0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-45985 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', 0x0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-46016 {
+    SELECT GREATEST(NULL, 0x1, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    NULL
+}
+
+test t-46045 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, NULL);
+}
+expect {
+    NULL
+}
+
+test t-46065 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, NULL);
+}
+expect {
+    NULL
+}
+
+test t-46104 {
+    SELECT GREATEST(NULL, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,IGNORABLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-46120 {
+    SELECT GREATEST(NULL, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-46201 {
+    SELECT GREATEST(date'2023-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, NULL);
+}
+expect {
+    NULL
+}
+
+test t-46242 {
+    SELECT GREATEST(NULL, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,IGNORABLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-46248 {
+    SELECT GREATEST(NULL, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,IGNORABLE), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-46270 {
+    SELECT GREATEST(NULL, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-46287 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, NULL);
+}
+expect {
+    NULL
+}
+
+test t-46337 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, NULL);
+}
+expect {
+    NULL
+}
+
+test t-46360 {
+    SELECT GREATEST(NULL, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, time'120:59:59');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (binary,IGNORABLE), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'greatest'
+test t-46362 {
+    SELECT GREATEST(NULL, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-46366 {
+    SELECT GREATEST(NULL, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, date'2024-02-18');
+}
+expect {
+    NULL
+}
+
+test t-46411 {
+    SELECT GREATEST(date'2023-02-01', date'2024-02-18', NULL);
+}
+expect {
+    NULL
+}
+
+test t-46436 {
+    SELECT GREATEST(NULL, date'2100-02-01', time'23:59:59.5432');
+}
+expect {
+    NULL
+}
+
+test t-46449 {
+    SELECT GREATEST(time'120:59:59', timestamp'2025-01-01 00:00:00.123456', NULL);
+}
+expect {
+    NULL
+}
+
+test t-46459 {
+    SELECT GREATEST(-1.0, -1, 0);
+}
+expect {
+    0.0
+}
+
+test t-46466 {
+    SELECT GREATEST(0, -1, 18446744073709551615);
+}
+expect {
+    18446744073709551615
+}
+
+test t-46551 {
+    SELECT GREATEST(-1.0, 1, 0);
+}
+expect {
+    1.0
+}
+
+test t-46563 {
+    SELECT GREATEST(-9223372036854775808, 1, 0);
+}
+expect {
+    1
+}
+
+test t-46564 {
+    SELECT GREATEST(0, 1, CAST(0 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-46585 {
+    SELECT GREATEST(_utf8mb4 'FOOBAR', 1, 0);
+}
+expect {
+    FOOBAR
+}
+
+test t-46587 {
+    SELECT GREATEST(_binary '0', 1, 0);
+}
+expect {
+    1
+}
+
+test t-46608 {
+    SELECT GREATEST(0, 1, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+test t-46638 {
+    SELECT GREATEST(0, 0.0, 1.0);
+}
+expect {
+    1.0
+}
+
+test t-46746 {
+    SELECT GREATEST(0, 1.0, CAST(2 AS UNSIGNED));
+}
+expect {
+    2.0
+}
+
+test t-46823 {
+    SELECT GREATEST(18446744073709551615, -1.0, 0);
+}
+expect {
+    18446744073709551615.0
+}
+
+test t-46840 {
+    SELECT GREATEST(0, -1.0, "0");
+}
+expect {
+    0
+}
+
+test t-46871 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, -1.0, 0);
+}
+expect {
+    Ꜹ
+}
+
+test t-46876 {
+    SELECT GREATEST(0, -1.0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-46905 {
+    SELECT GREATEST(0.0E0, 1.0E0, 0);
+}
+expect {
+    1
+}
+
+test t-46935 {
+    SELECT GREATEST(_binary '0', 1.0E0, 0);
+}
+expect {
+    1
+}
+
+test t-46997 {
+    SELECT GREATEST(CAST(1 AS UNSIGNED), -1.0E0, 0);
+}
+expect {
+    1
+}
+
+test t-47016 {
+    SELECT GREATEST(0, -1.0E0, _binary '0');
+}
+expect {
+    0
+}
+
+test t-47061 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', -1.0E0, 0);
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-47160 {
+    SELECT GREATEST(0, 18446744073709551615, 'foobar');
+}
+expect {
+    foobar
+}
+
+test t-47189 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 18446744073709551615, 0);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-47208 {
+    SELECT GREATEST(0, 18446744073709551615, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-47232 {
+    SELECT GREATEST(0, 9223372036854775807, CAST(2 AS UNSIGNED));
+}
+expect {
+    9223372036854775807
+}
+
+test t-47251 {
+    SELECT GREATEST(_binary '0', 9223372036854775807, 0);
+}
+expect {
+    9223372036854775807
+}
+
+test t-47267 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, 9223372036854775807, 0);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-47375 {
+    SELECT GREATEST(time'120:59:59', -9223372036854775808, 0);
+}
+expect {
+    120:59:59
+}
+
+test t-47454 {
+    SELECT GREATEST(0, CAST(1 AS UNSIGNED), 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-47525 {
+    SELECT GREATEST("0", CAST(2 AS UNSIGNED), 0);
+}
+expect {
+    2
+}
+
+test t-47531 {
+    SELECT GREATEST(_utf8mb4 'foobar', CAST(2 AS UNSIGNED), 0);
+}
+expect {
+    foobar
+}
+
+test t-47540 {
+    SELECT GREATEST(0, CAST(2 AS UNSIGNED), 0x0);
+}
+expect {
+    2
+}
+
+test t-47548 {
+    SELECT GREATEST(0, CAST(2 AS UNSIGNED), _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-47684 {
+    SELECT GREATEST(0, 'foobar', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    foobar
+}
+
+test t-47714 {
+    SELECT GREATEST(0, 'foobar', time'120:59:59');
+}
+expect {
+    foobar
+}
+
+test t-47717 {
+    SELECT GREATEST("0", 'FOOBAR', 0);
+}
+expect {
+    FOOBAR
+}
+
+test t-47735 {
+    SELECT GREATEST(0x1, 'FOOBAR', 0);
+}
+expect {
+    FOOBAR
+}
+
+test t-47756 {
+    SELECT GREATEST(0, 'FOOBAR', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-47792 {
+    SELECT GREATEST(0, "0", 0x0);
+}
+expect {
+    0
+}
+
+test t-47798 {
+    SELECT GREATEST(0, "0", _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-47828 {
+    SELECT GREATEST(0, "0", date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-47834 {
+    SELECT GREATEST(0, "0", time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-47839 {
+    SELECT GREATEST("1", "-1", 0);
+}
+expect {
+    1
+}
+
+test t-47865 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, "-1", 0);
+}
+expect {
+    Ꜹ
+}
+
+test t-47888 {
+    SELECT GREATEST(0, "-1", timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-47939 {
+    SELECT GREATEST(date'2024-02-18', "1", 0);
+}
+expect {
+    2024-02-18
+}
+
+test t-47949 {
+    SELECT GREATEST(time'23:59:59.5432', "1", 0);
+}
+expect {
+    23:59:59.5432
+}
+
+test t-47980 {
+    SELECT GREATEST(0, _utf8mb4 'foobar', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-48003 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'foobar', 0);
+}
+expect {
+    foobar
+}
+
+test t-48005 {
+    SELECT GREATEST(time'120:59:59', _utf8mb4 'foobar', 0);
+}
+expect {
+    foobar
+}
+
+test t-48011 {
+    SELECT GREATEST(_binary '1', _utf8mb4 'FOOBAR', 0);
+}
+expect {
+    FOOBAR
+}
+
+test t-48021 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', 0);
+}
+expect {
+    FOOBAR
+}
+
+test t-48023 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', 0);
+}
+expect {
+    FOOBAR
+}
+
+test t-48037 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'FOOBAR', 0);
+}
+expect {
+    の東京ノ
+}
+
+test t-48052 {
+    SELECT GREATEST(0, _utf8mb4 'FOOBAR', timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-48161 {
+    SELECT GREATEST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _binary '1', 0);
+}
+expect {
+    Abc
+}
+
+test t-48162 {
+    SELECT GREATEST(0, _binary '1', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-48163 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _binary '1', 0);
+}
+expect {
+    aBC
+}
+
+test t-48164 {
+    SELECT GREATEST(0, _binary '1', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-48183 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _binary '1', 0);
+}
+expect {
+    ノ東京の
+}
+
+test t-48258 {
+    SELECT GREATEST(0, 0x1, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-48311 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect error {
+}
+
+test t-48339 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect {
+    ㉮
+}
+
+test t-48359 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-48378 {
+    SELECT GREATEST(0, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-48383 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-48414 {
+    SELECT GREATEST(0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-48433 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect {
+    ÁḆĈ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-48446 {
+    SELECT GREATEST(0, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-48469 {
+    SELECT GREATEST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect {
+    가
+}
+
+test t-48470 {
+    SELECT GREATEST(0, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ㉮
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-48478 {
+    SELECT GREATEST(0, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect error {
+}
+
+test t-48499 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 0);
+}
+expect {
+    가
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-48502 {
+    SELECT GREATEST(0, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-48571 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 0);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'greatest'
+test t-48582 {
+    SELECT GREATEST(0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-48598 {
+    SELECT GREATEST(0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-48622 {
+    SELECT GREATEST(0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-48648 {
+    SELECT GREATEST(0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, time'23:59:59.5432');
+}
+expect {
+    の東京ノ
+}
+
+test t-48667 {
+    SELECT GREATEST(date'2023-02-01', date'2024-02-18', 0);
+}
+expect {
+    2024-02-18
+}
+
+test t-48749 {
+    SELECT GREATEST(_binary '0', 1, -1);
+}
+expect {
+    1
+}
+
+test t-48805 {
+    SELECT GREATEST(1.0E0, 0.0, -1);
+}
+expect {
+    1
+}
+
+test t-48836 {
+    SELECT GREATEST(-1, 0.0, _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-48888 {
+    SELECT GREATEST(-1, 0.0, time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-48899 {
+    SELECT GREATEST(18446744073709551615, 1.0, -1);
+}
+expect {
+    18446744073709551615.0
+}
+
+test t-48926 {
+    SELECT GREATEST(-1, 1.0, _binary '0');
+}
+expect {
+    1.0
+}
+
+test t-48931 {
+    SELECT GREATEST(_binary '1', 1.0, -1);
+}
+expect {
+    1.0
+}
+
+test t-48934 {
+    SELECT GREATEST(-1, 1.0, 0x1);
+}
+expect {
+    1.0
+}
+
+test t-48942 {
+    SELECT GREATEST(-1, 1.0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-48962 {
+    SELECT GREATEST(-1, 1.0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-48965 {
+    SELECT GREATEST(date'2024-02-18', 1.0, -1);
+}
+expect {
+    2024-02-18
+}
+
+test t-48978 {
+    SELECT GREATEST(-1, -1.0, 1.0E0);
+}
+expect {
+    1
+}
+
+test t-49005 {
+    SELECT GREATEST("-1", -1.0, -1);
+}
+expect {
+    -1.0
+}
+
+test t-49051 {
+    SELECT GREATEST(date'2024-02-18', -1.0, -1);
+}
+expect {
+    2024-02-18
+}
+
+test t-49055 {
+    SELECT GREATEST(date'2100-02-01', -1.0, -1);
+}
+expect {
+    2100-02-01
+}
+
+test t-49057 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', -1.0, -1);
+}
+expect {
+    2020-12-31 23:59:59.0
+}
+
+test t-49062 {
+    SELECT GREATEST(-1, -1.0, time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-49085 {
+    SELECT GREATEST('FOOBAR', 1.0E0, -1);
+}
+expect {
+    FOOBAR
+}
+
+test t-49094 {
+    SELECT GREATEST(-1, 1.0E0, _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-49104 {
+    SELECT GREATEST(-1, 1.0E0, 0x1);
+}
+expect {
+    1
+}
+
+test t-49134 {
+    SELECT GREATEST(-1, 1.0E0, date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-49135 {
+    SELECT GREATEST(date'2024-02-18', 1.0E0, -1);
+}
+expect {
+    2024-02-18
+}
+
+test t-49194 {
+    SELECT GREATEST(-1, -1.0E0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-49220 {
+    SELECT GREATEST(-1, -1.0E0, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-49274 {
+    SELECT GREATEST(-1, 0.0E0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-49276 {
+    SELECT GREATEST(-1, 0.0E0, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-49289 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, 0.0E0, -1);
+}
+expect {
+    の東京ノ
+}
+
+test t-49304 {
+    SELECT GREATEST(-1, 0.0E0, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-49331 {
+    SELECT GREATEST("1", 18446744073709551615, -1);
+}
+expect {
+    18446744073709551615
+}
+
+test t-49345 {
+    SELECT GREATEST(0x1, 18446744073709551615, -1);
+}
+expect {
+    18446744073709551615
+}
+
+test t-49363 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 18446744073709551615, -1);
+}
+expect {
+    の東京ノ
+}
+
+test t-49393 {
+    SELECT GREATEST(CAST(1 AS UNSIGNED), 9223372036854775807, -1);
+}
+expect {
+    9223372036854775807
+}
+
+test t-49396 {
+    SELECT GREATEST(-1, 9223372036854775807, CAST(420 AS UNSIGNED));
+}
+expect {
+    9223372036854775807
+}
+
+test t-49456 {
+    SELECT GREATEST(-1, 9223372036854775807, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+test t-49486 {
+    SELECT GREATEST(-1, -9223372036854775808, _binary '0');
+}
+expect {
+    0
+}
+
+test t-49494 {
+    SELECT GREATEST(-1, -9223372036854775808, 0x1);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-49536 {
+    SELECT GREATEST(-1, -9223372036854775808, time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-49608 {
+    SELECT GREATEST(-1, CAST(0 AS UNSIGNED), time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-49667 {
+    SELECT GREATEST(date'2024-02-18', CAST(1 AS UNSIGNED), -1);
+}
+expect {
+    2024-02-18
+}
+
+test t-49686 {
+    SELECT GREATEST(-1, CAST(2 AS UNSIGNED), "0");
+}
+expect {
+    2
+}
+
+test t-49708 {
+    SELECT GREATEST(-1, CAST(2 AS UNSIGNED), _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-49724 {
+    SELECT GREATEST(-1, CAST(2 AS UNSIGNED), _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-49738 {
+    SELECT GREATEST(-1, CAST(2 AS UNSIGNED), date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-49795 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, CAST(420 AS UNSIGNED), -1);
+}
+expect {
+    ノ東京の
+}
+
+test t-49799 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, CAST(420 AS UNSIGNED), -1);
+}
+expect {
+    ノ東京の
+}
+
+test t-49828 {
+    SELECT GREATEST(-1, 'foobar', _binary '-1');
+}
+expect {
+    foobar
+}
+
+test t-49859 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, 'foobar', -1);
+}
+expect {
+    ノ東京の
+}
+
+test t-49890 {
+    SELECT GREATEST(-1, 'FOOBAR', _binary '-1');
+}
+expect {
+    FOOBAR
+}
+
+test t-49897 {
+    SELECT GREATEST(0x1, 'FOOBAR', -1);
+}
+expect {
+    FOOBAR
+}
+
+test t-49922 {
+    SELECT GREATEST(-1, 'FOOBAR', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-49928 {
+    SELECT GREATEST(-1, 'FOOBAR', date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-49954 {
+    SELECT GREATEST(-1, "0", 0x0);
+}
+expect {
+    0
+}
+
+test t-49973 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, "0", -1);
+}
+expect {
+    ㉮
+}
+
+test t-49979 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, "0", -1);
+}
+expect {
+    の東京ノ
+}
+
+test t-50004 {
+    SELECT GREATEST(-1, "-1", _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-50062 {
+    SELECT GREATEST(-1, "1", _binary '0');
+}
+expect {
+    1
+}
+
+test t-50158 {
+    SELECT GREATEST(-1, _utf8mb4 'foobar', date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-50175 {
+    SELECT GREATEST(0x0, _utf8mb4 'FOOBAR', -1);
+}
+expect {
+    FOOBAR
+}
+
+test t-50187 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', -1);
+}
+expect {
+    FOOBAR
+}
+
+test t-50221 {
+    SELECT GREATEST(_binary '-1', _binary '0', -1);
+}
+expect {
+    0
+}
+
+test t-50250 {
+    SELECT GREATEST(-1, _binary '0', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-50258 {
+    SELECT GREATEST(-1, _binary '0', date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-50271 {
+    SELECT GREATEST(_binary '1', _binary '-1', -1);
+}
+expect {
+    1
+}
+
+test t-50287 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _binary '-1', -1);
+}
+expect {
+    Ꜹ
+}
+
+test t-50351 {
+    SELECT GREATEST(date'2024-02-18', _binary '1', -1);
+}
+expect {
+    2024-02-18
+}
+
+test t-50354 {
+    SELECT GREATEST(-1, _binary '1', date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-50355 {
+    SELECT GREATEST(date'2100-02-01', _binary '1', -1);
+}
+expect {
+    2100-02-01
+}
+
+test t-50407 {
+    SELECT GREATEST(time'120:59:59', 0x0, -1);
+}
+expect {
+    120:59:59
+}
+
+test t-50414 {
+    SELECT GREATEST(-1, 0x1, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-50442 {
+    SELECT GREATEST(-1, 0x1, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'greatest'
+test t-50472 {
+    SELECT GREATEST(-1, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-50500 {
+    SELECT GREATEST(-1, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ㉮
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'greatest'
+test t-50510 {
+    SELECT GREATEST(-1, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-50565 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, -1);
+}
+expect {
+    Ꜻ
+}
+
+test t-50570 {
+    SELECT GREATEST(-1, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ㉮
+}
+
+test t-50590 {
+    SELECT GREATEST(-1, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-50613 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, -1);
+}
+expect error {
+}
+
+test t-50618 {
+    SELECT GREATEST(-1, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-50627 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, -1);
+}
+expect {
+    Ꜻ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-50635 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, -1);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-50641 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, -1);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-50667 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, -1);
+}
+expect error {
+}
+
+test t-50729 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, -1);
+}
+expect {
+    2100-02-01
+}
+
+test t-50734 {
+    SELECT GREATEST(-1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, time'23:59:59.5432');
+}
+expect {
+    の東京ノ
+}
+
+test t-50761 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, -1);
+}
+expect {
+    の東京ノ
+}
+
+test t-50768 {
+    SELECT GREATEST(-1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-50787 {
+    SELECT GREATEST(date'2023-02-01', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, -1);
+}
+expect {
+    2023-02-01
+}
+
+test t-50790 {
+    SELECT GREATEST(-1, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-50840 {
+    SELECT GREATEST(-1, date'2023-02-01', date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-50845 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', date'2023-02-01', -1);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-50894 {
+    SELECT GREATEST(1, 0.0, 'foobar');
+}
+expect {
+    foobar
+}
+
+test t-50915 {
+    SELECT GREATEST(0x0, 0.0, 1);
+}
+expect {
+    1
+}
+
+test t-50936 {
+    SELECT GREATEST(1, 0.0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-50991 {
+    SELECT GREATEST("1", 1.0, 1);
+}
+expect {
+    1.0
+}
+
+test t-51032 {
+    SELECT GREATEST(1, 1.0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-51062 {
+    SELECT GREATEST(1, -1.0, CAST(1 AS UNSIGNED));
+}
+expect {
+    1.0
+}
+
+test t-51087 {
+    SELECT GREATEST(_binary '1', -1.0, 1);
+}
+expect {
+    1
+}
+
+test t-51091 {
+    SELECT GREATEST(0x1, -1.0, 1);
+}
+expect {
+    1
+}
+
+test t-51135 {
+    SELECT GREATEST(-1.0E0, 1.0E0, 1);
+}
+expect {
+    1
+}
+
+test t-51177 {
+    SELECT GREATEST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 1.0E0, 1);
+}
+expect {
+    Abc
+}
+
+test t-51220 {
+    SELECT GREATEST(1, -1.0E0, 18446744073709551615);
+}
+expect {
+    1.8446744073709552e19
+}
+
+test t-51236 {
+    SELECT GREATEST(1, -1.0E0, 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-51263 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, -1.0E0, 1);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-51287 {
+    SELECT GREATEST(date'2024-02-18', -1.0E0, 1);
+}
+expect {
+    2024-02-18
+}
+
+test t-51289 {
+    SELECT GREATEST(date'2023-02-01', -1.0E0, 1);
+}
+expect {
+    2023-02-01
+}
+
+test t-51294 {
+    SELECT GREATEST(1, -1.0E0, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-51380 {
+    SELECT GREATEST(1, 18446744073709551615, 9223372036854775807);
+}
+expect {
+    18446744073709551615
+}
+
+test t-51382 {
+    SELECT GREATEST(1, 18446744073709551615, -9223372036854775808);
+}
+expect {
+    18446744073709551615
+}
+
+test t-51399 {
+    SELECT GREATEST("-1", 18446744073709551615, 1);
+}
+expect {
+    18446744073709551615
+}
+
+test t-51477 {
+    SELECT GREATEST("1", 9223372036854775807, 1);
+}
+expect {
+    9223372036854775807
+}
+
+test t-51480 {
+    SELECT GREATEST(1, 9223372036854775807, _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-51486 {
+    SELECT GREATEST(1, 9223372036854775807, _binary '1');
+}
+expect {
+    9223372036854775807
+}
+
+test t-51530 {
+    SELECT GREATEST(1, 9223372036854775807, time'23:59:59.5432');
+}
+expect {
+    9223372036854775807
+}
+
+test t-51561 {
+    SELECT GREATEST(_binary '1', -9223372036854775808, 1);
+}
+expect {
+    1
+}
+
+test t-51563 {
+    SELECT GREATEST(0x0, -9223372036854775808, 1);
+}
+expect {
+    1
+}
+
+test t-51573 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, -9223372036854775808, 1);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-51617 {
+    SELECT GREATEST('FOOBAR', CAST(0 AS UNSIGNED), 1);
+}
+expect {
+    FOOBAR
+}
+
+test t-51646 {
+    SELECT GREATEST(1, CAST(0 AS UNSIGNED), _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-51680 {
+    SELECT GREATEST(1, CAST(1 AS UNSIGNED), CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+test t-51695 {
+    SELECT GREATEST(_utf8mb4 'foobar', CAST(1 AS UNSIGNED), 1);
+}
+expect {
+    foobar
+}
+
+test t-51724 {
+    SELECT GREATEST(1, CAST(1 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-51731 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, CAST(1 AS UNSIGNED), 1);
+}
+expect {
+    ノ東京の
+}
+
+test t-51756 {
+    SELECT GREATEST(1, CAST(2 AS UNSIGNED), "0");
+}
+expect {
+    2
+}
+
+test t-51770 {
+    SELECT GREATEST(1, CAST(2 AS UNSIGNED), _binary '1');
+}
+expect {
+    2
+}
+
+test t-51777 {
+    SELECT GREATEST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED), 1);
+}
+expect {
+    Abc
+}
+
+test t-51784 {
+    SELECT GREATEST(1, CAST(2 AS UNSIGNED), _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-51817 {
+    SELECT GREATEST(time'120:59:59', CAST(2 AS UNSIGNED), 1);
+}
+expect {
+    2
+}
+
+test t-51833 {
+    SELECT GREATEST(_binary '0', CAST(420 AS UNSIGNED), 1);
+}
+expect {
+    420
+}
+
+test t-51849 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED), 1);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-51899 {
+    SELECT GREATEST(_binary '-1', 'foobar', 1);
+}
+expect {
+    foobar
+}
+
+test t-51932 {
+    SELECT GREATEST(1, 'foobar', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-51973 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 'FOOBAR', 1);
+}
+expect {
+    FOOBAR
+}
+
+test t-51977 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 'FOOBAR', 1);
+}
+expect {
+    FOOBAR
+}
+
+test t-52035 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, "0", 1);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-52061 {
+    SELECT GREATEST(date'2100-02-01', "0", 1);
+}
+expect {
+    2100-02-01
+}
+
+test t-52067 {
+    SELECT GREATEST(time'23:59:59.5432', "0", 1);
+}
+expect {
+    23:59:59.5432
+}
+
+test t-52072 {
+    SELECT GREATEST(1, "-1", _utf8mb4 'foobar');
+}
+expect {
+    foobar
+}
+
+test t-52079 {
+    SELECT GREATEST(_binary '-1', "-1", 1);
+}
+expect {
+    1
+}
+
+test t-52081 {
+    SELECT GREATEST(_binary '1', "-1", 1);
+}
+expect {
+    1
+}
+
+test t-52104 {
+    SELECT GREATEST(1, "-1", _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-52109 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, "-1", 1);
+}
+expect {
+    ノ東京の
+}
+
+test t-52137 {
+    SELECT GREATEST(_binary '1', "1", 1);
+}
+expect {
+    1
+}
+
+test t-52145 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, "1", 1);
+}
+expect {
+    aBC
+}
+
+test t-52160 {
+    SELECT GREATEST(1, "1", _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-52168 {
+    SELECT GREATEST(1, "1", _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-52191 {
+    SELECT GREATEST(_binary '1', _utf8mb4 'foobar', 1);
+}
+expect {
+    foobar
+}
+
+test t-52200 {
+    SELECT GREATEST(1, _utf8mb4 'foobar', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    foobar
+}
+
+test t-52234 {
+    SELECT GREATEST(1, _utf8mb4 'foobar', time'23:59:59.5432');
+}
+expect {
+    foobar
+}
+
+test t-52239 {
+    SELECT GREATEST(_binary '0', _utf8mb4 'FOOBAR', 1);
+}
+expect {
+    FOOBAR
+}
+
+test t-52242 {
+    SELECT GREATEST(1, _utf8mb4 'FOOBAR', _binary '1');
+}
+expect {
+    FOOBAR
+}
+
+test t-52247 {
+    SELECT GREATEST(0x1, _utf8mb4 'FOOBAR', 1);
+}
+expect {
+    FOOBAR
+}
+
+test t-52301 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _binary '0', 1);
+}
+expect {
+    aBC
+}
+
+test t-52362 {
+    SELECT GREATEST(1, _binary '-1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-52374 {
+    SELECT GREATEST(1, _binary '-1', date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-52421 {
+    SELECT GREATEST(date'2024-02-18', _binary '1', 1);
+}
+expect {
+    2024-02-18
+}
+
+test t-52449 {
+    SELECT GREATEST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, 0x0, 1);
+}
+expect {
+    가
+}
+
+test t-52483 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 0x1, 1);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-52496 {
+    SELECT GREATEST(1, 0x1, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-52541 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 1);
+}
+expect error {
+}
+
+test t-52560 {
+    SELECT GREATEST(1, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-52561 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 1);
+}
+expect {
+    ǍḄÇ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-52574 {
+    SELECT GREATEST(1, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+test t-52698 {
+    SELECT GREATEST(1, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, time'120:59:59');
+}
+expect {
+    Ꜻ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-52813 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, 1);
+}
+expect error {
+}
+
+test t-52818 {
+    SELECT GREATEST(1, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-52841 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, 1);
+}
+expect {
+    2100-02-01
+}
+
+test t-52867 {
+    SELECT GREATEST(time'120:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, 1);
+}
+expect {
+    ノ東京の
+}
+
+test t-52878 {
+    SELECT GREATEST(1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-52880 {
+    SELECT GREATEST(1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, time'23:59:59.5432');
+}
+expect {
+    の東京ノ
+}
+
+test t-52974 {
+    SELECT GREATEST(0.0, 1.0, _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-52998 {
+    SELECT GREATEST(0.0, 1.0, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+test t-53011 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, 1.0, 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-53025 {
+    SELECT GREATEST(time'23:59:59.5432', 1.0, 0.0);
+}
+expect {
+    23:59:59.5432
+}
+
+test t-53030 {
+    SELECT GREATEST(0.0, -1.0, -1.0E0);
+}
+expect {
+    0
+}
+
+test t-53057 {
+    SELECT GREATEST("1", -1.0, 0.0);
+}
+expect {
+    1
+}
+
+test t-53078 {
+    SELECT GREATEST(0.0, -1.0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-53097 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, -1.0, 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-53113 {
+    SELECT GREATEST(time'120:59:59', -1.0, 0.0);
+}
+expect {
+    120:59:59
+}
+
+test t-53123 {
+    SELECT GREATEST(-9223372036854775808, 1.0E0, 0.0);
+}
+expect {
+    1
+}
+
+test t-53146 {
+    SELECT GREATEST(0.0, 1.0E0, _binary '0');
+}
+expect {
+    1
+}
+
+test t-53173 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 1.0E0, 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-53204 {
+    SELECT GREATEST(0.0, -1.0E0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-53206 {
+    SELECT GREATEST(0.0, -1.0E0, CAST(0 AS UNSIGNED));
+}
+expect {
+    0
+}
+
+test t-53267 {
+    SELECT GREATEST(date'2024-02-18', -1.0E0, 0.0);
+}
+expect {
+    2024-02-18
+}
+
+test t-53293 {
+    SELECT GREATEST(CAST(420 AS UNSIGNED), 0.0E0, 0.0);
+}
+expect {
+    420
+}
+
+test t-53320 {
+    SELECT GREATEST(0.0, 0.0E0, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-53386 {
+    SELECT GREATEST(0.0, 18446744073709551615, _binary '0');
+}
+expect {
+    18446744073709551615
+}
+
+test t-53414 {
+    SELECT GREATEST(0.0, 18446744073709551615, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-53423 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, 18446744073709551615, 0.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-53444 {
+    SELECT GREATEST(0.0, 9223372036854775807, CAST(2 AS UNSIGNED));
+}
+expect {
+    9223372036854775807.0
+}
+
+test t-53451 {
+    SELECT GREATEST('FOOBAR', 9223372036854775807, 0.0);
+}
+expect {
+    FOOBAR
+}
+
+test t-53481 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 9223372036854775807, 0.0);
+}
+expect {
+    Ꜻ
+}
+
+test t-53488 {
+    SELECT GREATEST(0.0, 9223372036854775807, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-53493 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, 9223372036854775807, 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-53494 {
+    SELECT GREATEST(0.0, 9223372036854775807, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-53506 {
+    SELECT GREATEST(0.0, 9223372036854775807, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.0
+}
+
+test t-53555 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, -9223372036854775808, 0.0);
+}
+expect {
+    Ꜻ
+}
+
+test t-53571 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, -9223372036854775808, 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-53585 {
+    SELECT GREATEST(time'23:59:59.5432', -9223372036854775808, 0.0);
+}
+expect {
+    23:59:59.5432
+}
+
+test t-53662 {
+    SELECT GREATEST(0.0, CAST(1 AS UNSIGNED), CAST(420 AS UNSIGNED));
+}
+expect {
+    420.0
+}
+
+test t-53710 {
+    SELECT GREATEST(0.0, CAST(1 AS UNSIGNED), _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    ノ東京の
+}
+
+test t-53712 {
+    SELECT GREATEST(0.0, CAST(1 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-53852 {
+    SELECT GREATEST(0.0, CAST(420 AS UNSIGNED), date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-53866 {
+    SELECT GREATEST(0.0, 'foobar', "0");
+}
+expect {
+    foobar
+}
+
+test t-53898 {
+    SELECT GREATEST(0.0, 'foobar', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+test t-53947 {
+    SELECT GREATEST(0x1, 'FOOBAR', 0.0);
+}
+expect {
+    FOOBAR
+}
+
+test t-53969 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, 'FOOBAR', 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-54034 {
+    SELECT GREATEST(0.0, "0", _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-54048 {
+    SELECT GREATEST(0.0, "0", time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-54076 {
+    SELECT GREATEST(0.0, "-1", _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜹ
+}
+
+test t-54081 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, "-1", 0.0);
+}
+expect {
+    ㉮
+}
+
+test t-54094 {
+    SELECT GREATEST(0.0, "-1", date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-54097 {
+    SELECT GREATEST(date'2023-02-01', "-1", 0.0);
+}
+expect {
+    2023-02-01
+}
+
+test t-54101 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', "-1", 0.0);
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-54108 {
+    SELECT GREATEST(0.0, "1", _utf8mb4 'foobar');
+}
+expect {
+    foobar
+}
+
+test t-54150 {
+    SELECT GREATEST(0.0, "1", date'2024-02-18');
+}
+expect {
+    2024-02-18
+}
+
+test t-54156 {
+    SELECT GREATEST(0.0, "1", timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-54196 {
+    SELECT GREATEST(0.0, _utf8mb4 'foobar', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-54228 {
+    SELECT GREATEST(0.0, _utf8mb4 'FOOBAR', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    FOOBAR
+}
+
+test t-54238 {
+    SELECT GREATEST(0.0, _utf8mb4 'FOOBAR', _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    FOOBAR
+}
+
+test t-54243 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'FOOBAR', 0.0);
+}
+expect {
+    ㉮
+}
+
+test t-54253 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'FOOBAR', 0.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-54258 {
+    SELECT GREATEST(0.0, _utf8mb4 'FOOBAR', date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-54265 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', _utf8mb4 'FOOBAR', 0.0);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-54321 {
+    SELECT GREATEST(_binary '1', _binary '-1', 0.0);
+}
+expect {
+    1
+}
+
+test t-54357 {
+    SELECT GREATEST(date'2023-02-01', _binary '-1', 0.0);
+}
+expect {
+    2023-02-01
+}
+
+test t-54380 {
+    SELECT GREATEST(0.0, _binary '1', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-54381 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, _binary '1', 0.0);
+}
+expect {
+    Ꜻ
+}
+
+test t-54387 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _binary '1', 0.0);
+}
+expect {
+    ㉮
+}
+
+test t-54396 {
+    SELECT GREATEST(0.0, _binary '1', _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-54407 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', _binary '1', 0.0);
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-54417 {
+    SELECT GREATEST(_utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 0x0, 0.0);
+}
+expect {
+    Abc
+}
+
+test t-54442 {
+    SELECT GREATEST(0.0, 0x0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-54494 {
+    SELECT GREATEST(0.0, 0x1, timestamp'2025-01-01 00:00:00.123456');
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-54499 {
+    SELECT GREATEST(time'120:59:59', 0x1, 0.0);
+}
+expect {
+    120:59:59
+}
+
+test t-54501 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect {
+    Abc
+}
+
+test t-54551 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect {
+    ㉮
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-54561 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-54659 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect error {
+}
+
+test t-54671 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect {
+    2100-02-01
+}
+
+test t-54700 {
+    SELECT GREATEST(0.0, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-54745 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, 0.0);
+}
+expect error {
+}
+
+test t-54786 {
+    SELECT GREATEST(0.0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, time'120:59:59');
+}
+expect {
+    の東京ノ
+}
+
+test t-54877 {
+    SELECT GREATEST(time'120:59:59', _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, 0.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-54941 {
+    SELECT GREATEST('foobar', -1.0, 1.0);
+}
+expect {
+    foobar
+}
+
+test t-54948 {
+    SELECT GREATEST(1.0, -1.0, "1");
+}
+expect {
+    1.0
+}
+
+test t-54952 {
+    SELECT GREATEST(1.0, -1.0, _utf8mb4 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-54960 {
+    SELECT GREATEST(1.0, -1.0, 0x0);
+}
+expect {
+    1.0
+}
+
+test t-54984 {
+    SELECT GREATEST(1.0, -1.0, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-55031 {
+    SELECT GREATEST("-1", 1.0E0, 1.0);
+}
+expect {
+    1.0
+}
+
+test t-55054 {
+    SELECT GREATEST(1.0, 1.0E0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-55057 {
+    SELECT GREATEST(_utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci, 1.0E0, 1.0);
+}
+expect {
+    Ꜻ
+}
+
+test t-55059 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 1.0E0, 1.0);
+}
+expect {
+    Ꜹ
+}
+
+test t-55115 {
+    SELECT GREATEST("1", -1.0E0, 1.0);
+}
+expect {
+    1.0
+}
+
+test t-55126 {
+    SELECT GREATEST(1.0, -1.0E0, 0x0);
+}
+expect {
+    1.0
+}
+
+test t-55178 {
+    SELECT GREATEST(1.0, 0.0E0, CAST(0 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-55227 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 0.0E0, 1.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-55298 {
+    SELECT GREATEST(1.0, 18446744073709551615, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜹ
+}
+
+test t-55304 {
+    SELECT GREATEST(1.0, 18446744073709551615, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-55329 {
+    SELECT GREATEST(time'120:59:59', 18446744073709551615, 1.0);
+}
+expect {
+    18446744073709551615
+}
+
+test t-55404 {
+    SELECT GREATEST(1.0, 9223372036854775807, time'120:59:59');
+}
+expect {
+    9223372036854775807
+}
+
+test t-55416 {
+    SELECT GREATEST(1.0, -9223372036854775808, 'FOOBAR');
+}
+expect {
+    FOOBAR
+}
+
+test t-55420 {
+    SELECT GREATEST(1.0, -9223372036854775808, "-1");
+}
+expect {
+    1.0
+}
+
+test t-55432 {
+    SELECT GREATEST(1.0, -9223372036854775808, _binary '1');
+}
+expect {
+    1.0
+}
+
+test t-55517 {
+    SELECT GREATEST(_utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci, CAST(0 AS UNSIGNED), 1.0);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-55522 {
+    SELECT GREATEST(1.0, CAST(0 AS UNSIGNED), _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+test t-55534 {
+    SELECT GREATEST(1.0, CAST(0 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-55561 {
+    SELECT GREATEST("0", CAST(1 AS UNSIGNED), 1.0);
+}
+expect {
+    1.0
+}
+
+test t-55583 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, CAST(1 AS UNSIGNED), 1.0);
+}
+expect {
+    aBC
+}
+
+test t-55627 {
+    SELECT GREATEST('FOOBAR', CAST(2 AS UNSIGNED), 1.0);
+}
+expect {
+    FOOBAR
+}
+
+test t-55663 {
+    SELECT GREATEST(_utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED), 1.0);
+}
+expect {
+    ㉮
+}
+
+test t-55677 {
+    SELECT GREATEST(date'2024-02-18', CAST(2 AS UNSIGNED), 1.0);
+}
+expect {
+    2024-02-18
+}
+
+test t-55688 {
+    SELECT GREATEST(1.0, CAST(2 AS UNSIGNED), time'120:59:59');
+}
+expect {
+    2
+}
+
+test t-55698 {
+    SELECT GREATEST(1.0, CAST(420 AS UNSIGNED), "1");
+}
+expect {
+    420
+}
+
+test t-55718 {
+    SELECT GREATEST(1.0, CAST(420 AS UNSIGNED), _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-55722 {
+    SELECT GREATEST(1.0, CAST(420 AS UNSIGNED), _utf8mb4 'Ꜻ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜻ
+}
+
+test t-55725 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, CAST(420 AS UNSIGNED), 1.0);
+}
+expect {
+    Ꜹ
+}
+
+test t-55733 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, CAST(420 AS UNSIGNED), 1.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-55755 {
+    SELECT GREATEST(time'120:59:59', CAST(420 AS UNSIGNED), 1.0);
+}
+expect {
+    420
+}
+
+test t-55761 {
+    SELECT GREATEST("-1", 'foobar', 1.0);
+}
+expect {
+    foobar
+}
+
+test t-55774 {
+    SELECT GREATEST(1.0, 'foobar', 0x0);
+}
+expect {
+    foobar
+}
+
+test t-55913 {
+    SELECT GREATEST(_utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, "0", 1.0);
+}
+expect {
+    가
+}
+
+test t-55932 {
+    SELECT GREATEST(1.0, "0", date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-55940 {
+    SELECT GREATEST(1.0, "0", time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-55989 {
+    SELECT GREATEST(date'2023-02-01', "-1", 1.0);
+}
+expect {
+    2023-02-01
+}
+
+test t-55995 {
+    SELECT GREATEST(timestamp'2025-01-01 00:00:00.123456', "-1", 1.0);
+}
+expect {
+    2025-01-01 00:00:00.123456
+}
+
+test t-56033 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, "1", 1.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-56040 {
+    SELECT GREATEST(1.0, "1", _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    ノ東京の
+}
+
+test t-56071 {
+    SELECT GREATEST(_utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'foobar', 1.0);
+}
+expect {
+    foobar
+}
+
+test t-56095 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'foobar', 1.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-56155 {
+    SELECT GREATEST(timestamp'2020-12-31 23:59:59', _utf8mb4 'FOOBAR', 1.0);
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-56208 {
+    SELECT GREATEST(1.0, _binary '0', time'23:59:59.5432');
+}
+expect {
+    23:59:59.5432
+}
+
+test t-56215 {
+    SELECT GREATEST(0x0, _binary '-1', 1.0);
+}
+expect {
+    1.0
+}
+
+test t-56218 {
+    SELECT GREATEST(1.0, _binary '-1', _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Abc
+}
+
+test t-56230 {
+    SELECT GREATEST(1.0, _binary '-1', _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+test t-56269 {
+    SELECT GREATEST(_utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, _binary '1', 1.0);
+}
+expect {
+    ǍḄÇ
+}
+
+test t-56283 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _binary '1', 1.0);
+}
+expect {
+    ノ東京の
+}
+
+test t-56285 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs, _binary '1', 1.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-56304 {
+    SELECT GREATEST(1.0, _binary '1', time'120:59:59');
+}
+expect {
+    120:59:59
+}
+
+test t-56314 {
+    SELECT GREATEST(1.0, 0x0, _utf8mb4 'ÁḆĈ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    ÁḆĈ
+}
+
+test t-56320 {
+    SELECT GREATEST(1.0, 0x0, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    가
+}
+
+test t-56370 {
+    SELECT GREATEST(1.0, 0x1, _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs);
+}
+expect {
+    の東京ノ
+}
+
+test t-56400 {
+    SELECT GREATEST(1.0, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜹ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT) for operation 'greatest'
+test t-56408 {
+    SELECT GREATEST(1.0, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-56417 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'Abc' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect error {
+}
+
+test t-56439 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    Ꜹ
+}
+
+test t-56467 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    aBC
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs_ks,EXPLICIT), (utf8mb4_0900_as_ci,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-56489 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks, _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect error {
+}
+
+test t-56497 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    2100-02-01
+}
+
+test t-56503 {
+    SELECT GREATEST(time'23:59:59.5432', _utf8mb4 'ǍḄÇ' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    ǍḄÇ
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_0900_as_ci,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'greatest'
+test t-56586 {
+    SELECT GREATEST(1.0, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-56590 {
+    SELECT GREATEST(1.0, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-56618 {
+    SELECT GREATEST(1.0, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, date'2023-02-01');
+}
+expect {
+    2023-02-01
+}
+
+test t-56622 {
+    SELECT GREATEST(1.0, _utf8mb4 '가' COLLATE utf8mb4_0900_as_ci, timestamp'2020-12-31 23:59:59');
+}
+expect {
+    2020-12-31 23:59:59.000000
+}
+
+test t-56643 {
+    SELECT GREATEST(date'2024-02-18', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    2024-02-18
+}
+
+test t-56647 {
+    SELECT GREATEST(date'2100-02-01', _utf8mb4 '㉮' COLLATE utf8mb4_0900_as_ci, 1.0);
+}
+expect {
+    2100-02-01
+}
+
+test t-56657 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, _utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, 1.0);
+}
+expect {
+    ノ東京の
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_0900_as_cs,EXPLICIT), (latin1_swedish_ci,NUMERIC) for operation 'greatest'
+test t-56683 {
+    SELECT GREATEST(_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_0900_as_cs, 1.0);
+}
+expect error {
+}
+
+# mysql-error: 1270 HY000 Illegal mix of collations (latin1_swedish_ci,NUMERIC), (utf8mb4_ja_0900_as_cs,EXPLICIT), (utf8mb4_ja_0900_as_cs_ks,EXPLICIT) for operation 'greatest'
+test t-56724 {
+    SELECT GREATEST(1.0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect error {
+}
+
+test t-56730 {
+    SELECT GREATEST(1.0, _utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs, date'2100-02-01');
+}
+expect {
+    2100-02-01
+}
+
+test t-56812 {
+    SELECT GREATEST(-1.0, 1.0E0, -1.0E0);
+}
+expect {
+    1
+}
+
+test t-56846 {
+    SELECT GREATEST(-1.0, 1.0E0, _binary '-1');
+}
+expect {
+    1
+}
+
+test t-56856 {
+    SELECT GREATEST(-1.0, 1.0E0, _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-56864 {
+    SELECT GREATEST(-1.0, 1.0E0, _utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    Ꜹ
+}
+
+test t-56893 {
+    SELECT GREATEST(time'23:59:59.5432', 1.0E0, -1.0);
+}
+expect {
+    23:59:59.5432
+}
+
+test t-56986 {
+    SELECT GREATEST(-1.0, 0.0E0, CAST(1 AS UNSIGNED));
+}
+expect {
+    1
+}
+
+test t-56988 {
+    SELECT GREATEST(-1.0, 0.0E0, CAST(2 AS UNSIGNED));
+}
+expect {
+    2
+}
+
+test t-57009 {
+    SELECT GREATEST(_binary '-1', 0.0E0, -1.0);
+}
+expect {
+    0
+}
+
+test t-57181 {
+    SELECT GREATEST(_utf8mb4 'Ꜹ' COLLATE utf8mb4_0900_as_ci, 9223372036854775807, -1.0);
+}
+expect {
+    Ꜹ
+}
+
+test t-57318 {
+    SELECT GREATEST(-1.0, CAST(0 AS UNSIGNED), _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}
+
+test t-57333 {
+    SELECT GREATEST(_utf8mb4 'の東京ノ' COLLATE utf8mb4_0900_as_cs, CAST(0 AS UNSIGNED), -1.0);
+}
+expect {
+    の東京ノ
+}
+
+test t-57340 {
+    SELECT GREATEST(-1.0, CAST(0 AS UNSIGNED), _utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks);
+}
+expect {
+    の東京ノ
+}
+
+test t-57388 {
+    SELECT GREATEST(-1.0, CAST(1 AS UNSIGNED), _utf8mb4 'aBC' COLLATE utf8mb4_0900_as_ci);
+}
+expect {
+    aBC
+}

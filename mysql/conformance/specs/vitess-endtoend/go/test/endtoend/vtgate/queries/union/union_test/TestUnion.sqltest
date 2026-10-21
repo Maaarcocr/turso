@@ -1,0 +1,80 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/union/union_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1(
+                   id1 bigint,
+                   id2 bigint,
+                   primary key(id1)
+) Engine=InnoDB;
+    insert into t1(id1, id2) values(1, 1), (2, 2);
+}
+
+test l148 {
+    SELECT 1 UNION SELECT 1 UNION SELECT 1;
+}
+expect unordered {
+    1
+}
+
+test l149 {
+    SELECT 1,'a' UNION SELECT 1,'a' UNION SELECT 1,'a' ORDER BY 1;
+}
+expect {
+    1|a
+}
+
+test l150 {
+    SELECT 1,'z' UNION SELECT 2,'q' UNION SELECT 3,'b' ORDER BY 2;
+}
+expect {
+    3|b
+    2|q
+    1|z
+}
+
+test l151 {
+    SELECT 1,'a' UNION ALL SELECT 1,'a' UNION ALL SELECT 1,'a' ORDER BY 1;
+}
+expect {
+    1|a
+    1|a
+    1|a
+}
+
+test l152 {
+    (SELECT 1,'a') UNION ALL (SELECT 1,'a') UNION ALL (SELECT 1,'a') ORDER BY 1;
+}
+expect {
+    1|a
+    1|a
+    1|a
+}
+
+test l153 {
+    (SELECT 1,'a') ORDER BY 1;
+}
+expect {
+    1|a
+}
+
+test l154 {
+    (SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1);
+}
+expect unordered {
+    1|a
+}
+
+@setup s1
+test l155 {
+    (SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2);
+}
+expect unordered {
+    1|a
+    a|2
+}

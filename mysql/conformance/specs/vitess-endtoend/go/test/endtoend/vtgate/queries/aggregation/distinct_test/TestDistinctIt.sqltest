@@ -1,0 +1,130 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/distinct_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table aggr_test
+(
+    id   bigint,
+    val1 varchar(16),
+    val2 bigint,
+    primary key (id)
+) Engine = InnoDB;
+    insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4);
+    insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1);
+}
+
+setup s2 {
+    create table example (
+    id bigint unsigned not null,
+    foo enum('a','b') not null,
+    primary key (id)
+) Engine = InnoDB;
+}
+
+setup s3 {
+    insert into example(id, foo) values (1, 'a'), (2, 'b');
+}
+
+@setup s1
+test l44 {
+    select distinct val1 from aggr_test;
+}
+expect unordered {
+    a
+    b
+    c
+    d
+    e
+}
+
+@setup s1
+test l45 {
+    select distinct val2 from aggr_test;
+}
+expect unordered {
+    1
+    3
+    4
+    NULL
+}
+
+@setup s1
+test l46 {
+    select distinct id from aggr_test;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+}
+
+@setup s2
+test l49 {
+    insert into example(id, foo) values (1, 'a'), (2, 'b');
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+test l50 {
+    select distinct foo from example;
+}
+expect unordered {
+    a
+    b
+}
+
+@setup s1
+test l64 {
+    select distinct val1 from aggr_test order by val1 desc;
+}
+expect {
+    e
+    d
+    c
+    b
+    a
+}
+
+@setup s1
+test l65 {
+    select distinct val1, count(*) from aggr_test group by val1;
+}
+expect unordered {
+    a|2
+    b|1
+    c|2
+    d|1
+    e|2
+}
+
+@setup s1
+test l66 {
+    select distinct val1+val2 from aggr_test;
+}
+expect unordered {
+    1
+    3
+    4
+    NULL
+}
+
+@setup s1
+test l67 {
+    select distinct count(*) from aggr_test group by val1;
+}
+expect unordered {
+    1
+    2
+}

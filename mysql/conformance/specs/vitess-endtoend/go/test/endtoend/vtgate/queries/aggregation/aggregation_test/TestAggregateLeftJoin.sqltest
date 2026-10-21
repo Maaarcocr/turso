@@ -1,0 +1,476 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+}
+
+setup s3 {
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+    insert into t1(t1_id, name, value, shardKey) values (11, 'r', 'r', 1), (3, 'r', 'r', 0);
+    insert into t2(id, shardKey) values (11, 1);
+}
+
+@setup s1
+test l481 {
+    insert into t1(t1_id, name, value, shardKey) values (11, 'r', 'r', 1), (3, 'r', 'r', 0);
+}
+expect unordered {
+}
+
+@setup s2
+test l482 {
+    insert into t2(id, shardKey) values (11, 1);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l484 {
+    SELECT t1.shardkey FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l485 {
+    SELECT count(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s3
+test l486 {
+    SELECT count(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l487 {
+    SELECT count(*) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s3
+test l488 {
+    SELECT sum(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l489 {
+    SELECT sum(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l490 {
+    SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r';
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l493 {
+    SELECT avg(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    0.5000
+}
+
+@setup s1
+@setup s3
+test l494 {
+    SELECT avg(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id;
+}
+expect unordered {
+    1.0000
+}
+
+@setup s1
+@setup s3
+test l517 {
+    SELECT count(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-2 {
+    SELECT count(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-3 {
+    SELECT count(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s3
+test l517-4 {
+    SELECT count(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-5 {
+    SELECT count(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-6 {
+    SELECT count(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-7 {
+    SELECT count(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-8 {
+    SELECT count(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l517-9 {
+    SELECT count(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-10 {
+    SELECT count(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-11 {
+    SELECT sum(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-12 {
+    SELECT sum(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-13 {
+    SELECT sum(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l517-14 {
+    SELECT sum(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-15 {
+    SELECT sum(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+@setup s3
+test l517-16 {
+    SELECT sum(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    1
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-17 {
+    SELECT sum(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    1
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-18 {
+    SELECT sum(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l517-19 {
+    SELECT sum(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    1
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-20 {
+    SELECT sum(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    1
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-21 {
+    SELECT avg(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    0.0000
+    1.0000
+}
+
+@setup s1
+@setup s3
+test l517-22 {
+    SELECT avg(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    0.0000
+    1.0000
+}
+
+@setup s1
+@setup s3
+test l517-23 {
+    SELECT avg(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    0.5000
+}
+
+@setup s1
+@setup s3
+test l517-24 {
+    SELECT avg(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    0.0000
+    1.0000
+}
+
+@setup s1
+@setup s3
+test l517-25 {
+    SELECT avg(t1.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    0.0000
+    1.0000
+}
+
+@setup s1
+@setup s3
+test l517-26 {
+    SELECT avg(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    1.0000
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-27 {
+    SELECT avg(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    1.0000
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-28 {
+    SELECT avg(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    1.0000
+}
+
+@setup s1
+@setup s3
+test l517-29 {
+    SELECT avg(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    1.0000
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-30 {
+    SELECT avg(t2.shardkey) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    1.0000
+    NULL
+}
+
+@setup s1
+@setup s3
+test l517-31 {
+    SELECT count(*) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.t1_id;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-32 {
+    SELECT count(*) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.shardKey;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-33 {
+    SELECT count(*) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t1.value;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s3
+test l517-34 {
+    SELECT count(*) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.id;
+}
+expect unordered {
+    1
+    1
+}
+
+@setup s1
+@setup s3
+test l517-35 {
+    SELECT count(*) FROM t1 LEFT JOIN (select id, shardkey from t2 limit 100) as t2 ON t1.t1_id = t2.id group by t2.shardKey;
+}
+expect unordered {
+    1
+    1
+}

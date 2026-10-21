@@ -1,0 +1,30 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/derived/derived_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table user
+(
+    id   bigint,
+    name varchar(255),
+    primary key (id)
+) Engine = InnoDB;
+    create table music
+(
+    id      bigint,
+    user_id bigint,
+    primary key (id)
+) Engine = InnoDB;
+    set sql_mode = '';
+}
+
+@setup s1
+test l61 {
+    select d.a from music join (select id, count(*) as a from user) as d on music.user_id = d.id group by 1;
+}
+expect unordered {
+}

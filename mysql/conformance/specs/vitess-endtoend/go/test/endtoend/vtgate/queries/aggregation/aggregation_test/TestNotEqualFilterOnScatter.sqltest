@@ -1,0 +1,83 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table aggr_test
+(
+    id   bigint,
+    val1 varchar(16),
+    val2 bigint,
+    primary key (id)
+) Engine = InnoDB;
+    insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5);
+}
+
+@setup s1
+test l262 {
+    select count(*) as a from aggr_test having a != 5;
+}
+expect unordered {
+}
+
+@setup s1
+test l263 {
+    select count(*) as a from aggr_test having 5 != a;
+}
+expect unordered {
+}
+
+@setup s1
+test l264 {
+    select count(*) as a from aggr_test having a != a;
+}
+expect unordered {
+}
+
+@setup s1
+test l265 {
+    select count(*) as a from aggr_test having a != 3+2;
+}
+expect unordered {
+}
+
+@setup s1
+test l266 {
+    select count(*) as a from aggr_test having a != 1;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l267 {
+    select count(*) as a from aggr_test having a != "1";
+}
+expect unordered {
+    5
+}
+
+@setup s1
+test l268 {
+    select count(*) as a from aggr_test having a != "5";
+}
+expect unordered {
+}
+
+@setup s1
+test l269 {
+    select count(*) as a from aggr_test having a != 5.00;
+}
+expect unordered {
+}
+
+@setup s1
+test l270 {
+    select 1 from aggr_test having count(*) != 5;
+}
+expect unordered {
+}

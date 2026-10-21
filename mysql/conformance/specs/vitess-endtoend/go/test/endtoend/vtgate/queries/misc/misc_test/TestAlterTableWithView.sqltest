@@ -1,0 +1,133 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine=InnoDB;
+}
+
+setup s2 {
+    create view v1 as select * from t1;
+}
+
+setup s3 {
+    insert into t1(id1, id2) values (1, 1);
+}
+
+setup s4 {
+    alter table t1 add column test bigint;
+}
+
+setup s5 {
+    alter view v1 as select * from t1;
+}
+
+setup s6 {
+    alter table t1 drop column test;
+}
+
+setup s7 {
+    alter view v1 as select * from t1;
+}
+
+@setup s1
+test l731 {
+    create view v1 as select * from t1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l745 {
+    insert into t1(id1, id2) values (1, 1);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l746 {
+    select * from v1;
+}
+expect unordered {
+    1|1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l749 {
+    alter table t1 add column test bigint;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l751 {
+    alter view v1 as select * from t1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+test l766 {
+    select * from v1;
+}
+expect unordered {
+    1|1|NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+test l769 {
+    alter table t1 drop column test;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+test l770 {
+    alter view v1 as select * from t1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+test l774 {
+    select * from v1;
+}
+expect unordered {
+    1|1
+}

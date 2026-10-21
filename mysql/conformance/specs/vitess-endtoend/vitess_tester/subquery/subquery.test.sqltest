@@ -1,0 +1,95 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/vitess_tester/subquery/subquery.test
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+    create table t2
+(
+    id3 bigint,
+    id4 bigint,
+    primary key (id3)
+) Engine = InnoDB;
+    INSERT INTO t1 (id1, id2) VALUES
+(0, 0),
+(1, 1),
+(2, 2),
+(3, 3),
+(4, 4);
+    INSERT INTO t2 (id3, id4) VALUES
+(0, 0),
+(1, 1);
+}
+
+@setup s1
+test l27 {
+    SELECT count(*) FROM t1 WHERE id1 = 0 AND id1 IN (SELECT id4 FROM t2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l29 {
+    SELECT count(*) FROM t1 WHERE id1 = 2 OR id1 IN (SELECT id4 FROM t2);
+}
+expect unordered {
+    3
+}
+
+@setup s1
+test l31 {
+    SELECT count(*) FROM t1 WHERE id1 = 0 AND id1 IN (SELECT id4 FROM t2 where id4 = 3);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l33 {
+    SELECT count(*) FROM t1 WHERE id1 = 2 OR id1 IN (SELECT id4 FROM t2 where id4 = 3);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l36 {
+    SELECT count(*) FROM t1 WHERE id1 = 2 AND id1 NOT IN (SELECT id4 FROM t2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l38 {
+    SELECT count(*) FROM t1 WHERE id1 = 0 OR id1 NOT IN (SELECT id4 FROM t2);
+}
+expect unordered {
+    4
+}
+
+@setup s1
+test l40 {
+    SELECT count(*) FROM t1 WHERE id1 = 2 AND id1 NOT IN (SELECT id4 FROM t2 where id4 = 3);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l42 {
+    SELECT count(*) FROM t1 WHERE id1 = 0 OR id1 NOT IN (SELECT id4 FROM t2 where id4 = 3);
+}
+expect unordered {
+    5
+}

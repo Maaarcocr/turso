@@ -1,0 +1,1134 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-173213 {
+    SELECT MAKETIME(cast('\{"b": 2, "c": 1\}' as json), 0xFF666F6F626172FF, 0b1001);
+}
+expect {
+    NULL
+}
+
+test t-173254 {
+    SELECT MAKETIME(cast('\{"b": 2, "c": 1\}' as json), 0xFF666F6F626172FF, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-173276 {
+    SELECT MAKETIME(cast('\{"b": 2, "c": 1\}' as json), 0xFF666F6F626172FF, time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-173305 {
+    SELECT MAKETIME(cast('\{"b": 2, "c": 1\}' as json), 0xFF666F6F626172FF, cast(1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-173311 {
+    SELECT MAKETIME(cast('\{"b": 2, "c": 1\}' as json), 0xFF666F6F626172FF, cast('1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-173417 {
+    SELECT MAKETIME(cast('\{"b": 2, "c": 1\}' as json), 18446744073709551615, timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-173726 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 0, JSON_OBJECT());
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-173754 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 0, '103458.123456');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-173766 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 0, time'00:00:59.2132234');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-173773 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 0, '2000-01-01 12:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-173953 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), '3', cast(1.1 as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-173989 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 59, 1);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174004 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 59, 0.000);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174092 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 59, time '-5 10:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174135 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 59, cast('["ab"]' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174190 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 60, true);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174215 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 60, time '31:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174229 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 60, 20000101103458);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174452 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 0xFF666F6F626172FF, cast(_binary' "foo"' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174548 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 18446744073709551615, date '2000-01-01');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-174580 {
+    SELECT MAKETIME(cast(' "b": 2\}' as json), 18446744073709551615, '101:34:58');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-174793 {
+    SELECT MAKETIME(cast('"a": 1' as json), '', cast(date '2000-01-02' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-174854 {
+    SELECT MAKETIME(cast('"a": 1' as json), 0, 0xFF666F6F626172);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-174913 {
+    SELECT MAKETIME(cast('"a": 1' as json), 0, '3001-02-18 23:59:59');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175046 {
+    SELECT MAKETIME(cast('"a": 1' as json), '3', '20000101103458.1234');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175125 {
+    SELECT MAKETIME(cast('"a": 1' as json), 59, ' 0 ');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175232 {
+    SELECT MAKETIME(cast('"a": 1' as json), 59, '0000-02-29');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175298 {
+    SELECT MAKETIME(cast('"a": 1' as json), 60, -1.7e0);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175318 {
+    SELECT MAKETIME(cast('"a": 1' as json), 60, X'ff');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175353 {
+    SELECT MAKETIME(cast('"a": 1' as json), 60, time '10:04:58.1');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175369 {
+    SELECT MAKETIME(cast('"a": 1' as json), 60, '20000101103458');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175380 {
+    SELECT MAKETIME(cast('"a": 1' as json), 60, '103458.123456foo');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175451 {
+    SELECT MAKETIME(cast('"a": 1' as json), 0xFF666F6F626172FF, ' 255 ');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175612 {
+    SELECT MAKETIME(cast('"a": 1' as json), 18446744073709551615, ' 1 ');
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175652 {
+    SELECT MAKETIME(cast('"a": 1' as json), 18446744073709551615, NULL * NULL);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175728 {
+    SELECT MAKETIME(cast('"a": 1' as json), 18446744073709551615, cast('\{\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-175749 {
+    SELECT MAKETIME(cast('"a": 1' as json), 18446744073709551615, cast(_binary '"bar"' as json));
+}
+expect error {
+}
+
+test t-175775 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), '', ' 255 ');
+}
+expect {
+    NULL
+}
+
+test t-175786 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), '', 0.000);
+}
+expect {
+    00:00:00.000
+}
+
+test t-175800 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), '', 0x1);
+}
+expect {
+    00:00:01
+}
+
+test t-175817 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), '', NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-175886 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), '', cast(0 as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-175934 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, 255);
+}
+expect {
+    NULL
+}
+
+test t-175967 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, 0b1001);
+}
+expect {
+    00:00:09
+}
+
+test t-175968 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, b'1001');
+}
+expect {
+    00:00:09
+}
+
+test t-176003 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, time '32:34:58.5');
+}
+expect {
+    NULL
+}
+
+test t-176031 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-176051 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, cast(false as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-176067 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0, cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-176161 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), '3', time '130:34:58');
+}
+expect {
+    NULL
+}
+
+test t-176258 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 59, 255);
+}
+expect {
+    NULL
+}
+
+test t-176282 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 59, _utf8 'foobar');
+}
+expect {
+    00:59:00.000000
+}
+
+test t-176323 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 59, time '130:34:58');
+}
+expect {
+    NULL
+}
+
+test t-176336 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 59, 20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-176338 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 59, 20000101);
+}
+expect {
+    NULL
+}
+
+test t-176385 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 59, cast(9223372036854775807 as json));
+}
+expect {
+    NULL
+}
+
+test t-176464 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 60, 1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-176559 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 60, cast(_binary '"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-176737 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 0xFF666F6F626172FF, cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-176755 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 18446744073709551615, -1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-176804 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 18446744073709551615, JSON_OBJECT());
+}
+expect {
+    NULL
+}
+
+test t-176815 {
+    SELECT MAKETIME(cast(date '2000-01-01' as json), 18446744073709551615, time '5 10:34:58.9');
+}
+expect {
+    NULL
+}
+
+test t-177034 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), '', cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-177062 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), '', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-177064 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), '', cast(time '12:34:58' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-177130 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0, time '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-177181 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0, '3001-02-18 23:59:59');
+}
+expect {
+    NULL
+}
+
+test t-177196 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0, cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-177249 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), '3', -1.1);
+}
+expect {
+    NULL
+}
+
+test t-177269 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), '3', false);
+}
+expect {
+    00:03:00
+}
+
+test t-177368 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), '3', cast(_binary' "foo"' as json));
+}
+expect {
+    00:03:00.000000
+}
+
+test t-177407 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 59, 1.5);
+}
+expect {
+    00:59:01.5
+}
+
+test t-177520 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 59, cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-177674 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 60, cast('null' as json));
+}
+expect {
+    NULL
+}
+
+test t-177681 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 60, cast(9223372036854775807 as json));
+}
+expect {
+    NULL
+}
+
+test t-177730 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0xFF666F6F626172FF, 0.000);
+}
+expect {
+    NULL
+}
+
+test t-177753 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0xFF666F6F626172FF, NULL);
+}
+expect {
+    NULL
+}
+
+test t-177807 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0xFF666F6F626172FF, '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-177843 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0xFF666F6F626172FF, cast(9223372036854775807 as json));
+}
+expect {
+    NULL
+}
+
+test t-177871 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 0xFF666F6F626172FF, cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-177883 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 18446744073709551615, ' 255 foo');
+}
+expect {
+    NULL
+}
+
+test t-177948 {
+    SELECT MAKETIME(cast(date '2000-01-02' as json), 18446744073709551615, time '130:34:58.6');
+}
+expect {
+    NULL
+}
+
+test t-178038 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '', 0);
+}
+expect {
+    00:00:00
+}
+
+test t-178040 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '', 255);
+}
+expect {
+    NULL
+}
+
+test t-178102 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '', time '10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-178250 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 0, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-178276 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 0, timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-178398 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '3', b'1001');
+}
+expect {
+    00:03:09
+}
+
+test t-178411 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '3', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-178503 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '3', cast(_binary '"bar"' as json));
+}
+expect {
+    00:03:00.000000
+}
+
+test t-178508 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), '3', cast('["a"]' as json));
+}
+expect {
+    00:03:00.000000
+}
+
+test t-178531 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 59, ' 255 foo');
+}
+expect {
+    NULL
+}
+
+test t-178584 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 59, 18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-178599 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 59, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-178733 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 60, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-178742 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 60, 0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-178754 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 60, time '5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-178798 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 60, '1969-02-18');
+}
+expect {
+    NULL
+}
+
+test t-178909 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 0xFF666F6F626172FF, -18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-178932 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 0xFF666F6F626172FF, 103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-178961 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 0xFF666F6F626172FF, '1970-01-01 00:00:01');
+}
+expect {
+    NULL
+}
+
+test t-179161 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 18446744073709551615, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    NULL
+}
+
+test t-179167 {
+    SELECT MAKETIME(cast(timestamp '2000-01-01 12:34:58' as json), 18446744073709551615, cast(date '2000-01-02' as json));
+}
+expect {
+    NULL
+}
+
+test t-179178 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), '', '\t1foo\t');
+}
+expect {
+    00:00:01.000000
+}
+
+test t-179254 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), '', 20000101);
+}
+expect {
+    NULL
+}
+
+test t-179313 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), '', cast(_binary '"bar"' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-179331 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), '', cast(time '12:34:56' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-179433 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 0, time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-179456 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 0, cast('null' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-179465 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 0, cast('1' as json));
+}
+expect {
+    00:00:01.000000
+}
+
+test t-179541 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), '3', NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-179608 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), '3', '1969-02-18');
+}
+expect {
+    NULL
+}
+
+test t-179659 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 59, 1);
+}
+expect {
+    00:59:01
+}
+
+test t-179747 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 59, '103458');
+}
+expect {
+    NULL
+}
+
+test t-179753 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 59, '103458foo');
+}
+expect {
+    NULL
+}
+
+test t-179755 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 59, time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-179792 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 59, cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-179870 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 60, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-179887 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 60, time '130:34:58');
+}
+expect {
+    NULL
+}
+
+test t-180075 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 0xFF666F6F626172FF, '20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-180099 {
+    SELECT MAKETIME(cast(time '12:34:56' as json), 0xFF666F6F626172FF, cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-180355 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), '', 1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-180495 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0, '');
+}
+expect {
+    00:00:00.000000
+}
+
+test t-180542 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0, date '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-180581 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0, '1970-01-01 00:00:01');
+}
+expect {
+    NULL
+}
+
+test t-180714 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), '3', 103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-180728 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), '3', time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-180778 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), '3', cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    00:03:00.000000
+}
+
+test t-180940 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 59, cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    00:59:00.000000
+}
+
+test t-180981 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 60, '');
+}
+expect {
+    NULL
+}
+
+test t-181063 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 60, '2000-01-01 12:34:58');
+}
+expect {
+    NULL
+}
+
+test t-181070 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 60, cast(0 as json));
+}
+expect {
+    NULL
+}
+
+test t-181089 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 60, cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-181140 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0xFF666F6F626172FF, '-1.5');
+}
+expect {
+    NULL
+}
+
+test t-181168 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0xFF666F6F626172FF, 1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-181174 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0xFF666F6F626172FF, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-181231 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0xFF666F6F626172FF, '3001-02-18 23:59:59');
+}
+expect {
+    NULL
+}
+
+test t-181243 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 0xFF666F6F626172FF, cast(1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-181343 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 18446744073709551615, time '31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-181434 {
+    SELECT MAKETIME(cast(time '12:34:58' as json), 18446744073709551615, cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-181454 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '', -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-181518 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '', timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-181560 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '', cast('\{\}' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-181601 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '', cast(time '5 12:34:58' as json));
+}
+expect {
+    00:00:00.000000
+}
+
+test t-181616 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 0, -1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-181706 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 0, time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-181710 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 0, '2000-01-01');
+}
+expect {
+    NULL
+}
+
+test t-181820 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '3', 0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-181875 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '3', '0000-01-03');
+}
+expect {
+    00:03:00.000000
+}
+
+test t-181902 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), '3', cast('"bar"' as json));
+}
+expect {
+    00:03:00.000000
+}
+
+test t-181976 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 59, NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-182135 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 60, NULL / NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-182243 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 60, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-182244 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 60, cast(date '2000-01-01' as json));
+}
+expect {
+    NULL
+}
+
+test t-182293 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 0xFF666F6F626172FF, 1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-182316 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 0xFF666F6F626172FF, time '32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-182322 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 0xFF666F6F626172FF, time '130:34:58.6');
+}
+expect {
+    NULL
+}
+
+test t-182456 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 18446744073709551615, NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-182529 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 18446744073709551615, cast(1 as json));
+}
+expect {
+    NULL
+}
+
+test t-182550 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 18446744073709551615, cast('"bar"' as json));
+}
+expect {
+    NULL
+}
+
+test t-182563 {
+    SELECT MAKETIME(cast(time '5 12:34:58' as json), 18446744073709551615, cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    NULL
+}
