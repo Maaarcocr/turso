@@ -89,14 +89,16 @@ def checkout_source(meta, args):
 
 def run_importer(meta, checkout, candidates_dir):
     """Re-run the recorded importer command; returns the candidate files."""
-    command = [part.format(checkout=checkout, candidates=candidates_dir) for part in meta["importer"]]
+    command = [part.format(checkout=checkout.resolve(), candidates=candidates_dir.resolve())
+               for part in meta["importer"]]
     script = (CONFORMANCE / command[0]).resolve()
     if CONFORMANCE.resolve() / "tools" != script.parent:
         raise SystemExit(f"importer {command[0]} is not a tool in mysql/conformance/tools/")
     if candidates_dir.exists():
         shutil.rmtree(candidates_dir)
     log(f"{meta['source']}: importing {checkout} with {command[0]}")
-    result = subprocess.run([sys.executable, "-I", str(script), *command[1:]], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, "-I", str(script), *command[1:]], capture_output=True, text=True,
+                            cwd=CONFORMANCE)
     if result.returncode != 0:
         raise SystemExit(f"importer failed:\n{result.stdout[-4000:]}\n{result.stderr[-4000:]}")
     return sorted(candidates_dir.glob("*.jsonl"))
