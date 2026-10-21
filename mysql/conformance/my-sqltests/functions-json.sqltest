@@ -1,0 +1,529 @@
+# Owned specs for the MySQL JSON functions. Every expected value was
+# recorded from MySQL 8.4.10 (mysql/conformance/target.toml); error tests
+# note the MySQL error in a comment.
+
+@database :memory:
+
+test array-formatting {
+    SELECT JSON_ARRAY(1, -5, 'a', NULL, JSON_ARRAY(), JSON_OBJECT());
+}
+expect {
+    [1, -5, "a", null, [], \{\}]
+}
+
+test array-embeds-json-values-but-quotes-strings {
+    SELECT JSON_ARRAY(JSON_ARRAY(1, 2), '[1, 2]', JSON_EXTRACT('\{"a": [3]\}', '$.a'));
+}
+expect {
+    [[1, 2], "[1, 2]", [3]]
+}
+
+test array-doubles {
+    SELECT JSON_ARRAY(1e0, 100e0, 0.5e0, 1e15, 1e14, -0e0, 1e-7, 1e-16);
+}
+expect {
+    [1.0, 100.0, 0.5, 1e15, 100000000000000.0, -0.0, 0.0000001, 1e-16]
+}
+
+test array-binary-string-is-opaque {
+    SELECT JSON_ARRAY(X'666F6F');
+}
+expect {
+    ["base64:type15:Zm9v"]
+}
+
+test object-key-order-and-duplicates {
+    SELECT JSON_OBJECT('bb', 1, 'a', 2, 'c', 3, 'B', 4, 'a', 5);
+}
+expect {
+    \{"B": 4, "a": 5, "c": 3, "bb": 1\}
+}
+
+test object-integer-and-json-keys {
+    SELECT JSON_OBJECT(1, 'one', JSON_ARRAY(1, 2), 'array');
+}
+expect {
+    \{"1": "one", "[1, 2]": "array"\}
+}
+
+# mysql-error: 3158 JSON documents may not contain NULL member names.
+test object-null-key-is-an-error {
+    SELECT JSON_OBJECT(NULL, 1);
+}
+expect error {
+}
+
+# mysql-error: 3144 Cannot create a JSON value from a string with CHARACTER SET 'binary'.
+test object-double-key-is-an-error {
+    SELECT JSON_OBJECT(1.5e0, 1);
+}
+expect error {
+}
+
+# mysql-error: 1582 Incorrect parameter count in the call to native function 'JSON_OBJECT'
+test object-odd-argument-count-is-an-error {
+    SELECT JSON_OBJECT('a', 1, 'b');
+}
+expect error {
+}
+
+test parse-normalizes-text {
+    SELECT JSON_EXTRACT('\{ "b" :[1,2] , "a":\{"y":true,"x":null\}, "a": "last" \}', '$');
+}
+expect {
+    \{"a": "last", "b": [1, 2]\}
+}
+
+test parse-number-kinds {
+    SELECT JSON_TYPE('4294967295'), JSON_TYPE('4294967296'), JSON_TYPE('-9223372036854775808'), JSON_TYPE('-9223372036854775809'), JSON_TYPE('1.0'), JSON_TYPE('-0');
+}
+expect {
+    INTEGER|UNSIGNED INTEGER|INTEGER|DOUBLE|DOUBLE|INTEGER
+}
+
+test parse-number-printing {
+    SELECT JSON_EXTRACT('[-0, -0.0, 1E2, 18446744073709551615, 18446744073709551616, 123456789012345678901234567890, 0.30000000000000004, 1.5e-7]', '$');
+}
+expect {
+    [0, -0.0, 100.0, 18446744073709551615, 1.8446744073709552e19, 1.2345678901234566e29, 0.30000000000000004, 0.00000015]
+}
+
+test parse-number-ties-round-to-even {
+    SELECT JSON_EXTRACT('[1911500004920875.033401878017598983]', '$[0]');
+}
+expect {
+    1911500004920875.2
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function json_extract: "Missing a name for object member." at position 8.
+test parse-invalid-text-is-an-error {
+    SELECT JSON_EXTRACT('\{"a": 1,\}', '$');
+}
+expect error {
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function json_extract: "Number too big to be stored in double." at position 0.
+test parse-too-large-number-is-an-error {
+    SELECT JSON_EXTRACT('1e309', '$');
+}
+expect error {
+}
+
+test parse-depth-limit {
+    SELECT JSON_VALID(CONCAT(REPEAT('[', 100), REPEAT(']', 100)));
+}
+expect {
+    1
+}
+
+# mysql-error: 3157 The JSON document exceeds the maximum depth.
+test parse-too-deep-is-an-error {
+    SELECT JSON_VALID(CONCAT(REPEAT('[', 101), REPEAT(']', 101)));
+}
+expect error {
+}
+
+test extract-single-path {
+    SELECT JSON_EXTRACT('\{"a": \{"b": [10, 20]\}\}', '$.a.b[1]');
+}
+expect {
+    20
+}
+
+test extract-missing-path-is-null {
+    SELECT JSON_EXTRACT('\{"a": 1\}', '$.b');
+}
+expect {
+    NULL
+}
+
+test extract-several-paths-wrap-in-array {
+    SELECT JSON_EXTRACT('\{"a": 1, "b": 2\}', '$.b', '$.a', '$.c');
+}
+expect {
+    [2, 1]
+}
+
+test extract-repeated-path-repeats-value {
+    SELECT JSON_EXTRACT('\{"a": 1\}', '$.a', '$.a');
+}
+expect {
+    [1, 1]
+}
+
+test extract-any-descendant {
+    SELECT JSON_EXTRACT('[\{"a": 1\}, \{"b": \{"a": 2\}\}]', '$**.a');
+}
+expect {
+    [1, 2]
+}
+
+test extract-any-descendant-array-cell {
+    SELECT JSON_EXTRACT('[\{"a": 1\}, \{"a": 2\}]', '$**[0]');
+}
+expect {
+    [\{"a": 1\}, 1, \{"a": 2\}, 2]
+}
+
+test extract-wildcards {
+    SELECT JSON_EXTRACT('\{"a": [1, 2], "b": [3]\}', '$.*[*]');
+}
+expect {
+    [1, 2, 3]
+}
+
+test extract-wildcard-with-one-match-still-wraps {
+    SELECT JSON_EXTRACT('\{"a": 1\}', '$.*');
+}
+expect {
+    [1]
+}
+
+test extract-ranges-and-last {
+    SELECT JSON_EXTRACT('[1, 2, 3, 4]', '$[1 to 2]'), JSON_EXTRACT('[1, 2, 3, 4]', '$[last-1 to last]'), JSON_EXTRACT('[1, 2, 3, 4]', '$[last-10 to 1]'), JSON_EXTRACT('[1, 2, 3, 4]', '$[last - 1]');
+}
+expect {
+    [2, 3]|[3, 4]|[1, 2]|3
+}
+
+test extract-scalar-as-one-element-array {
+    SELECT JSON_EXTRACT('\{"a": 1\}', '$[0].a'), JSON_EXTRACT('5', '$[last]'), JSON_EXTRACT('5', '$[0 to 3]'), JSON_EXTRACT('5', '$[*]'), JSON_EXTRACT('5', '$[1]');
+}
+expect {
+    1|5|[5]|NULL|NULL
+}
+
+test extract-quoted-member-names {
+    SELECT JSON_EXTRACT('\{"a b": 1, "": 2, "1": 3\}', '$."a b"', '$.""', '$."1"');
+}
+expect {
+    [1, 2, 3]
+}
+
+test extract-null-path-is-null {
+    SELECT JSON_EXTRACT('\{"a": 1\}', NULL, 'not a path');
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3143 Invalid JSON path expression. The error is around character position 4.
+test extract-invalid-path-is-an-error {
+    SELECT JSON_EXTRACT('\{"a": 1\}', '$.1a');
+}
+expect error {
+}
+
+# mysql-error: 3143 Invalid JSON path expression. The error is around character position 8.
+test extract-descending-range-is-an-error {
+    SELECT JSON_EXTRACT('[1, 2]', '$[1 to 0]');
+}
+expect error {
+}
+
+# mysql-error: 3143 Invalid JSON path expression. The error is around character position 3.
+test extract-path-ending-with-descendants-is-an-error {
+    SELECT JSON_EXTRACT('[1, 2]', '$**');
+}
+expect error {
+}
+
+# mysql-error: 3146 Invalid data type for JSON data in argument 1 to function json_extract; a JSON string or JSON type is required.
+test extract-number-document-is-an-error {
+    SELECT JSON_EXTRACT(1, '$');
+}
+expect error {
+}
+
+test contains-path-one-stops-at-first-match {
+    SELECT JSON_CONTAINS_PATH('\{"a": 1\}', 'one', '$.b', '$.a', 'not a path');
+}
+expect {
+    1
+}
+
+test contains-path-all-stops-at-first-miss {
+    SELECT JSON_CONTAINS_PATH('\{"a": 1\}', 'ALL', '$.a', '$.b', 'not a path');
+}
+expect {
+    0
+}
+
+test contains-path-wildcards {
+    SELECT JSON_CONTAINS_PATH('[\{"a": 1\}, \{"a": 2\}]', 'all', '$**.a', '$[*].a', '$[0 to 1]');
+}
+expect {
+    1
+}
+
+test contains-path-null-arguments {
+    SELECT JSON_CONTAINS_PATH(NULL, 'one', '$'), JSON_CONTAINS_PATH('\{\}', NULL, '$'), JSON_CONTAINS_PATH('\{"a": 1\}', 'one', NULL, '$.a');
+}
+expect {
+    NULL|NULL|NULL
+}
+
+# mysql-error: 3154 The oneOrAll argument to json_contains_path may take these values: 'one' or 'all'.
+test contains-path-bad-mode-is-an-error {
+    SELECT JSON_CONTAINS_PATH('\{"a": 1\}', 'some', '$.a');
+}
+expect error {
+}
+
+test keys {
+    SELECT JSON_KEYS('\{"b": 1, "a": \{"c": 2\}\}'), JSON_KEYS('\{"b": 1, "a": \{"c": 2\}\}', '$.a'), JSON_KEYS('[1]'), JSON_KEYS('\{"a": 1\}', '$[0]');
+}
+expect {
+    ["a", "b"]|["c"]|NULL|NULL
+}
+
+# mysql-error: 3149 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test keys-wildcard-is-an-error {
+    SELECT JSON_KEYS('\{"a": \{\}\}', '$.*');
+}
+expect error {
+}
+
+test length {
+    SELECT JSON_LENGTH('[1, [2, 3]]'), JSON_LENGTH('\{"a": 1\}'), JSON_LENGTH('"abc"'), JSON_LENGTH('[1, [2, 3]]', '$[1]'), JSON_LENGTH('[1, [2, 3]]', '$[5]');
+}
+expect {
+    2|1|1|2|NULL
+}
+
+test length-of-wildcard-counts-matches {
+    SELECT JSON_LENGTH('[[1, 2, 3], 4]', '$[*]'), JSON_LENGTH('[[1, 2, 3]]', '$[*]');
+}
+expect {
+    2|1
+}
+
+test depth-and-type {
+    SELECT JSON_DEPTH('[[1], \{"a": [2]\}]'), JSON_DEPTH('[]'), JSON_TYPE('[]'), JSON_TYPE('\{\}'), JSON_TYPE('"a"'), JSON_TYPE('true'), JSON_TYPE('null'), JSON_TYPE('1.5'), JSON_TYPE(JSON_ARRAY(1));
+}
+expect {
+    4|1|ARRAY|OBJECT|STRING|BOOLEAN|NULL|DOUBLE|ARRAY
+}
+
+test valid {
+    SELECT JSON_VALID('\{"a": 1\}'), JSON_VALID('\{"a": 1'), JSON_VALID(''), JSON_VALID(NULL), JSON_VALID(1);
+}
+expect {
+    1|0|0|NULL|0
+}
+
+test pretty {
+    SELECT REPLACE(JSON_PRETTY('\{"a": [1, \{"b": []\}, \{\}], "c": "x"\}'), CHAR(10), '~');
+}
+expect {
+    \{~  "a": [~    1,~    \{~      "b": []~    \},~    \{\}~  ],~  "c": "x"~\}
+}
+
+test unquote {
+    SELECT JSON_UNQUOTE('"abc"'), JSON_UNQUOTE('abc'), JSON_UNQUOTE('"abc'), JSON_UNQUOTE(JSON_EXTRACT('\{"a": "x"\}', '$.a')), JSON_UNQUOTE(JSON_EXTRACT('\{"a": [1, "x"]\}', '$.a'));
+}
+expect {
+    abc|abc|"abc|x|[1, "x"]
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function json_unquote: "The document root must not be followed by other values." at position 3.
+test unquote-invalid-quoted-text-is-an-error {
+    SELECT JSON_UNQUOTE('"a"b"');
+}
+expect error {
+}
+
+# mysql-error: 3064 Incorrect type for argument 1 in function json_unquote.
+test unquote-number-is-an-error {
+    SELECT JSON_UNQUOTE(1);
+}
+expect error {
+}
+
+test quote {
+    SELECT JSON_QUOTE('a"b'), JSON_QUOTE(''), JSON_ARRAY(JSON_QUOTE('a'));
+}
+expect {
+    "a\"b"|""|["\"a\""]
+}
+
+# mysql-error: 3064 Incorrect type for argument 1 in function json_quote.
+test quote-json-value-is-an-error {
+    SELECT JSON_QUOTE(JSON_ARRAY(1));
+}
+expect error {
+}
+
+test value {
+    SELECT JSON_VALUE('\{"a": "x"\}', '$.a'), JSON_VALUE('\{"a": [1]\}', '$.a'), JSON_VALUE('\{"a": null\}', '$.a'), JSON_VALUE('[1, 2]', '$[*]');
+}
+expect {
+    x|[1]|NULL|NULL
+}
+
+test set-insert-replace-members {
+    SELECT JSON_SET('\{"a": 1\}', '$.a', 2, '$.b', 3, '$.c.d', 4), JSON_INSERT('\{"a": 1\}', '$.a', 2, '$.b', 3), JSON_REPLACE('\{"a": 1\}', '$.a', 2, '$.b', 3);
+}
+expect {
+    \{"a": 2, "b": 3\}|\{"a": 1, "b": 3\}|\{"a": 2\}
+}
+
+test set-insert-replace-cells {
+    SELECT JSON_SET('[1, 2]', '$[0]', 9, '$[5]', 8), JSON_INSERT('[1, 2]', '$[0]', 9, '$[5]', 8), JSON_REPLACE('[1, 2]', '$[0]', 9, '$[5]', 8);
+}
+expect {
+    [9, 2, 8]|[1, 2, 8]|[9, 2]
+}
+
+test set-past-either-end-of-an-array {
+    SELECT JSON_SET('\{"a": [1, 2]\}', '$.a[last-5]', 0, '$.a[7]', 3);
+}
+expect {
+    \{"a": [0, 1, 2, 3]\}
+}
+
+test set-wraps-a-scalar-into-an-array {
+    SELECT JSON_SET('\{"a": 1\}', '$[3]', 9), JSON_SET('1', '$[0]', 9), JSON_INSERT('1', '$[1]', 9);
+}
+expect {
+    [\{"a": 1\}, 9]|9|[1, 9]
+}
+
+test set-root {
+    SELECT JSON_SET('\{"a": 1\}', '$', 9), JSON_INSERT('\{"a": 1\}', '$', 9), JSON_REPLACE('\{"a": 1\}', '$', '[1]');
+}
+expect {
+    9|\{"a": 1\}|"[1]"
+}
+
+test set-null-path-is-null {
+    SELECT JSON_SET('\{"a": 1\}', '$.a', 2, NULL, 3);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3149 In this situation, path expressions may not contain the * and ** tokens or an array range.
+test set-wildcard-is-an-error {
+    SELECT JSON_SET('\{"a": 1\}', '$.*', 2);
+}
+expect error {
+}
+
+test remove {
+    SELECT JSON_REMOVE('\{"a": 1, "b": 2\}', '$.a', '$.c'), JSON_REMOVE('[1, 2, 3]', '$[0]', '$[last]'), JSON_REMOVE('[1, 2, 3]', '$[5]');
+}
+expect {
+    \{"b": 2\}|[2]|[1, 2, 3]
+}
+
+test remove-through-a-wrapped-scalar {
+    SELECT JSON_REMOVE('\{"a": 1, "b": 2\}', '$.a[0]'), JSON_REMOVE('[10, 20]', '$[0][0]'), JSON_REMOVE('1', '$[0]');
+}
+expect {
+    \{"b": 2\}|[20]|1
+}
+
+# mysql-error: 3153 The path expression '$' is not allowed in this context.
+test remove-root-is-an-error {
+    SELECT JSON_REMOVE('\{"a": 1\}', '$');
+}
+expect error {
+}
+
+test array-append {
+    SELECT JSON_ARRAY_APPEND('[1, [2]]', '$', 3, '$[1]', 4, '$[0]', 5, '$[9]', 6), JSON_ARRAY_APPEND('\{"a": 1\}', '$', 2);
+}
+expect {
+    [[1, 5], [2, 4], 3]|[\{"a": 1\}, 2]
+}
+
+test array-insert {
+    SELECT JSON_ARRAY_INSERT('[1, 2, 3]', '$[1]', 'x', '$[9]', 'y', '$[0]', 'z'), JSON_ARRAY_INSERT('[1, 2]', '$[last]', 9), JSON_ARRAY_INSERT('\{"a": 1\}', '$.a[0]', 0);
+}
+expect {
+    ["z", 1, "x", 2, 3, "y"]|[1, 9, 2]|\{"a": 1\}
+}
+
+# mysql-error: 3165 A path expression is not a path to a cell in an array.
+test array-insert-needs-a-cell-path {
+    SELECT JSON_ARRAY_INSERT('[1]', '$', 0);
+}
+expect error {
+}
+
+test merge-preserve {
+    SELECT JSON_MERGE_PRESERVE('[1, 2]', '\{"a": 1\}', '3', '\{"a": 2, "b": 3\}'), JSON_MERGE_PRESERVE('\{"a": \{"b": 1\}\}', '\{"a": \{"b": 2\}\}'), JSON_MERGE('1', '2'), JSON_MERGE_PRESERVE('1', NULL);
+}
+expect {
+    [1, 2, \{"a": 1\}, 3, \{"a": 2, "b": 3\}]|\{"a": \{"b": [1, 2]\}\}|[1, 2]|NULL
+}
+
+test merge-patch {
+    SELECT JSON_MERGE_PATCH('\{"a": 1, "b": 2\}', '\{"a": null, "c": \{"d": 1\}\}', '\{"c": \{"e": null\}\}'), JSON_MERGE_PATCH('[1]', '\{"a": 1\}'), JSON_MERGE_PATCH('\{"a": 1\}', '[1]');
+}
+expect {
+    \{"b": 2, "c": \{"d": 1\}\}|\{"a": 1\}|[1]
+}
+
+test merge-patch-null-arguments {
+    SELECT JSON_MERGE_PATCH(NULL, '\{"a": 1\}'), JSON_MERGE_PATCH(NULL, '[1]'), JSON_MERGE_PATCH('\{"a": 1\}', NULL, '\{"b": 1\}');
+}
+expect {
+    NULL|[1]|NULL
+}
+
+test contains {
+    SELECT JSON_CONTAINS('[1, [2]]', '2'), JSON_CONTAINS('[[1, 2], 3]', '[[1]]'), JSON_CONTAINS('\{"a": [1, 2], "b": 3\}', '\{"a": 1\}'), JSON_CONTAINS('1', '1.0'), JSON_CONTAINS('1', '[1]'), JSON_CONTAINS('[1]', 'true'), JSON_CONTAINS('["1"]', '1');
+}
+expect {
+    1|1|1|1|0|0|0
+}
+
+test contains-at-path {
+    SELECT JSON_CONTAINS('\{"a": [1, 2]\}', '1', '$.a'), JSON_CONTAINS('\{"a": 1\}', '1', '$.b');
+}
+expect {
+    1|NULL
+}
+
+test overlaps {
+    SELECT JSON_OVERLAPS('[1, 2]', '[2, 3]'), JSON_OVERLAPS('[1, 2]', '2'), JSON_OVERLAPS('[[1]]', '[1]'), JSON_OVERLAPS('\{"a": 1, "b": 2\}', '\{"b": 2\}'), JSON_OVERLAPS('[]', '[]');
+}
+expect {
+    1|1|0|1|0
+}
+
+test search {
+    SELECT JSON_SEARCH('["abc", \{"x": "abc"\}, ["ABC"]]', 'one', 'abc'), JSON_SEARCH('["abc", \{"x": "abc"\}, ["ABC"]]', 'all', 'a%'), JSON_SEARCH('\{"a b": "x", "c": \{"d-e": "x"\}\}', 'all', 'x');
+}
+expect {
+    "$[0]"|["$[0]", "$[1].x"]|["$.c.\"d-e\"", "$.\"a b\""]
+}
+
+test search-escape-and-paths {
+    SELECT JSON_SEARCH('["a_c", "abc"]', 'all', 'a|_c', '|'), JSON_SEARCH('["abc", \{"x": "abc"\}]', 'all', 'abc', NULL, '$[1]'), JSON_SEARCH('[1, "1", true]', 'all', '1');
+}
+expect {
+    "$[0]"|"$[1].x"|"$[1]"
+}
+
+# mysql-error: 1210 Incorrect arguments to ESCAPE
+test search-long-escape-is-an-error {
+    SELECT JSON_SEARCH('["abc"]', 'all', 'abc', 'xy');
+}
+expect error {
+}
+
+setup s1 {
+    CREATE TABLE docs(j TEXT);
+    INSERT INTO docs VALUES ('\{"b":1,"a":2\}');
+}
+
+@setup s1
+test json-in-a-text-column-is-a-string {
+    SELECT JSON_ARRAY(j), JSON_EXTRACT(j, '$') FROM docs;
+}
+expect {
+    ["\{\"b\":1,\"a\":2\}"]|\{"a": 2, "b": 1\}
+}
