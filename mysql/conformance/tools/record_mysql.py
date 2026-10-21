@@ -68,7 +68,7 @@ LOCK = CONFORMANCE / "corpus/sources.lock.toml"
 RESULTS = CONFORMANCE / "results"
 # Bump when the results record format changes.
 RESULTS_FORMAT = 1
-# A recorded result that contains one of its own statements of at least this
+# A recorded result that contains a statement of the source of at least this
 # many characters is withheld from results/ (bucket `echoes-sql`): committed
 # results must not carry source SQL. Shorter statements (`BEGIN`, `SELECT 1`)
 # are not distinctive enough to count.
@@ -1320,29 +1320,42 @@ def _normalized(text):
     return " ".join(text.split())
 
 
-# MySQL quotes the statement text after a syntax problem in diagnostics, for
-# example in optimizer-hint warnings: "... syntax error near '<text>' at line 1".
+# MySQL quotes SQL text after a syntax problem in diagnostics, for example in
+# optimizer-hint warnings: "... syntax error near '<text>' at line 1".
 _NEAR_FRAGMENT = re.compile(r"\bnear '(.*?)' at line \d+")
 
 
-def echoes_sql(plan, candidate, outcome):
-    """True when a recorded result reproduces the candidate's own SQL text.
+class SqlEchoIndex:
+    """Finds any of a source's statements inside MySQL output.
 
-    That is a complete statement of its setup or sql, or a statement fragment
-    that MySQL quotes in a diagnostic (`near '...'`). Whitespace is normalized
-    on both sides (error messages are normalized when recorded); statements
-    and fragments shorter than MIN_ECHO_LENGTH are ignored.
+    Statements and texts are compared whitespace-normalized (error messages
+    are normalized when recorded); statements shorter than `min_length` are
+    ignored. Lookup goes through the first `min_length` characters of each
+    statement, so a search is linear in the text.
     """
-    if outcome["bucket"] != "recorded":
-        return False
-    text = _normalized("\n".join(outcome["lines"]) if outcome["kind"] == "rows" else outcome["error"][2])
-    statements = [_normalized(s) for s in effective_setup(plan, candidate) + candidate.record["sql"]]
-    if any(len(statement) >= MIN_ECHO_LENGTH and statement in text for statement in statements):
-        return True
-    for fragment in _NEAR_FRAGMENT.findall(text):
-        if len(fragment) >= MIN_ECHO_LENGTH and any(fragment in statement for statement in statements):
-            return True
-    return False
+
+    def __init__(self, statements, min_length=MIN_ECHO_LENGTH):
+        self.min_length = min_length
+        self.by_prefix = collections.defaultdict(set)
+        for statement in statements:
+            statement = _normalized(statement)
+            if len(statement) >= min_length:
+                self.by_prefix[statement[:min_length]].add(statement)
+
+    def find(self, text):
+        """The first statement contained in `text`, or None."""
+        text = _normalized(text)
+        width = self.min_length
+        for start in range(len(text) - width + 1):
+            for statement in self.by_prefix.get(text[start:start + width], ()):
+                if text.startswith(statement, start):
+                    return statement
+        return None
+
+
+def quotes_sql(text, min_length=MIN_ECHO_LENGTH):
+    """True when MySQL quotes SQL text (`near '...' at line N`) of `min_length`+ characters."""
+    return any(len(fragment) >= min_length for fragment in _NEAR_FRAGMENT.findall(_normalized(text)))
 
 
 def result_texts(entry):
@@ -1356,44 +1369,56 @@ def result_texts(entry):
 
 
 def find_sql_echoes(entries, statements, min_length=MIN_ECHO_LENGTH):
-    """Return [(entry id, statement)] for results that contain any of `statements`.
+    """Return [(entry id, statement or reason)] for results that reproduce source SQL.
 
-    Used to prove that committed results carry no source SQL: `statements` are
-    all setup and sql statements of a source's candidates. Comparison is on
-    whitespace-normalized text; statements shorter than `min_length` are
-    ignored. Runs in time linear in the result text (window lookup on the
-    first `min_length` characters of each statement).
+    `statements` are all setup and sql statements of a source's candidates; a
+    result reproduces SQL when it contains one of them or MySQL quotes SQL
+    text in it (`quotes_sql`). Used by withhold_sql_echoes when recording and
+    by tests over committed results.
     """
-    by_prefix = collections.defaultdict(set)
-    for statement in statements:
-        statement = _normalized(statement)
-        if len(statement) >= min_length:
-            by_prefix[statement[:min_length]].add(statement)
+    index = SqlEchoIndex(statements, min_length)
     found = []
     for entry in entries:
         for text in result_texts(entry):
-            text = _normalized(text)
-            hit = None
-            for start in range(len(text) - min_length + 1):
-                for statement in by_prefix.get(text[start:start + min_length], ()):
-                    if text.startswith(statement, start):
-                        hit = statement
-                        break
-                if hit:
-                    break
+            hit = index.find(text) or ("quoted SQL text" if quotes_sql(text, min_length) else None)
             if hit:
                 found.append((entry["id"], hit))
                 break
     return found
 
 
-def withhold_sql_echoes(plans, outcomes_by_group):
-    """Replace recorded outcomes that echo source SQL with bucket `echoes-sql`."""
+def candidate_statements(paths):
+    """Every setup and sql statement of the candidate files of a source."""
+    statements = set()
+    for path in paths:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    record = json.loads(line)
+                    statements.update(record.get("setup", []))
+                    statements.update(record.get("sql", []))
+    return statements
+
+
+def withhold_sql_echoes(plans, outcomes_by_group, statements):
+    """Replace recorded outcomes that reproduce source SQL with bucket `echoes-sql`.
+
+    A result reproduces SQL when it contains any statement of the source's
+    candidates (`statements`, MIN_ECHO_LENGTH characters or longer, for
+    example a row of SHOW PROCESSLIST or a string literal holding a query) or
+    when MySQL quotes SQL text in it, so committed results never carry
+    source SQL.
+    """
+    index = SqlEchoIndex(statements)
     withheld = 0
     for plan in plans:
         outcomes = outcomes_by_group[plan.name]
         for candidate in plan.candidates:
-            if echoes_sql(plan, candidate, outcomes[candidate.index]):
+            outcome = outcomes[candidate.index]
+            if outcome["bucket"] != "recorded":
+                continue
+            texts = outcome["lines"] if outcome["kind"] == "rows" else [outcome["error"][2]]
+            if any(index.find(text) or quotes_sql(text) for text in texts):
                 outcomes[candidate.index] = {"bucket": "echoes-sql", "detail": "result contains source SQL"}
                 withheld += 1
     return withheld
@@ -1609,8 +1634,8 @@ def record(args):
     for plan in plan_list:
         outcomes_by_group[plan.name] = classify_group(plan, runs[plan.name], args.max_expect_bytes)
     if args.results_only:
-        withheld = withhold_sql_echoes(plan_list, outcomes_by_group)
-        log(f"withheld {withheld} results that contain their own source SQL")
+        withheld = withhold_sql_echoes(plan_list, outcomes_by_group, candidate_statements(args.candidates))
+        log(f"withheld {withheld} results that reproduce source SQL (echoes-sql)")
     for plan in plan_list:
         tally_outcomes(plan, outcomes_by_group[plan.name], runs[plan.name], stats)
     written = write_specs(out_dir, plan_list, outcomes_by_group, stats)
