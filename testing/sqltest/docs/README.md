@@ -70,7 +70,7 @@ sqltest/
 │   │   ├── mod.rs          # Comparison dispatcher
 │   │   ├── exact.rs        # Exact match (with diff)
 │   │   ├── pattern.rs      # Regex pattern match
-│   │   └── unordered.rs    # Set comparison
+│   │   └── unordered.rs    # Multiset comparison
 │   └── output/             # Output formatting
 │       ├── mod.rs          # OutputFormat trait
 │       ├── pretty.rs       # Colored terminal output

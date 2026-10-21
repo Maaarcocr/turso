@@ -257,7 +257,7 @@ The `expect` block can have modifiers:
 | (none) | Exact row-by-row match |
 | `error` | Expect an error (optional pattern match) |
 | `pattern` | Match output against regex pattern |
-| `unordered` | Compare as sets (order doesn't matter) |
+| `unordered` | Compare as multisets (order doesn't matter, duplicate rows do) |
 
 ### Output Format
 
