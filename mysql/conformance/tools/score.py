@@ -70,16 +70,27 @@ def source_dir_of(manifest, specs_root):
 
 
 def load_manifests(specs_root):
+    """Map `<source>/<shard>::<test>` to {id, level, source} from every manifest.
+
+    Each manifest line describes one shard; its tests are
+    [name, id, level, path index, line] (see SPECS.md).
+    """
     specs = {}
-    for manifest in sorted(specs_root.rglob("manifest*.jsonl")):
+    for manifest in sorted(specs_root.rglob("manifest.jsonl")):
         source = source_dir_of(manifest, specs_root)
         with open(manifest, encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
-                item = json.loads(line)
-                item["source_name"] = source
-                specs[f"{source}/{item['test']}"] = item
+                shard = json.loads(line)
+                for name, test_id, level, path_index, source_line in shard["tests"]:
+                    specs[f"{source}/{shard['shard']}::{name}"] = {
+                        "id": test_id,
+                        "level": level,
+                        "source": {"path": shard["paths"][path_index], "line": source_line,
+                                   "license": shard["license"]},
+                        "source_name": source,
+                    }
     return specs
 
 

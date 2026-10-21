@@ -488,12 +488,10 @@ class ScoreTests(unittest.TestCase):
             root = pathlib.Path(directory)
             specs = root / "specs"
             (specs / "src" / "dir").mkdir(parents=True)
-            manifest = [
-                {"id": f"src/x:L{n}", "test": f"dir/x.sqltest::l{n}", "level": 100 + n, "features": [],
-                 "source": {"path": "x", "line": n, "license": "MIT"}}
-                for n in (1, 2, 3)
-            ]
-            (specs / "src" / "dir" / "manifest.jsonl").write_text("".join(json.dumps(m) + "\n" for m in manifest))
+            manifest = {"shard": "dir/x.sqltest", "group": "src/x", "repo": "r", "revision": "v",
+                        "license": "MIT", "paths": ["x"],
+                        "tests": [[f"l{n}", f"src/x:L{n}", 100 + n, 0, n] for n in (1, 2, 3)]}
+            (specs / "src" / "dir" / "manifest.jsonl").write_text(json.dumps(manifest) + "\n")
             results = {"files": [{"path": str(specs / "src/dir/x.sqltest"), "results": [
                 {"name": "l1", "outcome": "passed"},
                 {"name": "l2", "outcome": "failed", "reason": "boom"},
