@@ -1,0 +1,126 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493);
+    set @@sql_mode = ' ';
+}
+
+@setup s1
+test l596 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l599 {
+    SELECT 1+COUNT(t1_id) FROM t1;
+}
+expect unordered {
+    10
+}
+
+@setup s1
+@setup s2
+test l600 {
+    SELECT COUNT(t1_id)+1 FROM t1;
+}
+expect unordered {
+    10
+}
+
+@setup s1
+@setup s2
+test l601 {
+    SELECT COUNT(t1_id)+MAX(shardkey) FROM t1;
+}
+expect unordered {
+    783502
+}
+
+@setup s1
+@setup s2
+test l602 {
+    SELECT shardkey, MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey;
+}
+expect unordered {
+    100|5
+    12833|16
+    200|7
+    2380|14
+    300|6
+    783493|18
+    893|12
+}
+
+@setup s1
+@setup s2
+test l603 {
+    SELECT shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey;
+}
+expect unordered {
+    105
+    12849
+    207
+    2394
+    306
+    783511
+    905
+}
+
+@setup s1
+@setup s2
+test l604 {
+    SELECT name+COUNT(t1_id)+1 FROM t1 GROUP BY name;
+}
+expect unordered {
+    2
+    2
+    3
+    3
+    4
+}
+
+@setup s1
+@setup s2
+test l605 {
+    SELECT COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name;
+}
+expect unordered {
+    125
+    12908
+    209
+    233
+    2439
+    315
+    783586
+    938
+}
+
+@setup s1
+@setup s2
+test l607 {
+    SELECT COUNT(t1_id)+MAX(shardkey)+AVG(t1_id) FROM t1;
+}
+expect unordered {
+    783507.0000
+}

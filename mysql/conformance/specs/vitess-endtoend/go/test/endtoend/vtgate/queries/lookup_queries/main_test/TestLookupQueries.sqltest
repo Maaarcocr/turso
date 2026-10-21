@@ -1,0 +1,123 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/lookup_queries/main_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table user
+(
+    id            bigint,
+    lookup        varchar(128),
+    lookup_unique varchar(128),
+    primary key (id)
+) Engine = InnoDB;
+    create table lookup
+(
+    lookup      varchar(128),
+    id          bigint,
+    keyspace_id varbinary(100),
+    primary key (id)
+) Engine = InnoDB;
+    create table lookup_unique
+(
+    lookup_unique varchar(128),
+    keyspace_id   varbinary(100),
+    primary key (lookup_unique)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into user 
+    (id, lookup,   lookup_unique) values 
+	(1, 'apa',    'apa'), 
+	(2, 'apa',    'bandar'), 
+	(3, 'monkey', 'monkey');
+}
+
+@setup s1
+test l128 {
+    insert into user 
+    (id, lookup,   lookup_unique) values 
+	(1, 'apa',    'apa'), 
+	(2, 'apa',    'bandar'), 
+	(3, 'monkey', 'monkey');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l138 {
+    select id from user where lookup = 'apa';
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s2
+test l139 {
+    select id from user where lookup = 'not there';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l140 {
+    select id from user where lookup in ('apa', 'monkey');
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s2
+test l141 {
+    select count(*) from user where lookup in ('apa', 'monkey');
+}
+expect unordered {
+    3
+}
+
+@setup s1
+@setup s2
+test l143 {
+    select id from user where lookup_unique = 'apa';
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l144 {
+    select id from user where lookup_unique = 'not there';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l145 {
+    select id from user where lookup_unique in ('apa', 'bandar');
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s2
+test l146 {
+    select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar');
+}
+expect unordered {
+    3
+}

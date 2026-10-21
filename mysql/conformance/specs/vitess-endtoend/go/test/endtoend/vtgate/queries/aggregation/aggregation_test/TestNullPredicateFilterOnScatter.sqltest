@@ -1,0 +1,37 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table aggr_test
+(
+    id   bigint,
+    val1 varchar(16),
+    val2 bigint,
+    primary key (id)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into aggr_test(id, val1, val2) values(1,'a',null), (2,'a',null), (3,'b',10), (4,'b',20);
+}
+
+@setup s1
+test l171 {
+    insert into aggr_test(id, val1, val2) values(1,'a',null), (2,'a',null), (3,'b',10), (4,'b',20);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l180 {
+    select val1, sum(val2) as s from aggr_test group by val1 having sum(val2) > 5 order by val1;
+}
+expect {
+    b|30
+}

@@ -1,0 +1,35 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t10 (
+   k BIGINT PRIMARY KEY,
+   a INT,
+   b INT
+);
+}
+
+setup s2 {
+    insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20);
+}
+
+@setup s1
+test l556 {
+    insert into t10(k, a, b) values (0, 100, 10), (10, 200, 20);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l558 {
+    select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t10 where a = 100) A;
+}
+expect unordered {
+    100|10|10.0000
+}

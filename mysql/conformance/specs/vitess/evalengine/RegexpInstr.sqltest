@@ -1,0 +1,406 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT REGEXP_INSTR('Michael!', '.*');
+}
+expect {
+    1
+}
+
+test t-1 {
+    SELECT REGEXP_INSTR('new*\n*line', 'new\\\*.\\\*line');
+}
+expect {
+    0
+}
+
+test t-2 {
+    SELECT REGEXP_INSTR('a', '^[a-d]');
+}
+expect {
+    1
+}
+
+test t-3 {
+    SELECT REGEXP_INSTR('CamelCase', 'CAMELCASE');
+}
+expect {
+    1
+}
+
+test t-4 {
+    SELECT REGEXP_INSTR('CamelCase', 'CAMELCASE' COLLATE utf8mb4_0900_as_cs);
+}
+expect {
+    0
+}
+
+# mysql-error: 3686 HY000 Index out of bounds in regular expression search.
+test t-6 {
+    SELECT REGEXP_INSTR('abc', 'ABC', 'c');
+}
+expect error {
+}
+
+test t-7 {
+    SELECT REGEXP_INSTR('0', '0', 1, 0);
+}
+expect {
+    1
+}
+
+test t-8 {
+    SELECT REGEXP_INSTR(' ', '[[:blank:]]');
+}
+expect {
+    1
+}
+
+test t-9 {
+    SELECT REGEXP_INSTR('\t', '[[:blank:]]');
+}
+expect {
+    1
+}
+
+test t-10 {
+    SELECT REGEXP_INSTR(' ', '[[:space:]]');
+}
+expect {
+    1
+}
+
+test t-11 {
+    SELECT REGEXP_INSTR('\t', '[[:space:]]');
+}
+expect {
+    1
+}
+
+test t-12 {
+    SELECT REGEXP_INSTR(_latin1 0xFF, _latin1 '[[:lower:]]' COLLATE latin1_bin);
+}
+expect {
+    1
+}
+
+test t-13 {
+    SELECT REGEXP_INSTR(_koi8r  0xFF, _koi8r  '[[:lower:]]' COLLATE koi8r_bin);
+}
+expect {
+    0
+}
+
+test t-14 {
+    SELECT REGEXP_INSTR(_latin1 0xFF, _latin1 '[[:upper:]]' COLLATE latin1_bin);
+}
+expect {
+    0
+}
+
+test t-15 {
+    SELECT REGEXP_INSTR(_koi8r  0xFF, _koi8r  '[[:upper:]]' COLLATE koi8r_bin);
+}
+expect {
+    1
+}
+
+test t-16 {
+    SELECT REGEXP_INSTR(_latin1 0xF7, _latin1 '[[:alpha:]]');
+}
+expect {
+    0
+}
+
+test t-17 {
+    SELECT REGEXP_INSTR(_koi8r  0xF7, _koi8r  '[[:alpha:]]');
+}
+expect {
+    1
+}
+
+test t-18 {
+    SELECT REGEXP_INSTR(_latin1'a', _latin1'A' collate latin1_general_ci);
+}
+expect {
+    1
+}
+
+test t-19 {
+    SELECT REGEXP_INSTR(_latin1'a', _latin1'A' collate latin1_bin);
+}
+expect {
+    0
+}
+
+test t-20 {
+    SELECT REGEXP_INSTR('a', '\\\p\{alphabetic\}');
+}
+expect {
+    1
+}
+
+test t-21 {
+    SELECT REGEXP_INSTR('a', '\\\P\{alphabetic\}');
+}
+expect {
+    0
+}
+
+test t-23 {
+    SELECT REGEXP_INSTR('a', '\\\p\{Lowercase_letter\}');
+}
+expect {
+    1
+}
+
+test t-24 {
+    SELECT REGEXP_INSTR('a', '\\\p\{Uppercase_letter\}');
+}
+expect {
+    1
+}
+
+test t-25 {
+    SELECT REGEXP_INSTR('A', '\\\p\{Lowercase_letter\}');
+}
+expect {
+    1
+}
+
+test t-26 {
+    SELECT REGEXP_INSTR('A', '\\\p\{Uppercase_letter\}');
+}
+expect {
+    1
+}
+
+test t-31 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog');
+}
+expect {
+    1
+}
+
+test t-32 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 2);
+}
+expect {
+    9
+}
+
+test t-33 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 1);
+}
+expect {
+    1
+}
+
+test t-34 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 0);
+}
+expect {
+    1
+}
+
+test t-35 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 1);
+}
+expect {
+    4
+}
+
+test t-36 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 1, 1, 'i');
+}
+expect {
+    4
+}
+
+test t-37 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 1, 1, 'c');
+}
+expect {
+    0
+}
+
+test t-38 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2);
+}
+expect {
+    9
+}
+
+test t-39 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 0);
+}
+expect {
+    9
+}
+
+test t-40 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2, 1);
+}
+expect {
+    12
+}
+
+test t-41 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'i');
+}
+expect {
+    12
+}
+
+test t-42 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, 'c');
+}
+expect {
+    0
+}
+
+test t-43 {
+    SELECT REGEXP_INSTR('aa aaa aaaa', 'a\{2\}');
+}
+expect {
+    1
+}
+
+test t-44 {
+    SELECT REGEXP_INSTR('aa aaa aaaa', 'a\{4\}');
+}
+expect {
+    8
+}
+
+test t-45 {
+    SELECT REGEXP_INSTR(1234, 12);
+}
+expect {
+    1
+}
+
+test t-46 {
+    SELECT REGEXP_INSTR(1234, 12, 1);
+}
+expect {
+    1
+}
+
+# mysql-error: 3686 HY000 Index out of bounds in regular expression search.
+test t-47 {
+    SELECT REGEXP_INSTR(1234, 12, 100);
+}
+expect error {
+}
+
+test t-48 {
+    SELECT REGEXP_INSTR(1234, 12, 1, 1);
+}
+expect {
+    1
+}
+
+test t-49 {
+    SELECT REGEXP_INSTR(1234, 12, 1, 1, 1);
+}
+expect {
+    3
+}
+
+test t-50 {
+    SELECT REGEXP_INSTR(1234, 12, 1, 1, 1, 'c');
+}
+expect {
+    3
+}
+
+test t-51 {
+    SELECT REGEXP_INSTR('', ' ', 1000);
+}
+expect {
+    0
+}
+
+# mysql-error: 3686 HY000 Index out of bounds in regular expression search.
+test t-52 {
+    SELECT REGEXP_INSTR(' ', ' ', 1000);
+}
+expect error {
+}
+
+test t-53 {
+    SELECT REGEXP_INSTR(NULL, 'DOG', 1, 2, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-54 {
+    SELECT REGEXP_INSTR('dog cat dog', NULL, 1, 2, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-55 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', NULL, 2, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-56 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, NULL, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-57 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, NULL, 'c');
+}
+expect {
+    NULL
+}
+
+test t-58 {
+    SELECT REGEXP_INSTR('dog cat dog', 'DOG', 1, 2, 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-60 {
+    SELECT REGEXP_INSTR('dog cat dog', _latin1 'DOG', NULL, 2, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-61 {
+    SELECT REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, NULL, 1, 'c');
+}
+expect {
+    NULL
+}
+
+test t-62 {
+    SELECT REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, NULL, 'c');
+}
+expect {
+    NULL
+}
+
+test t-63 {
+    SELECT REGEXP_INSTR('dog cat dog', _latin1 'DOG', 1, 2, 1, NULL);
+}
+expect {
+    NULL
+}

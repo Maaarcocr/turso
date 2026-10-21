@@ -1,0 +1,476 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/misc/misc_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table all_types
+(
+    id                 bigint not null,
+    msg                varchar(64),
+    keyspace_id        bigint(20) unsigned,
+    tinyint_unsigned   TINYINT,
+    bool_signed        BOOL,
+    smallint_unsigned  SMALLINT,
+    mediumint_unsigned MEDIUMINT,
+    int_unsigned       INT,
+    float_unsigned     FLOAT(10, 2),
+    double_unsigned    DOUBLE(16, 2),
+    decimal_unsigned   DECIMAL,
+    t_date             DATE,
+    t_datetime         DATETIME,
+    t_datetime_micros  DATETIME(6),
+    t_time             TIME,
+    t_timestamp        TIMESTAMP,
+    c8                 bit(8)  DEFAULT NULL,
+    c16                bit(16) DEFAULT NULL,
+    c24                bit(24) DEFAULT NULL,
+    c32                bit(32) DEFAULT NULL,
+    c40                bit(40) DEFAULT NULL,
+    c48                bit(48) DEFAULT NULL,
+    c56                bit(56) DEFAULT NULL,
+    c63                bit(63) DEFAULT NULL,
+    c64                bit(64) DEFAULT NULL,
+    json_col           JSON,
+    text_col           TEXT,
+    data               longblob,
+    tinyint_min        TINYINT,
+    tinyint_max        TINYINT,
+    tinyint_pos        TINYINT,
+    tinyint_neg        TINYINT,
+    smallint_min       SMALLINT,
+    smallint_max       SMALLINT,
+    smallint_pos       SMALLINT,
+    smallint_neg       SMALLINT,
+    medint_min         MEDIUMINT,
+    medint_max         MEDIUMINT,
+    medint_pos         MEDIUMINT,
+    medint_neg         MEDIUMINT,
+    int_min            INT,
+    int_max            INT,
+    int_pos            INT,
+    int_neg            INT,
+    bigint_min         BIGINT,
+    bigint_max         BIGINT,
+    bigint_pos         BIGINT,
+    bigint_neg         BIGINT,
+    primary key (id)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine=InnoDB;
+    create table tbl
+(
+    id         bigint,
+    unq_col    bigint,
+    nonunq_col bigint not null,
+    primary key (id),
+    unique (unq_col)
+) Engine = InnoDB;
+    create table all_types
+(
+    id                 bigint not null,
+    msg                varchar(64),
+    keyspace_id        bigint(20) unsigned,
+    tinyint_unsigned   TINYINT,
+    bool_signed        BOOL,
+    smallint_unsigned  SMALLINT,
+    mediumint_unsigned MEDIUMINT,
+    int_unsigned       INT,
+    float_unsigned     FLOAT(10, 2),
+    double_unsigned    DOUBLE(16, 2),
+    decimal_unsigned   DECIMAL,
+    t_date             DATE,
+    t_datetime         DATETIME,
+    t_datetime_micros  DATETIME(6),
+    t_time             TIME,
+    t_timestamp        TIMESTAMP,
+    c8                 bit(8)  DEFAULT NULL,
+    c16                bit(16) DEFAULT NULL,
+    c24                bit(24) DEFAULT NULL,
+    c32                bit(32) DEFAULT NULL,
+    c40                bit(40) DEFAULT NULL,
+    c48                bit(48) DEFAULT NULL,
+    c56                bit(56) DEFAULT NULL,
+    c63                bit(63) DEFAULT NULL,
+    c64                bit(64) DEFAULT NULL,
+    json_col           JSON,
+    text_col           TEXT,
+    data               longblob,
+    tinyint_min        TINYINT,
+    tinyint_max        TINYINT,
+    tinyint_pos        TINYINT,
+    tinyint_neg        TINYINT,
+    smallint_min       SMALLINT,
+    smallint_max       SMALLINT,
+    smallint_pos       SMALLINT,
+    smallint_neg       SMALLINT,
+    medint_min         MEDIUMINT,
+    medint_max         MEDIUMINT,
+    medint_pos         MEDIUMINT,
+    medint_neg         MEDIUMINT,
+    int_min            INT,
+    int_max            INT,
+    int_pos            INT,
+    int_neg            INT,
+    bigint_min         BIGINT,
+    bigint_max         BIGINT,
+    bigint_pos         BIGINT,
+    bigint_neg         BIGINT,
+    primary key (id)
+) Engine = InnoDB;
+    insert into t1(id1, id2) values (1,2), (42,5), (5, 42);
+    insert into all_types(id) values (1);
+}
+
+@setup s1
+test l701 {
+    insert into all_types(id) values (1);
+}
+expect unordered {
+}
+
+@setup s2
+test l718 {
+    select t1.id1 as t0, tbl.id+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-2 {
+    select t1.id1 as t0, tbl.msg+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-3 {
+    select t1.id1 as t0, tbl.keyspace_id+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-4 {
+    select t1.id1 as t0, tbl.tinyint_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-5 {
+    select t1.id1 as t0, tbl.bool_signed+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-6 {
+    select t1.id1 as t0, tbl.smallint_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-7 {
+    select t1.id1 as t0, tbl.mediumint_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-8 {
+    select t1.id1 as t0, tbl.int_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-9 {
+    select t1.id1 as t0, tbl.float_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-10 {
+    select t1.id1 as t0, tbl.double_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-11 {
+    select t1.id1 as t0, tbl.decimal_unsigned+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-12 {
+    select t1.id1 as t0, tbl.t_date+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-13 {
+    select t1.id1 as t0, tbl.t_datetime+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-14 {
+    select t1.id1 as t0, tbl.t_datetime_micros+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-15 {
+    select t1.id1 as t0, tbl.t_time+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-16 {
+    select t1.id1 as t0, tbl.t_timestamp+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-17 {
+    select t1.id1 as t0, tbl.c8+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-18 {
+    select t1.id1 as t0, tbl.c16+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-19 {
+    select t1.id1 as t0, tbl.c24+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-20 {
+    select t1.id1 as t0, tbl.c32+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-21 {
+    select t1.id1 as t0, tbl.c40+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-22 {
+    select t1.id1 as t0, tbl.c48+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-23 {
+    select t1.id1 as t0, tbl.c56+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-24 {
+    select t1.id1 as t0, tbl.c63+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-25 {
+    select t1.id1 as t0, tbl.c64+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-26 {
+    select t1.id1 as t0, tbl.json_col+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-27 {
+    select t1.id1 as t0, tbl.text_col+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-28 {
+    select t1.id1 as t0, tbl.data+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-29 {
+    select t1.id1 as t0, tbl.tinyint_min+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-30 {
+    select t1.id1 as t0, tbl.tinyint_max+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-31 {
+    select t1.id1 as t0, tbl.tinyint_pos+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-32 {
+    select t1.id1 as t0, tbl.tinyint_neg+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-33 {
+    select t1.id1 as t0, tbl.smallint_min+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-34 {
+    select t1.id1 as t0, tbl.smallint_max+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-35 {
+    select t1.id1 as t0, tbl.smallint_pos+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-36 {
+    select t1.id1 as t0, tbl.smallint_neg+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-37 {
+    select t1.id1 as t0, tbl.medint_min+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-38 {
+    select t1.id1 as t0, tbl.medint_max+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-39 {
+    select t1.id1 as t0, tbl.medint_pos+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-40 {
+    select t1.id1 as t0, tbl.medint_neg+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-41 {
+    select t1.id1 as t0, tbl.int_min+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-42 {
+    select t1.id1 as t0, tbl.int_max+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-43 {
+    select t1.id1 as t0, tbl.int_pos+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-44 {
+    select t1.id1 as t0, tbl.int_neg+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-45 {
+    select t1.id1 as t0, tbl.bigint_min+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-46 {
+    select t1.id1 as t0, tbl.bigint_max+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-47 {
+    select t1.id1 as t0, tbl.bigint_pos+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}
+
+@setup s2
+test l718-48 {
+    select t1.id1 as t0, tbl.bigint_neg+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90;
+}
+expect unordered {
+}

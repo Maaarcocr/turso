@@ -1,0 +1,720 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/orderby/orderby_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table user
+(
+    id bigint primary key,
+    col bigint,
+    email varchar(20)
+) Engine = InnoDB
+  DEFAULT charset = utf8mb4
+  COLLATE = utf8mb4_general_ci;
+}
+
+setup s2 {
+    insert into user(id, col, email) values(1,1,'a'), (2,2,'Abc'), (3,3,'b'), (4,4,'c'), (5,2,'test'), (6,1,'test'), (7,2,'a'), (8,3,'b'), (9,4,'c3'), (10,2,'d');
+}
+
+@setup s1
+test l94 {
+    insert into user(id, col, email) values(1,1,'a'), (2,2,'Abc'), (3,3,'b'), (4,4,'c'), (5,2,'test'), (6,1,'test'), (7,2,'a'), (8,3,'b'), (9,4,'c3'), (10,2,'d');
+}
+expect unordered {
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153 {
+    select email, max(col) from user group by email order by col;
+}
+expect error {
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-2 {
+    select email, max(col) from user group by email order by col + 1;
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-3 {
+    select email, max(col) from user group by email order by max(col);
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-4 {
+    select email, max(col) from user group by email order by max(col) + 1;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-5 {
+    select email, max(col) from user group by email order by min(col);
+}
+expect {
+    a|2
+    test|2
+    Abc|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-6 {
+    select email, max(col) as col from user group by email order by col;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-7 {
+    select email, max(col) as col from user group by email order by max(col);
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-8 {
+    select email, max(col) as col from user group by email order by col + 1;
+}
+expect error {
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-9 {
+    select email, max(col) as col from user group by email order by email + col;
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-10 {
+    select email, max(col) as col from user group by email order by email + max(col);
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-11 {
+    select email, max(col) as col from user group by email order by email, col;
+}
+expect {
+    a|2
+    Abc|2
+    b|3
+    c|4
+    c3|4
+    d|2
+    test|2
+}
+
+@setup s1
+@setup s2
+test l153-12 {
+    select email, max(col) as xyz from user group by email order by email, xyz;
+}
+expect {
+    a|2
+    Abc|2
+    b|3
+    c|4
+    c3|4
+    d|2
+    test|2
+}
+
+# mysql-error: 1111 HY000 Invalid use of group function
+@setup s1
+@setup s2
+test l153-13 {
+    select email, max(col) as xyz from user group by email order by email, max(xyz);
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-14 {
+    select email, max(col) as xyz from user group by email order by email, abs(xyz);
+}
+expect {
+    a|2
+    Abc|2
+    b|3
+    c|4
+    c3|4
+    d|2
+    test|2
+}
+
+@setup s1
+@setup s2
+test l153-15 {
+    select email, max(col) as xyz from user group by email order by email, max(col);
+}
+expect {
+    a|2
+    Abc|2
+    b|3
+    c|4
+    c3|4
+    d|2
+    test|2
+}
+
+# mysql-error: 1055 42000 Expression #2 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-16 {
+    select email, max(col) as xyz from user group by email order by email, abs(col);
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-17 {
+    select email, max(col) as xyz from user group by email order by xyz + email;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-18 {
+    select email, max(col) as xyz from user group by email order by abs(xyz) + email;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-19 {
+    select email, max(col) as xyz from user group by email order by abs(xyz);
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-20 {
+    select email, max(col) as xyz from user group by email order by abs(col);
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-21 {
+    select email, max(col) as max_col from user group by email order by max_col desc, length(email);
+}
+expect {
+    c|4
+    c3|4
+    b|3
+    a|2
+    d|2
+    Abc|2
+    test|2
+}
+
+@setup s1
+@setup s2
+test l153-22 {
+    select email, max(col) as max_col, min(col) as min_col from user group by email order by max_col - min_col;
+}
+expect {
+    Abc|2|2
+    b|3|3
+    c|4|4
+    c3|4|4
+    d|2|2
+    a|2|1
+    test|2|1
+}
+
+@setup s1
+@setup s2
+test l153-23 {
+    select email, max(col) as col1, count(*) as col2 from user group by email order by col2 * col1;
+}
+expect {
+    Abc|2|1
+    d|2|1
+    a|2|2
+    c|4|1
+    test|2|2
+    c3|4|1
+    b|3|2
+}
+
+@setup s1
+@setup s2
+test l153-24 {
+    select email, sum(col) as sum_col from user group by email having sum_col > 10 order by sum_col / count(email);
+}
+expect {
+}
+
+@setup s1
+@setup s2
+test l153-25 {
+    select email, max(col) as max_col, char_length(email) as len_email from user group by email order by len_email, max_col desc;
+}
+expect {
+    c|4|1
+    b|3|1
+    a|2|1
+    d|2|1
+    c3|4|2
+    Abc|2|3
+    test|2|4
+}
+
+@setup s1
+@setup s2
+test l153-26 {
+    select email, max(col) as col_alias from user group by email order by case when col_alias > 100 then 0 else 1 end, col_alias;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-27 {
+    select email, count(*) as cnt, max(col) as max_col from user group by email order by cnt desc, max_col + cnt;
+}
+expect {
+    a|2|2
+    test|2|2
+    b|2|3
+    Abc|1|2
+    d|1|2
+    c|1|4
+    c3|1|4
+}
+
+@setup s1
+@setup s2
+test l153-28 {
+    select email, max(col) as max_col from user group by email order by if(max_col > 50, max_col, -max_col) desc;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-29 {
+    select email, max(col) as col, sum(col) as sum_col from user group by email order by col * sum_col desc;
+}
+expect error {
+}
+
+# mysql-error: 1055 42000 Expression #1 of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column 'test.user.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+@setup s2
+test l153-30 {
+    select email, max(col) as col, (select min(col) from user as u2 where u2.email = user.email) as min_col from user group by email order by col - min_col;
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-31 {
+    select email, max(col) as max_col, (max(col) % 10) as mod_col from user group by email order by mod_col, max_col;
+}
+expect {
+    a|2|2
+    Abc|2|2
+    test|2|2
+    d|2|2
+    b|3|3
+    c|4|4
+    c3|4|4
+}
+
+@setup s1
+@setup s2
+test l153-32 {
+    select email, max(col) as 'value', count(email) as 'number' from user group by email order by 'number', 'value';
+}
+expect {
+    a|2|2
+    Abc|2|1
+    b|3|2
+    c|4|1
+    test|2|2
+    c3|4|1
+    d|2|1
+}
+
+@setup s1
+@setup s2
+test l153-33 {
+    select email, max(col) as col, concat('email: ', email, ' col: ', max(col)) as complex_alias from user group by email order by complex_alias desc;
+}
+expect {
+    test|2|email: test col: 2
+    d|2|email: d col: 2
+    c3|4|email: c3 col: 4
+    c|4|email: c col: 4
+    b|3|email: b col: 3
+    Abc|2|email: Abc col: 2
+    a|2|email: a col: 2
+}
+
+@setup s1
+@setup s2
+test l153-34 {
+    select email, max(col) as max_col from user group by email union select email, min(col) as min_col from user group by email order by email;
+}
+expect {
+    a|2
+    a|1
+    Abc|2
+    b|3
+    c|4
+    c3|4
+    d|2
+    test|2
+    test|1
+}
+
+@setup s1
+@setup s2
+test l153-35 {
+    select email, max(col) as col from user where col > 50 group by email order by col desc;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+test l153-36 {
+    select email, max(col) as col from user group by email order by length(email), col;
+}
+expect {
+    a|2
+    d|2
+    b|3
+    c|4
+    c3|4
+    Abc|2
+    test|2
+}
+
+@setup s1
+@setup s2
+test l153-37 {
+    select email, max(col) as max_col, substring(email, 1, 3) as sub_email from user group by email order by sub_email, max_col desc;
+}
+expect {
+    a|2|a
+    Abc|2|Abc
+    b|3|b
+    c|4|c
+    c3|4|c3
+    d|2|d
+    test|2|tes
+}
+
+@setup s1
+@setup s2
+test l153-38 {
+    select email, max(col) as max_col from user group by email order by reverse(email), max_col;
+}
+expect {
+    c3|4
+    a|2
+    b|3
+    c|4
+    Abc|2
+    d|2
+    test|2
+}
+
+# mysql-error: 1111 HY000 Invalid use of group function
+@setup s1
+@setup s2
+test l153-39 {
+    select email, max(col) as max_col from user group by email having max_col > avg(max_col) order by max_col desc;
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l153-40 {
+    select email, count(*) as count, max(col) as max_col from user group by email order by count * max_col desc;
+}
+expect {
+    b|2|3
+    a|2|2
+    c|1|4
+    test|2|2
+    c3|1|4
+    Abc|1|2
+    d|1|2
+}
+
+@setup s1
+@setup s2
+test l153-41 {
+    select email, max(col) as col_alias from user group by email order by col_alias limit 10;
+}
+expect {
+    a|2
+    Abc|2
+    test|2
+    d|2
+    b|3
+    c|4
+    c3|4
+}
+
+@setup s1
+@setup s2
+test l153-42 {
+    select email, max(col) as col from user group by email order by col desc, email;
+}
+expect {
+    c|4
+    c3|4
+    b|3
+    a|2
+    Abc|2
+    d|2
+    test|2
+}
+
+@setup s1
+@setup s2
+test l153-43 {
+    select concat(email, ' ', max(col)) as combined from user group by email order by combined desc;
+}
+expect {
+    test 2
+    d 2
+    c3 4
+    c 4
+    b 3
+    Abc 2
+    a 2
+}
+
+@setup s1
+@setup s2
+test l153-44 {
+    select email, max(col) as max_col from user group by email order by ascii(email), max_col;
+}
+expect {
+    Abc|2
+    a|2
+    b|3
+    c|4
+    c3|4
+    d|2
+    test|2
+}
+
+@setup s1
+@setup s2
+test l153-45 {
+    select email, char_length(email) as email_length, max(col) as max_col from user group by email order by email_length desc, max_col;
+}
+expect {
+    test|4|2
+    Abc|3|2
+    c3|2|4
+    a|1|2
+    d|1|2
+    b|1|3
+    c|1|4
+}
+
+@setup s1
+@setup s2
+test l153-46 {
+    select email, max(col) as col from user group by email having col between 10 and 100 order by col;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+test l153-47 {
+    select email, max(col) as max_col, min(col) as min_col from user group by email order by max_col + min_col desc;
+}
+expect {
+    c|4|4
+    c3|4|4
+    b|3|3
+    Abc|2|2
+    d|2|2
+    a|2|1
+    test|2|1
+}
+
+@setup s1
+@setup s2
+test l153-48 {
+    select email, max(col) as 'max', count(*) as 'count' from user group by email order by 'max' desc, 'count';
+}
+expect {
+    a|2|2
+    Abc|2|1
+    b|3|2
+    c|4|1
+    test|2|2
+    c3|4|1
+    d|2|1
+}
+
+@setup s1
+@setup s2
+test l153-49 {
+    select email, max(col) as max_col from (select email, col from user where col > 20) as filtered group by email order by max_col;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+test l153-50 {
+    select a.email, a.max_col from (select email, max(col) as max_col from user group by email) as a order by a.max_col desc;
+}
+expect {
+    c|4
+    c3|4
+    b|3
+    a|2
+    Abc|2
+    test|2
+    d|2
+}
+
+@setup s1
+@setup s2
+test l153-51 {
+    select email, max(col) as max_col from user where email like 'a%' group by email order by max_col, email;
+}
+expect {
+    a|2
+    Abc|2
+}
+
+@setup s1
+@setup s2
+test l153-52 {
+    select email, max(col) as max_col from user group by email union select email, avg(col) as avg_col from user group by email order by email desc;
+}
+expect {
+    test|2.0000
+    test|1.5000
+    d|2.0000
+    c3|4.0000
+    c|4.0000
+    b|3.0000
+    Abc|2.0000
+    a|2.0000
+    a|1.5000
+}

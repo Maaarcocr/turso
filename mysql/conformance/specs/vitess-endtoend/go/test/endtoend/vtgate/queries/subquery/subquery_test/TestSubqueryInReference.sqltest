@@ -1,0 +1,207 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/subquery/subquery_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into t1(id1, id2) values (1,10), (2, 20), (3, 30), (4, 40), (5, 50);
+}
+
+@setup s1
+test l134 {
+    insert into t1(id1, id2) values (1,10), (2, 20), (3, 30), (4, 40), (5, 50);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l135 {
+    select exists(select * from t1 where id1 = 3);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l136 {
+    select exists(select * from t1 where id1 = 9);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l137 {
+    select exists(select * from t1);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l138 {
+    select exists(select * from t1 where id2 = 30);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l139 {
+    select exists(select * from t1 where id2 = 9);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l140 {
+    select count(*) from t1 where id2 = 9;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l142 {
+    select 1 in (select 1 from t1 where id1 = 3);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l143 {
+    select 1 in (select 1 from t1 where id1 = 9);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l144 {
+    select 1 in (select id1 from t1);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l145 {
+    select 1 in (select 1 from t1 where id2 = 30);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l146 {
+    select 1 in (select 1 from t1 where id2 = 9);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l148 {
+    select 1 not in (select 1 from t1 where id1 = 3);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l149 {
+    select 1 not in (select 1 from t1 where id1 = 9);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l150 {
+    select 1 not in (select id1 from t1);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l151 {
+    select 1 not in (select 1 from t1 where id2 = 30);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l152 {
+    select 1 not in (select 1 from t1 where id2 = 9);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l154 {
+    select (select id2 from t1 where id1 = 3);
+}
+expect unordered {
+    30
+}
+
+@setup s1
+@setup s2
+test l155 {
+    select (select id2 from t1 where id1 = 9);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+test l156 {
+    select (select id1 from t1 where id2 = 30);
+}
+expect unordered {
+    3
+}
+
+@setup s1
+@setup s2
+test l157 {
+    select (select id1 from t1 where id2 = 9);
+}
+expect unordered {
+    NULL
+}

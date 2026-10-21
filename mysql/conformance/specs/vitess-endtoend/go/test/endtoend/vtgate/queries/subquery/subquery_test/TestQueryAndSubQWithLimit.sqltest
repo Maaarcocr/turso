@@ -1,0 +1,45 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/subquery/subquery_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9);
+}
+
+@setup s1
+test l93 {
+    insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l94 {
+    select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100;
+}
+expect unordered {
+    0|0
+    1|1
+    2|2
+    3|3
+    4|4
+    5|5
+    6|6
+    7|7
+    8|8
+    9|9
+}

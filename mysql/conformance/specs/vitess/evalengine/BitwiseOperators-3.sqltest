@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-91384 {
+    SELECT -1.1 << X'ff';
+}
+expect {
+    0
+}
+
+test t-91532 {
+    SELECT -1.7 << 1.7;
+}
+expect {
+    18446744073709551608
+}
+
+test t-91556 {
+    SELECT -1.7 << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-91559 {
+    SELECT -1.7 << NULL / NULL;
+}
+expect {
+    NULL
+}
+
+test t-91614 {
+    SELECT -1.7 << time'00:00:59.2132234';
+}
+expect {
+    17293822569102704640
+}
+
+test t-91700 {
+    SELECT '1.5' << _utf8 'foobar';
+}
+expect {
+    1
+}
+
+test t-91721 {
+    SELECT '1.5' << NULL / NULL;
+}
+expect {
+    NULL
+}
+
+test t-91823 {
+    SELECT '1.5' << cast('["ab", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-91840 {
+    SELECT '-1.5' << ' 1 ';
+}
+expect {
+    18446744073709551614
+}
+
+test t-91849 {
+    SELECT '-1.5' << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-91879 {
+    SELECT '-1.5' << 1 * NULL;
+}
+expect {
+    NULL
+}
+
+test t-91926 {
+    SELECT '-1.5' << '103458.123456';
+}
+expect {
+    0
+}
+
+test t-91968 {
+    SELECT '-1.5' << cast('2' as json);
+}
+expect {
+    18446744073709551612
+}
+
+test t-91971 {
+    SELECT '-1.5' << cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-92017 {
+    SELECT 'foobar' << 1.1;
+}
+expect {
+    0
+}
+
+test t-92047 {
+    SELECT 'foobar' << 1 + NULL;
+}
+expect {
+    NULL
+}
+
+test t-92095 {
+    SELECT 'foobar' << time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-92164 {
+    SELECT _utf8 'foobar' << ' 1 ';
+}
+expect {
+    0
+}
+
+test t-92215 {
+    SELECT _utf8 'foobar' << 0x666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-92225 {
+    SELECT _utf8 'foobar' << time '31:34:58';
+}
+expect {
+    0
+}
+
+test t-92268 {
+    SELECT _utf8 'foobar' << '2000-01-01';
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-92299 {
+    SELECT _utf8 'foobar' << cast('invalid' as json);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-92315 {
+    SELECT _utf8 'foobar' << cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-92344 {
+    SELECT '' << -1.7;
+}
+expect {
+    0
+}
+
+test t-92431 {
+    SELECT '' << '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+test t-92600 {
+    SELECT _binary 'foobar' << cast(0 as json);
+}
+expect {
+    foobar
+}
+
+test t-92674 {
+    SELECT 0x0 << _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-92760 {
+    SELECT 0x0 << '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-92912 {
+    SELECT 0x1 << time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-93005 {
+    SELECT 0xff << 0b1001;
+}
+expect {
+    130560
+}
+
+test t-93044 {
+    SELECT 0xff << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-93056 {
+    SELECT 0xff << '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-93066 {
+    SELECT 0xff << '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-93103 {
+    SELECT 0xff << cast('1.1' as json);
+}
+expect {
+    510
+}
+
+test t-93105 {
+    SELECT 0xff << cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-93107 {
+    SELECT 0xff << cast('"foo"' as json);
+}
+expect {
+    255
+}
+
+test t-93245 {
+    SELECT X'00' << '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+test t-93291 {
+    SELECT X'00' << cast(time '12:34:56' as json);
+}
+expect {
+    0
+}
+
+test t-93335 {
+    SELECT X'01' << false;
+}
+expect {
+    1
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-93355 {
+    SELECT X'01' << -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-93371 {
+    SELECT X'01' << timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-93382 {
+    SELECT X'01' << '20000101';
+}
+expect {
+    0
+}
+
+test t-93455 {
+    SELECT X'01' << cast(time '5 12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-93460 {
+    SELECT X'ff' << ' 1 ';
+}
+expect {
+    510
+}
+
+test t-93492 {
+    SELECT X'ff' << b'1001';
+}
+expect {
+    130560
+}
+
+test t-93520 {
+    SELECT X'ff' << time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-93535 {
+    SELECT X'ff' << 20000101103458;
+}
+expect {
+    0
+}
+
+test t-93561 {
+    SELECT X'ff' << '10:04:58';
+}
+expect {
+    261120
+}
+
+test t-93593 {
+    SELECT X'ff' << cast('"foo"' as json);
+}
+expect {
+    255
+}
+
+test t-93625 {
+    SELECT 0b1001 << ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-93635 {
+    SELECT 0b1001 << 1.5;
+}
+expect {
+    36
+}
+
+test t-93662 {
+    SELECT 0b1001 << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-93682 {
+    SELECT 0b1001 << time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-93688 {
+    SELECT 0b1001 << time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-93692 {
+    SELECT 0b1001 << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-93760 {
+    SELECT 0b1001 << cast(0xFF666F6F626172FF as json);
+}
+expect {
+    9
+}
+
+test t-93763 {
+    SELECT 0b1001 << cast(0b001 as json);
+}
+expect {
+    9
+}
+
+test t-93780 {
+    SELECT b'1001' << 0;
+}
+expect {
+    9
+}
+
+test t-93783 {
+    SELECT b'1001' << ' 0 ';
+}
+expect {
+    9
+}
+
+test t-93848 {
+    SELECT b'1001' << time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-93873 {
+    SELECT b'1001' << '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-93973 {
+    SELECT 0x9 << 0xff;
+}
+expect {
+    0
+}
+
+test t-93979 {
+    SELECT 0x9 << 0x9;
+}
+expect {
+    4608
+}
+
+test t-94045 {
+    SELECT 0x9 << time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-94056 {
+    SELECT 0x9 << '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-94141 {
+    SELECT x'09' << 0x9;
+}
+expect {
+    4608
+}
+
+test t-94264 {
+    SELECT x'09' << cast(time '12:34:58' as json);
+}
+expect {
+    9
+}
+
+test t-94351 {
+    SELECT NULL << '20000101103458';
+}
+expect {
+    NULL
+}
+
+test t-94390 {
+    SELECT NULL << cast('false' as json);
+}
+expect {
+    NULL
+}
+
+test t-94418 {
+    SELECT NULL << cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-94427 {
+    SELECT NULL << cast(time '5 12:34:58' as json);
+}
+expect {
+    NULL
+}
+
+test t-94454 {
+    SELECT true << _utf8 'foobar';
+}
+expect {
+    1
+}
+
+test t-94665 {
+    SELECT false << timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-94684 {
+    SELECT false << '20000101foo';
+}
+expect {
+    0
+}
+
+test t-94686 {
+    SELECT false << '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-94749 {
+    SELECT false << cast(time '12:34:56' as json);
+}
+expect {
+    0
+}
+
+test t-94816 {
+    SELECT NULL * 1 << time '10:04:58';
+}
+expect {
+    NULL
+}
+
+test t-94818 {
+    SELECT NULL * 1 << time '32:34:58';
+}
+expect {
+    NULL
+}
+
+test t-94863 {
+    SELECT NULL * 1 << '0000-01-03';
+}
+expect {
+    NULL
+}
+
+test t-94870 {
+    SELECT NULL * 1 << cast(true as json);
+}
+expect {
+    NULL
+}
+
+test t-94883 {
+    SELECT NULL * 1 << cast('1' as json);
+}
+expect {
+    NULL
+}
+
+test t-94972 {
+    SELECT 1 * NULL << -9223372036854775808;
+}
+expect {
+    NULL
+}
+
+test t-95003 {
+    SELECT 1 * NULL << '103458';
+}
+expect {
+    NULL
+}
+
+test t-95033 {
+    SELECT 1 * NULL << cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-95088 {
+    SELECT NULL * NULL << 1.1e0;
+}
+expect {
+    NULL
+}
+
+test t-95141 {
+    SELECT NULL * NULL << time '31:34:58';
+}
+expect {
+    NULL
+}
+
+test t-95233 {
+    SELECT NULL * NULL << cast(date '2000-01-02' as json);
+}
+expect {
+    NULL
+}
+
+test t-95286 {
+    SELECT NULL / 1 << NULL + 1;
+}
+expect {
+    NULL
+}
+
+test t-95302 {
+    SELECT NULL / 1 << time '10:04:58';
+}
+expect {
+    NULL
+}
+
+test t-95308 {
+    SELECT NULL / 1 << time '31:34:58.4';
+}
+expect {
+    NULL
+}
+
+test t-95348 {
+    SELECT NULL / 1 << '0000-02-29';
+}
+expect {
+    NULL
+}
+
+test t-95352 {
+    SELECT NULL / 1 << '3001-02-19 00:00:00';
+}
+expect {
+    NULL
+}
+
+test t-95365 {
+    SELECT NULL / 1 << cast(1.1 as json);
+}
+expect {
+    NULL
+}
+
+test t-95367 {
+    SELECT NULL / 1 << cast(9223372036854775807 as json);
+}
+expect {
+    NULL
+}
+
+test t-95397 {
+    SELECT NULL / 1 << cast(time '12:34:56' as json);
+}
+expect {
+    NULL
+}
+
+test t-95483 {
+    SELECT 1 / NULL << 103458;
+}
+expect {
+    NULL
+}
+
+test t-95604 {
+    SELECT NULL / NULL << NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-95650 {
+    SELECT NULL / NULL << '20000101';
+}
+expect {
+    NULL
+}
+
+test t-95683 {
+    SELECT NULL / NULL << cast('[]' as json);
+}
+expect {
+    NULL
+}
+
+test t-95706 {
+    SELECT NULL / NULL << cast(0b01 as json);
+}
+expect {
+    NULL
+}
+
+test t-95772 {
+    SELECT NULL + 1 << NULL + 1;
+}
+expect {
+    NULL
+}
+
+test t-95832 {
+    SELECT NULL + 1 << '2000-01-01';
+}
+expect {
+    NULL
+}
+
+test t-95869 {
+    SELECT NULL + 1 << cast(0b001 as json);
+}
+expect {
+    NULL
+}
+
+test t-95909 {
+    SELECT 1 + NULL << '1.5';
+}
+expect {
+    NULL
+}
+
+test t-95974 {
+    SELECT 1 + NULL << '20000101';
+}
+expect {
+    NULL
+}
+
+test t-95986 {
+    SELECT 1 + NULL << time'00:00:01.0000';
+}
+expect {
+    NULL
+}
+
+test t-96037 {
+    SELECT 1 + NULL << cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-96053 {
+    SELECT NULL + NULL << ' 255 ';
+}
+expect {
+    NULL
+}
+
+test t-96149 {
+    SELECT NULL + NULL << time'00:00:59.01011';
+}
+expect {
+    NULL
+}
+
+test t-96153 {
+    SELECT NULL + NULL << '10:04:58';
+}
+expect {
+    NULL
+}
+
+test t-96171 {
+    SELECT NULL + NULL << cast('true' as json);
+}
+expect {
+    NULL
+}
+
+test t-96233 {
+    SELECT NULL - 1 << '1.5';
+}
+expect {
+    NULL
+}
+
+test t-96235 {
+    SELECT NULL - 1 << 'foobar';
+}
+expect {
+    NULL
+}
+
+test t-96244 {
+    SELECT NULL - 1 << X'ff';
+}
+expect {
+    NULL
+}
+
+test t-96279 {
+    SELECT NULL - 1 << time '10:04:58.1';
+}
+expect {
+    NULL
+}
+
+test t-96290 {
+    SELECT NULL - 1 << 20000101103458.1234;
+}
+expect {
+    NULL
+}
+
+test t-96301 {
+    SELECT NULL - 1 << '20000101103458foo';
+}
+expect {
+    NULL
+}
+
+test t-96303 {
+    SELECT NULL - 1 << '20000101103458.123456foo';
+}
+expect {
+    NULL
+}
+
+test t-96363 {
+    SELECT NULL - 1 << cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-96423 {
+    SELECT 1 - NULL << NULL - 1;
+}
+expect {
+    NULL
+}
+
+test t-96440 {
+    SELECT 1 - NULL << time '5 10:34:58';
+}
+expect {
+    NULL
+}
+
+test t-96489 {
+    SELECT 1 - NULL << cast(1 as json);
+}
+expect {
+    NULL
+}
+
+test t-96534 {
+    SELECT NULL - NULL << 0;
+}
+expect {
+    NULL
+}
+
+test t-96617 {
+    SELECT NULL - NULL << 103458;
+}
+expect {
+    NULL
+}
+
+test t-96627 {
+    SELECT NULL - NULL << '20000101103458.123456foo';
+}
+expect {
+    NULL
+}
+
+test t-96675 {
+    SELECT NULL - NULL << cast(_binary '"bar"' as json);
+}
+expect {
+    NULL
+}
+
+test t-96688 {
+    SELECT NULL - NULL << cast(' "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-96848 {
+    SELECT 0xFF666F6F626172FF << cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    18403519451478717183
+}
+
+test t-96949 {
+    SELECT 0x666F6F626172FF << '20000101103458foo';
+}
+expect {
+    0
+}
+
+test t-96974 {
+    SELECT 0x666F6F626172FF << cast(0 as json);
+}
+expect {
+    28832971807093503
+}
+
+test t-96975 {
+    SELECT 0x666F6F626172FF << cast(1 as json);
+}
+expect {
+    57665943614187006
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-97012 {
+    SELECT 0x666F6F626172FF << cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-97026 {
+    SELECT 0xFF666F6F626172 << '\t1foo\t';
+}
+expect {
+    143777495714677476
+}
+
+test t-97112 {
+    SELECT 0xFF666F6F626172 << '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-97207 {
+    SELECT 9223372036854775807 << 'foobar';
+}
+expect {
+    9223372036854775807
+}
+
+test t-97283 {
+    SELECT 9223372036854775807 << time'00:00:59.01011';
+}
+expect {
+    17870283321406128128
+}
+
+test t-97296 {
+    SELECT 9223372036854775807 << '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-97320 {
+    SELECT 9223372036854775807 << cast('"bar"' as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-97424 {
+    SELECT -9223372036854775808 << 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-97441 {
+    SELECT -9223372036854775808 << time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-97458 {
+    SELECT -9223372036854775808 << '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-97464 {
+    SELECT -9223372036854775808 << cast('\{\}' as json);
+}
+expect {
+    9223372036854775808
+}
+
+test t-97580 {
+    SELECT 18446744073709551615 << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-97616 {
+    SELECT 18446744073709551615 << '0000-02-29';
+}
+expect {
+    18446744073709551615
+}
+
+test t-97663 {
+    SELECT 18446744073709551615 << cast(date '2000-01-02' as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-97685 {
+    SELECT 18446744073709540000e0 << 1.5;
+}
+expect {
+    18446744073709551612
+}
+
+test t-97722 {
+    SELECT 18446744073709540000e0 << 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-97728 {
+    SELECT 18446744073709540000e0 << 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-97771 {
+    SELECT 18446744073709540000e0 << time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-97797 {
+    SELECT 18446744073709540000e0 << cast(9223372036854775807 as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-97841 {
+    SELECT -18446744073709540000e0 << -1.5e0;
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-97875 {
+    SELECT -18446744073709540000e0 << NULL / 1;
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-97978 {
+    SELECT -18446744073709540000e0 << cast('["ab", "cd", "ef"]' as json);
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-97981 {
+    SELECT -18446744073709540000e0 << cast('\{"b": 2, "a": 1\}' as json);
+}
+expect error {
+}
+
+test t-98088 {
+    SELECT JSON_OBJECT() << '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-98110 {
+    SELECT JSON_OBJECT() << cast(true as json);
+}
+expect {
+    0
+}
+
+test t-98130 {
+    SELECT JSON_OBJECT() << cast('"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-98144 {
+    SELECT JSON_OBJECT() << cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-98179 {
+    SELECT JSON_ARRAY() << 'foobar';
+}
+expect {
+    0
+}
+
+test t-98181 {
+    SELECT JSON_ARRAY() << '';
+}
+expect {
+    0
+}
+
+test t-98205 {
+    SELECT JSON_ARRAY() << NULL - 1;
+}
+expect {
+    NULL
+}
+
+test t-98255 {
+    SELECT JSON_ARRAY() << time'00:00:59.01011';
+}
+expect {
+    0
+}
+
+test t-98284 {
+    SELECT JSON_ARRAY() << cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-98313 {
+    SELECT JSON_ARRAY() << cast(time '12:34:56' as json);
+}
+expect {
+    0
+}
+
+test t-98422 {
+    SELECT time '10:04:58' << '101:34:58';
+}
+expect {
+    0
+}
+
+test t-98522 {
+    SELECT time '31:34:58' << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-98591 {
+    SELECT time '31:34:58' << '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+test t-98611 {
+    SELECT time '31:34:58' << cast('1.1' as json);
+}
+expect {
+    626916
+}
+
+test t-98613 {
+    SELECT time '31:34:58' << cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-98662 {
+    SELECT time '32:34:58' << -1.7;
+}
+expect {
+    0
+}
+
+test t-98668 {
+    SELECT time '32:34:58' << _binary 'foobar';
+}
+expect {
+    323458
+}
+
+test t-98816 {
+    SELECT time '130:34:58' << -1.7e0;
+}
+expect {
+    0
+}
+
+test t-98867 {
+    SELECT time '130:34:58' << time '31:34:58';
+}
+expect {
+    0
+}
+
+test t-98909 {
+    SELECT time '130:34:58' << '5 10:34:58';
+}
+expect {
+    41710656
+}
+
+test t-98977 {
+    SELECT time '5 10:34:58' << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-98993 {
+    SELECT time '5 10:34:58' << 0x0;
+}
+expect {
+    1303458
+}
+
+test t-99035 {
+    SELECT time '5 10:34:58' << time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-99057 {
+    SELECT time '5 10:34:58' << '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-99069 {
+    SELECT time '5 10:34:58' << '10:04:58';
+}
+expect {
+    1334740992
+}
+
+test t-99139 {
+    SELECT time '10:04:58.1' << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-99148 {
+    SELECT time '10:04:58.1' << -1.7;
+}
+expect {
+    0
+}
+
+test t-99155 {
+    SELECT time '10:04:58.1' << 0x0;
+}
+expect {
+    100458
+}
+
+test t-99203 {
+    SELECT time '10:04:58.1' << timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-99260 {
+    SELECT time '10:04:58.1' << cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-99275 {
+    SELECT time '10:04:58.1' << cast('["ab", "ef"]' as json);
+}
+expect {
+    100458
+}
+
+test t-99418 {
+    SELECT time '31:34:58.4' << cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-99680 {
+    SELECT time '130:34:58.6' << time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-99693 {
+    SELECT time '130:34:58.6' << 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-99786 {
+    SELECT time '5 10:34:58.9' << 1.1e0;
+}
+expect {
+    2606918
+}
+
+test t-99797 {
+    SELECT time '5 10:34:58.9' << '1.5';
+}
+expect {
+    2606918
+}
+
+test t-99815 {
+    SELECT time '5 10:34:58.9' << false;
+}
+expect {
+    1303459
+}
+
+test t-99836 {
+    SELECT time '5 10:34:58.9' << JSON_OBJECT();
+}
+expect {
+    1303459
+}
+
+test t-99898 {
+    SELECT time '5 10:34:58.9' << cast('false' as json);
+}
+expect {
+    1303459
+}
+
+test t-99991 {
+    SELECT date '2000-01-01' << 0x666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-100014 {
+    SELECT date '2000-01-01' << timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-100024 {
+    SELECT date '2000-01-01' << '20000101';
+}
+expect {
+    0
+}
+
+test t-100059 {
+    SELECT date '2000-01-01' << cast('true' as json);
+}
+expect {
+    40000202
+}
+
+test t-100078 {
+    SELECT date '2000-01-01' << cast(0xFF666F6F626172FF as json);
+}
+expect {
+    20000101
+}
+
+test t-100109 {
+    SELECT timestamp '2000-01-01 10:34:58' << -1.5e0;
+}
+expect {
+    0
+}
+
+test t-100168 {
+    SELECT timestamp '2000-01-01 10:34:58' << time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-100169 {
+    SELECT timestamp '2000-01-01 10:34:58' << time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-100192 {
+    SELECT timestamp '2000-01-01 10:34:58' << '20000101foo';
+}
+expect {
+    0
+}
+
+test t-100216 {
+    SELECT timestamp '2000-01-01 10:34:58' << cast(true as json);
+}
+expect {
+    40000202206916
+}
+
+test t-100282 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' << -1.7;
+}
+expect {
+    0
+}
+
+test t-100295 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' << 0b1001;
+}
+expect {
+    10240051764970496
+}
+
+test t-100304 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-100400 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' << cast(_binary' "foo"' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-100425 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << ' 0 ';
+}
+expect {
+    20000101103459
+}
+
+test t-100441 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << 1.1;
+}
+expect {
+    40000202206918
+}
+
+test t-100497 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-100514 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-100560 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << cast('"bar"' as json);
+}
+expect {
+    20000101103459
+}
+
+test t-100569 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << cast('["ab"]' as json);
+}
+expect {
+    20000101103459
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-100577 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' << cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-100625 {
+    SELECT timestamp '2024-12-30 10:34:58' << false;
+}
+expect {
+    20241230103458
+}
+
+test t-100681 {
+    SELECT timestamp '2024-12-30 10:34:58' << time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-100694 {
+    SELECT timestamp '2024-12-30 10:34:58' << '0000-02-29';
+}
+expect {
+    20241230103458
+}
+
+test t-100756 {
+    SELECT 20000101103458 << 1.5e0;
+}
+expect {
+    80000404413832
+}
+
+test t-100790 {
+    SELECT 20000101103458 << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-100904 {
+    SELECT 20000101103458 << cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-100949 {
+    SELECT 20000101103458.1234 << false;
+}
+expect {
+    20000101103458
+}
+
+test t-101057 {
+    SELECT 20000101103458.1234 << cast('["ab", "ef"]' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-101078 {
+    SELECT 20000101103458.123456 << 0.0e0;
+}
+expect {
+    20000101103458
+}
+
+test t-101155 {
+    SELECT 20000101103458.123456 << '20000101103458';
+}
+expect {
+    0
+}
+
+test t-101176 {
+    SELECT 20000101103458.123456 << '101:34:58';
+}
+expect {
+    0
+}
+
+test t-101219 {
+    SELECT 20000101103458.123456 << cast('["ab", "ef"]' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-101283 {
+    SELECT 20000101 << NULL - 1;
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-101293 {
+    SELECT 20000101 << -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-101343 {
+    SELECT 20000101 << '0000-01-03';
+}
+expect {
+    20000101
+}
+
+test t-101361 {
+    SELECT 20000101 << cast(9223372036854775807 as json);
+}
+expect {
+    0
+}
+
+test t-101408 {
+    SELECT 103458 << -1.7e0;
+}
+expect {
+    0
+}
+
+test t-101431 {
+    SELECT 103458 << 0x9;
+}
+expect {
+    52970496
+}
+
+test t-101475 {
+    SELECT 103458 << 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-101508 {
+    SELECT 103458 << '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-101528 {
+    SELECT 103458 << cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-101534 {
+    SELECT 103458 << cast(_binary' "foo"' as json);
+}
+expect {
+    103458
+}
+
+test t-101557 {
+    SELECT 103458.123456 << 1;
+}
+expect {
+    206916
+}
+
+test t-101576 {
+    SELECT 103458.123456 << 1.7;
+}
+expect {
+    413832
+}
+
+test t-101649 {
+    SELECT 103458.123456 << '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-101673 {
+    SELECT 103458.123456 << cast(1 as json);
+}
+expect {
+    206916
+}
+
+test t-101707 {
+    SELECT 103458.123456 << cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    103458
+}
+
+test t-101712 {
+    SELECT 103458.123456 << cast(date '2000-01-01' as json);
+}
+expect {
+    103458
+}
+
+test t-101743 {
+    SELECT '20000101103458' << 'foobar';
+}
+expect {
+    20000101103458
+}
+
+test t-101747 {
+    SELECT '20000101103458' << 0x0;
+}
+expect {
+    20000101103458
+}
+
+test t-101749 {
+    SELECT '20000101103458' << 0xff;
+}
+expect {
+    0
+}
+
+test t-101759 {
+    SELECT '20000101103458' << false;
+}
+expect {
+    20000101103458
+}
+
+test t-101787 {
+    SELECT '20000101103458' << time '10:04:58.1';
+}
+expect {
+    0
+}
+
+test t-101832 {
+    SELECT '20000101103458' << '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-101914 {
+    SELECT '20000101103458.1234' << X'ff';
+}
+expect {
+    0
+}
+
+test t-101917 {
+    SELECT '20000101103458.1234' << 0x9;
+}
+expect {
+    10240051764970496
+}
+
+test t-101997 {
+    SELECT '20000101103458.1234' << cast(1 as json);
+}
+expect {
+    40000202206916
+}
+
+test t-102217 {
+    SELECT '20000101' << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-102266 {
+    SELECT '20000101' << JSON_OBJECT();
+}
+expect {
+    20000101
+}
+
+test t-102280 {
+    SELECT '20000101' << timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    0
+}
+
+test t-102291 {
+    SELECT '20000101' << '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-102315 {
+    SELECT '20000101' << '0000-01-03';
+}
+expect {
+    20000101
+}
+
+test t-102477 {
+    SELECT '103458' << '0000-01-03';
+}
+expect {
+    103458
+}
+
+test t-102478 {
+    SELECT '103458' << '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-102483 {
+    SELECT '103458' << cast(1 as json);
+}
+expect {
+    206916
+}
+
+test t-102605 {
+    SELECT '103458.123456' << timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-102686 {
+    SELECT '103458.123456' << cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    103458
+}
+
+test t-102722 {
+    SELECT '20000101103458foo' << X'00';
+}
+expect {
+    20000101103458
+}
+
+test t-102779 {
+    SELECT '20000101103458foo' << '103458';
+}
+expect {
+    0
+}
+
+test t-102904 {
+    SELECT '20000101103458.1234foo' << 1 - NULL;
+}
+expect {
+    NULL
+}
+
+test t-102909 {
+    SELECT '20000101103458.1234foo' << 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-102947 {
+    SELECT '20000101103458.1234foo' << '103458foo';
+}
+expect {
+    0
+}
+
+test t-102957 {
+    SELECT '20000101103458.1234foo' << '10:04:58';
+}
+expect {
+    20480103529940992
+}
+
+test t-103013 {
+    SELECT '20000101103458.1234foo' << cast(time '5 12:34:58' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-103071 {
+    SELECT '20000101103458.123456foo' << 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-103077 {
+    SELECT '20000101103458.123456foo' << JSON_ARRAY();
+}
+expect {
+    20000101103458
+}
+
+test t-103159 {
+    SELECT '20000101103458.123456foo' << cast(0b001 as json);
+}
+expect {
+    20000101103458
+}
+
+test t-103205 {
+    SELECT '20000101foo' << 0x0;
+}
+expect {
+    20000101
+}
+
+test t-103251 {
+    SELECT '20000101foo' << timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-103382 {
+    SELECT '103458foo' << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-103471 {
+    SELECT '103458foo' << cast('1.1' as json);
+}
+expect {
+    206916
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-103492 {
+    SELECT '103458foo' << cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-103529 {
+    SELECT '103458.123456foo' << 0x0;
+}
+expect {
+    103458
+}
+
+test t-103552 {
+    SELECT '103458.123456foo' << 1 - NULL;
+}
+expect {
+    NULL
+}
+
+test t-103671 {
+    SELECT time '-10:04:58' << 1.0e0;
+}
+expect {
+    18446744073709350700
+}
+
+test t-103733 {
+    SELECT time '-10:04:58' << time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-103766 {
+    SELECT time '-10:04:58' << time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-103785 {
+    SELECT time '-10:04:58' << cast('true' as json);
+}
+expect {
+    18446744073709350700
+}
+
+test t-103936 {
+    SELECT time '-31:34:58' << '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-104008 {
+    SELECT time '-32:34:58' << -1.7;
+}
+expect {
+    0
+}
+
+test t-104011 {
+    SELECT time '-32:34:58' << 'foobar';
+}
+expect {
+    18446744073709228158
+}
+
+test t-104089 {
+    SELECT time '-32:34:58' << time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-104148 {
+    SELECT time'00:00:01.0000' << 0;
+}
+expect {
+    1
+}
+
+test t-104156 {
+    SELECT time'00:00:01.0000' << 0.0e0;
+}
+expect {
+    1
+}
+
+test t-104172 {
+    SELECT time'00:00:01.0000' << '-1.5';
+}
+expect {
+    0
+}
+
+test t-104196 {
+    SELECT time'00:00:01.0000' << NULL + 1;
+}
+expect {
+    NULL
+}
+
+test t-104244 {
+    SELECT time'00:00:01.0000' << '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-104277 {
+    SELECT time'00:00:01.0000' << cast(9223372036854775807 as json);
+}
+expect {
+    0
+}
+
+test t-104279 {
+    SELECT time'00:00:01.0000' << cast('1' as json);
+}
+expect {
+    2
+}
+
+test t-104318 {
+    SELECT time'00:00:59.01011' << 0.0e0;
+}
+expect {
+    59
+}
+
+test t-104341 {
+    SELECT time'00:00:59.01011' << 0xff;
+}
+expect {
+    0
+}
+
+test t-104462 {
+    SELECT time'00:00:59.01011' << cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    59
+}
+
+test t-104481 {
+    SELECT time'00:00:59.2132234' << 1.0e0;
+}
+expect {
+    118
+}
+
+test t-104612 {
+    SELECT time'00:00:59.2132234' << cast(_binary' "foo"' as json);
+}
+expect {
+    59
+}
+
+test t-104752 {
+    SELECT time '-101:34:58' << cast(true as json);
+}
+expect {
+    18446744073707524700
+}
+
+test t-104757 {
+    SELECT time '-101:34:58' << cast('true' as json);
+}
+expect {
+    18446744073707524700
+}
+
+test t-104900 {
+    SELECT time '-5 10:34:58' << time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-104919 {
+    SELECT time '-5 10:34:58' << cast('true' as json);
+}
+expect {
+    18446744073706944700
+}
+
+test t-104920 {
+    SELECT time '-5 10:34:58' << cast('false' as json);
+}
+expect {
+    18446744073708248158
+}
+
+test t-105007 {
+    SELECT '10:04:58' << 1 + NULL;
+}
+expect {
+    NULL
+}
+
+test t-105011 {
+    SELECT '10:04:58' << NULL - NULL;
+}
+expect {
+    NULL
+}
+
+test t-105032 {
+    SELECT '10:04:58' << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-105152 {
+    SELECT '101:34:58' << X'00';
+}
+expect {
+    101
+}
+
+test t-105166 {
+    SELECT '101:34:58' << 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-105266 {
+    SELECT '101:34:58' << cast('["a"]' as json);
+}
+expect {
+    101
+}
+
+test t-105268 {
+    SELECT '101:34:58' << cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    101
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-105274 {
+    SELECT '101:34:58' << cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-105318 {
+    SELECT '5 10:34:58' << b'1001';
+}
+expect {
+    2560
+}
+
+test t-105336 {
+    SELECT '5 10:34:58' << 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-105427 {
+    SELECT '5 10:34:58' << cast(0b001 as json);
+}
+expect {
+    5
+}
+
+test t-105428 {
+    SELECT '5 10:34:58' << cast('["a"]' as json);
+}
+expect {
+    5
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-105437 {
+    SELECT '5 10:34:58' << cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-105452 {
+    SELECT '2000-01-01' << 0.0e0;
+}
+expect {
+    2000
+}
+
+test t-105486 {
+    SELECT '2000-01-01' << NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-105488 {
+    SELECT '2000-01-01' << NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-105496 {
+    SELECT '2000-01-01' << 1 - NULL;
+}
+expect {
+    NULL
+}
+
+test t-105503 {
+    SELECT '2000-01-01' << 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-105515 {
+    SELECT '2000-01-01' << time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-105517 {
+    SELECT '2000-01-01' << time '5 10:34:58.9';
+}
+expect {
+    0
+}
+
+test t-105609 {
+    SELECT '2000-01-01 12:34:58' << ' 0 ';
+}
+expect {
+    2000
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-105745 {
+    SELECT '2000-01-01 12:34:58' << cast('invalid' as json);
+}
+expect error {
+}
+
+test t-105755 {
+    SELECT '2000-01-01 12:34:58' << cast('["ab", "ef"]' as json);
+}
+expect {
+    2000
+}
+
+test t-105782 {
+    SELECT '0000-02-29' << -1.7e0;
+}
+expect {
+    0
+}
+
+test t-105856 {
+    SELECT '0000-02-29' << '20000101';
+}
+expect {
+    0
+}
+
+test t-105864 {
+    SELECT '0000-02-29' << '103458.123456foo';
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-105922 {
+    SELECT '0000-02-29' << cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-105929 {
+    SELECT '0000-02-29' << cast(time '5 12:34:58' as json);
+}
+expect {
+    0
+}
+
+test t-105965 {
+    SELECT '0000-01-03' << 0b1001;
+}
+expect {
+    0
+}
+
+test t-105990 {
+    SELECT '0000-01-03' << 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-106150 {
+    SELECT '1969-02-18' << -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-106196 {
+    SELECT '1969-02-18' << time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-106234 {
+    SELECT '1969-02-18' << cast(0xFF666F6F626172FF as json);
+}
+expect {
+    1969
+}
+
+test t-106290 {
+    SELECT '1970-01-01 00:00:01' << b'1001';
+}
+expect {
+    1008640
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-106409 {
+    SELECT '1970-01-01 00:00:01' << cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-106430 {
+    SELECT '3001-02-19 00:00:00' << -1.7e0;
+}
+expect {
+    0
+}
+
+test t-106473 {
+    SELECT '3001-02-19 00:00:00' << 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-106479 {
+    SELECT '3001-02-19 00:00:00' << JSON_ARRAY();
+}
+expect {
+    3001
+}
+
+test t-106495 {
+    SELECT '3001-02-19 00:00:00' << 20000101103458;
+}
+expect {
+    0
+}
+
+test t-106602 {
+    SELECT '3001-02-18 23:59:59' << '-1.5';
+}
+expect {
+    0
+}
+
+test t-106652 {
+    SELECT '3001-02-18 23:59:59' << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-106693 {
+    SELECT '3001-02-18 23:59:59' << '3001-02-18 23:59:59';
+}
+expect {
+    0
+}
+
+test t-106697 {
+    SELECT '3001-02-18 23:59:59' << cast(false as json);
+}
+expect {
+    3001
+}
+
+test t-106745 {
+    SELECT cast(0 as json) << ' 255 ';
+}
+expect {
+    0
+}
+
+test t-106775 {
+    SELECT cast(0 as json) << 0b1001;
+}
+expect {
+    0
+}
+
+test t-106795 {
+    SELECT cast(0 as json) << 0x666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-106849 {
+    SELECT cast(0 as json) << '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-106894 {
+    SELECT cast(0 as json) << cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-107026 {
+    SELECT cast(1 as json) << cast('false' as json);
+}
+expect {
+    1
+}
+
+test t-107123 {
+    SELECT cast(true as json) << 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-107159 {
+    SELECT cast(true as json) << '103458foo';
+}
+expect {
+    0
+}
+
+test t-107230 {
+    SELECT cast(false as json) << ' 1 ';
+}
+expect {
+    0
+}
+
+test t-107276 {
+    SELECT cast(false as json) << NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-107315 {
+    SELECT cast(false as json) << '103458';
+}
+expect {
+    0
+}
+
+test t-107360 {
+    SELECT cast(false as json) << cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-107455 {
+    SELECT cast('\{\}' as json) << time '130:34:58';
+}
+expect {
+    0
+}
+
+test t-107468 {
+    SELECT cast('\{\}' as json) << 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-107567 {
+    SELECT cast('[]' as json) << 1.5;
+}
+expect {
+    0
+}
+
+test t-107618 {
+    SELECT cast('[]' as json) << time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-107665 {
+    SELECT cast('[]' as json) << '3001-02-18 23:59:59';
+}
+expect {
+    0
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-107773 {
+    SELECT cast('null' as json) << -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-107810 {
+    SELECT cast('null' as json) << time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-107819 {
+    SELECT cast('null' as json) << '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-107916 {
+    SELECT cast('true' as json) << NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-107951 {
+    SELECT cast('true' as json) << timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-107956 {
+    SELECT cast('true' as json) << 20000101;
+}
+expect {
+    0
+}
+
+test t-107983 {
+    SELECT cast('true' as json) << '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+test t-108049 {
+    SELECT cast('false' as json) << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-108076 {
+    SELECT cast('false' as json) << true;
+}
+expect {
+    0
+}
+
+test t-108082 {
+    SELECT cast('false' as json) << 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-108122 {
+    SELECT cast('false' as json) << '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-108192 {
+    SELECT cast('false' as json) << cast(date '2000-01-01' as json);
+}
+expect {
+    0
+}
+
+test t-108409 {
+    SELECT cast(2 as json) << 1 + NULL;
+}
+expect {
+    NULL
+}
+
+test t-108463 {
+    SELECT cast(2 as json) << time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-108518 {
+    SELECT cast(2 as json) << cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    2
+}
+
+test t-108654 {
+    SELECT cast(1.1 as json) << cast('2' as json);
+}
+expect {
+    4
+}
+
+test t-108689 {
+    SELECT cast(-1.1 as json) << ' 255 ';
+}
+expect {
+    0
+}
+
+test t-108746 {
+    SELECT cast(-1.1 as json) << JSON_OBJECT();
+}
+expect {
+    18446744073709551615
+}
+
+test t-108782 {
+    SELECT cast(-1.1 as json) << time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-108805 {
+    SELECT cast(-1.1 as json) << cast('[]' as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-108863 {
+    SELECT cast(9223372036854775807 as json) << 1.5;
+}
+expect {
+    18446744073709551612
+}
+
+test t-108908 {
+    SELECT cast(9223372036854775807 as json) << JSON_OBJECT();
+}
+expect {
+    9223372036854775807
+}
+
+test t-108916 {
+    SELECT cast(9223372036854775807 as json) << time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-108987 {
+    SELECT cast(9223372036854775807 as json) << cast(_binary '"bar"' as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-108995 {
+    SELECT cast(9223372036854775807 as json) << cast('["ab", "ef"]' as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-109098 {
+    SELECT cast(18446744073709551615 as json) << '103458.123456';
+}
+expect {
+    0
+}
+
+test t-109188 {
+    SELECT cast('1' as json) << -1.5;
+}
+expect {
+    0
+}
+
+test t-109200 {
+    SELECT cast('1' as json) << 0x1;
+}
+expect {
+    2
+}
+
+test t-109206 {
+    SELECT cast('1' as json) << b'1001';
+}
+expect {
+    512
+}
+
+test t-109225 {
+    SELECT cast('1' as json) << 0x666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-109227 {
+    SELECT cast('1' as json) << 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-109318 {
+    SELECT cast('1' as json) << cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-109325 {
+    SELECT cast('1' as json) << cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-109341 {
+    SELECT cast('2' as json) << 1.0e0;
+}
+expect {
+    4
+}
+
+test t-109342 {
+    SELECT cast('2' as json) << 1.5e0;
+}
+expect {
+    8
+}
+
+test t-109364 {
+    SELECT cast('2' as json) << X'00';
+}
+expect {
+    2
+}
+
+test t-109365 {
+    SELECT cast('2' as json) << X'01';
+}
+expect {
+    4
+}
+
+test t-109424 {
+    SELECT cast('2' as json) << '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-109468 {
+    SELECT cast('2' as json) << cast('18446744073709551615' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-109471 {
+    SELECT cast('2' as json) << cast('invalid' as json);
+}
+expect error {
+}
+
+test t-109505 {
+    SELECT cast('1.1' as json) << -1.5e0;
+}
+expect {
+    0
+}
+
+test t-109508 {
+    SELECT cast('1.1' as json) << -1.7e0;
+}
+expect {
+    0
+}
+
+test t-109642 {
+    SELECT cast('1.1' as json) << cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-109673 {
+    SELECT cast('-1.1' as json) << 1.5;
+}
+expect {
+    18446744073709551612
+}
+
+test t-109759 {
+    SELECT cast('-1.1' as json) << time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-109944 {
+    SELECT cast('9223372036854775807' as json) << cast(2 as json);
+}
+expect {
+    18446744073709551612
+}
+
+test t-109991 {
+    SELECT cast('18446744073709551615' as json) << -1.5e0;
+}
+expect {
+    0
+}
+
+test t-110002 {
+    SELECT cast('18446744073709551615' as json) << -1.7;
+}
+expect {
+    0
+}
+
+test t-110017 {
+    SELECT cast('18446744073709551615' as json) << 0x9;
+}
+expect {
+    18446744073709551104
+}
+
+test t-110053 {
+    SELECT cast('18446744073709551615' as json) << time '5 10:34:58.9';
+}
+expect {
+    0
+}
+
+test t-110150 {
+    SELECT cast('"foo"' as json) << 0.0e0;
+}
+expect {
+    0
+}
+
+test t-110201 {
+    SELECT cast('"foo"' as json) << 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-110228 {
+    SELECT cast('"foo"' as json) << '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-110240 {
+    SELECT cast('"foo"' as json) << time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-110242 {
+    SELECT cast('"foo"' as json) << time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-110253 {
+    SELECT cast('"foo"' as json) << '0000-01-03';
+}
+expect {
+    0
+}
+
+test t-110269 {
+    SELECT cast('"foo"' as json) << cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-110361 {
+    SELECT cast('"bar"' as json) << 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-110391 {
+    SELECT cast('"bar"' as json) << '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-110436 {
+    SELECT cast('"bar"' as json) << cast('2' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-110560 {
+    SELECT cast('invalid' as json) << '20000101foo';
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-110615 {
+    SELECT cast('invalid' as json) << cast('["ab", "ef"]' as json);
+}
+expect error {
+}
+
+test t-110635 {
+    SELECT cast(_binary' "foo"' as json) << ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-110641 {
+    SELECT cast(_binary' "foo"' as json) << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-110657 {
+    SELECT cast(_binary' "foo"' as json) << 0x0;
+}
+expect {
+    0
+}
+
+test t-110710 {
+    SELECT cast(_binary' "foo"' as json) << 20000101;
+}
+expect {
+    0
+}
+
+test t-110728 {
+    SELECT cast(_binary' "foo"' as json) << time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-110749 {
+    SELECT cast(_binary' "foo"' as json) << cast('[]' as json);
+}
+expect {
+    0
+}
+
+test t-110763 {
+    SELECT cast(_binary' "foo"' as json) << cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-110796 {
+    SELECT cast(_binary '"bar"' as json) << '\t1foo\t';
+}
+expect {
+    0
+}
+
+test t-110810 {
+    SELECT cast(_binary '"bar"' as json) << 1.7;
+}
+expect {
+    0
+}
+
+test t-110878 {
+    SELECT cast(_binary '"bar"' as json) << '20000101';
+}
+expect {
+    0
+}
+
+test t-110884 {
+    SELECT cast(_binary '"bar"' as json) << '20000101foo';
+}
+expect {
+    0
+}
+
+test t-110982 {
+    SELECT cast(0xFF666F6F626172FF as json) << 0x1;
+}
+expect {
+    0
+}
+
+test t-111009 {
+    SELECT cast(0xFF666F6F626172FF as json) << 9223372036854775807;
+}
+expect {
+    0
+}
+
+test t-111026 {
+    SELECT cast(0xFF666F6F626172FF as json) << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-111116 {
+    SELECT cast(0x666F6F626172FF as json) << 255;
+}
+expect {
+    0
+}
+
+test t-111178 {
+    SELECT cast(0x666F6F626172FF as json) << time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-111326 {
+    SELECT cast(0b01 as json) << NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-111334 {
+    SELECT cast(0b01 as json) << -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-111370 {
+    SELECT cast(0b01 as json) << '20000101foo';
+}
+expect {
+    0
+}
+
+test t-111426 {
+    SELECT cast(0b01 as json) << cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    0
+}
+
+test t-111509 {
+    SELECT cast(0b001 as json) << time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-111512 {
+    SELECT cast(0b001 as json) << date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-111571 {
+    SELECT cast(0b001 as json) << cast('1.1' as json);
+}
+expect {
+    0
+}
+
+test t-111625 {
+    SELECT cast('["a"]' as json) << 'foobar';
+}
+expect {
+    0
+}
+
+test t-111743 {
+    SELECT cast('["a"]' as json) << cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-111776 {
+    SELECT cast('["ab"]' as json) << -1.7e0;
+}
+expect {
+    0
+}
+
+test t-111892 {
+    SELECT cast('["ab"]' as json) << cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-111905 {
+    SELECT cast('["ab"]' as json) << cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-112019 {
+    SELECT cast('["ab", "cd", "ef"]' as json) << '103458foo';
+}
+expect {
+    0
+}
+
+test t-112095 {
+    SELECT cast('["ab", "ef"]' as json) << 1.0e0;
+}
+expect {
+    0
+}
+
+test t-112097 {
+    SELECT cast('["ab", "ef"]' as json) << -1.5e0;
+}
+expect {
+    0
+}
+
+test t-112169 {
+    SELECT cast('["ab", "ef"]' as json) << 103458;
+}
+expect {
+    0
+}
+
+test t-112186 {
+    SELECT cast('["ab", "ef"]' as json) << time'00:00:01.0000';
+}
+expect {
+    0
+}
+
+test t-112204 {
+    SELECT cast('["ab", "ef"]' as json) << cast(true as json);
+}
+expect {
+    0
+}
+
+test t-112279 {
+    SELECT cast('\{"a": 1, "b": 2\}' as json) << 0xff;
+}
+expect {
+    0
+}
+
+test t-112369 {
+    SELECT cast('\{"a": 1, "b": 2\}' as json) << cast('[]' as json);
+}
+expect {
+    0
+}
+
+test t-112496 {
+    SELECT cast('\{"b": 2, "a": 1\}' as json) << '20000101103458.1234';
+}
+expect {
+    0
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-112633 {
+    SELECT cast('\{"c": 1, "b": 2\}' as json) << -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-112639 {
+    SELECT cast('\{"c": 1, "b": 2\}' as json) << time '130:34:58';
+}
+expect {
+    0
+}
+
+test t-112684 {
+    SELECT cast('\{"c": 1, "b": 2\}' as json) << '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-112715 {
+    SELECT cast('\{"c": 1, "b": 2\}' as json) << cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-112716 {
+    SELECT cast('\{"c": 1, "b": 2\}' as json) << cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-112751 {
+    SELECT cast('\{"b": 2, "c": 1\}' as json) << 1.5;
+}
+expect {
+    0
+}
+
+test t-112842 {
+    SELECT cast('\{"b": 2, "c": 1\}' as json) << '2000-01-01';
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-112925 {
+    SELECT cast(' "b": 2\}' as json) << 0x0;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-112936 {
+    SELECT cast(' "b": 2\}' as json) << true;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-112937 {
+    SELECT cast(' "b": 2\}' as json) << false;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-112942 {
+    SELECT cast(' "b": 2\}' as json) << 1 / NULL;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-112999 {
+    SELECT cast(' "b": 2\}' as json) << time '-101:34:58';
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-113032 {
+    SELECT cast(' "b": 2\}' as json) << cast('18446744073709551615' as json);
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-113074 {
+    SELECT cast('"a": 1' as json) << 0.000;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-113078 {
+    SELECT cast('"a": 1' as json) << 1.7;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-113093 {
+    SELECT cast('"a": 1' as json) << 0b1001;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-113114 {
+    SELECT cast('"a": 1' as json) << 0xFF666F6F626172;
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-113123 {
+    SELECT cast('"a": 1' as json) << time '31:34:58';
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-113165 {
+    SELECT cast('"a": 1' as json) << '5 10:34:58';
+}
+expect error {
+}
+
+test t-113310 {
+    SELECT cast(date '2000-01-01' as json) << '103458.123456';
+}
+expect {
+    0
+}
+
+test t-113322 {
+    SELECT cast(date '2000-01-01' as json) << time'00:00:59.2132234';
+}
+expect {
+    0
+}
+
+test t-113397 {
+    SELECT cast(date '2000-01-02' as json) << 0.0;
+}
+expect {
+    0
+}
+
+test t-113447 {
+    SELECT cast(date '2000-01-02' as json) << time '31:34:58';
+}
+expect {
+    0
+}
+
+test t-113486 {
+    SELECT cast(date '2000-01-02' as json) << time '-5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-113580 {
+    SELECT cast(timestamp '2000-01-01 12:34:58' as json) << b'1001';
+}
+expect {
+    0
+}
+
+test t-113673 {
+    SELECT cast(timestamp '2000-01-01 12:34:58' as json) << cast(9223372036854775807 as json);
+}
+expect {
+    0
+}
+
+test t-113710 {
+    SELECT cast(time '12:34:56' as json) << ' 1 ';
+}
+expect {
+    0
+}
+
+test t-113719 {
+    SELECT cast(time '12:34:56' as json) << -1.1e0;
+}
+expect {
+    0
+}
+
+test t-113817 {
+    SELECT cast(time '12:34:56' as json) << '0000-01-03';
+}
+expect {
+    0
+}
+
+test t-113851 {
+    SELECT cast(time '12:34:56' as json) << cast(0b001 as json);
+}
+expect {
+    0
+}
+
+test t-113943 {
+    SELECT cast(time '12:34:58' as json) << timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-113981 {
+    SELECT cast(time '12:34:58' as json) << '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+test t-114036 {
+    SELECT cast(time '5 12:34:58' as json) << '\t1foo\t';
+}
+expect {
+    0
+}
+
+test t-114084 {
+    SELECT cast(time '5 12:34:58' as json) << 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-114111 {
+    SELECT cast(time '5 12:34:58' as json) << 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-114113 {
+    SELECT cast(time '5 12:34:58' as json) << 103458;
+}
+expect {
+    0
+}
+
+test t-114126 {
+    SELECT cast(time '5 12:34:58' as json) << '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-114127 {
+    SELECT cast(time '5 12:34:58' as json) << time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-114131 {
+    SELECT cast(time '5 12:34:58' as json) << time'00:00:59.01011';
+}
+expect {
+    0
+}
+
+test t-114156 {
+    SELECT cast(time '5 12:34:58' as json) << cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-114165 {
+    SELECT cast(time '5 12:34:58' as json) << cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+test t-114168 {
+    SELECT cast(time '5 12:34:58' as json) << cast('"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-114186 {
+    SELECT cast(time '5 12:34:58' as json) << cast(date '2000-01-01' as json);
+}
+expect {
+    0
+}
+
+test t-114234 {
+    SELECT 0 >> _binary "foobar1234";
+}
+expect {
+    0
+}
+
+test t-114308 {
+    SELECT 0xFF >> 1.1e0;
+}
+expect {
+    127
+}
+
+test t-114336 {
+    SELECT 255 >> 0;
+}
+expect {
+    255
+}
+
+test t-114337 {
+    SELECT 255 >> 1;
+}
+expect {
+    127
+}
+
+test t-114338 {
+    SELECT 255 >> 0xFF;
+}
+expect {
+    0
+}
+
+test t-114355 {
+    SELECT 255 >> -1.5e0;
+}
+expect {
+    0
+}
+
+test t-114356 {
+    SELECT 255 >> 1.1e0;
+}
+expect {
+    127
+}
+
+test t-114408 {
+    SELECT 1.0 >> 9e0;
+}
+expect {
+    0
+}
+
+test t-114443 {
+    SELECT 1.1 >> 1.5;
+}
+expect {
+    0
+}
+
+test t-114483 {
+    SELECT -1 >> 255;
+}
+expect {
+    0
+}
+
+test t-114554 {
+    SELECT -255 >> 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-114564 {
+    SELECT -255 >> -0x1;
+}
+expect {
+    0
+}
+
+test t-114715 {
+    SELECT 13 >> 64;
+}
+expect {
+    0
+}
+
+test t-114720 {
+    SELECT 1.5 >> 0;
+}
+expect {
+    2
+}
+
+test t-114731 {
+    SELECT 1.5 >> 1.5;
+}
+expect {
+    0
+}
+
+test t-114732 {
+    SELECT 1.5 >> -1.5;
+}
+expect {
+    0
+}
+
+test t-114885 {
+    SELECT '-1.5' >> -1e0;
+}
+expect {
+    0
+}
+
+test t-114887 {
+    SELECT '-1.5' >> 7e0;
+}
+expect {
+    144115188075855871
+}
+
+test t-114894 {
+    SELECT '-1.5' >> 18446744073709551616;
+}
+expect {
+    0
+}
+
+test t-114908 {
+    SELECT '-1.5' >> '64';
+}
+expect {
+    0
+}
+
+test t-114984 {
+    SELECT 1.0e0 >> 9e0;
+}
+expect {
+    0
+}
+
+test t-115056 {
+    SELECT 1.5e0 >> 0;
+}
+expect {
+    2
+}
+
+test t-115106 {
+    SELECT -1.5e0 >> 0xFF;
+}
+expect {
+    0
+}
+
+test t-115129 {
+    SELECT -1.5e0 >> 13e0;
+}
+expect {
+    2251799813685247
+}
+
+test t-115144 {
+    SELECT -1.5e0 >> NULL;
+}
+expect {
+    NULL
+}
+
+test t-115198 {
+    SELECT 1.1e0 >> X'40';
+}
+expect {
+    0
+}
+
+test t-115205 {
+    SELECT -1e0 >> 1.1;
+}
+expect {
+    9223372036854775807
+}
+
+test t-115208 {
+    SELECT -1e0 >> 7;
+}
+expect {
+    144115188075855871
+}
+
+test t-115301 {
+    SELECT 7e0 >> 1.1;
+}
+expect {
+    3
+}
+
+test t-115415 {
+    SELECT 13e0 >> 7e0;
+}
+expect {
+    0
+}
+
+test t-115437 {
+    SELECT 13e0 >> _binary '64';
+}
+expect {
+    0
+}
+
+test t-115466 {
+    SELECT 18446744073709551615 >> 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-115484 {
+    SELECT 18446744073709551615 >> '64';
+}
+expect {
+    0
+}
+
+test t-115512 {
+    SELECT 9223372036854775807 >> 9e0;
+}
+expect {
+    18014398509481983
+}
+
+test t-115595 {
+    SELECT -9223372036854775808 >> 1.5;
+}
+expect {
+    2305843009213693952
+}
+
+test t-115596 {
+    SELECT -9223372036854775808 >> -1.5;
+}
+expect {
+    0
+}
+
+test t-115683 {
+    SELECT -9223372036854775809 >> 255;
+}
+expect {
+    0
+}
+
+test t-115694 {
+    SELECT -9223372036854775809 >> '-1.5';
+}
+expect {
+    0
+}
+
+test t-115773 {
+    SELECT "foobar" >> _binary '64';
+}
+expect {
+    0
+}
+
+test t-115819 {
+    SELECT "foobar1234" >> 64;
+}
+expect {
+    0
+}
+
+test t-115861 {
+    SELECT "0" >> X'ff';
+}
+expect {
+    0
+}
+
+test t-115926 {
+    SELECT -0x1 >> -1;
+}
+expect {
+    0
+}
+
+test t-115988 {
+    SELECT X'ff' >> 1.1e0;
+}
+expect {
+    127
+}
+
+test t-116019 {
+    SELECT X'00' >> 255;
+}
+expect {
+    0
+}
+
+test t-116023 {
+    SELECT X'00' >> -255;
+}
+expect {
+    0
+}
+
+test t-116158 {
+    SELECT NULL >> X'40';
+}
+expect {
+    NULL
+}
+
+test t-116159 {
+    SELECT NULL >> _binary X'40';
+}
+expect {
+    NULL
+}
+
+test t-116175 {
+    SELECT _binary "foobar" >> 0.0e0;
+}
+expect {
+    foobar
+}
+
+test t-116261 {
+    SELECT 64 >> 1.1;
+}
+expect {
+    32
+}
+
+test t-116275 {
+    SELECT 64 >> -1.5e0;
+}
+expect {
+    0
+}
+
+test t-116443 {
+    SELECT X'40' >> 64;
+}
+expect {
+    0
+}
+
+test t-116534 {
+    SELECT 0 >> x'09';
+}
+expect {
+    0
+}
+
+test t-116538 {
+    SELECT 0 >> NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-116550 {
+    SELECT 0 >> 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-116728 {
+    SELECT 1 >> time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-116755 {
+    SELECT 1 >> time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-116772 {
+    SELECT 1 >> '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-116807 {
+    SELECT 1 >> cast('["ab", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-116904 {
+    SELECT 255 >> 103458.123456;
+}
+expect {
+    0
+}
+
+test t-117037 {
+    SELECT ' 0 ' >> 0x666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-117120 {
+    SELECT ' 0 ' >> cast('"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-117139 {
+    SELECT ' 0 ' >> cast(date '2000-01-02' as json);
+}
+expect {
+    0
+}
+
+test t-117140 {
+    SELECT ' 0 ' >> cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    0
+}
+
+test t-117266 {
+    SELECT ' 1 ' >> cast('null' as json);
+}
+expect {
+    1
+}
+
+test t-117268 {
+    SELECT ' 1 ' >> cast('false' as json);
+}
+expect {
+    1
+}
+
+test t-117330 {
+    SELECT ' 255 ' >> '-1.5';
+}
+expect {
+    0
+}
+
+test t-117387 {
+    SELECT ' 255 ' >> 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-117418 {
+    SELECT ' 255 ' >> '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-117427 {
+    SELECT ' 255 ' >> cast('[]' as json);
+}
+expect {
+    255
+}
+
+test t-117432 {
+    SELECT ' 255 ' >> cast(2 as json);
+}
+expect {
+    63
+}
+
+test t-117552 {
+    SELECT '\t1foo\t' >> 103458.123456;
+}
+expect {
+    0
+}
+
+test t-117553 {
+    SELECT '\t1foo\t' >> '20000101103458';
+}
+expect {
+    0
+}
+
+test t-117628 {
+    SELECT '\t1foo\t' >> cast(time '12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-117669 {
+    SELECT ' 255 foo' >> NULL;
+}
+expect {
+    NULL
+}
+
+test t-117813 {
+    SELECT 0.0e0 >> -1.1;
+}
+expect {
+    0
+}
+
+test t-117878 {
+    SELECT 0.0e0 >> '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-117901 {
+    SELECT 0.0e0 >> '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+test t-117903 {
+    SELECT 0.0e0 >> '0000-01-03';
+}
+expect {
+    0
+}
+
+test t-117935 {
+    SELECT 0.0e0 >> cast(0x666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-118044 {
+    SELECT 1.0e0 >> '103458.123456';
+}
+expect {
+    0
+}
+
+test t-118048 {
+    SELECT 1.0e0 >> '20000101foo';
+}
+expect {
+    0
+}
+
+test t-118102 {
+    SELECT 1.0e0 >> cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    1
+}
+
+test t-118156 {
+    SELECT 1.5e0 >> true;
+}
+expect {
+    1
+}
+
+test t-118223 {
+    SELECT 1.5e0 >> '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-118332 {
+    SELECT -1.5e0 >> 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-118371 {
+    SELECT -1.5e0 >> '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-118407 {
+    SELECT -1.5e0 >> cast(9223372036854775807 as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-118432 {
+    SELECT -1.5e0 >> cast(' "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-118445 {
+    SELECT 1.1e0 >> ' 255 ';
+}
+expect {
+    0
+}
+
+test t-118461 {
+    SELECT 1.1e0 >> -1.1;
+}
+expect {
+    0
+}
+
+test t-118529 {
+    SELECT 1.1e0 >> '103458';
+}
+expect {
+    0
+}
+
+test t-118545 {
+    SELECT 1.1e0 >> '10:04:58';
+}
+expect {
+    0
+}
+
+test t-118631 {
+    SELECT -1.1e0 >> 0x0;
+}
+expect {
+    18446744073709551615
+}
+
+test t-118632 {
+    SELECT -1.1e0 >> 0x1;
+}
+expect {
+    9223372036854775807
+}
+
+test t-118665 {
+    SELECT -1.1e0 >> JSON_ARRAY();
+}
+expect {
+    18446744073709551615
+}
+
+test t-118718 {
+    SELECT -1.1e0 >> cast(0 as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-118720 {
+    SELECT -1.1e0 >> cast(true as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-118745 {
+    SELECT -1.1e0 >> cast(0x666F6F626172FF as json);
+}
+expect {
+    18446744073709551615
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-118757 {
+    SELECT -1.1e0 >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-118765 {
+    SELECT -1.7e0 >> 1;
+}
+expect {
+    9223372036854775807
+}
+
+test t-118792 {
+    SELECT -1.7e0 >> _binary 'foobar';
+}
+expect {
+    18446744073709551614
+}
+
+test t-118794 {
+    SELECT -1.7e0 >> 0x1;
+}
+expect {
+    9223372036854775807
+}
+
+test t-118863 {
+    SELECT -1.7e0 >> time '-32:34:58';
+}
+expect {
+    0
+}
+
+test t-118872 {
+    SELECT -1.7e0 >> '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-118924 {
+    SELECT -1.7e0 >> cast(time '12:34:58' as json);
+}
+expect {
+    18446744073709551614
+}
+
+test t-118980 {
+    SELECT 0.0 >> 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-119005 {
+    SELECT 0.0 >> 20000101103458;
+}
+expect {
+    0
+}
+
+test t-119047 {
+    SELECT 0.0 >> cast('[]' as json);
+}
+expect {
+    0
+}
+
+test t-119119 {
+    SELECT 0.000 >> 0xff;
+}
+expect {
+    0
+}
+
+test t-119132 {
+    SELECT 0.000 >> NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-119134 {
+    SELECT 0.000 >> 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-119190 {
+    SELECT 0.000 >> time'00:00:59.2132234';
+}
+expect {
+    0
+}
+
+test t-119194 {
+    SELECT 0.000 >> '101:34:58';
+}
+expect {
+    0
+}
+
+test t-119219 {
+    SELECT 0.000 >> cast('1' as json);
+}
+expect {
+    0
+}
+
+test t-119314 {
+    SELECT 1.5 >> time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-119358 {
+    SELECT 1.5 >> '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-119362 {
+    SELECT 1.5 >> '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-119410 {
+    SELECT 1.5 >> cast(time '12:34:58' as json);
+}
+expect {
+    2
+}
+
+test t-119417 {
+    SELECT -1.5 >> ' 255 ';
+}
+expect {
+    0
+}
+
+test t-119638 {
+    SELECT 1.1 >> time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-119659 {
+    SELECT 1.1 >> '20000101103458';
+}
+expect {
+    0
+}
+
+test t-119746 {
+    SELECT 1.7 >> 1.5e0;
+}
+expect {
+    0
+}
+
+test t-119789 {
+    SELECT 1.7 >> NULL - NULL;
+}
+expect {
+    NULL
+}
+
+test t-119792 {
+    SELECT 1.7 >> 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-119908 {
+    SELECT -1.1 >> 1.5e0;
+}
+expect {
+    4611686018427387903
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-119959 {
+    SELECT -1.1 >> -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-119980 {
+    SELECT -1.1 >> 20000101;
+}
+expect {
+    0
+}
+
+test t-119982 {
+    SELECT -1.1 >> 103458.123456;
+}
+expect {
+    0
+}
+
+test t-120047 {
+    SELECT -1.1 >> cast('["ab", "ef"]' as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-120140 {
+    SELECT -1.7 >> 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-120155 {
+    SELECT -1.7 >> '103458foo';
+}
+expect {
+    0
+}
+
+test t-120190 {
+    SELECT -1.7 >> cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-120250 {
+    SELECT '1.5' >> _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-120313 {
+    SELECT '1.5' >> '20000101103458foo';
+}
+expect {
+    0
+}
+
+test t-120380 {
+    SELECT '1.5' >> cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    1
+}
+
+test t-120399 {
+    SELECT '-1.5' >> 0.0;
+}
+expect {
+    18446744073709551615
+}
+
+test t-120420 {
+    SELECT '-1.5' >> b'1001';
+}
+expect {
+    36028797018963967
+}
+
+test t-120426 {
+    SELECT '-1.5' >> NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-120432 {
+    SELECT '-1.5' >> NULL + 1;
+}
+expect {
+    NULL
+}
+
+test t-120462 {
+    SELECT '-1.5' >> timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-120499 {
+    SELECT '-1.5' >> '3001-02-18 23:59:59';
+}
+expect {
+    0
+}
+
+test t-120510 {
+    SELECT '-1.5' >> cast(2 as json);
+}
+expect {
+    4611686018427387903
+}
+
+test t-120518 {
+    SELECT '-1.5' >> cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-120542 {
+    SELECT '-1.5' >> cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-120610 {
+    SELECT 'foobar' >> time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-120616 {
+    SELECT 'foobar' >> time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-120617 {
+    SELECT 'foobar' >> time '32:34:58.5';
+}
+expect {
+    0
+}
+
+test t-120641 {
+    SELECT 'foobar' >> '103458foo';
+}
+expect {
+    0
+}
+
+test t-120653 {
+    SELECT 'foobar' >> '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-120683 {
+    SELECT 'foobar' >> cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-120715 {
+    SELECT _utf8 'foobar' >> ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-120754 {
+    SELECT _utf8 'foobar' >> 1 / NULL;
+}
+expect {
+    NULL
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-120769 {
+    SELECT _utf8 'foobar' >> -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-120771 {
+    SELECT _utf8 'foobar' >> JSON_ARRAY();
+}
+expect {
+    0
+}
+
+test t-120838 {
+    SELECT _utf8 'foobar' >> cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-120849 {
+    SELECT _utf8 'foobar' >> cast(_binary '"bar"' as json);
+}
+expect {
+    0
+}
+
+test t-120850 {
+    SELECT _utf8 'foobar' >> cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-120897 {
+    SELECT '' >> '';
+}
+expect {
+    0
+}
+
+test t-120913 {
+    SELECT '' >> 1 * NULL;
+}
+expect {
+    NULL
+}
+
+test t-120926 {
+    SELECT '' >> 0xFF666F6F626172;
+}
+expect {
+    0
+}
+
+test t-120955 {
+    SELECT '' >> '20000101103458';
+}
+expect {
+    0
+}
+
+test t-120976 {
+    SELECT '' >> '101:34:58';
+}
+expect {
+    0
+}
+
+test t-121199 {
+    SELECT 0x0 >> ' 255 ';
+}
+expect {
+    0
+}
+
+test t-121207 {
+    SELECT 0x0 >> -1.1e0;
+}
+expect {
+    0
+}
+
+test t-121224 {
+    SELECT 0x0 >> 0x1;
+}
+expect {
+    0
+}
+
+test t-121236 {
+    SELECT 0x0 >> NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-121262 {
+    SELECT 0x0 >> time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-121290 {
+    SELECT 0x0 >> '103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-121406 {
+    SELECT 0x1 >> NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-121434 {
+    SELECT 0x1 >> timestamp '2024-12-30 10:34:58';
+}
+expect {
+    0
+}
+
+test t-121478 {
+    SELECT 0x1 >> cast('null' as json);
+}
+expect {
+    1
+}
+
+test t-121584 {
+    SELECT 0xff >> time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-121636 {
+    SELECT 0xff >> cast(true as json);
+}
+expect {
+    127
+}
+
+test t-121679 {
+    SELECT 0xff >> cast(time '5 12:34:58' as json);
+}
+expect {
+    255
+}
+
+test t-121807 {
+    SELECT X'00' >> cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-121880 {
+    SELECT X'01' >> x'09';
+}
+expect {
+    0
+}
+
+test t-121901 {
+    SELECT X'01' >> 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-121917 {
+    SELECT X'01' >> timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-121924 {
+    SELECT X'01' >> 20000101;
+}
+expect {
+    0
+}
+
+test t-121928 {
+    SELECT X'01' >> '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-122001 {
+    SELECT X'01' >> cast(time '12:34:56' as json);
+}
+expect {
+    1
+}
+
+test t-122009 {
+    SELECT X'ff' >> ' 255 ';
+}
+expect {
+    0
+}
+
+test t-122051 {
+    SELECT X'ff' >> NULL / NULL;
+}
+expect {
+    NULL
+}
+
+test t-122053 {
+    SELECT X'ff' >> 1 + NULL;
+}
+expect {
+    NULL
+}
+
+test t-122085 {
+    SELECT X'ff' >> 20000101103458.123456;
+}
+expect {
+    0
+}
+
+test t-122109 {
+    SELECT X'ff' >> '10:04:58';
+}
+expect {
+    0
+}
+
+test t-122134 {
+    SELECT X'ff' >> cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-122143 {
+    SELECT X'ff' >> cast('invalid' as json);
+}
+expect error {
+}
+
+test t-122166 {
+    SELECT 0b1001 >> 0;
+}
+expect {
+    9
+}
+
+test t-122190 {
+    SELECT 0b1001 >> '-1.5';
+}
+expect {
+    0
+}
+
+test t-122241 {
+    SELECT 0b1001 >> timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-122272 {
+    SELECT 0b1001 >> '101:34:58';
+}
+expect {
+    0
+}
+
+test t-122282 {
+    SELECT 0b1001 >> cast(0 as json);
+}
+expect {
+    9
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-122305 {
+    SELECT 0b1001 >> cast('invalid' as json);
+}
+expect error {
+}
+
+test t-122451 {
+    SELECT b'1001' >> cast('true' as json);
+}
+expect {
+    4
+}
+
+test t-122631 {
+    SELECT 0x9 >> cast(_binary '"bar"' as json);
+}
+expect {
+    9
+}
+
+test t-122634 {
+    SELECT 0x9 >> cast(0b01 as json);
+}
+expect {
+    9
+}
+
+test t-122643 {
+    SELECT 0x9 >> cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    9
+}
+
+test t-122683 {
+    SELECT x'09' >> 0xff;
+}
+expect {
+    0
+}
+
+test t-122755 {
+    SELECT x'09' >> time '-101:34:58';
+}
+expect {
+    0
+}
+
+test t-122793 {
+    SELECT x'09' >> cast(_binary '"bar"' as json);
+}
+expect {
+    9
+}
+
+test t-122843 {
+    SELECT NULL >> 0x0;
+}
+expect {
+    NULL
+}
+
+test t-122878 {
+    SELECT NULL >> time '10:04:58';
+}
+expect {
+    NULL
+}
+
+test t-122887 {
+    SELECT NULL >> time '5 10:34:58.9';
+}
+expect {
+    NULL
+}
+
+test t-122984 {
+    SELECT true >> 0.0e0;
+}
+expect {
+    1
+}
+
+test t-123036 {
+    SELECT true >> 18446744073709540000e0;
+}
+expect {
+    0
+}
+
+test t-123046 {
+    SELECT true >> time '31:34:58.4';
+}
+expect {
+    0
+}
+
+test t-123123 {
+    SELECT true >> cast('["ab"]' as json);
+}
+expect {
+    1
+}
+
+test t-123127 {
+    SELECT true >> cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-123171 {
+    SELECT false >> X'01';
+}
+expect {
+    0
+}
+
+test t-123181 {
+    SELECT false >> 1 * NULL;
+}
+expect {
+    NULL
+}
+
+test t-123268 {
+    SELECT false >> cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-123271 {
+    SELECT false >> cast('1.1' as json);
+}
+expect {
+    0
+}
+
+test t-123286 {
+    SELECT false >> cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-123287 {
+    SELECT false >> cast('["ab", "ef"]' as json);
+}
+expect {
+    0
+}
+
+test t-123297 {
+    SELECT false >> cast(time '12:34:56' as json);
+}
+expect {
+    0
+}
+
+test t-123300 {
+    SELECT NULL * 1 >> 0;
+}
+expect {
+    NULL
+}
+
+test t-123304 {
+    SELECT NULL * 1 >> ' 1 ';
+}
+expect {
+    NULL
+}
+
+test t-123359 {
+    SELECT NULL * 1 >> 18446744073709551615;
+}
+expect {
+    NULL
+}
+
+test t-123373 {
+    SELECT NULL * 1 >> time '5 10:34:58.9';
+}
+expect {
+    NULL
+}
+
+test t-123393 {
+    SELECT NULL * 1 >> '20000101103458.123456foo';
+}
+expect {
+    NULL
+}
+
+test t-123437 {
+    SELECT NULL * 1 >> cast('"foo"' as json);
+}
+expect {
+    NULL
+}
+
+test t-123450 {
+    SELECT NULL * 1 >> cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-123541 {
+    SELECT 1 * NULL >> 20000101103458;
+}
+expect {
+    NULL
+}
+
+test t-123564 {
+    SELECT 1 * NULL >> time'00:00:59.2132234';
+}
+expect {
+    NULL
+}
+
+test t-123646 {
+    SELECT NULL * NULL >> -1.7;
+}
+expect {
+    NULL
+}
+
+test t-123715 {
+    SELECT NULL * NULL >> '20000101103458foo';
+}
+expect {
+    NULL
+}
+
+test t-123784 {
+    SELECT NULL * NULL >> cast(time '12:34:58' as json);
+}
+expect {
+    NULL
+}
+
+test t-123791 {
+    SELECT NULL / 1 >> ' 255 ';
+}
+expect {
+    NULL
+}
+
+test t-123801 {
+    SELECT NULL / 1 >> 0.0;
+}
+expect {
+    NULL
+}
+
+test t-123905 {
+    SELECT NULL / 1 >> cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-123932 {
+    SELECT NULL / 1 >> cast('["a"]' as json);
+}
+expect {
+    NULL
+}
+
+test t-124028 {
+    SELECT 1 / NULL >> 20000101103458.1234;
+}
+expect {
+    NULL
+}
+
+test t-124042 {
+    SELECT 1 / NULL >> '20000101foo';
+}
+expect {
+    NULL
+}
+
+test t-124061 {
+    SELECT 1 / NULL >> '1970-01-01 00:00:01';
+}
+expect {
+    NULL
+}
+
+test t-124119 {
+    SELECT NULL / NULL >> 1.0e0;
+}
+expect {
+    NULL
+}
+
+test t-124124 {
+    SELECT NULL / NULL >> -1.7e0;
+}
+expect {
+    NULL
+}
+
+test t-124152 {
+    SELECT NULL / NULL >> NULL * 1;
+}
+expect {
+    NULL
+}
+
+test t-124160 {
+    SELECT NULL / NULL >> NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-124165 {
+    SELECT NULL / NULL >> 0x666F6F626172FF;
+}
+expect {
+    NULL
+}
+
+test t-124171 {
+    SELECT NULL / NULL >> -18446744073709540000e0;
+}
+expect {
+    NULL
+}
+
+test t-124192 {
+    SELECT NULL / NULL >> 20000101;
+}
+expect {
+    NULL
+}
+
+test t-124263 {
+    SELECT NULL / NULL >> cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-124318 {
+    SELECT NULL + 1 >> 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-124342 {
+    SELECT NULL + 1 >> time '31:34:58.4';
+}
+expect {
+    NULL
+}
+
+test t-124412 {
+    SELECT NULL + 1 >> cast(_binary' "foo"' as json);
+}
+expect {
+    NULL
+}
+
+test t-124496 {
+    SELECT 1 + NULL >> JSON_OBJECT();
+}
+expect {
+    NULL
+}
+
+test t-124504 {
+    SELECT 1 + NULL >> time '31:34:58.4';
+}
+expect {
+    NULL
+}
+
+test t-124555 {
+    SELECT 1 + NULL >> cast('[]' as json);
+}
+expect {
+    NULL
+}
+
+test t-124599 {
+    SELECT NULL + NULL >> ' 0 ';
+}
+expect {
+    NULL
+}
+
+test t-124651 {
+    SELECT NULL + NULL >> 0x666F6F626172FF;
+}
+expect {
+    NULL
+}
+
+test t-124671 {
+    SELECT NULL + NULL >> timestamp '2000-01-01 10:34:58';
+}
+expect {
+    NULL
+}
+
+test t-124705 {
+    SELECT NULL + NULL >> '2000-01-01 12:34:58';
+}
+expect {
+    NULL
+}
+
+test t-124715 {
+    SELECT NULL + NULL >> cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-124748 {
+    SELECT NULL + NULL >> cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test t-124789 {
+    SELECT NULL - 1 >> 0xff;
+}
+expect {
+    NULL
+}
+
+test t-124804 {
+    SELECT NULL - 1 >> 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-124819 {
+    SELECT NULL - 1 >> -18446744073709540000e0;
+}
+expect {
+    NULL
+}
+
+test t-124847 {
+    SELECT NULL - 1 >> '103458';
+}
+expect {
+    NULL
+}
+
+test t-124914 {
+    SELECT NULL - 1 >> cast(date '2000-01-01' as json);
+}
+expect {
+    NULL
+}
+
+test t-124976 {
+    SELECT 1 - NULL >> 0xFF666F6F626172;
+}
+expect {
+    NULL
+}
+
+test t-124994 {
+    SELECT 1 - NULL >> date '2000-01-01';
+}
+expect {
+    NULL
+}
+
+test t-125018 {
+    SELECT 1 - NULL >> time '-31:34:58';
+}
+expect {
+    NULL
+}
+
+test t-125033 {
+    SELECT 1 - NULL >> '1970-01-01 00:00:01';
+}
+expect {
+    NULL
+}
+
+test t-125039 {
+    SELECT 1 - NULL >> cast(false as json);
+}
+expect {
+    NULL
+}
+
+test t-125063 {
+    SELECT 1 - NULL >> cast(0x666F6F626172FF as json);
+}
+expect {
+    NULL
+}
+
+test t-125114 {
+    SELECT NULL - NULL >> X'00';
+}
+expect {
+    NULL
+}
+
+test t-125120 {
+    SELECT NULL - NULL >> x'09';
+}
+expect {
+    NULL
+}
+
+test t-125258 {
+    SELECT 0xFF666F6F626172FF >> -1.7e0;
+}
+expect {
+    0
+}
+
+test t-125284 {
+    SELECT 0xFF666F6F626172FF >> true;
+}
+expect {
+    9201759725739358591
+}
+
+test t-125379 {
+    SELECT 0xFF666F6F626172FF >> cast('9223372036854775807' as json);
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-125399 {
+    SELECT 0xFF666F6F626172FF >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-125417 {
+    SELECT 0x666F6F626172FF >> -1.5e0;
+}
+expect {
+    0
+}
+
+test t-125421 {
+    SELECT 0x666F6F626172FF >> 0.0;
+}
+expect {
+    28832971807093503
+}
+
+test t-125455 {
+    SELECT 0x666F6F626172FF >> 1 + NULL;
+}
+expect {
+    NULL
+}
+
+test t-125520 {
+    SELECT 0x666F6F626172FF >> '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-125605 {
+    SELECT 0xFF666F6F626172 >> 0x9;
+}
+expect {
+    140407710658864
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-125707 {
+    SELECT 0xFF666F6F626172 >> cast('invalid' as json);
+}
+expect error {
+}
+
+test t-125812 {
+    SELECT 9223372036854775807 >> 20000101;
+}
+expect {
+    0
+}
+
+test t-125819 {
+    SELECT 9223372036854775807 >> '103458';
+}
+expect {
+    0
+}
+
+test t-125860 {
+    SELECT 9223372036854775807 >> cast(18446744073709551615 as json);
+}
+expect {
+    0
+}
+
+test t-125871 {
+    SELECT 9223372036854775807 >> cast(_binary '"bar"' as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-125880 {
+    SELECT 9223372036854775807 >> cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-125989 {
+    SELECT -9223372036854775808 >> time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-126016 {
+    SELECT -9223372036854775808 >> cast('false' as json);
+}
+expect {
+    9223372036854775808
+}
+
+test t-126137 {
+    SELECT 18446744073709551615 >> 103458;
+}
+expect {
+    0
+}
+
+test t-126149 {
+    SELECT 18446744073709551615 >> '103458foo';
+}
+expect {
+    0
+}
+
+test t-126160 {
+    SELECT 18446744073709551615 >> '101:34:58';
+}
+expect {
+    0
+}
+
+test t-126175 {
+    SELECT 18446744073709551615 >> cast('[]' as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-126176 {
+    SELECT 18446744073709551615 >> cast('null' as json);
+}
+expect {
+    18446744073709551615
+}
+
+test t-126223 {
+    SELECT 18446744073709540000e0 >> ' 255 foo';
+}
+expect {
+    0
+}
+
+test t-126227 {
+    SELECT 18446744073709540000e0 >> -1.5e0;
+}
+expect {
+    0
+}
+
+test t-126357 {
+    SELECT 18446744073709540000e0 >> cast(_binary '"bar"' as json);
+}
+expect {
+    9223372036854775807
+}
+
+test t-126361 {
+    SELECT 18446744073709540000e0 >> cast(0b001 as json);
+}
+expect {
+    9223372036854775807
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-126404 {
+    SELECT -18446744073709540000e0 >> _utf8 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-126453 {
+    SELECT -18446744073709540000e0 >> timestamp '2000-01-01 10:34:58';
+}
+expect error {
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-126478 {
+    SELECT -18446744073709540000e0 >> time'00:00:01.0000';
+}
+expect error {
+}
+
+test t-126552 {
+    SELECT JSON_OBJECT() >> 1.1e0;
+}
+expect {
+    0
+}
+
+test t-126658 {
+    SELECT JSON_OBJECT() >> cast(true as json);
+}
+expect {
+    0
+}
+
+test t-126673 {
+    SELECT JSON_OBJECT() >> cast('1.1' as json);
+}
+expect {
+    0
+}
+
+test t-126686 {
+    SELECT JSON_OBJECT() >> cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-126711 {
+    SELECT JSON_ARRAY() >> 1.0e0;
+}
+expect {
+    0
+}
+
+test t-126768 {
+    SELECT JSON_ARRAY() >> time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-126797 {
+    SELECT JSON_ARRAY() >> '103458foo';
+}
+expect {
+    0
+}
+
+test t-126848 {
+    SELECT JSON_ARRAY() >> cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-126880 {
+    SELECT time '10:04:58' >> 0.000;
+}
+expect {
+    100458
+}
+
+test t-126892 {
+    SELECT time '10:04:58' >> _binary 'foobar';
+}
+expect {
+    100458
+}
+
+test t-126899 {
+    SELECT time '10:04:58' >> 0b1001;
+}
+expect {
+    196
+}
+
+test t-127006 {
+    SELECT time '10:04:58' >> cast(0xFF666F6F626172FF as json);
+}
+expect {
+    100458
+}
+
+test t-127008 {
+    SELECT time '10:04:58' >> cast(0b01 as json);
+}
+expect {
+    100458
+}
+
+test t-127238 {
+    SELECT time '32:34:58' >> NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-127347 {
+    SELECT time '32:34:58' >> cast(time '12:34:56' as json);
+}
+expect {
+    323458
+}
+
+test t-127588 {
+    SELECT time '5 10:34:58' >> timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    0
+}
+
+test t-127625 {
+    SELECT time '5 10:34:58' >> '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-127667 {
+    SELECT time '5 10:34:58' >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-127732 {
+    SELECT time '10:04:58.1' >> -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-127750 {
+    SELECT time '10:04:58.1' >> timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    0
+}
+
+test t-127801 {
+    SELECT time '10:04:58.1' >> cast(1.1 as json);
+}
+expect {
+    50229
+}
+
+test t-127929 {
+    SELECT time '31:34:58.4' >> '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-127945 {
+    SELECT time '31:34:58.4' >> '2000-01-01 12:34:58';
+}
+expect {
+    0
+}
+
+test t-127948 {
+    SELECT time '31:34:58.4' >> '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-128100 {
+    SELECT time '32:34:58.5' >> time'00:00:59.2132234';
+}
+expect {
+    0
+}
+
+test t-128182 {
+    SELECT time '130:34:58.6' >> -1.7;
+}
+expect {
+    0
+}
+
+test t-128317 {
+    SELECT time '130:34:58.6' >> cast(date '2000-01-02' as json);
+}
+expect {
+    1303459
+}
+
+test t-128375 {
+    SELECT time '5 10:34:58.9' >> NULL - NULL;
+}
+expect {
+    NULL
+}
+
+test t-128398 {
+    SELECT time '5 10:34:58.9' >> timestamp '2000-01-01 10:34:58.123456';
+}
+expect {
+    0
+}
+
+test t-128402 {
+    SELECT time '5 10:34:58.9' >> 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-128414 {
+    SELECT time '5 10:34:58.9' >> '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-128439 {
+    SELECT time '5 10:34:58.9' >> cast(1 as json);
+}
+expect {
+    651729
+}
+
+test t-128474 {
+    SELECT time '5 10:34:58.9' >> cast('\{"c": 1, "b": 2\}' as json);
+}
+expect {
+    1303459
+}
+
+test t-128484 {
+    SELECT date '2000-01-01' >> 0;
+}
+expect {
+    20000101
+}
+
+test t-128522 {
+    SELECT date '2000-01-01' >> x'09';
+}
+expect {
+    39062
+}
+
+test t-128550 {
+    SELECT date '2000-01-01' >> time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-128561 {
+    SELECT date '2000-01-01' >> timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-128828 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' >> 1.7;
+}
+expect {
+    5000025275864
+}
+
+test t-128845 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' >> 0x9;
+}
+expect {
+    39062697467
+}
+
+test t-128956 {
+    SELECT timestamp '2000-01-01 10:34:58.123456' >> cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-129029 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' >> 18446744073709551615;
+}
+expect {
+    0
+}
+
+test t-129043 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' >> time '5 10:34:58.9';
+}
+expect {
+    0
+}
+
+test t-129118 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' >> cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    20000101103459
+}
+
+test t-129126 {
+    SELECT timestamp '2000-01-01 10:34:58.978654' >> cast(date '2000-01-01' as json);
+}
+expect {
+    20000101103459
+}
+
+test t-129145 {
+    SELECT timestamp '2024-12-30 10:34:58' >> -1.1e0;
+}
+expect {
+    0
+}
+
+test t-129159 {
+    SELECT timestamp '2024-12-30 10:34:58' >> '';
+}
+expect {
+    20241230103458
+}
+
+test t-129211 {
+    SELECT timestamp '2024-12-30 10:34:58' >> 20000101103458;
+}
+expect {
+    0
+}
+
+test t-129222 {
+    SELECT timestamp '2024-12-30 10:34:58' >> '103458.123456';
+}
+expect {
+    0
+}
+
+test t-129249 {
+    SELECT timestamp '2024-12-30 10:34:58' >> cast(1 as json);
+}
+expect {
+    10120615051729
+}
+
+test t-129290 {
+    SELECT timestamp '2024-12-30 10:34:58' >> cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    20241230103458
+}
+
+test t-129335 {
+    SELECT 20000101103458 >> false;
+}
+expect {
+    20000101103458
+}
+
+test t-129337 {
+    SELECT 20000101103458 >> 1 * NULL;
+}
+expect {
+    NULL
+}
+
+test t-129345 {
+    SELECT 20000101103458 >> NULL - 1;
+}
+expect {
+    NULL
+}
+
+test t-129360 {
+    SELECT 20000101103458 >> time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-129413 {
+    SELECT 20000101103458 >> cast(false as json);
+}
+expect {
+    20000101103458
+}
+
+test t-129439 {
+    SELECT 20000101103458 >> cast(0b001 as json);
+}
+expect {
+    20000101103458
+}
+
+test t-129483 {
+    SELECT 20000101103458.1234 >> '';
+}
+expect {
+    20000101103458
+}
+
+test t-129484 {
+    SELECT 20000101103458.1234 >> _binary 'foobar';
+}
+expect {
+    20000101103458
+}
+
+test t-129495 {
+    SELECT 20000101103458.1234 >> NULL;
+}
+expect {
+    NULL
+}
+
+test t-129509 {
+    SELECT 20000101103458.1234 >> NULL - NULL;
+}
+expect {
+    NULL
+}
+
+test t-129530 {
+    SELECT 20000101103458.1234 >> date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-129540 {
+    SELECT 20000101103458.1234 >> 103458.123456;
+}
+expect {
+    0
+}
+
+test t-129590 {
+    SELECT 20000101103458.1234 >> cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-129603 {
+    SELECT 20000101103458.1234 >> cast('["ab"]' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-129618 {
+    SELECT 20000101103458.123456 >> 0;
+}
+expect {
+    20000101103458
+}
+
+test t-129668 {
+    SELECT 20000101103458.123456 >> NULL + NULL;
+}
+expect {
+    NULL
+}
+
+test t-129691 {
+    SELECT 20000101103458.123456 >> time '5 10:34:58.9';
+}
+expect {
+    0
+}
+
+test t-129739 {
+    SELECT 20000101103458.123456 >> cast('[]' as json);
+}
+expect {
+    20000101103458
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-129757 {
+    SELECT 20000101103458.123456 >> cast('invalid' as json);
+}
+expect error {
+}
+
+test t-129777 {
+    SELECT 20000101103458.123456 >> cast(time '12:34:56' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-129808 {
+    SELECT 20000101 >> _binary 'foobar';
+}
+expect {
+    20000101
+}
+
+test t-129824 {
+    SELECT 20000101 >> NULL * NULL;
+}
+expect {
+    NULL
+}
+
+test t-129902 {
+    SELECT 20000101 >> cast('null' as json);
+}
+expect {
+    20000101
+}
+
+test t-129922 {
+    SELECT 20000101 >> cast(0xFF666F6F626172FF as json);
+}
+expect {
+    20000101
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-129935 {
+    SELECT 20000101 >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-129945 {
+    SELECT 103458 >> ' 0 ';
+}
+expect {
+    103458
+}
+
+test t-129950 {
+    SELECT 103458 >> 0.0e0;
+}
+expect {
+    103458
+}
+
+test t-129972 {
+    SELECT 103458 >> 0x1;
+}
+expect {
+    51729
+}
+
+test t-130076 {
+    SELECT 103458 >> cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test t-130156 {
+    SELECT 103458.123456 >> 1 - NULL;
+}
+expect {
+    NULL
+}
+
+test t-130178 {
+    SELECT 103458.123456 >> date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-130269 {
+    SELECT '20000101103458' >> ' 0 ';
+}
+expect {
+    20000101103458
+}
+
+test t-130293 {
+    SELECT '20000101103458' >> '';
+}
+expect {
+    20000101103458
+}
+
+test t-130452 {
+    SELECT '20000101103458.1234' >> '-1.5';
+}
+expect {
+    0
+}
+
+test t-130456 {
+    SELECT '20000101103458.1234' >> _binary 'foobar';
+}
+expect {
+    20000101103458
+}
+
+test t-130477 {
+    SELECT '20000101103458.1234' >> 1 + NULL;
+}
+expect {
+    NULL
+}
+
+test t-130480 {
+    SELECT '20000101103458.1234' >> 1 - NULL;
+}
+expect {
+    NULL
+}
+
+test t-130491 {
+    SELECT '20000101103458.1234' >> JSON_ARRAY();
+}
+expect {
+    20000101103458
+}
+
+test t-130850 {
+    SELECT '20000101' >> time '-31:34:58';
+}
+expect {
+    0
+}
+
+test t-130863 {
+    SELECT '20000101' >> '0000-01-03';
+}
+expect {
+    20000101
+}
+
+test t-130866 {
+    SELECT '20000101' >> '3001-02-19 00:00:00';
+}
+expect {
+    0
+}
+
+test t-130918 {
+    SELECT '103458' >> ' 1 ';
+}
+expect {
+    51729
+}
+
+test t-130930 {
+    SELECT '103458' >> 0.000;
+}
+expect {
+    103458
+}
+
+test t-130950 {
+    SELECT '103458' >> b'1001';
+}
+expect {
+    202
+}
+
+test t-131035 {
+    SELECT '103458' >> cast('[]' as json);
+}
+expect {
+    103458
+}
+
+test t-131076 {
+    SELECT '103458.123456' >> 0;
+}
+expect {
+    103458
+}
+
+test t-131123 {
+    SELECT '103458.123456' >> NULL / NULL;
+}
+expect {
+    NULL
+}
+
+test t-131134 {
+    SELECT '103458.123456' >> -9223372036854775808;
+}
+expect {
+    0
+}
+
+test t-131153 {
+    SELECT '103458.123456' >> timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-131158 {
+    SELECT '103458.123456' >> 20000101;
+}
+expect {
+    0
+}
+
+test t-131226 {
+    SELECT '103458.123456' >> cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    103458
+}
+
+test t-131235 {
+    SELECT '103458.123456' >> cast(time '12:34:56' as json);
+}
+expect {
+    103458
+}
+
+test t-131281 {
+    SELECT '20000101103458foo' >> 1 * NULL;
+}
+expect {
+    NULL
+}
+
+test t-131312 {
+    SELECT '20000101103458foo' >> date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-131483 {
+    SELECT '20000101103458.1234foo' >> 103458;
+}
+expect {
+    0
+}
+
+test t-131491 {
+    SELECT '20000101103458.1234foo' >> '20000101103458foo';
+}
+expect {
+    0
+}
+
+test t-131492 {
+    SELECT '20000101103458.1234foo' >> '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-131527 {
+    SELECT '20000101103458.1234foo' >> cast(1.1 as json);
+}
+expect {
+    10000050551729
+}
+
+test t-131584 {
+    SELECT '20000101103458.123456foo' >> -1.7;
+}
+expect {
+    0
+}
+
+test t-131642 {
+    SELECT '20000101103458.123456foo' >> 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-131712 {
+    SELECT '20000101103458.123456foo' >> cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    20000101103458
+}
+
+test t-131807 {
+    SELECT '20000101foo' >> 103458;
+}
+expect {
+    0
+}
+
+test t-131841 {
+    SELECT '20000101foo' >> cast(1 as json);
+}
+expect {
+    10000050
+}
+
+test t-131856 {
+    SELECT '20000101foo' >> cast('2' as json);
+}
+expect {
+    5000025
+}
+
+test t-131901 {
+    SELECT '103458foo' >> 0.0;
+}
+expect {
+    103458
+}
+
+test t-131968 {
+    SELECT '103458foo' >> 20000101;
+}
+expect {
+    0
+}
+
+test t-132039 {
+    SELECT '103458foo' >> cast('\{"b": 2, "c": 1\}' as json);
+}
+expect {
+    103458
+}
+
+test t-132133 {
+    SELECT '103458.123456foo' >> '20000101103458';
+}
+expect {
+    0
+}
+
+test t-132134 {
+    SELECT '103458.123456foo' >> '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-132160 {
+    SELECT '103458.123456foo' >> '1969-02-18';
+}
+expect {
+    0
+}
+
+test t-132264 {
+    SELECT time '-10:04:58' >> 0xFF666F6F626172FF;
+}
+expect {
+    0
+}
+
+test t-132273 {
+    SELECT time '-10:04:58' >> JSON_ARRAY();
+}
+expect {
+    18446744073709451158
+}
+
+test t-132337 {
+    SELECT time '-10:04:58' >> cast(1.1 as json);
+}
+expect {
+    9223372036854725579
+}
+
+test t-132351 {
+    SELECT time '-10:04:58' >> cast(_binary '"bar"' as json);
+}
+expect {
+    18446744073709451158
+}
+
+test t-132412 {
+    SELECT time '-31:34:58' >> true;
+}
+expect {
+    9223372036854619079
+}
+
+test t-132618 {
+    SELECT time '-32:34:58' >> 103458.123456;
+}
+expect {
+    0
+}
+
+test t-132642 {
+    SELECT time '-32:34:58' >> '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-132672 {
+    SELECT time '-32:34:58' >> cast('"bar"' as json);
+}
+expect {
+    18446744073709228158
+}
+
+test t-132685 {
+    SELECT time '-32:34:58' >> cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    18446744073709228158
+}
+
+test t-132719 {
+    SELECT time'00:00:01.0000' >> '1.5';
+}
+expect {
+    0
+}
+
+test t-132745 {
+    SELECT time'00:00:01.0000' >> 1 + NULL;
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-132851 {
+    SELECT time'00:00:01.0000' >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-132897 {
+    SELECT time'00:00:59.01011' >> NULL;
+}
+expect {
+    NULL
+}
+
+test t-132948 {
+    SELECT time'00:00:59.01011' >> '103458.123456';
+}
+expect {
+    0
+}
+
+test t-132981 {
+    SELECT time'00:00:59.01011' >> cast('true' as json);
+}
+expect {
+    29
+}
+
+test t-133024 {
+    SELECT time'00:00:59.2132234' >> ' 1 ';
+}
+expect {
+    29
+}
+
+test t-133109 {
+    SELECT time'00:00:59.2132234' >> '103458';
+}
+expect {
+    0
+}
+
+test t-133122 {
+    SELECT time'00:00:59.2132234' >> time'00:00:59.2132234';
+}
+expect {
+    0
+}
+
+test t-133125 {
+    SELECT time'00:00:59.2132234' >> '10:04:58';
+}
+expect {
+    0
+}
+
+test t-133177 {
+    SELECT time'00:00:59.2132234' >> cast(date '2000-01-02' as json);
+}
+expect {
+    59
+}
+
+test t-133304 {
+    SELECT time '-101:34:58' >> cast('null' as json);
+}
+expect {
+    18446744073708538158
+}
+
+test t-133359 {
+    SELECT time '-5 10:34:58' >> 0.0;
+}
+expect {
+    18446744073708248158
+}
+
+test t-133411 {
+    SELECT time '-5 10:34:58' >> time '130:34:58';
+}
+expect {
+    0
+}
+
+test t-133429 {
+    SELECT time '-5 10:34:58' >> '20000101103458';
+}
+expect {
+    0
+}
+
+test t-133543 {
+    SELECT '10:04:58' >> 0x9;
+}
+expect {
+    0
+}
+
+test t-133568 {
+    SELECT '10:04:58' >> JSON_OBJECT();
+}
+expect {
+    10
+}
+
+test t-133583 {
+    SELECT '10:04:58' >> timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-133589 {
+    SELECT '10:04:58' >> 103458;
+}
+expect {
+    0
+}
+
+test t-133740 {
+    SELECT '101:34:58' >> time '130:34:58.6';
+}
+expect {
+    0
+}
+
+test t-133766 {
+    SELECT '101:34:58' >> time '-31:34:58';
+}
+expect {
+    0
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-133823 {
+    SELECT '101:34:58' >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-133826 {
+    SELECT '101:34:58' >> cast(timestamp '2000-01-01 12:34:58' as json);
+}
+expect {
+    101
+}
+
+test t-133979 {
+    SELECT '5 10:34:58' >> cast('["ab", "ef"]' as json);
+}
+expect {
+    5
+}
+
+test t-134014 {
+    SELECT '2000-01-01' >> -1.7;
+}
+expect {
+    0
+}
+
+test t-134072 {
+    SELECT '2000-01-01' >> 20000101103458.1234;
+}
+expect {
+    0
+}
+
+test t-134085 {
+    SELECT '2000-01-01' >> '20000101103458.123456foo';
+}
+expect {
+    0
+}
+
+test t-134133 {
+    SELECT '2000-01-01' >> cast(_binary '"bar"' as json);
+}
+expect {
+    2000
+}
+
+test t-134201 {
+    SELECT '2000-01-01 12:34:58' >> NULL / NULL;
+}
+expect {
+    NULL
+}
+
+test t-134221 {
+    SELECT '2000-01-01 12:34:58' >> time '130:34:58';
+}
+expect {
+    0
+}
+
+test t-134302 {
+    SELECT '2000-01-01 12:34:58' >> cast('["ab", "cd", "ef"]' as json);
+}
+expect {
+    2000
+}
+
+test t-134405 {
+    SELECT '0000-02-29' >> '103458';
+}
+expect {
+    0
+}
+
+test t-134478 {
+    SELECT '0000-01-03' >> 0;
+}
+expect {
+    0
+}
+
+test t-134544 {
+    SELECT '0000-01-03' >> time '32:34:58';
+}
+expect {
+    0
+}
+
+test t-134546 {
+    SELECT '0000-01-03' >> time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-134565 {
+    SELECT '0000-01-03' >> '20000101103458.123456';
+}
+expect {
+    0
+}
+
+test t-134600 {
+    SELECT '0000-01-03' >> cast('null' as json);
+}
+expect {
+    0
+}
+
+test t-134642 {
+    SELECT '1969-02-18' >> 255;
+}
+expect {
+    0
+}
+
+test t-134676 {
+    SELECT '1969-02-18' >> b'1001';
+}
+expect {
+    3
+}
+
+test t-134709 {
+    SELECT '1969-02-18' >> time '10:04:58.1';
+}
+expect {
+    0
+}
+
+test t-134726 {
+    SELECT '1969-02-18' >> '20000101103458.1234';
+}
+expect {
+    0
+}
+
+test t-134802 {
+    SELECT '1970-01-01 00:00:01' >> 0;
+}
+expect {
+    1970
+}
+
+test t-134824 {
+    SELECT '1970-01-01 00:00:01' >> -1.7;
+}
+expect {
+    0
+}
+
+# mysql-error: 1690 22003 BIGINT value is out of range in '-(18446744073709540000e0)'
+test t-134863 {
+    SELECT '1970-01-01 00:00:01' >> -18446744073709540000e0;
+}
+expect error {
+}
+
+test t-134870 {
+    SELECT '1970-01-01 00:00:01' >> time '5 10:34:58';
+}
+expect {
+    0
+}
+
+test t-134946 {
+    SELECT '1970-01-01 00:00:01' >> cast(0b01 as json);
+}
+expect {
+    1970
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-134957 {
+    SELECT '1970-01-01 00:00:01' >> cast('"a": 1' as json);
+}
+expect error {
+}
+
+test t-135010 {
+    SELECT '3001-02-19 00:00:00' >> 1 / NULL;
+}
+expect {
+    NULL
+}
+
+test t-135012 {
+    SELECT '3001-02-19 00:00:00' >> NULL + 1;
+}
+expect {
+    NULL
+}
+
+test t-135082 {
+    SELECT '3001-02-19 00:00:00' >> cast(true as json);
+}
+expect {
+    1500
+}
+
+test t-135113 {
+    SELECT '3001-02-19 00:00:00' >> cast('["ab", "ef"]' as json);
+}
+expect {
+    3001
+}
+
+test t-135121 {
+    SELECT '3001-02-19 00:00:00' >> cast(date '2000-01-02' as json);
+}
+expect {
+    3001
+}
+
+test t-135165 {
+    SELECT '3001-02-18 23:59:59' >> NULL;
+}
+expect {
+    NULL
+}
+
+test t-135198 {
+    SELECT '3001-02-18 23:59:59' >> time '130:34:58.6';
+}
+expect {
+    0
+}
+
+test t-135282 {
+    SELECT '3001-02-18 23:59:59' >> cast(date '2000-01-01' as json);
+}
+expect {
+    3001
+}
+
+test t-135325 {
+    SELECT cast(0 as json) >> 0x9;
+}
+expect {
+    0
+}
+
+test t-135335 {
+    SELECT cast(0 as json) >> NULL / NULL;
+}
+expect {
+    NULL
+}
+
+test t-135394 {
+    SELECT cast(0 as json) >> '101:34:58';
+}
+expect {
+    0
+}
+
+test t-135460 {
+    SELECT cast(1 as json) >> 1.5e0;
+}
+expect {
+    0
+}
+
+test t-135542 {
+    SELECT cast(1 as json) >> '20000101103458.1234foo';
+}
+expect {
+    0
+}
+
+test t-135571 {
+    SELECT cast(1 as json) >> cast('[]' as json);
+}
+expect {
+    1
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-135589 {
+    SELECT cast(1 as json) >> cast('invalid' as json);
+}
+expect error {
+}
+
+test t-135601 {
+    SELECT cast(1 as json) >> cast('\{"b": 2, "a": 1\}' as json);
+}
+expect {
+    1
+}
+
+test t-135645 {
+    SELECT cast(true as json) >> X'01';
+}
+expect {
+    0
+}
+
+test t-135657 {
+    SELECT cast(true as json) >> NULL / 1;
+}
+expect {
+    NULL
+}
+
+test t-135689 {
+    SELECT cast(true as json) >> timestamp '2000-01-01 10:34:58.978654';
+}
+expect {
+    0
+}
+
+test t-135709 {
+    SELECT cast(true as json) >> time '-10:04:58';
+}
+expect {
+    0
+}
+
+test t-135725 {
+    SELECT cast(true as json) >> '1970-01-01 00:00:01';
+}
+expect {
+    0
+}
+
+test t-135812 {
+    SELECT cast(false as json) >> x'09';
+}
+expect {
+    0
+}

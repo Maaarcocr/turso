@@ -1,0 +1,76 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE bet_logs (
+    id bigint unsigned NOT NULL,
+    merchant_game_id bigint unsigned NOT NULL,
+    bet_amount DECIMAL(20, 8),
+    game_id bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+    CREATE TABLE bet_logs (
+    id bigint unsigned NOT NULL,
+    merchant_game_id bigint unsigned NOT NULL,
+    bet_amount DECIMAL(20, 8),
+    game_id bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493);
+    insert into bet_logs(id, merchant_game_id, bet_amount, game_id) values
+		(1, 1, 22.5, 40), (2, 1, 15.3, 40),
+		(3, 2, 22.5, 40), (4, 2, 15.3, 40),
+		(5, 3, 22.5, 40), (6, 3, 15.3, 40),
+		(7, 3, 22.5, 40), (8, 4, 15.3, 40);
+    set @@sql_mode = ' ';
+}
+
+@setup s1
+test l617 {
+    insert into bet_logs(id, merchant_game_id, bet_amount, game_id) values
+		(1, 1, 22.5, 40), (2, 1, 15.3, 40),
+		(3, 2, 22.5, 40), (4, 2, 15.3, 40),
+		(5, 3, 22.5, 40), (6, 3, 15.3, 40),
+		(7, 3, 22.5, 40), (8, 4, 15.3, 40);
+}
+expect unordered {
+}
+
+@setup s2
+test l625 {
+    SELECT t1.name, SUM(b.bet_amount) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id;
+}
+expect unordered {
+    a1|15.30000000
+    a1|37.80000000
+    b1|37.80000000
+    c1|60.30000000
+}
+
+@setup s2
+test l626 {
+    SELECT t1.name, CAST(SUM(b.bet_amount) AS DECIMAL(20,6)) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id;
+}
+expect unordered {
+    a1|15.300000
+    a1|37.800000
+    b1|37.800000
+    c1|60.300000
+}

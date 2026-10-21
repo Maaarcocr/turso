@@ -1,0 +1,148 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (
+    t1_id bigint unsigned NOT NULL,
+    `name` varchar(20) NOT NULL,
+    `value` varchar(50),
+    shardKey bigint,
+    PRIMARY KEY (t1_id),
+    UNIQUE KEY `t1id_name` (t1_id, `name`),
+    KEY `IDX_TA_ValueName` (`value`(20), `name`(10))
+) ENGINE InnoDB;
+}
+
+setup s2 {
+    CREATE TABLE t2 (
+    id bigint NOT NULL,
+    shardKey bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;
+}
+
+setup s3 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200);
+}
+
+@setup s1
+@setup s2
+test l426 {
+    select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l427 {
+    select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l428 {
+    select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l429 {
+    select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l431 {
+    select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l432 {
+    select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+test l437 {
+    insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l442 {
+    select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l443 {
+    select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l444 {
+    select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l446 {
+    select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l447 {
+    select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo';
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l448 {
+    select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`;
+}
+expect unordered {
+}

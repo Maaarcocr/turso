@@ -1,0 +1,227 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/union/union_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1(
+                   id1 bigint,
+                   id2 bigint,
+                   primary key(id1)
+) Engine=InnoDB;
+}
+
+setup s2 {
+    create table t2(
+                   id3 bigint,
+                   id4 bigint,
+                   primary key(id3)
+) Engine=InnoDB;
+}
+
+setup s3 {
+    insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4);
+}
+
+setup s4 {
+    create table t2(
+                   id3 bigint,
+                   id4 bigint,
+                   primary key(id3)
+) Engine=InnoDB;
+    insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4);
+    insert into t2(id3, id4) values (2, 3), (3, 4), (4,4), (5,5);
+}
+
+@setup s1
+test l53 {
+    insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4);
+}
+expect unordered {
+}
+
+@setup s2
+test l54 {
+    insert into t2(id3, id4) values (2, 3), (3, 4), (4,4), (5,5);
+}
+expect unordered {
+}
+
+test l59 {
+    select 1 union select null;
+}
+expect unordered {
+    1
+    NULL
+}
+
+test l60 {
+    select null union select null;
+}
+expect unordered {
+    NULL
+}
+
+test l61 {
+    select * from (select 1 as col union select 2) as t;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s3
+test l64 {
+    select id1 from t1 where id1 = 1 union select id1 from t1 where id1 = 5;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l65 {
+    select id1 from t1 where id1 = 1 union select id1 from t1 where id1 = 4;
+}
+expect unordered {
+    1
+    4
+}
+
+@setup s1
+@setup s3
+test l66 {
+    select id1 from t1 where id1 = 1 union select 452 union select id1 from t1 where id1 = 4;
+}
+expect unordered {
+    1
+    4
+    452
+}
+
+@setup s1
+@setup s4
+test l67 {
+    select id1, id2 from t1 union select 827, 452 union select id3,id4 from t2;
+}
+expect unordered {
+    1|1
+    2|2
+    2|3
+    3|3
+    3|4
+    4|4
+    5|5
+    827|452
+}
+
+test l69 {
+    select 1 from dual where 1 IN (select 1 as col union select 2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l70 {
+    select 1 from dual union select id1 from t1 where id1 in (null);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l71 {
+    select id1 from t1 where id1 in (null) union select 1 from dual;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s3
+test l72 {
+    SELECT 1 from t1 UNION SELECT 2 from t1;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s3
+test l73 {
+    SELECT 5 from t1 UNION SELECT 6 from t1;
+}
+expect unordered {
+    5
+    6
+}
+
+@setup s1
+@setup s3
+test l74 {
+    SELECT id1 from t1 UNION SELECT id2 from t1;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+}
+
+@setup s1
+@setup s3
+test l75 {
+    SELECT 1 from t1 UNION SELECT id2 from t1;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+}
+
+@setup s1
+@setup s3
+test l76 {
+    SELECT 5 from t1 UNION SELECT id2 from t1;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    5
+}
+
+@setup s1
+@setup s3
+test l77 {
+    SELECT id1 from t1 UNION SELECT 2 from t1;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+}
+
+@setup s1
+@setup s3
+test l78 {
+    SELECT id1 from t1 UNION SELECT 5 from t1;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    5
+}

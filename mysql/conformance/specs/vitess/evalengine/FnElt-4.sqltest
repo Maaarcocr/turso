@@ -1,0 +1,1134 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-53300 {
+    SELECT ELT(3, _binary 'Müller' , _latin1 0xFF, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-53311 {
+    SELECT ELT(2, _binary 'Müller' , _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    �
+}
+
+test t-53317 {
+    SELECT ELT(2, _binary 'Müller' , _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    �
+}
+
+test t-53325 {
+    SELECT ELT(1, _binary 'Müller' , _latin1 0xFF, _latin1 0xFF);
+}
+expect {
+    Müller
+}
+
+test t-53334 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "Å å", "");
+}
+expect {
+    abcABCÅå
+}
+
+test t-53349 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "Å å", 0123);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53356 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "Å å", 3.1415926);
+}
+expect {
+    Å å
+}
+
+test t-53377 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "Å å", -9223372036854775808);
+}
+expect {
+    Å å
+}
+
+test t-53432 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', NULL, "한국어 시험");
+}
+expect {
+    한국어 시험
+}
+
+test t-53434 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', NULL, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-53444 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', NULL, -9223372036854775808);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-53448 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', NULL, -999999999999999999999999);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53531 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', "a", NULL);
+}
+expect {
+    NULL
+}
+
+test t-53538 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "a", "abc");
+}
+expect {
+    abcABCÅå
+}
+
+test t-53540 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', "a", "abc");
+}
+expect {
+    abc
+}
+
+test t-53541 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "a", 1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53547 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "a", 0123);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53559 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "a", "日本語テスト");
+}
+expect {
+    abcABCÅå
+}
+
+test t-53592 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "abc", "Å å");
+}
+expect {
+    abcABCÅå
+}
+
+test t-53595 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "abc", NULL);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53623 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "abc", "中文测试");
+}
+expect {
+    abc
+}
+
+test t-53633 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', "abc", "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-53681 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', 1, 0123);
+}
+expect {
+    123
+}
+
+test t-53703 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 1, 9223372036854775807);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53747 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', -1, 0123);
+}
+expect {
+    123
+}
+
+test t-53748 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', -1, 0xAACC);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53756 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', -1, "中文测试");
+}
+expect {
+    中文测试
+}
+
+test t-53785 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    -1
+}
+
+test t-53791 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 0123, "Å å");
+}
+expect {
+    123
+}
+
+test t-53800 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 0123, "a");
+}
+expect {
+    123
+}
+
+test t-53805 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 0123, 1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53867 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', 0xAACC, "a");
+}
+expect {
+    a
+}
+
+test t-53878 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 0xAACC, 0123);
+}
+expect {
+    ��
+}
+
+test t-53884 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 0xAACC, 3.1415926);
+}
+expect {
+    ��
+}
+
+test t-53964 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 3.1415926, '123');
+}
+expect {
+    abcABCÅå
+}
+
+test t-53970 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 3.1415926, -9223372036854775808);
+}
+expect {
+    abcABCÅå
+}
+
+test t-53977 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 3.1415926, -999999999999999999999999);
+}
+expect {
+    3.1415926
+}
+
+test t-53979 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 3.1415926, _binary 'Müller' );
+}
+expect {
+    abcABCÅå
+}
+
+test t-53992 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "中文测试", NULL);
+}
+expect {
+    中文测试
+}
+
+test t-54029 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', "中文测试", "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-54045 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "中文测试", _binary 'Müller' );
+}
+expect {
+    abcABCÅå
+}
+
+test t-54069 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "日本語テスト", 1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54076 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "日本語テスト", 0123);
+}
+expect {
+    日本語テスト
+}
+
+test t-54079 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "日本語テスト", 0xAACC);
+}
+expect {
+    日本語テスト
+}
+
+test t-54109 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "日本語テスト", -999999999999999999999999);
+}
+expect {
+    日本語テスト
+}
+
+test t-54113 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', "日本語テスト", _binary 'Müller' );
+}
+expect {
+    Müller
+}
+
+test t-54138 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "한국어 시험", -1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54154 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "한국어 시험", "日本語テスト");
+}
+expect {
+    한국어 시험
+}
+
+test t-54211 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', "😊😂🤢", 0xAACC);
+}
+expect {
+    😊😂🤢
+}
+
+test t-54222 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', "😊😂🤢", "한국어 시험");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54242 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', "😊😂🤢", -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-54266 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', '123', "abc");
+}
+expect {
+    abc
+}
+
+test t-54309 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', '123', _binary 'Müller' );
+}
+expect {
+    abcABCÅå
+}
+
+test t-54320 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', 9223372036854775807, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-54327 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 9223372036854775807, "a");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54329 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', 9223372036854775807, "a");
+}
+expect {
+    a
+}
+
+test t-54334 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 9223372036854775807, 1);
+}
+expect {
+    9223372036854775807
+}
+
+test t-54343 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 9223372036854775807, 0xAACC);
+}
+expect {
+    9223372036854775807
+}
+
+test t-54355 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 9223372036854775807, "한국어 시험");
+}
+expect {
+    9223372036854775807
+}
+
+test t-54358 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 9223372036854775807, "😊😂🤢");
+}
+expect {
+    9223372036854775807
+}
+
+test t-54382 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 9223372036854775807, _latin1 0xFF);
+}
+expect {
+    9223372036854775807
+}
+
+test t-54390 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', -9223372036854775808, "");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54405 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', -9223372036854775808, 0123);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54418 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', -9223372036854775808, "日本語テスト");
+}
+expect {
+    -9223372036854775808
+}
+
+test t-54450 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 999999999999999999999999, "Å å");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54459 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 999999999999999999999999, "a");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54461 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', 999999999999999999999999, "a");
+}
+expect {
+    a
+}
+
+test t-54465 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 999999999999999999999999, 1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54477 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 999999999999999999999999, 3.1415926);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54511 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', 999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    999999999999999999999999
+}
+
+test t-54513 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', 999999999999999999999999, _latin1 0xFF);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54524 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', -999999999999999999999999, "");
+}
+expect {
+    
+}
+
+test t-54540 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', -999999999999999999999999, 0xAACC);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54563 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', -999999999999999999999999, 9223372036854775807);
+}
+expect {
+    9223372036854775807
+}
+
+test t-54615 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', _binary 'Müller' , "日本語テスト");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54617 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', _binary 'Müller' , "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-54648 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', "Å å");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54661 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54666 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54668 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    -1
+}
+
+test t-54670 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', 0123);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54703 {
+    SELECT ELT(2, _utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', -999999999999999999999999);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54723 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', _latin1 0xFF, "a");
+}
+expect {
+    abcABCÅå
+}
+
+test t-54737 {
+    SELECT ELT(3, _utf8mb4 'abcABCÅå', _latin1 0xFF, 0123);
+}
+expect {
+    123
+}
+
+test t-54759 {
+    SELECT ELT(1, _utf8mb4 'abcABCÅå', _latin1 0xFF, 9223372036854775807);
+}
+expect {
+    abcABCÅå
+}
+
+test t-54800 {
+    SELECT ELT(3, _latin1 0xFF, "Å å", -1);
+}
+expect {
+    -1
+}
+
+test t-54806 {
+    SELECT ELT(3, _latin1 0xFF, "Å å", 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-54817 {
+    SELECT ELT(2, _latin1 0xFF, "Å å", "한국어 시험");
+}
+expect {
+    Å å
+}
+
+test t-54823 {
+    SELECT ELT(2, _latin1 0xFF, "Å å", '123');
+}
+expect {
+    Å å
+}
+
+test t-54824 {
+    SELECT ELT(3, _latin1 0xFF, "Å å", '123');
+}
+expect {
+    123
+}
+
+test t-54864 {
+    SELECT ELT(1, _latin1 0xFF, NULL, -1);
+}
+expect {
+    ÿ
+}
+
+test t-54874 {
+    SELECT ELT(2, _latin1 0xFF, NULL, 3.1415926);
+}
+expect {
+    NULL
+}
+
+test t-54913 {
+    SELECT ELT(2, _latin1 0xFF, "", "Å å");
+}
+expect {
+    
+}
+
+test t-54917 {
+    SELECT ELT(3, _latin1 0xFF, "", NULL);
+}
+expect {
+    NULL
+}
+
+test t-54931 {
+    SELECT ELT(2, _latin1 0xFF, "", -1);
+}
+expect {
+    
+}
+
+test t-54947 {
+    SELECT ELT(3, _latin1 0xFF, "", "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-54958 {
+    SELECT ELT(2, _latin1 0xFF, "", 9223372036854775807);
+}
+expect {
+    
+}
+
+test t-54961 {
+    SELECT ELT(2, _latin1 0xFF, "", -9223372036854775808);
+}
+expect {
+    
+}
+
+test t-54998 {
+    SELECT ELT(3, _latin1 0xFF, "a", -1);
+}
+expect {
+    -1
+}
+
+test t-55019 {
+    SELECT ELT(3, _latin1 0xFF, "a", "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-55020 {
+    SELECT ELT(1, _latin1 0xFF, "a", '123');
+}
+expect {
+    ÿ
+}
+
+test t-55039 {
+    SELECT ELT(2, _latin1 0xFF, "a", _utf8mb4 'abcABCÅå');
+}
+expect {
+    a
+}
+
+test t-55051 {
+    SELECT ELT(2, _latin1 0xFF, "abc", "");
+}
+expect {
+    abc
+}
+
+test t-55067 {
+    SELECT ELT(3, _latin1 0xFF, "abc", 0123);
+}
+expect {
+    123
+}
+
+test t-55088 {
+    SELECT ELT(3, _latin1 0xFF, "abc", '123');
+}
+expect {
+    123
+}
+
+test t-55092 {
+    SELECT ELT(1, _latin1 0xFF, "abc", -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-55103 {
+    SELECT ELT(3, _latin1 0xFF, "abc", _binary 'Müller' );
+}
+expect {
+    Müller
+}
+
+test t-55112 {
+    SELECT ELT(3, _latin1 0xFF, 1, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-55145 {
+    SELECT ELT(3, _latin1 0xFF, 1, "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-55165 {
+    SELECT ELT(2, _latin1 0xFF, 1, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-55170 {
+    SELECT ELT(1, _latin1 0xFF, 1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ
+}
+
+test t-55191 {
+    SELECT ELT(1, _latin1 0xFF, -1, 1);
+}
+expect {
+    ÿ
+}
+
+test t-55290 {
+    SELECT ELT(1, _latin1 0xFF, 0123, -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-55297 {
+    SELECT ELT(2, _latin1 0xFF, 0123, -999999999999999999999999);
+}
+expect {
+    123
+}
+
+test t-55349 {
+    SELECT ELT(3, _latin1 0xFF, 0xAACC, "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-55351 {
+    SELECT ELT(2, _latin1 0xFF, 0xAACC, '123');
+}
+expect {
+    ��
+}
+
+test t-55370 {
+    SELECT ELT(3, _latin1 0xFF, 0xAACC, _utf8mb4 'abcABCÅå');
+}
+expect {
+    abcABCÅå
+}
+
+test t-55401 {
+    SELECT ELT(1, _latin1 0xFF, 3.1415926, 3.1415926);
+}
+expect {
+    ÿ
+}
+
+test t-55418 {
+    SELECT ELT(3, _latin1 0xFF, 3.1415926, '123');
+}
+expect {
+    123
+}
+
+test t-55434 {
+    SELECT ELT(1, _latin1 0xFF, 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ
+}
+
+test t-55451 {
+    SELECT ELT(3, _latin1 0xFF, "中文测试", "a");
+}
+expect {
+    a
+}
+
+test t-55481 {
+    SELECT ELT(3, _latin1 0xFF, "中文测试", "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-55486 {
+    SELECT ELT(2, _latin1 0xFF, "中文测试", 9223372036854775807);
+}
+expect {
+    中文测试
+}
+
+test t-55511 {
+    SELECT ELT(3, _latin1 0xFF, "日本語テスト", NULL);
+}
+expect {
+    NULL
+}
+
+test t-55534 {
+    SELECT ELT(2, _latin1 0xFF, "日本語テスト", 3.1415926);
+}
+expect {
+    日本語テスト
+}
+
+test t-55548 {
+    SELECT ELT(1, _latin1 0xFF, "日本語テスト", '123');
+}
+expect {
+    ÿ
+}
+
+test t-55552 {
+    SELECT ELT(2, _latin1 0xFF, "日本語テスト", 9223372036854775807);
+}
+expect {
+    日本語テスト
+}
+
+test t-55557 {
+    SELECT ELT(1, _latin1 0xFF, "日本語テスト", 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-55673 {
+    SELECT ELT(3, _latin1 0xFF, "😊😂🤢", "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-55691 {
+    SELECT ELT(3, _latin1 0xFF, "😊😂🤢", 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-55714 {
+    SELECT ELT(2, _latin1 0xFF, '123', "a");
+}
+expect {
+    123
+}
+
+test t-55715 {
+    SELECT ELT(3, _latin1 0xFF, '123', "a");
+}
+expect {
+    a
+}
+
+test t-55720 {
+    SELECT ELT(2, _latin1 0xFF, '123', 1);
+}
+expect {
+    123
+}
+
+test t-55756 {
+    SELECT ELT(2, _latin1 0xFF, '123', 999999999999999999999999);
+}
+expect {
+    123
+}
+
+test t-55771 {
+    SELECT ELT(2, _latin1 0xFF, 9223372036854775807, "Å å");
+}
+expect {
+    9223372036854775807
+}
+
+test t-55787 {
+    SELECT ELT(3, _latin1 0xFF, 9223372036854775807, 1);
+}
+expect {
+    1
+}
+
+test t-55798 {
+    SELECT ELT(2, _latin1 0xFF, 9223372036854775807, 3.1415926);
+}
+expect {
+    9223372036854775807
+}
+
+test t-55805 {
+    SELECT ELT(3, _latin1 0xFF, 9223372036854775807, "日本語テスト");
+}
+expect {
+    日本語テスト
+}
+
+test t-55806 {
+    SELECT ELT(1, _latin1 0xFF, 9223372036854775807, "한국어 시험");
+}
+expect {
+    ÿ
+}
+
+test t-55811 {
+    SELECT ELT(3, _latin1 0xFF, 9223372036854775807, "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-55821 {
+    SELECT ELT(1, _latin1 0xFF, 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    ÿ
+}
+
+test t-55852 {
+    SELECT ELT(2, _latin1 0xFF, -9223372036854775808, 1);
+}
+expect {
+    -9223372036854775808
+}
+
+test t-55893 {
+    SELECT ELT(1, _latin1 0xFF, -9223372036854775808, _binary 'Müller' );
+}
+expect {
+    �
+}
+
+test t-55932 {
+    SELECT ELT(1, _latin1 0xFF, 999999999999999999999999, "中文测试");
+}
+expect {
+    ÿ
+}
+
+test t-55943 {
+    SELECT ELT(3, _latin1 0xFF, 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    😊😂🤢
+}
+
+test t-55958 {
+    SELECT ELT(3, _latin1 0xFF, 999999999999999999999999, -999999999999999999999999);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-55969 {
+    SELECT ELT(2, _latin1 0xFF, -999999999999999999999999, "Å å");
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-55972 {
+    SELECT ELT(2, _latin1 0xFF, -999999999999999999999999, NULL);
+}
+expect {
+    -999999999999999999999999
+}
+
+test t-56052 {
+    SELECT ELT(1, _latin1 0xFF, _binary 'Müller' , -1);
+}
+expect {
+    �
+}
+
+test t-56065 {
+    SELECT ELT(2, _latin1 0xFF, _binary 'Müller' , "中文测试");
+}
+expect {
+    Müller
+}
+
+test t-56083 {
+    SELECT ELT(2, _latin1 0xFF, _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    Müller
+}
+
+test t-56109 {
+    SELECT ELT(1, _latin1 0xFF, _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    ÿ
+}
+
+test t-56118 {
+    SELECT ELT(1, _latin1 0xFF, _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    ÿ
+}
+
+test t-56120 {
+    SELECT ELT(3, _latin1 0xFF, _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    -1
+}
+
+test t-56148 {
+    SELECT ELT(1, _latin1 0xFF, _utf8mb4 'abcABCÅå', -9223372036854775808);
+}
+expect {
+    ÿ
+}
+
+test t-56153 {
+    SELECT ELT(3, _latin1 0xFF, _utf8mb4 'abcABCÅå', 999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-56168 {
+    SELECT ELT(3, _latin1 0xFF, _latin1 0xFF, "Å å");
+}
+expect {
+    Å å
+}
+
+test t-56192 {
+    SELECT ELT(3, _latin1 0xFF, _latin1 0xFF, 0xAACC);
+}
+expect {
+    ��
+}
+
+test t-56205 {
+    SELECT ELT(1, _latin1 0xFF, _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    ÿ
+}
+
+test t-56206 {
+    SELECT ELT(2, _latin1 0xFF, _latin1 0xFF, "😊😂🤢");
+}
+expect {
+    ÿ
+}
+
+test t-56209 {
+    SELECT ELT(2, _latin1 0xFF, _latin1 0xFF, '123');
+}
+expect {
+    ÿ
+}

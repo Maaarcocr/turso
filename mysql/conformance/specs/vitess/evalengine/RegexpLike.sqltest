@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-2 {
+    SELECT 'Michael!' NOT REGEXP '.*';
+}
+expect {
+    0
+}
+
+test t-3 {
+    SELECT 'Michael!' NOT RLIKE '.*';
+}
+expect {
+    0
+}
+
+test t-4 {
+    SELECT 'new*\n*line' REGEXP 'new\\\*.\\\*line';
+}
+expect {
+    0
+}
+
+test t-6 {
+    SELECT REGEXP_LIKE('CamelCase', 'CAMELCASE');
+}
+expect {
+    1
+}
+
+test t-11 {
+    SELECT REGEXP_LIKE(1234, 12, 'c');
+}
+expect {
+    1
+}
+
+test t-14 {
+    SELECT ' '  REGEXP '[[:space:]]';
+}
+expect {
+    1
+}
+
+test t-17 {
+    SELECT _koi8r  0xFF regexp _koi8r  '[[:lower:]]' COLLATE koi8r_bin;
+}
+expect {
+    0
+}
+
+test t-19 {
+    SELECT _koi8r  0xFF regexp _koi8r  '[[:upper:]]' COLLATE koi8r_bin;
+}
+expect {
+    1
+}
+
+test t-24 {
+    SELECT _latin1 'ÿ' regexp _utf8mb4 'ÿ';
+}
+expect {
+    0
+}
+
+test t-29 {
+    SELECT 'a' regexp '\\\P\{alphabetic\}';
+}
+expect {
+    0
+}
+
+test t-34 {
+    SELECT 'A' regexp '\\\p\{Uppercase_letter\}';
+}
+expect {
+    1
+}
+
+test t-35 {
+    SELECT 'a' collate utf8mb4_0900_as_cs regexp '\\\p\{Lowercase_letter\}';
+}
+expect {
+    1
+}
+
+test t-40 {
+    SELECT 0xff REGEXP 0xfe;
+}
+expect {
+    0
+}
+
+test t-42 {
+    SELECT 0 REGEXP 0;
+}
+expect {
+    1
+}
+
+test t-47 {
+    SELECT REGEXP_LIKE(0, 0, 'm');
+}
+expect {
+    1
+}
+
+test t-48 {
+    SELECT REGEXP_LIKE(0, 0, 'n');
+}
+expect {
+    1
+}
+
+test t-52 {
+    SELECT 0 REGEXP 1;
+}
+expect {
+    0
+}
+
+test t-54 {
+    SELECT REGEXP_LIKE(0, 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-56 {
+    SELECT REGEXP_LIKE(0, 1, 'i');
+}
+expect {
+    0
+}
+
+test t-57 {
+    SELECT REGEXP_LIKE(0, 1, 'm');
+}
+expect {
+    0
+}
+
+test t-58 {
+    SELECT REGEXP_LIKE(0, 1, 'n');
+}
+expect {
+    0
+}
+
+test t-59 {
+    SELECT REGEXP_LIKE(0, 1, 'u');
+}
+expect {
+    0
+}
+
+test t-60 {
+    SELECT REGEXP_LIKE(0, 1, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-73 {
+    SELECT 0 NOT REGEXP '\t1foo\t';
+}
+expect {
+    1
+}
+
+test t-74 {
+    SELECT REGEXP_LIKE(0, '\t1foo\t', NULL);
+}
+expect {
+    NULL
+}
+
+test t-77 {
+    SELECT REGEXP_LIKE(0, '\t1foo\t', 'm');
+}
+expect {
+    0
+}
+
+test t-80 {
+    SELECT REGEXP_LIKE(0, '\t1foo\t', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-82 {
+    SELECT 0 REGEXP 'foobar';
+}
+expect {
+    0
+}
+
+test t-87 {
+    SELECT REGEXP_LIKE(0, 'foobar', 'm');
+}
+expect {
+    0
+}
+
+test t-89 {
+    SELECT REGEXP_LIKE(0, 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-90 {
+    SELECT REGEXP_LIKE(0, 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-92 {
+    SELECT 0 REGEXP _utf8 'foobar';
+}
+expect {
+    0
+}
+
+test t-93 {
+    SELECT 0 NOT REGEXP _utf8 'foobar';
+}
+expect {
+    1
+}
+
+test t-96 {
+    SELECT REGEXP_LIKE(0, _utf8 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-98 {
+    SELECT REGEXP_LIKE(0, _utf8 'foobar', 'n');
+}
+expect {
+    0
+}
+
+test t-99 {
+    SELECT REGEXP_LIKE(0, _utf8 'foobar', 'u');
+}
+expect {
+    0
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-102 {
+    SELECT 0 REGEXP '';
+}
+expect error {
+}
+
+test t-104 {
+    SELECT REGEXP_LIKE(0, '', NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-106 {
+    SELECT REGEXP_LIKE(0, '', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-107 {
+    SELECT REGEXP_LIKE(0, '', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-110 {
+    SELECT REGEXP_LIKE(0, '', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-111 {
+    SELECT REGEXP_LIKE(0, '', 'cimnuunmic');
+}
+expect error {
+}
+
+test t-112 {
+    SELECT 0 REGEXP _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-113 {
+    SELECT 0 NOT REGEXP _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-114 {
+    SELECT REGEXP_LIKE(0, _binary 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-120 {
+    SELECT REGEXP_LIKE(0, _binary 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-126 {
+    SELECT REGEXP_LIKE(0, 0x0, 'i');
+}
+expect {
+    0
+}
+
+test t-129 {
+    SELECT REGEXP_LIKE(0, 0x0, 'u');
+}
+expect {
+    0
+}
+
+test t-130 {
+    SELECT REGEXP_LIKE(0, 0x0, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-131 {
+    SELECT REGEXP_LIKE(0, 0x0, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-132 {
+    SELECT 0 REGEXP 0x1;
+}
+expect {
+    0
+}
+
+test t-134 {
+    SELECT REGEXP_LIKE(0, 0x1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-135 {
+    SELECT REGEXP_LIKE(0, 0x1, 'c');
+}
+expect {
+    0
+}
+
+test t-137 {
+    SELECT REGEXP_LIKE(0, 0x1, 'm');
+}
+expect {
+    0
+}
+
+test t-138 {
+    SELECT REGEXP_LIKE(0, 0x1, 'n');
+}
+expect {
+    0
+}
+
+test t-143 {
+    SELECT 0 NOT REGEXP 0xff;
+}
+expect {
+    1
+}
+
+test t-146 {
+    SELECT REGEXP_LIKE(0, 0xff, 'i');
+}
+expect {
+    0
+}
+
+test t-151 {
+    SELECT REGEXP_LIKE(0, 0xff, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-152 {
+    SELECT 0 REGEXP NULL;
+}
+expect {
+    NULL
+}
+
+test t-162 {
+    SELECT 0 REGEXP true;
+}
+expect {
+    0
+}
+
+test t-172 {
+    SELECT 0 REGEXP false;
+}
+expect {
+    1
+}
+
+test t-174 {
+    SELECT REGEXP_LIKE(0, false, NULL);
+}
+expect {
+    NULL
+}
+
+test t-181 {
+    SELECT REGEXP_LIKE(0, false, 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-183 {
+    SELECT 0 NOT REGEXP 0xFF666F6F626172FF;
+}
+expect {
+    1
+}
+
+test t-184 {
+    SELECT REGEXP_LIKE(0, 0xFF666F6F626172FF, NULL);
+}
+expect {
+    NULL
+}
+
+test t-188 {
+    SELECT REGEXP_LIKE(0, 0xFF666F6F626172FF, 'n');
+}
+expect {
+    0
+}
+
+test t-191 {
+    SELECT REGEXP_LIKE(0, 0xFF666F6F626172FF, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-205 {
+    SELECT REGEXP_LIKE(0, date '2000-01-01', 'c');
+}
+expect {
+    0
+}
+
+test t-209 {
+    SELECT REGEXP_LIKE(0, date '2000-01-01', 'u');
+}
+expect {
+    0
+}
+
+test t-210 {
+    SELECT REGEXP_LIKE(0, date '2000-01-01', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-213 {
+    SELECT 0 NOT REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-215 {
+    SELECT REGEXP_LIKE(0, timestamp '2000-01-01 10:34:58', 'c');
+}
+expect {
+    0
+}
+
+test t-219 {
+    SELECT REGEXP_LIKE(0, timestamp '2000-01-01 10:34:58', 'u');
+}
+expect {
+    0
+}
+
+test t-225 {
+    SELECT REGEXP_LIKE(0, cast(0 as json), 'c');
+}
+expect {
+    1
+}
+
+test t-226 {
+    SELECT REGEXP_LIKE(0, cast(0 as json), 'i');
+}
+expect {
+    1
+}
+
+test t-229 {
+    SELECT REGEXP_LIKE(0, cast(0 as json), 'u');
+}
+expect {
+    1
+}
+
+test t-231 {
+    SELECT REGEXP_LIKE(0, cast(0 as json), 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-232 {
+    SELECT 0 REGEXP cast(1 as json);
+}
+expect {
+    0
+}
+
+test t-233 {
+    SELECT 0 NOT REGEXP cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-238 {
+    SELECT REGEXP_LIKE(0, cast(1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-244 {
+    SELECT REGEXP_LIKE(0, cast(true as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-245 {
+    SELECT REGEXP_LIKE(0, cast(true as json), 'c');
+}
+expect {
+    0
+}
+
+test t-246 {
+    SELECT REGEXP_LIKE(0, cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-249 {
+    SELECT REGEXP_LIKE(0, cast(true as json), 'u');
+}
+expect {
+    0
+}
+
+test t-252 {
+    SELECT 0 REGEXP cast(false as json);
+}
+expect {
+    0
+}
+
+test t-261 {
+    SELECT REGEXP_LIKE(0, cast(false as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-264 {
+    SELECT REGEXP_LIKE(0, cast(2 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-265 {
+    SELECT REGEXP_LIKE(0, cast(2 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-268 {
+    SELECT REGEXP_LIKE(0, cast(2 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-269 {
+    SELECT REGEXP_LIKE(0, cast(2 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-277 {
+    SELECT REGEXP_LIKE(0, cast(1.1 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-279 {
+    SELECT REGEXP_LIKE(0, cast(1.1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-281 {
+    SELECT REGEXP_LIKE(0, cast(1.1 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-284 {
+    SELECT REGEXP_LIKE(0, cast(-1.1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-296 {
+    SELECT REGEXP_LIKE(0, cast('"foo"' as json), 'i');
+}
+expect {
+    0
+}
+
+test t-302 {
+    SELECT 0 REGEXP cast(_binary' "foo"' as json);
+}
+expect {
+    0
+}
+
+test t-303 {
+    SELECT 0 NOT REGEXP cast(_binary' "foo"' as json);
+}
+expect {
+    1
+}
+
+test t-304 {
+    SELECT REGEXP_LIKE(0, cast(_binary' "foo"' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-305 {
+    SELECT REGEXP_LIKE(0, cast(_binary' "foo"' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-310 {
+    SELECT REGEXP_LIKE(0, cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-316 {
+    SELECT REGEXP_LIKE(0, cast(0xFF666F6F626172FF as json), 'i');
+}
+expect {
+    0
+}
+
+test t-325 {
+    SELECT REGEXP_LIKE(0, cast(0b01 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-330 {
+    SELECT REGEXP_LIKE(0, cast(0b01 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-331 {
+    SELECT REGEXP_LIKE(0, cast(0b01 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-336 {
+    SELECT REGEXP_LIKE(0, cast('["a"]' as json), 'i');
+}
+expect {
+    0
+}
+
+test t-338 {
+    SELECT REGEXP_LIKE(0, cast('["a"]' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-339 {
+    SELECT REGEXP_LIKE(0, cast('["a"]' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-344 {
+    SELECT REGEXP_LIKE(0, cast('\{"a": 1, "b": 2\}' as json), NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-346 {
+    SELECT REGEXP_LIKE(0, cast('\{"a": 1, "b": 2\}' as json), 'i');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-348 {
+    SELECT REGEXP_LIKE(0, cast('\{"a": 1, "b": 2\}' as json), 'n');
+}
+expect error {
+}
+
+test t-353 {
+    SELECT 1 NOT REGEXP 0;
+}
+expect {
+    1
+}
+
+test t-360 {
+    SELECT REGEXP_LIKE(1, 0, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-371 {
+    SELECT REGEXP_LIKE(1, 1, 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-372 {
+    SELECT 1 REGEXP ' 0 ';
+}
+expect {
+    0
+}
+
+test t-373 {
+    SELECT 1 NOT REGEXP ' 0 ';
+}
+expect {
+    1
+}
+
+test t-374 {
+    SELECT REGEXP_LIKE(1, ' 0 ', NULL);
+}
+expect {
+    NULL
+}
+
+test t-376 {
+    SELECT REGEXP_LIKE(1, ' 0 ', 'i');
+}
+expect {
+    0
+}
+
+test t-380 {
+    SELECT REGEXP_LIKE(1, ' 0 ', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-383 {
+    SELECT 1 NOT REGEXP '\t1foo\t';
+}
+expect {
+    1
+}
+
+test t-384 {
+    SELECT REGEXP_LIKE(1, '\t1foo\t', NULL);
+}
+expect {
+    NULL
+}
+
+test t-385 {
+    SELECT REGEXP_LIKE(1, '\t1foo\t', 'c');
+}
+expect {
+    0
+}
+
+test t-386 {
+    SELECT REGEXP_LIKE(1, '\t1foo\t', 'i');
+}
+expect {
+    0
+}
+
+test t-387 {
+    SELECT REGEXP_LIKE(1, '\t1foo\t', 'm');
+}
+expect {
+    0
+}
+
+test t-391 {
+    SELECT REGEXP_LIKE(1, '\t1foo\t', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-392 {
+    SELECT 1 REGEXP 'foobar';
+}
+expect {
+    0
+}
+
+test t-393 {
+    SELECT 1 NOT REGEXP 'foobar';
+}
+expect {
+    1
+}
+
+test t-396 {
+    SELECT REGEXP_LIKE(1, 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-399 {
+    SELECT REGEXP_LIKE(1, 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-400 {
+    SELECT REGEXP_LIKE(1, 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-407 {
+    SELECT REGEXP_LIKE(1, _utf8 'foobar', 'm');
+}
+expect {
+    0
+}
+
+test t-409 {
+    SELECT REGEXP_LIKE(1, _utf8 'foobar', 'u');
+}
+expect {
+    0
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-413 {
+    SELECT 1 NOT REGEXP '';
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-416 {
+    SELECT REGEXP_LIKE(1, '', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-417 {
+    SELECT REGEXP_LIKE(1, '', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-421 {
+    SELECT REGEXP_LIKE(1, '', 'cimnuunmic');
+}
+expect error {
+}
+
+test t-423 {
+    SELECT 1 NOT REGEXP _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-425 {
+    SELECT REGEXP_LIKE(1, _binary 'foobar', 'c');
+}
+expect {
+    0
+}
+
+test t-428 {
+    SELECT REGEXP_LIKE(1, _binary 'foobar', 'n');
+}
+expect {
+    0
+}
+
+test t-429 {
+    SELECT REGEXP_LIKE(1, _binary 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-430 {
+    SELECT REGEXP_LIKE(1, _binary 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-431 {
+    SELECT REGEXP_LIKE(1, _binary 'foobar', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-432 {
+    SELECT 1 REGEXP 0x0;
+}
+expect {
+    0
+}
+
+test t-434 {
+    SELECT REGEXP_LIKE(1, 0x0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-437 {
+    SELECT REGEXP_LIKE(1, 0x0, 'm');
+}
+expect {
+    0
+}
+
+test t-438 {
+    SELECT REGEXP_LIKE(1, 0x0, 'n');
+}
+expect {
+    0
+}
+
+test t-440 {
+    SELECT REGEXP_LIKE(1, 0x0, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-443 {
+    SELECT 1 NOT REGEXP 0x1;
+}
+expect {
+    1
+}
+
+test t-444 {
+    SELECT REGEXP_LIKE(1, 0x1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-445 {
+    SELECT REGEXP_LIKE(1, 0x1, 'c');
+}
+expect {
+    0
+}
+
+test t-446 {
+    SELECT REGEXP_LIKE(1, 0x1, 'i');
+}
+expect {
+    0
+}
+
+test t-449 {
+    SELECT REGEXP_LIKE(1, 0x1, 'u');
+}
+expect {
+    0
+}
+
+test t-452 {
+    SELECT 1 REGEXP 0xff;
+}
+expect {
+    0
+}
+
+test t-453 {
+    SELECT 1 NOT REGEXP 0xff;
+}
+expect {
+    1
+}
+
+test t-454 {
+    SELECT REGEXP_LIKE(1, 0xff, NULL);
+}
+expect {
+    NULL
+}
+
+test t-460 {
+    SELECT REGEXP_LIKE(1, 0xff, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-461 {
+    SELECT REGEXP_LIKE(1, 0xff, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-466 {
+    SELECT REGEXP_LIKE(1, NULL, 'i');
+}
+expect {
+    NULL
+}
+
+test t-467 {
+    SELECT REGEXP_LIKE(1, NULL, 'm');
+}
+expect {
+    NULL
+}
+
+test t-469 {
+    SELECT REGEXP_LIKE(1, NULL, 'u');
+}
+expect {
+    NULL
+}
+
+test t-471 {
+    SELECT REGEXP_LIKE(1, NULL, 'cimnuunmic');
+}
+expect {
+    NULL
+}
+
+test t-474 {
+    SELECT REGEXP_LIKE(1, true, NULL);
+}
+expect {
+    NULL
+}
+
+test t-475 {
+    SELECT REGEXP_LIKE(1, true, 'c');
+}
+expect {
+    1
+}
+
+test t-478 {
+    SELECT REGEXP_LIKE(1, true, 'n');
+}
+expect {
+    1
+}
+
+test t-479 {
+    SELECT REGEXP_LIKE(1, true, 'u');
+}
+expect {
+    1
+}
+
+test t-483 {
+    SELECT 1 NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-485 {
+    SELECT REGEXP_LIKE(1, false, 'c');
+}
+expect {
+    0
+}
+
+test t-486 {
+    SELECT REGEXP_LIKE(1, false, 'i');
+}
+expect {
+    0
+}
+
+test t-495 {
+    SELECT REGEXP_LIKE(1, 0xFF666F6F626172FF, 'c');
+}
+expect {
+    0
+}
+
+test t-500 {
+    SELECT REGEXP_LIKE(1, 0xFF666F6F626172FF, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-504 {
+    SELECT REGEXP_LIKE(1, time '10:04:58', NULL);
+}
+expect {
+    NULL
+}
+
+test t-508 {
+    SELECT REGEXP_LIKE(1, time '10:04:58', 'n');
+}
+expect {
+    0
+}
+
+test t-511 {
+    SELECT REGEXP_LIKE(1, time '10:04:58', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-513 {
+    SELECT 1 NOT REGEXP date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-516 {
+    SELECT REGEXP_LIKE(1, date '2000-01-01', 'i');
+}
+expect {
+    0
+}
+
+test t-521 {
+    SELECT REGEXP_LIKE(1, date '2000-01-01', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-522 {
+    SELECT 1 REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-527 {
+    SELECT REGEXP_LIKE(1, timestamp '2000-01-01 10:34:58', 'm');
+}
+expect {
+    0
+}
+
+test t-538 {
+    SELECT REGEXP_LIKE(1, cast(0 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-539 {
+    SELECT REGEXP_LIKE(1, cast(0 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-540 {
+    SELECT REGEXP_LIKE(1, cast(0 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-544 {
+    SELECT REGEXP_LIKE(1, cast(1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-550 {
+    SELECT REGEXP_LIKE(1, cast(1 as json), 'cimnu');
+}
+expect {
+    1
+}
+
+test t-553 {
+    SELECT 1 NOT REGEXP cast(true as json);
+}
+expect {
+    1
+}
+
+test t-554 {
+    SELECT REGEXP_LIKE(1, cast(true as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-560 {
+    SELECT REGEXP_LIKE(1, cast(true as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-561 {
+    SELECT REGEXP_LIKE(1, cast(true as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-563 {
+    SELECT 1 NOT REGEXP cast(false as json);
+}
+expect {
+    1
+}
+
+test t-564 {
+    SELECT REGEXP_LIKE(1, cast(false as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-567 {
+    SELECT REGEXP_LIKE(1, cast(false as json), 'm');
+}
+expect {
+    0
+}
+
+test t-569 {
+    SELECT REGEXP_LIKE(1, cast(false as json), 'u');
+}
+expect {
+    0
+}
+
+test t-570 {
+    SELECT REGEXP_LIKE(1, cast(false as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-571 {
+    SELECT REGEXP_LIKE(1, cast(false as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-572 {
+    SELECT 1 REGEXP cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-573 {
+    SELECT 1 NOT REGEXP cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-575 {
+    SELECT REGEXP_LIKE(1, cast(2 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-576 {
+    SELECT REGEXP_LIKE(1, cast(2 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-577 {
+    SELECT REGEXP_LIKE(1, cast(2 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-584 {
+    SELECT REGEXP_LIKE(1, cast(1.1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-586 {
+    SELECT REGEXP_LIKE(1, cast(1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-589 {
+    SELECT REGEXP_LIKE(1, cast(1.1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-590 {
+    SELECT REGEXP_LIKE(1, cast(1.1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-591 {
+    SELECT REGEXP_LIKE(1, cast(1.1 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-597 {
+    SELECT REGEXP_LIKE(1, cast(-1.1 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-603 {
+    SELECT 1 NOT REGEXP cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-610 {
+    SELECT REGEXP_LIKE(1, cast('"foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-620 {
+    SELECT REGEXP_LIKE(1, cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-624 {
+    SELECT REGEXP_LIKE(1, cast(0xFF666F6F626172FF as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-629 {
+    SELECT REGEXP_LIKE(1, cast(0xFF666F6F626172FF as json), 'u');
+}
+expect {
+    0
+}
+
+test t-632 {
+    SELECT 1 REGEXP cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-633 {
+    SELECT 1 NOT REGEXP cast(0b01 as json);
+}
+expect {
+    1
+}
+
+test t-634 {
+    SELECT REGEXP_LIKE(1, cast(0b01 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-635 {
+    SELECT REGEXP_LIKE(1, cast(0b01 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-638 {
+    SELECT REGEXP_LIKE(1, cast(0b01 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-640 {
+    SELECT REGEXP_LIKE(1, cast(0b01 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-642 {
+    SELECT 1 REGEXP cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-647 {
+    SELECT REGEXP_LIKE(1, cast('["a"]' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-651 {
+    SELECT REGEXP_LIKE(1, cast('["a"]' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-658 {
+    SELECT REGEXP_LIKE(1, cast('\{"a": 1, "b": 2\}' as json), 'n');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-659 {
+    SELECT REGEXP_LIKE(1, cast('\{"a": 1, "b": 2\}' as json), 'u');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-661 {
+    SELECT REGEXP_LIKE(1, cast('\{"a": 1, "b": 2\}' as json), 'cimnuunmic');
+}
+expect error {
+}
+
+test t-666 {
+    SELECT REGEXP_LIKE(' 0 ', 0, 'i');
+}
+expect {
+    1
+}
+
+test t-668 {
+    SELECT REGEXP_LIKE(' 0 ', 0, 'n');
+}
+expect {
+    1
+}
+
+test t-679 {
+    SELECT REGEXP_LIKE(' 0 ', 1, 'u');
+}
+expect {
+    0
+}
+
+test t-680 {
+    SELECT REGEXP_LIKE(' 0 ', 1, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-689 {
+    SELECT REGEXP_LIKE(' 0 ', ' 0 ', 'u');
+}
+expect {
+    1
+}
+
+test t-691 {
+    SELECT REGEXP_LIKE(' 0 ', ' 0 ', 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-693 {
+    SELECT ' 0 ' NOT REGEXP '\t1foo\t';
+}
+expect {
+    1
+}
+
+test t-695 {
+    SELECT REGEXP_LIKE(' 0 ', '\t1foo\t', 'c');
+}
+expect {
+    0
+}
+
+test t-697 {
+    SELECT REGEXP_LIKE(' 0 ', '\t1foo\t', 'm');
+}
+expect {
+    0
+}
+
+test t-698 {
+    SELECT REGEXP_LIKE(' 0 ', '\t1foo\t', 'n');
+}
+expect {
+    0
+}
+
+test t-701 {
+    SELECT REGEXP_LIKE(' 0 ', '\t1foo\t', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-706 {
+    SELECT REGEXP_LIKE(' 0 ', 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-710 {
+    SELECT REGEXP_LIKE(' 0 ', 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-714 {
+    SELECT REGEXP_LIKE(' 0 ', _utf8 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-716 {
+    SELECT REGEXP_LIKE(' 0 ', _utf8 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-717 {
+    SELECT REGEXP_LIKE(' 0 ', _utf8 'foobar', 'm');
+}
+expect {
+    0
+}
+
+test t-719 {
+    SELECT REGEXP_LIKE(' 0 ', _utf8 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-724 {
+    SELECT REGEXP_LIKE(' 0 ', '', NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-725 {
+    SELECT REGEXP_LIKE(' 0 ', '', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-726 {
+    SELECT REGEXP_LIKE(' 0 ', '', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-727 {
+    SELECT REGEXP_LIKE(' 0 ', '', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-732 {
+    SELECT ' 0 ' REGEXP _binary 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-738 {
+    SELECT REGEXP_LIKE(' 0 ', _binary 'foobar', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-742 {
+    SELECT ' 0 ' REGEXP 0x0;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-744 {
+    SELECT REGEXP_LIKE(' 0 ', 0x0, NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-752 {
+    SELECT ' 0 ' REGEXP 0x1;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-760 {
+    SELECT REGEXP_LIKE(' 0 ', 0x1, 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-761 {
+    SELECT REGEXP_LIKE(' 0 ', 0x1, 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-765 {
+    SELECT REGEXP_LIKE(' 0 ', 0xff, 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-767 {
+    SELECT REGEXP_LIKE(' 0 ', 0xff, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-771 {
+    SELECT REGEXP_LIKE(' 0 ', 0xff, 'cimnuunmic');
+}
+expect error {
+}
+
+test t-772 {
+    SELECT ' 0 ' REGEXP NULL;
+}
+expect {
+    NULL
+}
+
+test t-776 {
+    SELECT REGEXP_LIKE(' 0 ', NULL, 'i');
+}
+expect {
+    NULL
+}
+
+test t-777 {
+    SELECT REGEXP_LIKE(' 0 ', NULL, 'm');
+}
+expect {
+    NULL
+}
+
+test t-779 {
+    SELECT REGEXP_LIKE(' 0 ', NULL, 'u');
+}
+expect {
+    NULL
+}
+
+test t-782 {
+    SELECT ' 0 ' REGEXP true;
+}
+expect {
+    0
+}
+
+test t-784 {
+    SELECT REGEXP_LIKE(' 0 ', true, NULL);
+}
+expect {
+    NULL
+}
+
+test t-785 {
+    SELECT REGEXP_LIKE(' 0 ', true, 'c');
+}
+expect {
+    0
+}
+
+test t-787 {
+    SELECT REGEXP_LIKE(' 0 ', true, 'm');
+}
+expect {
+    0
+}
+
+test t-793 {
+    SELECT ' 0 ' NOT REGEXP false;
+}
+expect {
+    0
+}
+
+test t-794 {
+    SELECT REGEXP_LIKE(' 0 ', false, NULL);
+}
+expect {
+    NULL
+}
+
+test t-795 {
+    SELECT REGEXP_LIKE(' 0 ', false, 'c');
+}
+expect {
+    1
+}
+
+test t-798 {
+    SELECT REGEXP_LIKE(' 0 ', false, 'n');
+}
+expect {
+    1
+}
+
+test t-801 {
+    SELECT REGEXP_LIKE(' 0 ', false, 'cimnuunmic');
+}
+expect {
+    1
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-802 {
+    SELECT ' 0 ' REGEXP 0xFF666F6F626172FF;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-807 {
+    SELECT REGEXP_LIKE(' 0 ', 0xFF666F6F626172FF, 'm');
+}
+expect error {
+}
+
+test t-819 {
+    SELECT REGEXP_LIKE(' 0 ', time '10:04:58', 'u');
+}
+expect {
+    0
+}
+
+test t-822 {
+    SELECT ' 0 ' REGEXP date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-826 {
+    SELECT REGEXP_LIKE(' 0 ', date '2000-01-01', 'i');
+}
+expect {
+    0
+}
+
+test t-828 {
+    SELECT REGEXP_LIKE(' 0 ', date '2000-01-01', 'n');
+}
+expect {
+    0
+}
+
+test t-830 {
+    SELECT REGEXP_LIKE(' 0 ', date '2000-01-01', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-833 {
+    SELECT ' 0 ' NOT REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-835 {
+    SELECT REGEXP_LIKE(' 0 ', timestamp '2000-01-01 10:34:58', 'c');
+}
+expect {
+    0
+}
+
+test t-838 {
+    SELECT REGEXP_LIKE(' 0 ', timestamp '2000-01-01 10:34:58', 'n');
+}
+expect {
+    0
+}
+
+test t-840 {
+    SELECT REGEXP_LIKE(' 0 ', timestamp '2000-01-01 10:34:58', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-844 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-846 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0 as json), 'i');
+}
+expect {
+    1
+}
+
+test t-848 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0 as json), 'n');
+}
+expect {
+    1
+}
+
+test t-853 {
+    SELECT ' 0 ' NOT REGEXP cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-856 {
+    SELECT REGEXP_LIKE(' 0 ', cast(1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-859 {
+    SELECT REGEXP_LIKE(' 0 ', cast(1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-860 {
+    SELECT REGEXP_LIKE(' 0 ', cast(1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-861 {
+    SELECT REGEXP_LIKE(' 0 ', cast(1 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-864 {
+    SELECT REGEXP_LIKE(' 0 ', cast(true as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-869 {
+    SELECT REGEXP_LIKE(' 0 ', cast(true as json), 'u');
+}
+expect {
+    0
+}
+
+test t-871 {
+    SELECT REGEXP_LIKE(' 0 ', cast(true as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-874 {
+    SELECT REGEXP_LIKE(' 0 ', cast(false as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-875 {
+    SELECT REGEXP_LIKE(' 0 ', cast(false as json), 'c');
+}
+expect {
+    0
+}
+
+test t-876 {
+    SELECT REGEXP_LIKE(' 0 ', cast(false as json), 'i');
+}
+expect {
+    0
+}
+
+test t-878 {
+    SELECT REGEXP_LIKE(' 0 ', cast(false as json), 'n');
+}
+expect {
+    0
+}
+
+test t-883 {
+    SELECT ' 0 ' NOT REGEXP cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-884 {
+    SELECT REGEXP_LIKE(' 0 ', cast(2 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-889 {
+    SELECT REGEXP_LIKE(' 0 ', cast(2 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-890 {
+    SELECT REGEXP_LIKE(' 0 ', cast(2 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-895 {
+    SELECT REGEXP_LIKE(' 0 ', cast(1.1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-898 {
+    SELECT REGEXP_LIKE(' 0 ', cast(1.1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-905 {
+    SELECT REGEXP_LIKE(' 0 ', cast(-1.1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-910 {
+    SELECT REGEXP_LIKE(' 0 ', cast(-1.1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-912 {
+    SELECT ' 0 ' REGEXP cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-917 {
+    SELECT REGEXP_LIKE(' 0 ', cast('"foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-919 {
+    SELECT REGEXP_LIKE(' 0 ', cast('"foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-920 {
+    SELECT REGEXP_LIKE(' 0 ', cast('"foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-923 {
+    SELECT ' 0 ' NOT REGEXP cast(_binary' "foo"' as json);
+}
+expect {
+    1
+}
+
+test t-925 {
+    SELECT REGEXP_LIKE(' 0 ', cast(_binary' "foo"' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-927 {
+    SELECT REGEXP_LIKE(' 0 ', cast(_binary' "foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-929 {
+    SELECT REGEXP_LIKE(' 0 ', cast(_binary' "foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-930 {
+    SELECT REGEXP_LIKE(' 0 ', cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-935 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0xFF666F6F626172FF as json), 'c');
+}
+expect {
+    0
+}
+
+test t-936 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0xFF666F6F626172FF as json), 'i');
+}
+expect {
+    0
+}
+
+test t-938 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0xFF666F6F626172FF as json), 'n');
+}
+expect {
+    0
+}
+
+test t-940 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0xFF666F6F626172FF as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-941 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0xFF666F6F626172FF as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-943 {
+    SELECT ' 0 ' NOT REGEXP cast(0b01 as json);
+}
+expect {
+    1
+}
+
+test t-946 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0b01 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-950 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0b01 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-951 {
+    SELECT REGEXP_LIKE(' 0 ', cast(0b01 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-952 {
+    SELECT ' 0 ' REGEXP cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-958 {
+    SELECT REGEXP_LIKE(' 0 ', cast('["a"]' as json), 'n');
+}
+expect {
+    0
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-967 {
+    SELECT REGEXP_LIKE(' 0 ', cast('\{"a": 1, "b": 2\}' as json), 'm');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-970 {
+    SELECT REGEXP_LIKE(' 0 ', cast('\{"a": 1, "b": 2\}' as json), 'cimnu');
+}
+expect error {
+}
+
+test t-978 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0, 'n');
+}
+expect {
+    0
+}
+
+test t-979 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0, 'u');
+}
+expect {
+    0
+}
+
+test t-981 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-997 {
+    SELECT REGEXP_LIKE('\t1foo\t', ' 0 ', 'm');
+}
+expect {
+    0
+}
+
+test t-999 {
+    SELECT REGEXP_LIKE('\t1foo\t', ' 0 ', 'u');
+}
+expect {
+    0
+}
+
+test t-1001 {
+    SELECT REGEXP_LIKE('\t1foo\t', ' 0 ', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1003 {
+    SELECT '\t1foo\t' NOT REGEXP '\t1foo\t';
+}
+expect {
+    0
+}
+
+test t-1004 {
+    SELECT REGEXP_LIKE('\t1foo\t', '\t1foo\t', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1006 {
+    SELECT REGEXP_LIKE('\t1foo\t', '\t1foo\t', 'i');
+}
+expect {
+    1
+}
+
+test t-1009 {
+    SELECT REGEXP_LIKE('\t1foo\t', '\t1foo\t', 'u');
+}
+expect {
+    1
+}
+
+test t-1010 {
+    SELECT REGEXP_LIKE('\t1foo\t', '\t1foo\t', 'cimnu');
+}
+expect {
+    1
+}
+
+test t-1011 {
+    SELECT REGEXP_LIKE('\t1foo\t', '\t1foo\t', 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-1012 {
+    SELECT '\t1foo\t' REGEXP 'foobar';
+}
+expect {
+    0
+}
+
+test t-1015 {
+    SELECT REGEXP_LIKE('\t1foo\t', 'foobar', 'c');
+}
+expect {
+    0
+}
+
+test t-1019 {
+    SELECT REGEXP_LIKE('\t1foo\t', 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-1020 {
+    SELECT REGEXP_LIKE('\t1foo\t', 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1022 {
+    SELECT '\t1foo\t' REGEXP _utf8 'foobar';
+}
+expect {
+    0
+}
+
+test t-1024 {
+    SELECT REGEXP_LIKE('\t1foo\t', _utf8 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1027 {
+    SELECT REGEXP_LIKE('\t1foo\t', _utf8 'foobar', 'm');
+}
+expect {
+    0
+}
+
+test t-1028 {
+    SELECT REGEXP_LIKE('\t1foo\t', _utf8 'foobar', 'n');
+}
+expect {
+    0
+}
+
+test t-1030 {
+    SELECT REGEXP_LIKE('\t1foo\t', _utf8 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1035 {
+    SELECT REGEXP_LIKE('\t1foo\t', '', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1044 {
+    SELECT REGEXP_LIKE('\t1foo\t', _binary 'foobar', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1045 {
+    SELECT REGEXP_LIKE('\t1foo\t', _binary 'foobar', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1047 {
+    SELECT REGEXP_LIKE('\t1foo\t', _binary 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1050 {
+    SELECT REGEXP_LIKE('\t1foo\t', _binary 'foobar', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1055 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0x0, 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1056 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0x0, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1069 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0x1, 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1077 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0xff, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1078 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0xff, 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1080 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0xff, 'cimnu');
+}
+expect error {
+}
+
+test t-1086 {
+    SELECT REGEXP_LIKE('\t1foo\t', NULL, 'i');
+}
+expect {
+    NULL
+}
+
+test t-1094 {
+    SELECT REGEXP_LIKE('\t1foo\t', true, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1099 {
+    SELECT REGEXP_LIKE('\t1foo\t', true, 'u');
+}
+expect {
+    1
+}
+
+test t-1106 {
+    SELECT REGEXP_LIKE('\t1foo\t', false, 'i');
+}
+expect {
+    0
+}
+
+test t-1107 {
+    SELECT REGEXP_LIKE('\t1foo\t', false, 'm');
+}
+expect {
+    0
+}
+
+test t-1108 {
+    SELECT REGEXP_LIKE('\t1foo\t', false, 'n');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1116 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0xFF666F6F626172FF, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1119 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0xFF666F6F626172FF, 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1121 {
+    SELECT REGEXP_LIKE('\t1foo\t', 0xFF666F6F626172FF, 'cimnuunmic');
+}
+expect error {
+}
+
+test t-1126 {
+    SELECT REGEXP_LIKE('\t1foo\t', time '10:04:58', 'i');
+}
+expect {
+    0
+}
+
+test t-1127 {
+    SELECT REGEXP_LIKE('\t1foo\t', time '10:04:58', 'm');
+}
+expect {
+    0
+}
+
+test t-1130 {
+    SELECT REGEXP_LIKE('\t1foo\t', time '10:04:58', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1133 {
+    SELECT '\t1foo\t' NOT REGEXP date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-1143 {
+    SELECT '\t1foo\t' NOT REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-1148 {
+    SELECT REGEXP_LIKE('\t1foo\t', timestamp '2000-01-01 10:34:58', 'n');
+}
+expect {
+    0
+}
+
+test t-1155 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1156 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1165 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(1 as json), 'c');
+}
+expect {
+    1
+}
+
+test t-1168 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(1 as json), 'n');
+}
+expect {
+    1
+}
+
+test t-1170 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(1 as json), 'cimnu');
+}
+expect {
+    1
+}
+
+test t-1171 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(1 as json), 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-1172 {
+    SELECT '\t1foo\t' REGEXP cast(true as json);
+}
+expect {
+    0
+}
+
+test t-1173 {
+    SELECT '\t1foo\t' NOT REGEXP cast(true as json);
+}
+expect {
+    1
+}
+
+test t-1174 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(true as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1176 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1177 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(true as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1178 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(true as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1179 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(true as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1180 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(true as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1182 {
+    SELECT '\t1foo\t' REGEXP cast(false as json);
+}
+expect {
+    0
+}
+
+test t-1185 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(false as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1188 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(false as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1190 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(false as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1194 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(2 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1196 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(2 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1199 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(2 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1201 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(2 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1206 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1210 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(1.1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1212 {
+    SELECT '\t1foo\t' REGEXP cast(-1.1 as json);
+}
+expect {
+    0
+}
+
+test t-1215 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(-1.1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1216 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(-1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1222 {
+    SELECT '\t1foo\t' REGEXP cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-1225 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('"foo"' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1226 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('"foo"' as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1227 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('"foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1229 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('"foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1230 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('"foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1231 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('"foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1234 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(_binary' "foo"' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1238 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(_binary' "foo"' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1240 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1242 {
+    SELECT '\t1foo\t' REGEXP cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-1245 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0xFF666F6F626172FF as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1246 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0xFF666F6F626172FF as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1247 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0xFF666F6F626172FF as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1248 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0xFF666F6F626172FF as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1250 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0xFF666F6F626172FF as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1251 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0xFF666F6F626172FF as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1254 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0b01 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1255 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0b01 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1256 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0b01 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1260 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast(0b01 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1264 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('["a"]' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1265 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('["a"]' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1266 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('["a"]' as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1270 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('["a"]' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1273 {
+    SELECT '\t1foo\t' NOT REGEXP cast('\{"a": 1, "b": 2\}' as json);
+}
+expect error {
+}
+
+test t-1274 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('\{"a": 1, "b": 2\}' as json), NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1278 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('\{"a": 1, "b": 2\}' as json), 'n');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1279 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('\{"a": 1, "b": 2\}' as json), 'u');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1280 {
+    SELECT REGEXP_LIKE('\t1foo\t', cast('\{"a": 1, "b": 2\}' as json), 'cimnu');
+}
+expect error {
+}
+
+test t-1282 {
+    SELECT 'foobar' REGEXP 0;
+}
+expect {
+    0
+}
+
+test t-1285 {
+    SELECT REGEXP_LIKE('foobar', 0, 'c');
+}
+expect {
+    0
+}
+
+test t-1286 {
+    SELECT REGEXP_LIKE('foobar', 0, 'i');
+}
+expect {
+    0
+}
+
+test t-1289 {
+    SELECT REGEXP_LIKE('foobar', 0, 'u');
+}
+expect {
+    0
+}
+
+test t-1292 {
+    SELECT 'foobar' REGEXP 1;
+}
+expect {
+    0
+}
+
+test t-1293 {
+    SELECT 'foobar' NOT REGEXP 1;
+}
+expect {
+    1
+}
+
+test t-1295 {
+    SELECT REGEXP_LIKE('foobar', 1, 'c');
+}
+expect {
+    0
+}
+
+test t-1298 {
+    SELECT REGEXP_LIKE('foobar', 1, 'n');
+}
+expect {
+    0
+}
+
+test t-1299 {
+    SELECT REGEXP_LIKE('foobar', 1, 'u');
+}
+expect {
+    0
+}
+
+test t-1306 {
+    SELECT REGEXP_LIKE('foobar', ' 0 ', 'i');
+}
+expect {
+    0
+}
+
+test t-1307 {
+    SELECT REGEXP_LIKE('foobar', ' 0 ', 'm');
+}
+expect {
+    0
+}
+
+test t-1308 {
+    SELECT REGEXP_LIKE('foobar', ' 0 ', 'n');
+}
+expect {
+    0
+}
+
+test t-1309 {
+    SELECT REGEXP_LIKE('foobar', ' 0 ', 'u');
+}
+expect {
+    0
+}
+
+test t-1311 {
+    SELECT REGEXP_LIKE('foobar', ' 0 ', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1312 {
+    SELECT 'foobar' REGEXP '\t1foo\t';
+}
+expect {
+    0
+}
+
+test t-1317 {
+    SELECT REGEXP_LIKE('foobar', '\t1foo\t', 'm');
+}
+expect {
+    0
+}
+
+test t-1319 {
+    SELECT REGEXP_LIKE('foobar', '\t1foo\t', 'u');
+}
+expect {
+    0
+}
+
+test t-1324 {
+    SELECT REGEXP_LIKE('foobar', 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1330 {
+    SELECT REGEXP_LIKE('foobar', 'foobar', 'cimnu');
+}
+expect {
+    1
+}
+
+test t-1334 {
+    SELECT REGEXP_LIKE('foobar', _utf8 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1336 {
+    SELECT REGEXP_LIKE('foobar', _utf8 'foobar', 'i');
+}
+expect {
+    1
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1342 {
+    SELECT 'foobar' REGEXP '';
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1348 {
+    SELECT REGEXP_LIKE('foobar', '', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1349 {
+    SELECT REGEXP_LIKE('foobar', '', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1353 {
+    SELECT 'foobar' NOT REGEXP _binary 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1354 {
+    SELECT REGEXP_LIKE('foobar', _binary 'foobar', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1355 {
+    SELECT REGEXP_LIKE('foobar', _binary 'foobar', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1356 {
+    SELECT REGEXP_LIKE('foobar', _binary 'foobar', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1357 {
+    SELECT REGEXP_LIKE('foobar', _binary 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1359 {
+    SELECT REGEXP_LIKE('foobar', _binary 'foobar', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1367 {
+    SELECT REGEXP_LIKE('foobar', 0x0, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1370 {
+    SELECT REGEXP_LIKE('foobar', 0x0, 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1373 {
+    SELECT 'foobar' NOT REGEXP 0x1;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1377 {
+    SELECT REGEXP_LIKE('foobar', 0x1, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1383 {
+    SELECT 'foobar' NOT REGEXP 0xff;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1387 {
+    SELECT REGEXP_LIKE('foobar', 0xff, 'm');
+}
+expect error {
+}
+
+test t-1394 {
+    SELECT REGEXP_LIKE('foobar', NULL, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1399 {
+    SELECT REGEXP_LIKE('foobar', NULL, 'u');
+}
+expect {
+    NULL
+}
+
+test t-1407 {
+    SELECT REGEXP_LIKE('foobar', true, 'm');
+}
+expect {
+    0
+}
+
+test t-1412 {
+    SELECT 'foobar' REGEXP false;
+}
+expect {
+    0
+}
+
+test t-1413 {
+    SELECT 'foobar' NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-1414 {
+    SELECT REGEXP_LIKE('foobar', false, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1415 {
+    SELECT REGEXP_LIKE('foobar', false, 'c');
+}
+expect {
+    0
+}
+
+test t-1418 {
+    SELECT REGEXP_LIKE('foobar', false, 'n');
+}
+expect {
+    0
+}
+
+test t-1419 {
+    SELECT REGEXP_LIKE('foobar', false, 'u');
+}
+expect {
+    0
+}
+
+test t-1420 {
+    SELECT REGEXP_LIKE('foobar', false, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1421 {
+    SELECT REGEXP_LIKE('foobar', false, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1422 {
+    SELECT 'foobar' REGEXP 0xFF666F6F626172FF;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1424 {
+    SELECT REGEXP_LIKE('foobar', 0xFF666F6F626172FF, NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1425 {
+    SELECT REGEXP_LIKE('foobar', 0xFF666F6F626172FF, 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1426 {
+    SELECT REGEXP_LIKE('foobar', 0xFF666F6F626172FF, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1428 {
+    SELECT REGEXP_LIKE('foobar', 0xFF666F6F626172FF, 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1430 {
+    SELECT REGEXP_LIKE('foobar', 0xFF666F6F626172FF, 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1431 {
+    SELECT REGEXP_LIKE('foobar', 0xFF666F6F626172FF, 'cimnuunmic');
+}
+expect error {
+}
+
+test t-1432 {
+    SELECT 'foobar' REGEXP time '10:04:58';
+}
+expect {
+    0
+}
+
+test t-1437 {
+    SELECT REGEXP_LIKE('foobar', time '10:04:58', 'm');
+}
+expect {
+    0
+}
+
+test t-1441 {
+    SELECT REGEXP_LIKE('foobar', time '10:04:58', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1442 {
+    SELECT 'foobar' REGEXP date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-1445 {
+    SELECT REGEXP_LIKE('foobar', date '2000-01-01', 'c');
+}
+expect {
+    0
+}
+
+test t-1448 {
+    SELECT REGEXP_LIKE('foobar', date '2000-01-01', 'n');
+}
+expect {
+    0
+}
+
+test t-1449 {
+    SELECT REGEXP_LIKE('foobar', date '2000-01-01', 'u');
+}
+expect {
+    0
+}
+
+test t-1450 {
+    SELECT REGEXP_LIKE('foobar', date '2000-01-01', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1452 {
+    SELECT 'foobar' REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-1453 {
+    SELECT 'foobar' NOT REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-1454 {
+    SELECT REGEXP_LIKE('foobar', timestamp '2000-01-01 10:34:58', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1456 {
+    SELECT REGEXP_LIKE('foobar', timestamp '2000-01-01 10:34:58', 'i');
+}
+expect {
+    0
+}
+
+test t-1457 {
+    SELECT REGEXP_LIKE('foobar', timestamp '2000-01-01 10:34:58', 'm');
+}
+expect {
+    0
+}
+
+test t-1458 {
+    SELECT REGEXP_LIKE('foobar', timestamp '2000-01-01 10:34:58', 'n');
+}
+expect {
+    0
+}
+
+test t-1461 {
+    SELECT REGEXP_LIKE('foobar', timestamp '2000-01-01 10:34:58', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1464 {
+    SELECT REGEXP_LIKE('foobar', cast(0 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1466 {
+    SELECT REGEXP_LIKE('foobar', cast(0 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1468 {
+    SELECT REGEXP_LIKE('foobar', cast(0 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1471 {
+    SELECT REGEXP_LIKE('foobar', cast(0 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1475 {
+    SELECT REGEXP_LIKE('foobar', cast(1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1482 {
+    SELECT 'foobar' REGEXP cast(true as json);
+}
+expect {
+    0
+}
+
+test t-1484 {
+    SELECT REGEXP_LIKE('foobar', cast(true as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1486 {
+    SELECT REGEXP_LIKE('foobar', cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1488 {
+    SELECT REGEXP_LIKE('foobar', cast(true as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1490 {
+    SELECT REGEXP_LIKE('foobar', cast(true as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1492 {
+    SELECT 'foobar' REGEXP cast(false as json);
+}
+expect {
+    0
+}
+
+test t-1493 {
+    SELECT 'foobar' NOT REGEXP cast(false as json);
+}
+expect {
+    1
+}
+
+test t-1500 {
+    SELECT REGEXP_LIKE('foobar', cast(false as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1503 {
+    SELECT 'foobar' NOT REGEXP cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-1505 {
+    SELECT REGEXP_LIKE('foobar', cast(2 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1510 {
+    SELECT REGEXP_LIKE('foobar', cast(2 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1513 {
+    SELECT 'foobar' NOT REGEXP cast(1.1 as json);
+}
+expect {
+    1
+}
+
+test t-1516 {
+    SELECT REGEXP_LIKE('foobar', cast(1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1518 {
+    SELECT REGEXP_LIKE('foobar', cast(1.1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1533 {
+    SELECT 'foobar' NOT REGEXP cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-1535 {
+    SELECT REGEXP_LIKE('foobar', cast('"foo"' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1537 {
+    SELECT REGEXP_LIKE('foobar', cast('"foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1541 {
+    SELECT REGEXP_LIKE('foobar', cast('"foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1542 {
+    SELECT 'foobar' REGEXP cast(_binary' "foo"' as json);
+}
+expect {
+    0
+}
+
+test t-1545 {
+    SELECT REGEXP_LIKE('foobar', cast(_binary' "foo"' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1546 {
+    SELECT REGEXP_LIKE('foobar', cast(_binary' "foo"' as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1548 {
+    SELECT REGEXP_LIKE('foobar', cast(_binary' "foo"' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1549 {
+    SELECT REGEXP_LIKE('foobar', cast(_binary' "foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1550 {
+    SELECT REGEXP_LIKE('foobar', cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1551 {
+    SELECT REGEXP_LIKE('foobar', cast(_binary' "foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1553 {
+    SELECT 'foobar' NOT REGEXP cast(0xFF666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-1558 {
+    SELECT REGEXP_LIKE('foobar', cast(0xFF666F6F626172FF as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1560 {
+    SELECT REGEXP_LIKE('foobar', cast(0xFF666F6F626172FF as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1563 {
+    SELECT 'foobar' NOT REGEXP cast(0b01 as json);
+}
+expect {
+    1
+}
+
+test t-1567 {
+    SELECT REGEXP_LIKE('foobar', cast(0b01 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1569 {
+    SELECT REGEXP_LIKE('foobar', cast(0b01 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1570 {
+    SELECT REGEXP_LIKE('foobar', cast(0b01 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1577 {
+    SELECT REGEXP_LIKE('foobar', cast('["a"]' as json), 'm');
+}
+expect {
+    1
+}
+
+test t-1578 {
+    SELECT REGEXP_LIKE('foobar', cast('["a"]' as json), 'n');
+}
+expect {
+    1
+}
+
+test t-1579 {
+    SELECT REGEXP_LIKE('foobar', cast('["a"]' as json), 'u');
+}
+expect {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1585 {
+    SELECT REGEXP_LIKE('foobar', cast('\{"a": 1, "b": 2\}' as json), 'c');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1587 {
+    SELECT REGEXP_LIKE('foobar', cast('\{"a": 1, "b": 2\}' as json), 'm');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1588 {
+    SELECT REGEXP_LIKE('foobar', cast('\{"a": 1, "b": 2\}' as json), 'n');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1590 {
+    SELECT REGEXP_LIKE('foobar', cast('\{"a": 1, "b": 2\}' as json), 'cimnu');
+}
+expect error {
+}
+
+test t-1594 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1597 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0, 'm');
+}
+expect {
+    0
+}
+
+test t-1601 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1602 {
+    SELECT _utf8 'foobar' REGEXP 1;
+}
+expect {
+    0
+}
+
+test t-1603 {
+    SELECT _utf8 'foobar' NOT REGEXP 1;
+}
+expect {
+    1
+}
+
+test t-1604 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1605 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 1, 'c');
+}
+expect {
+    0
+}
+
+test t-1606 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 1, 'i');
+}
+expect {
+    0
+}
+
+test t-1609 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 1, 'u');
+}
+expect {
+    0
+}
+
+test t-1610 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 1, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1613 {
+    SELECT _utf8 'foobar' NOT REGEXP ' 0 ';
+}
+expect {
+    1
+}
+
+test t-1614 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', ' 0 ', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1621 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', ' 0 ', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1623 {
+    SELECT _utf8 'foobar' NOT REGEXP '\t1foo\t';
+}
+expect {
+    1
+}
+
+test t-1625 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', '\t1foo\t', 'c');
+}
+expect {
+    0
+}
+
+test t-1627 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', '\t1foo\t', 'm');
+}
+expect {
+    0
+}
+
+test t-1636 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 'foobar', 'i');
+}
+expect {
+    1
+}
+
+test t-1637 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 'foobar', 'm');
+}
+expect {
+    1
+}
+
+test t-1643 {
+    SELECT _utf8 'foobar' NOT REGEXP _utf8 'foobar';
+}
+expect {
+    0
+}
+
+test t-1644 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', _utf8 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1654 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', '', NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1656 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', '', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1659 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', '', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1664 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', _binary 'foobar', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1666 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', _binary 'foobar', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1667 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', _binary 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1668 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', _binary 'foobar', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1671 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', _binary 'foobar', 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1675 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x0, 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1676 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x0, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1678 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x0, 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1679 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x0, 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1681 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x0, 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1684 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x1, NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1685 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x1, 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1686 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x1, 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1687 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x1, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1688 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0x1, 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1692 {
+    SELECT _utf8 'foobar' REGEXP 0xff;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1693 {
+    SELECT _utf8 'foobar' NOT REGEXP 0xff;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1694 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xff, NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1695 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xff, 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1697 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xff, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1699 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xff, 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1700 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xff, 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1701 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xff, 'cimnuunmic');
+}
+expect error {
+}
+
+test t-1709 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', NULL, 'u');
+}
+expect {
+    NULL
+}
+
+test t-1711 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', NULL, 'cimnuunmic');
+}
+expect {
+    NULL
+}
+
+test t-1712 {
+    SELECT _utf8 'foobar' REGEXP true;
+}
+expect {
+    0
+}
+
+test t-1713 {
+    SELECT _utf8 'foobar' NOT REGEXP true;
+}
+expect {
+    1
+}
+
+test t-1714 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', true, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1722 {
+    SELECT _utf8 'foobar' REGEXP false;
+}
+expect {
+    0
+}
+
+test t-1723 {
+    SELECT _utf8 'foobar' NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-1725 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', false, 'c');
+}
+expect {
+    0
+}
+
+test t-1731 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', false, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb3_general_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1735 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', 0xFF666F6F626172FF, 'c');
+}
+expect error {
+}
+
+test t-1744 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', time '10:04:58', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1746 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', time '10:04:58', 'i');
+}
+expect {
+    0
+}
+
+test t-1747 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', time '10:04:58', 'm');
+}
+expect {
+    0
+}
+
+test t-1749 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', time '10:04:58', 'u');
+}
+expect {
+    0
+}
+
+test t-1752 {
+    SELECT _utf8 'foobar' REGEXP date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-1753 {
+    SELECT _utf8 'foobar' NOT REGEXP date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-1762 {
+    SELECT _utf8 'foobar' REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-1769 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', timestamp '2000-01-01 10:34:58', 'u');
+}
+expect {
+    0
+}
+
+test t-1773 {
+    SELECT _utf8 'foobar' NOT REGEXP cast(0 as json);
+}
+expect {
+    1
+}
+
+test t-1780 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1781 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1790 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1796 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1797 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(true as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1798 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(true as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1799 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(true as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1803 {
+    SELECT _utf8 'foobar' NOT REGEXP cast(false as json);
+}
+expect {
+    1
+}
+
+test t-1805 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(false as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1806 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(false as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1811 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(false as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1812 {
+    SELECT _utf8 'foobar' REGEXP cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-1814 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(2 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1817 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(2 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-1821 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(2 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1822 {
+    SELECT _utf8 'foobar' REGEXP cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-1824 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(1.1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1825 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(1.1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1826 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1829 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(1.1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1832 {
+    SELECT _utf8 'foobar' REGEXP cast(-1.1 as json);
+}
+expect {
+    0
+}
+
+test t-1836 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(-1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-1838 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(-1.1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1840 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(-1.1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1844 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('"foo"' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1849 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('"foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1854 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(_binary' "foo"' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1858 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(_binary' "foo"' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1860 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1861 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(_binary' "foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1862 {
+    SELECT _utf8 'foobar' REGEXP cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-1863 {
+    SELECT _utf8 'foobar' NOT REGEXP cast(0xFF666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-1865 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0xFF666F6F626172FF as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1868 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0xFF666F6F626172FF as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1870 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0xFF666F6F626172FF as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1871 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0xFF666F6F626172FF as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1875 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0b01 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-1878 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0b01 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-1879 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast(0b01 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-1883 {
+    SELECT _utf8 'foobar' NOT REGEXP cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-1884 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('["a"]' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-1886 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('["a"]' as json), 'i');
+}
+expect {
+    1
+}
+
+test t-1887 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('["a"]' as json), 'm');
+}
+expect {
+    1
+}
+
+test t-1888 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('["a"]' as json), 'n');
+}
+expect {
+    1
+}
+
+test t-1890 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('["a"]' as json), 'cimnu');
+}
+expect {
+    1
+}
+
+test t-1891 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('["a"]' as json), 'cimnuunmic');
+}
+expect {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1895 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('\{"a": 1, "b": 2\}' as json), 'c');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1896 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('\{"a": 1, "b": 2\}' as json), 'i');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-1897 {
+    SELECT REGEXP_LIKE(_utf8 'foobar', cast('\{"a": 1, "b": 2\}' as json), 'm');
+}
+expect error {
+}
+
+test t-1906 {
+    SELECT REGEXP_LIKE('', 0, 'i');
+}
+expect {
+    0
+}
+
+test t-1912 {
+    SELECT '' REGEXP 1;
+}
+expect {
+    0
+}
+
+test t-1913 {
+    SELECT '' NOT REGEXP 1;
+}
+expect {
+    1
+}
+
+test t-1914 {
+    SELECT REGEXP_LIKE('', 1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-1915 {
+    SELECT REGEXP_LIKE('', 1, 'c');
+}
+expect {
+    0
+}
+
+test t-1916 {
+    SELECT REGEXP_LIKE('', 1, 'i');
+}
+expect {
+    0
+}
+
+test t-1917 {
+    SELECT REGEXP_LIKE('', 1, 'm');
+}
+expect {
+    0
+}
+
+test t-1918 {
+    SELECT REGEXP_LIKE('', 1, 'n');
+}
+expect {
+    0
+}
+
+test t-1921 {
+    SELECT REGEXP_LIKE('', 1, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1924 {
+    SELECT REGEXP_LIKE('', ' 0 ', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1932 {
+    SELECT '' REGEXP '\t1foo\t';
+}
+expect {
+    0
+}
+
+test t-1934 {
+    SELECT REGEXP_LIKE('', '\t1foo\t', NULL);
+}
+expect {
+    NULL
+}
+
+test t-1936 {
+    SELECT REGEXP_LIKE('', '\t1foo\t', 'i');
+}
+expect {
+    0
+}
+
+test t-1940 {
+    SELECT REGEXP_LIKE('', '\t1foo\t', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-1942 {
+    SELECT '' REGEXP 'foobar';
+}
+expect {
+    0
+}
+
+test t-1945 {
+    SELECT REGEXP_LIKE('', 'foobar', 'c');
+}
+expect {
+    0
+}
+
+test t-1948 {
+    SELECT REGEXP_LIKE('', 'foobar', 'n');
+}
+expect {
+    0
+}
+
+test t-1949 {
+    SELECT REGEXP_LIKE('', 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-1953 {
+    SELECT '' NOT REGEXP _utf8 'foobar';
+}
+expect {
+    1
+}
+
+test t-1956 {
+    SELECT REGEXP_LIKE('', _utf8 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-1957 {
+    SELECT REGEXP_LIKE('', _utf8 'foobar', 'm');
+}
+expect {
+    0
+}
+
+test t-1959 {
+    SELECT REGEXP_LIKE('', _utf8 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-1961 {
+    SELECT REGEXP_LIKE('', _utf8 'foobar', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-1964 {
+    SELECT REGEXP_LIKE('', '', NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test t-1968 {
+    SELECT REGEXP_LIKE('', '', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1972 {
+    SELECT '' REGEXP _binary 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1975 {
+    SELECT REGEXP_LIKE('', _binary 'foobar', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1979 {
+    SELECT REGEXP_LIKE('', _binary 'foobar', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1980 {
+    SELECT REGEXP_LIKE('', _binary 'foobar', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1982 {
+    SELECT '' REGEXP 0x0;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1990 {
+    SELECT REGEXP_LIKE('', 0x0, 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1997 {
+    SELECT REGEXP_LIKE('', 0x1, 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-1999 {
+    SELECT REGEXP_LIKE('', 0x1, 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2000 {
+    SELECT REGEXP_LIKE('', 0x1, 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2002 {
+    SELECT '' REGEXP 0xff;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2003 {
+    SELECT '' NOT REGEXP 0xff;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2009 {
+    SELECT REGEXP_LIKE('', 0xff, 'u');
+}
+expect error {
+}
+
+test t-2016 {
+    SELECT REGEXP_LIKE('', NULL, 'i');
+}
+expect {
+    NULL
+}
+
+test t-2017 {
+    SELECT REGEXP_LIKE('', NULL, 'm');
+}
+expect {
+    NULL
+}
+
+test t-2018 {
+    SELECT REGEXP_LIKE('', NULL, 'n');
+}
+expect {
+    NULL
+}
+
+test t-2019 {
+    SELECT REGEXP_LIKE('', NULL, 'u');
+}
+expect {
+    NULL
+}
+
+test t-2024 {
+    SELECT REGEXP_LIKE('', true, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2027 {
+    SELECT REGEXP_LIKE('', true, 'm');
+}
+expect {
+    0
+}
+
+test t-2033 {
+    SELECT '' NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-2038 {
+    SELECT REGEXP_LIKE('', false, 'n');
+}
+expect {
+    0
+}
+
+test t-2040 {
+    SELECT REGEXP_LIKE('', false, 'cimnu');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2042 {
+    SELECT '' REGEXP 0xFF666F6F626172FF;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2043 {
+    SELECT '' NOT REGEXP 0xFF666F6F626172FF;
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'utf8mb4_0900_ai_ci' cannot be used in conjunction with 'binary' in call to regexp_like.
+test t-2045 {
+    SELECT REGEXP_LIKE('', 0xFF666F6F626172FF, 'c');
+}
+expect error {
+}
+
+test t-2060 {
+    SELECT REGEXP_LIKE('', time '10:04:58', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2061 {
+    SELECT REGEXP_LIKE('', time '10:04:58', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2073 {
+    SELECT '' NOT REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    1
+}
+
+test t-2075 {
+    SELECT REGEXP_LIKE('', timestamp '2000-01-01 10:34:58', 'c');
+}
+expect {
+    0
+}
+
+test t-2077 {
+    SELECT REGEXP_LIKE('', timestamp '2000-01-01 10:34:58', 'm');
+}
+expect {
+    0
+}
+
+test t-2081 {
+    SELECT REGEXP_LIKE('', timestamp '2000-01-01 10:34:58', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2088 {
+    SELECT REGEXP_LIKE('', cast(0 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2089 {
+    SELECT REGEXP_LIKE('', cast(0 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2091 {
+    SELECT REGEXP_LIKE('', cast(0 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2093 {
+    SELECT '' NOT REGEXP cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-2094 {
+    SELECT REGEXP_LIKE('', cast(1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2095 {
+    SELECT REGEXP_LIKE('', cast(1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2097 {
+    SELECT REGEXP_LIKE('', cast(1 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2100 {
+    SELECT REGEXP_LIKE('', cast(1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2101 {
+    SELECT REGEXP_LIKE('', cast(1 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2106 {
+    SELECT REGEXP_LIKE('', cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2113 {
+    SELECT '' NOT REGEXP cast(false as json);
+}
+expect {
+    1
+}
+
+test t-2117 {
+    SELECT REGEXP_LIKE('', cast(false as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2118 {
+    SELECT REGEXP_LIKE('', cast(false as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2121 {
+    SELECT REGEXP_LIKE('', cast(false as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2122 {
+    SELECT '' REGEXP cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-2123 {
+    SELECT '' NOT REGEXP cast(2 as json);
+}
+expect {
+    1
+}
+
+test t-2126 {
+    SELECT REGEXP_LIKE('', cast(2 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2129 {
+    SELECT REGEXP_LIKE('', cast(2 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2131 {
+    SELECT REGEXP_LIKE('', cast(2 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2132 {
+    SELECT '' REGEXP cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-2135 {
+    SELECT REGEXP_LIKE('', cast(1.1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2140 {
+    SELECT REGEXP_LIKE('', cast(1.1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2149 {
+    SELECT REGEXP_LIKE('', cast(-1.1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2152 {
+    SELECT '' REGEXP cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test t-2153 {
+    SELECT '' NOT REGEXP cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-2157 {
+    SELECT REGEXP_LIKE('', cast('"foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2158 {
+    SELECT REGEXP_LIKE('', cast('"foo"' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2161 {
+    SELECT REGEXP_LIKE('', cast('"foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2162 {
+    SELECT '' REGEXP cast(_binary' "foo"' as json);
+}
+expect {
+    0
+}
+
+test t-2164 {
+    SELECT REGEXP_LIKE('', cast(_binary' "foo"' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2170 {
+    SELECT REGEXP_LIKE('', cast(_binary' "foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2171 {
+    SELECT REGEXP_LIKE('', cast(_binary' "foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2173 {
+    SELECT '' NOT REGEXP cast(0xFF666F6F626172FF as json);
+}
+expect {
+    1
+}
+
+test t-2174 {
+    SELECT REGEXP_LIKE('', cast(0xFF666F6F626172FF as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2178 {
+    SELECT REGEXP_LIKE('', cast(0xFF666F6F626172FF as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2182 {
+    SELECT '' REGEXP cast(0b01 as json);
+}
+expect {
+    0
+}
+
+test t-2185 {
+    SELECT REGEXP_LIKE('', cast(0b01 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2191 {
+    SELECT REGEXP_LIKE('', cast(0b01 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2195 {
+    SELECT REGEXP_LIKE('', cast('["a"]' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2198 {
+    SELECT REGEXP_LIKE('', cast('["a"]' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2200 {
+    SELECT REGEXP_LIKE('', cast('["a"]' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2213 {
+    SELECT _binary 'foobar' NOT REGEXP 0;
+}
+expect {
+    1
+}
+
+test t-2218 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0, 'n');
+}
+expect {
+    0
+}
+
+test t-2220 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2231 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 1, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2232 {
+    SELECT _binary 'foobar' REGEXP ' 0 ';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2237 {
+    SELECT REGEXP_LIKE(_binary 'foobar', ' 0 ', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2240 {
+    SELECT REGEXP_LIKE(_binary 'foobar', ' 0 ', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2249 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '\t1foo\t', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2250 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '\t1foo\t', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2251 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '\t1foo\t', 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2253 {
+    SELECT _binary 'foobar' NOT REGEXP 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2254 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 'foobar', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2258 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 'foobar', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2260 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 'foobar', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2267 {
+    SELECT REGEXP_LIKE(_binary 'foobar', _utf8 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2268 {
+    SELECT REGEXP_LIKE(_binary 'foobar', _utf8 'foobar', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2270 {
+    SELECT REGEXP_LIKE(_binary 'foobar', _utf8 'foobar', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2272 {
+    SELECT _binary 'foobar' REGEXP '';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2274 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2275 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2276 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2279 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2280 {
+    SELECT REGEXP_LIKE(_binary 'foobar', '', 'cimnu');
+}
+expect error {
+}
+
+test t-2285 {
+    SELECT REGEXP_LIKE(_binary 'foobar', _binary 'foobar', 'c');
+}
+expect {
+    1
+}
+
+test t-2288 {
+    SELECT REGEXP_LIKE(_binary 'foobar', _binary 'foobar', 'n');
+}
+expect {
+    1
+}
+
+test t-2291 {
+    SELECT REGEXP_LIKE(_binary 'foobar', _binary 'foobar', 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-2297 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x0, 'm');
+}
+expect {
+    0
+}
+
+test t-2299 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x0, 'u');
+}
+expect {
+    0
+}
+
+test t-2300 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x0, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2302 {
+    SELECT _binary 'foobar' REGEXP 0x1;
+}
+expect {
+    0
+}
+
+test t-2304 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2309 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x1, 'u');
+}
+expect {
+    0
+}
+
+test t-2310 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x1, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2311 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0x1, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2314 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xff, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2315 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xff, 'c');
+}
+expect {
+    0
+}
+
+test t-2318 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xff, 'n');
+}
+expect {
+    0
+}
+
+test t-2327 {
+    SELECT REGEXP_LIKE(_binary 'foobar', NULL, 'm');
+}
+expect {
+    NULL
+}
+
+test t-2329 {
+    SELECT REGEXP_LIKE(_binary 'foobar', NULL, 'u');
+}
+expect {
+    NULL
+}
+
+test t-2332 {
+    SELECT _binary 'foobar' REGEXP true;
+}
+expect {
+    0
+}
+
+test t-2334 {
+    SELECT REGEXP_LIKE(_binary 'foobar', true, NULL);
+}
+expect {
+    NULL
+}
+
+test t-2335 {
+    SELECT REGEXP_LIKE(_binary 'foobar', true, 'c');
+}
+expect {
+    0
+}
+
+test t-2336 {
+    SELECT REGEXP_LIKE(_binary 'foobar', true, 'i');
+}
+expect {
+    0
+}
+
+test t-2340 {
+    SELECT REGEXP_LIKE(_binary 'foobar', true, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2341 {
+    SELECT REGEXP_LIKE(_binary 'foobar', true, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2343 {
+    SELECT _binary 'foobar' NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-2347 {
+    SELECT REGEXP_LIKE(_binary 'foobar', false, 'm');
+}
+expect {
+    0
+}
+
+test t-2350 {
+    SELECT REGEXP_LIKE(_binary 'foobar', false, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2355 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xFF666F6F626172FF, 'c');
+}
+expect {
+    0
+}
+
+test t-2356 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xFF666F6F626172FF, 'i');
+}
+expect {
+    0
+}
+
+test t-2357 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xFF666F6F626172FF, 'm');
+}
+expect {
+    0
+}
+
+test t-2358 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xFF666F6F626172FF, 'n');
+}
+expect {
+    0
+}
+
+test t-2361 {
+    SELECT REGEXP_LIKE(_binary 'foobar', 0xFF666F6F626172FF, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2365 {
+    SELECT REGEXP_LIKE(_binary 'foobar', time '10:04:58', 'c');
+}
+expect {
+    0
+}
+
+test t-2367 {
+    SELECT REGEXP_LIKE(_binary 'foobar', time '10:04:58', 'm');
+}
+expect {
+    0
+}
+
+test t-2372 {
+    SELECT _binary 'foobar' REGEXP date '2000-01-01';
+}
+expect {
+    0
+}
+
+test t-2373 {
+    SELECT _binary 'foobar' NOT REGEXP date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-2376 {
+    SELECT REGEXP_LIKE(_binary 'foobar', date '2000-01-01', 'i');
+}
+expect {
+    0
+}
+
+test t-2377 {
+    SELECT REGEXP_LIKE(_binary 'foobar', date '2000-01-01', 'm');
+}
+expect {
+    0
+}
+
+test t-2379 {
+    SELECT REGEXP_LIKE(_binary 'foobar', date '2000-01-01', 'u');
+}
+expect {
+    0
+}
+
+test t-2380 {
+    SELECT REGEXP_LIKE(_binary 'foobar', date '2000-01-01', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2381 {
+    SELECT REGEXP_LIKE(_binary 'foobar', date '2000-01-01', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2382 {
+    SELECT _binary 'foobar' REGEXP timestamp '2000-01-01 10:34:58';
+}
+expect {
+    0
+}
+
+test t-2385 {
+    SELECT REGEXP_LIKE(_binary 'foobar', timestamp '2000-01-01 10:34:58', 'c');
+}
+expect {
+    0
+}
+
+test t-2386 {
+    SELECT REGEXP_LIKE(_binary 'foobar', timestamp '2000-01-01 10:34:58', 'i');
+}
+expect {
+    0
+}
+
+test t-2387 {
+    SELECT REGEXP_LIKE(_binary 'foobar', timestamp '2000-01-01 10:34:58', 'm');
+}
+expect {
+    0
+}
+
+test t-2389 {
+    SELECT REGEXP_LIKE(_binary 'foobar', timestamp '2000-01-01 10:34:58', 'u');
+}
+expect {
+    0
+}
+
+test t-2392 {
+    SELECT _binary 'foobar' REGEXP cast(0 as json);
+}
+expect {
+    0
+}
+
+test t-2395 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2397 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2401 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2403 {
+    SELECT _binary 'foobar' NOT REGEXP cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-2404 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2406 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2408 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2410 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2413 {
+    SELECT _binary 'foobar' NOT REGEXP cast(true as json);
+}
+expect {
+    1
+}
+
+test t-2416 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2418 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(true as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2419 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(true as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2420 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(true as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2423 {
+    SELECT _binary 'foobar' NOT REGEXP cast(false as json);
+}
+expect {
+    1
+}
+
+test t-2429 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(false as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2430 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(false as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2434 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(2 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2435 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(2 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2436 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(2 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2441 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(2 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2442 {
+    SELECT _binary 'foobar' REGEXP cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-2447 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1.1 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2449 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1.1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2450 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(1.1 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2453 {
+    SELECT _binary 'foobar' NOT REGEXP cast(-1.1 as json);
+}
+expect {
+    1
+}
+
+test t-2455 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(-1.1 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2456 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(-1.1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2458 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(-1.1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2463 {
+    SELECT _binary 'foobar' NOT REGEXP cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-2464 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('"foo"' as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2467 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('"foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2468 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('"foo"' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2469 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('"foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2470 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('"foo"' as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2482 {
+    SELECT _binary 'foobar' REGEXP cast(0xFF666F6F626172FF as json);
+}
+expect {
+    0
+}
+
+test t-2489 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0xFF666F6F626172FF as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2493 {
+    SELECT _binary 'foobar' NOT REGEXP cast(0b01 as json);
+}
+expect {
+    1
+}
+
+test t-2498 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0b01 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2499 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0b01 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2501 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast(0b01 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2503 {
+    SELECT _binary 'foobar' NOT REGEXP cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-2505 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('["a"]' as json), 'c');
+}
+expect {
+    1
+}
+
+test t-2507 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('["a"]' as json), 'm');
+}
+expect {
+    1
+}
+
+test t-2509 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('["a"]' as json), 'u');
+}
+expect {
+    1
+}
+
+test t-2511 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('["a"]' as json), 'cimnuunmic');
+}
+expect {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-2515 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('\{"a": 1, "b": 2\}' as json), 'c');
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-2518 {
+    SELECT REGEXP_LIKE(_binary 'foobar', cast('\{"a": 1, "b": 2\}' as json), 'n');
+}
+expect error {
+}
+
+test t-2537 {
+    SELECT REGEXP_LIKE(0x0, 1, 'm');
+}
+expect {
+    0
+}
+
+test t-2538 {
+    SELECT REGEXP_LIKE(0x0, 1, 'n');
+}
+expect {
+    0
+}
+
+test t-2539 {
+    SELECT REGEXP_LIKE(0x0, 1, 'u');
+}
+expect {
+    0
+}
+
+test t-2540 {
+    SELECT REGEXP_LIKE(0x0, 1, 'cimnu');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2549 {
+    SELECT REGEXP_LIKE(0x0, ' 0 ', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2551 {
+    SELECT REGEXP_LIKE(0x0, ' 0 ', 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2559 {
+    SELECT REGEXP_LIKE(0x0, '\t1foo\t', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2563 {
+    SELECT 0x0 NOT REGEXP 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2567 {
+    SELECT REGEXP_LIKE(0x0, 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2569 {
+    SELECT REGEXP_LIKE(0x0, 'foobar', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2573 {
+    SELECT 0x0 NOT REGEXP _utf8 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2574 {
+    SELECT REGEXP_LIKE(0x0, _utf8 'foobar', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2584 {
+    SELECT REGEXP_LIKE(0x0, '', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2588 {
+    SELECT REGEXP_LIKE(0x0, '', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2590 {
+    SELECT REGEXP_LIKE(0x0, '', 'cimnu');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2591 {
+    SELECT REGEXP_LIKE(0x0, '', 'cimnuunmic');
+}
+expect error {
+}
+
+test t-2592 {
+    SELECT 0x0 REGEXP _binary 'foobar';
+}
+expect {
+    0
+}
+
+test t-2596 {
+    SELECT REGEXP_LIKE(0x0, _binary 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-2599 {
+    SELECT REGEXP_LIKE(0x0, _binary 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-2600 {
+    SELECT REGEXP_LIKE(0x0, _binary 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2601 {
+    SELECT REGEXP_LIKE(0x0, _binary 'foobar', 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2607 {
+    SELECT REGEXP_LIKE(0x0, 0x0, 'm');
+}
+expect {
+    1
+}
+
+test t-2611 {
+    SELECT REGEXP_LIKE(0x0, 0x0, 'cimnuunmic');
+}
+expect {
+    1
+}
+
+test t-2612 {
+    SELECT 0x0 REGEXP 0x1;
+}
+expect {
+    0
+}
+
+test t-2613 {
+    SELECT 0x0 NOT REGEXP 0x1;
+}
+expect {
+    1
+}
+
+test t-2615 {
+    SELECT REGEXP_LIKE(0x0, 0x1, 'c');
+}
+expect {
+    0
+}
+
+test t-2616 {
+    SELECT REGEXP_LIKE(0x0, 0x1, 'i');
+}
+expect {
+    0
+}
+
+test t-2617 {
+    SELECT REGEXP_LIKE(0x0, 0x1, 'm');
+}
+expect {
+    0
+}
+
+test t-2618 {
+    SELECT REGEXP_LIKE(0x0, 0x1, 'n');
+}
+expect {
+    0
+}
+
+test t-2629 {
+    SELECT REGEXP_LIKE(0x0, 0xff, 'u');
+}
+expect {
+    0
+}
+
+test t-2640 {
+    SELECT REGEXP_LIKE(0x0, NULL, 'cimnu');
+}
+expect {
+    NULL
+}
+
+test t-2642 {
+    SELECT 0x0 REGEXP true;
+}
+expect {
+    0
+}
+
+test t-2646 {
+    SELECT REGEXP_LIKE(0x0, true, 'i');
+}
+expect {
+    0
+}
+
+test t-2651 {
+    SELECT REGEXP_LIKE(0x0, true, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2653 {
+    SELECT 0x0 NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-2661 {
+    SELECT REGEXP_LIKE(0x0, false, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2668 {
+    SELECT REGEXP_LIKE(0x0, 0xFF666F6F626172FF, 'n');
+}
+expect {
+    0
+}
+
+test t-2674 {
+    SELECT REGEXP_LIKE(0x0, time '10:04:58', NULL);
+}
+expect {
+    NULL
+}
+
+test t-2676 {
+    SELECT REGEXP_LIKE(0x0, time '10:04:58', 'i');
+}
+expect {
+    0
+}
+
+test t-2677 {
+    SELECT REGEXP_LIKE(0x0, time '10:04:58', 'm');
+}
+expect {
+    0
+}
+
+test t-2679 {
+    SELECT REGEXP_LIKE(0x0, time '10:04:58', 'u');
+}
+expect {
+    0
+}
+
+test t-2683 {
+    SELECT 0x0 NOT REGEXP date '2000-01-01';
+}
+expect {
+    1
+}
+
+test t-2684 {
+    SELECT REGEXP_LIKE(0x0, date '2000-01-01', NULL);
+}
+expect {
+    NULL
+}
+
+test t-2685 {
+    SELECT REGEXP_LIKE(0x0, date '2000-01-01', 'c');
+}
+expect {
+    0
+}
+
+test t-2687 {
+    SELECT REGEXP_LIKE(0x0, date '2000-01-01', 'm');
+}
+expect {
+    0
+}
+
+test t-2689 {
+    SELECT REGEXP_LIKE(0x0, date '2000-01-01', 'u');
+}
+expect {
+    0
+}
+
+test t-2690 {
+    SELECT REGEXP_LIKE(0x0, date '2000-01-01', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2704 {
+    SELECT REGEXP_LIKE(0x0, cast(0 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2705 {
+    SELECT REGEXP_LIKE(0x0, cast(0 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2706 {
+    SELECT REGEXP_LIKE(0x0, cast(0 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2707 {
+    SELECT REGEXP_LIKE(0x0, cast(0 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2709 {
+    SELECT REGEXP_LIKE(0x0, cast(0 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2710 {
+    SELECT REGEXP_LIKE(0x0, cast(0 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2713 {
+    SELECT 0x0 NOT REGEXP cast(1 as json);
+}
+expect {
+    1
+}
+
+test t-2714 {
+    SELECT REGEXP_LIKE(0x0, cast(1 as json), NULL);
+}
+expect {
+    NULL
+}
+
+test t-2716 {
+    SELECT REGEXP_LIKE(0x0, cast(1 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2717 {
+    SELECT REGEXP_LIKE(0x0, cast(1 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2719 {
+    SELECT REGEXP_LIKE(0x0, cast(1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2723 {
+    SELECT 0x0 NOT REGEXP cast(true as json);
+}
+expect {
+    1
+}
+
+test t-2726 {
+    SELECT REGEXP_LIKE(0x0, cast(true as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2727 {
+    SELECT REGEXP_LIKE(0x0, cast(true as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2735 {
+    SELECT REGEXP_LIKE(0x0, cast(false as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2737 {
+    SELECT REGEXP_LIKE(0x0, cast(false as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2740 {
+    SELECT REGEXP_LIKE(0x0, cast(false as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2741 {
+    SELECT REGEXP_LIKE(0x0, cast(false as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2742 {
+    SELECT 0x0 REGEXP cast(2 as json);
+}
+expect {
+    0
+}
+
+test t-2746 {
+    SELECT REGEXP_LIKE(0x0, cast(2 as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2747 {
+    SELECT REGEXP_LIKE(0x0, cast(2 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2749 {
+    SELECT REGEXP_LIKE(0x0, cast(2 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2750 {
+    SELECT REGEXP_LIKE(0x0, cast(2 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2752 {
+    SELECT 0x0 REGEXP cast(1.1 as json);
+}
+expect {
+    0
+}
+
+test t-2758 {
+    SELECT REGEXP_LIKE(0x0, cast(1.1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2759 {
+    SELECT REGEXP_LIKE(0x0, cast(1.1 as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2761 {
+    SELECT REGEXP_LIKE(0x0, cast(1.1 as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2768 {
+    SELECT REGEXP_LIKE(0x0, cast(-1.1 as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2773 {
+    SELECT 0x0 NOT REGEXP cast('"foo"' as json);
+}
+expect {
+    1
+}
+
+test t-2775 {
+    SELECT REGEXP_LIKE(0x0, cast('"foo"' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2777 {
+    SELECT REGEXP_LIKE(0x0, cast('"foo"' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2783 {
+    SELECT 0x0 NOT REGEXP cast(_binary' "foo"' as json);
+}
+expect {
+    1
+}
+
+test t-2789 {
+    SELECT REGEXP_LIKE(0x0, cast(_binary' "foo"' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2791 {
+    SELECT REGEXP_LIKE(0x0, cast(_binary' "foo"' as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2796 {
+    SELECT REGEXP_LIKE(0x0, cast(0xFF666F6F626172FF as json), 'i');
+}
+expect {
+    0
+}
+
+test t-2801 {
+    SELECT REGEXP_LIKE(0x0, cast(0xFF666F6F626172FF as json), 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2803 {
+    SELECT 0x0 NOT REGEXP cast(0b01 as json);
+}
+expect {
+    1
+}
+
+test t-2805 {
+    SELECT REGEXP_LIKE(0x0, cast(0b01 as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2807 {
+    SELECT REGEXP_LIKE(0x0, cast(0b01 as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2810 {
+    SELECT REGEXP_LIKE(0x0, cast(0b01 as json), 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2812 {
+    SELECT 0x0 REGEXP cast('["a"]' as json);
+}
+expect {
+    0
+}
+
+test t-2813 {
+    SELECT 0x0 NOT REGEXP cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test t-2815 {
+    SELECT REGEXP_LIKE(0x0, cast('["a"]' as json), 'c');
+}
+expect {
+    0
+}
+
+test t-2817 {
+    SELECT REGEXP_LIKE(0x0, cast('["a"]' as json), 'm');
+}
+expect {
+    0
+}
+
+test t-2818 {
+    SELECT REGEXP_LIKE(0x0, cast('["a"]' as json), 'n');
+}
+expect {
+    0
+}
+
+test t-2819 {
+    SELECT REGEXP_LIKE(0x0, cast('["a"]' as json), 'u');
+}
+expect {
+    0
+}
+
+test t-2824 {
+    SELECT REGEXP_LIKE(0x0, cast('\{"a": 1, "b": 2\}' as json), NULL);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test t-2830 {
+    SELECT REGEXP_LIKE(0x0, cast('\{"a": 1, "b": 2\}' as json), 'cimnu');
+}
+expect error {
+}
+
+test t-2832 {
+    SELECT 0x1 REGEXP 0;
+}
+expect {
+    0
+}
+
+test t-2835 {
+    SELECT REGEXP_LIKE(0x1, 0, 'c');
+}
+expect {
+    0
+}
+
+test t-2842 {
+    SELECT 0x1 REGEXP 1;
+}
+expect {
+    0
+}
+
+test t-2849 {
+    SELECT REGEXP_LIKE(0x1, 1, 'u');
+}
+expect {
+    0
+}
+
+test t-2850 {
+    SELECT REGEXP_LIKE(0x1, 1, 'cimnu');
+}
+expect {
+    0
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2854 {
+    SELECT REGEXP_LIKE(0x1, ' 0 ', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2863 {
+    SELECT 0x1 NOT REGEXP '\t1foo\t';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2865 {
+    SELECT REGEXP_LIKE(0x1, '\t1foo\t', 'c');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2867 {
+    SELECT REGEXP_LIKE(0x1, '\t1foo\t', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2868 {
+    SELECT REGEXP_LIKE(0x1, '\t1foo\t', 'n');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2871 {
+    SELECT REGEXP_LIKE(0x1, '\t1foo\t', 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2873 {
+    SELECT 0x1 NOT REGEXP 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2876 {
+    SELECT REGEXP_LIKE(0x1, 'foobar', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2877 {
+    SELECT REGEXP_LIKE(0x1, 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2879 {
+    SELECT REGEXP_LIKE(0x1, 'foobar', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2882 {
+    SELECT 0x1 REGEXP _utf8 'foobar';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2884 {
+    SELECT REGEXP_LIKE(0x1, _utf8 'foobar', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2886 {
+    SELECT REGEXP_LIKE(0x1, _utf8 'foobar', 'i');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2887 {
+    SELECT REGEXP_LIKE(0x1, _utf8 'foobar', 'm');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2889 {
+    SELECT REGEXP_LIKE(0x1, _utf8 'foobar', 'u');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb3_general_ci' in call to regexp_like.
+test t-2891 {
+    SELECT REGEXP_LIKE(0x1, _utf8 'foobar', 'cimnuunmic');
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2892 {
+    SELECT 0x1 REGEXP '';
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2894 {
+    SELECT REGEXP_LIKE(0x1, '', NULL);
+}
+expect error {
+}
+
+# mysql-error: 3995 HY000 Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_like.
+test t-2896 {
+    SELECT REGEXP_LIKE(0x1, '', 'i');
+}
+expect error {
+}
+
+test t-2903 {
+    SELECT 0x1 NOT REGEXP _binary 'foobar';
+}
+expect {
+    1
+}
+
+test t-2904 {
+    SELECT REGEXP_LIKE(0x1, _binary 'foobar', NULL);
+}
+expect {
+    NULL
+}
+
+test t-2906 {
+    SELECT REGEXP_LIKE(0x1, _binary 'foobar', 'i');
+}
+expect {
+    0
+}
+
+test t-2909 {
+    SELECT REGEXP_LIKE(0x1, _binary 'foobar', 'u');
+}
+expect {
+    0
+}
+
+test t-2910 {
+    SELECT REGEXP_LIKE(0x1, _binary 'foobar', 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2913 {
+    SELECT 0x1 NOT REGEXP 0x0;
+}
+expect {
+    1
+}
+
+test t-2916 {
+    SELECT REGEXP_LIKE(0x1, 0x0, 'i');
+}
+expect {
+    0
+}
+
+test t-2923 {
+    SELECT 0x1 NOT REGEXP 0x1;
+}
+expect {
+    0
+}
+
+test t-2935 {
+    SELECT REGEXP_LIKE(0x1, 0xff, 'c');
+}
+expect {
+    0
+}
+
+test t-2940 {
+    SELECT REGEXP_LIKE(0x1, 0xff, 'cimnu');
+}
+expect {
+    0
+}
+
+test t-2941 {
+    SELECT REGEXP_LIKE(0x1, 0xff, 'cimnuunmic');
+}
+expect {
+    0
+}
+
+test t-2948 {
+    SELECT REGEXP_LIKE(0x1, NULL, 'n');
+}
+expect {
+    NULL
+}
+
+test t-2955 {
+    SELECT REGEXP_LIKE(0x1, true, 'c');
+}
+expect {
+    0
+}
+
+test t-2956 {
+    SELECT REGEXP_LIKE(0x1, true, 'i');
+}
+expect {
+    0
+}
+
+test t-2957 {
+    SELECT REGEXP_LIKE(0x1, true, 'm');
+}
+expect {
+    0
+}
+
+test t-2959 {
+    SELECT REGEXP_LIKE(0x1, true, 'u');
+}
+expect {
+    0
+}
+
+test t-2962 {
+    SELECT 0x1 REGEXP false;
+}
+expect {
+    0
+}
+
+test t-2963 {
+    SELECT 0x1 NOT REGEXP false;
+}
+expect {
+    1
+}
+
+test t-2964 {
+    SELECT REGEXP_LIKE(0x1, false, NULL);
+}
+expect {
+    NULL
+}

@@ -1,0 +1,7007 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-11 {
+    SELECT FIELD("Å å", "Å å", "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-22 {
+    SELECT FIELD("Å å", NULL, "Å å");
+}
+expect {
+    2
+}
+
+test t-124 {
+    SELECT FIELD("Å å", 1, '123');
+}
+expect {
+    0
+}
+
+test t-125 {
+    SELECT FIELD("Å å", 1, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-202 {
+    SELECT FIELD("Å å", 3.1415926, "abc");
+}
+expect {
+    2
+}
+
+test t-218 {
+    SELECT FIELD("Å å", 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+test t-234 {
+    SELECT FIELD("Å å", "中文测试", '123');
+}
+expect {
+    0
+}
+
+test t-256 {
+    SELECT FIELD("Å å", "日本語テスト", '123');
+}
+expect {
+    0
+}
+
+test t-348 {
+    SELECT FIELD("Å å", 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-349 {
+    SELECT FIELD("Å å", 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-357 {
+    SELECT FIELD("Å å", -9223372036854775808, 1);
+}
+expect {
+    0
+}
+
+test t-462 {
+    SELECT FIELD("Å å", _latin1 0xFF, "Å å");
+}
+expect {
+    2
+}
+
+test t-503 {
+    SELECT FIELD(NULL, "Å å", _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-508 {
+    SELECT FIELD(NULL, NULL, "");
+}
+expect {
+    0
+}
+
+test t-548 {
+    SELECT FIELD(NULL, "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-576 {
+    SELECT FIELD(NULL, "abc", "abc");
+}
+expect {
+    0
+}
+
+test t-607 {
+    SELECT FIELD(NULL, 1, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-648 {
+    SELECT FIELD(NULL, 0123, "中文测试");
+}
+expect {
+    0
+}
+
+test t-800 {
+    SELECT FIELD(NULL, '123', 0xAACC);
+}
+expect {
+    0
+}
+
+test t-810 {
+    SELECT FIELD(NULL, '123', -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-882 {
+    SELECT FIELD(NULL, -999999999999999999999999, "");
+}
+expect {
+    0
+}
+
+test t-894 {
+    SELECT FIELD(NULL, -999999999999999999999999, '123');
+}
+expect {
+    0
+}
+
+test t-909 {
+    SELECT FIELD(NULL, _binary 'Müller' , 0123);
+}
+expect {
+    0
+}
+
+test t-913 {
+    SELECT FIELD(NULL, _binary 'Müller' , "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-933 {
+    SELECT FIELD(NULL, _utf8mb4 'abcABCÅå', 3.1415926);
+}
+expect {
+    0
+}
+
+test t-948 {
+    SELECT FIELD(NULL, _latin1 0xFF, "");
+}
+expect {
+    0
+}
+
+test t-969 {
+    SELECT FIELD("", "Å å", NULL);
+}
+expect {
+    0
+}
+
+test t-971 {
+    SELECT FIELD("", "Å å", "a");
+}
+expect {
+    0
+}
+
+test t-986 {
+    SELECT FIELD("", "Å å", -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-994 {
+    SELECT FIELD("", NULL, "abc");
+}
+expect {
+    0
+}
+
+test t-1014 {
+    SELECT FIELD("", "", "");
+}
+expect {
+    1
+}
+
+test t-1023 {
+    SELECT FIELD("", "", "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-1036 {
+    SELECT FIELD("", "a", "");
+}
+expect {
+    2
+}
+
+test t-1131 {
+    SELECT FIELD("", 0123, 3.1415926);
+}
+expect {
+    0
+}
+
+test t-1142 {
+    SELECT FIELD("", 0123, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-1157 {
+    SELECT FIELD("", 0xAACC, "😊😂🤢");
+}
+expect error {
+}
+
+test t-1185 {
+    SELECT FIELD("", 3.1415926, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-1252 {
+    SELECT FIELD("", "한국어 시험", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-1254 {
+    SELECT FIELD("", "😊😂🤢", "Å å");
+}
+expect {
+    0
+}
+
+test t-1260 {
+    SELECT FIELD("", "😊😂🤢", -1);
+}
+expect {
+    1
+}
+
+test t-1266 {
+    SELECT FIELD("", "😊😂🤢", "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-1353 {
+    SELECT FIELD("", 999999999999999999999999, "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-1355 {
+    SELECT FIELD("", 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-1395 {
+    SELECT FIELD("", _binary 'Müller' , 3.1415926);
+}
+expect {
+    1
+}
+
+test t-1420 {
+    SELECT FIELD("", _utf8mb4 'abcABCÅå', "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-1425 {
+    SELECT FIELD("", _utf8mb4 'abcABCÅå', 999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-1430 {
+    SELECT FIELD("", _latin1 0xFF, "Å å");
+}
+expect {
+    0
+}
+
+test t-1498 {
+    SELECT FIELD("a", "", "");
+}
+expect {
+    0
+}
+
+test t-1526 {
+    SELECT FIELD("a", "a", 0xAACC);
+}
+expect {
+    1
+}
+
+test t-1600 {
+    SELECT FIELD("a", -1, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-1788 {
+    SELECT FIELD("a", 9223372036854775807, -1);
+}
+expect {
+    0
+}
+
+test t-1925 {
+    SELECT FIELD("a", _latin1 0xFF, "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-1972 {
+    SELECT FIELD("abc", NULL, '123');
+}
+expect {
+    0
+}
+
+test t-2038 {
+    SELECT FIELD("abc", "abc", '123');
+}
+expect {
+    1
+}
+
+test t-2045 {
+    SELECT FIELD("abc", "abc", _latin1 0xFF);
+}
+expect {
+    1
+}
+
+test t-2107 {
+    SELECT FIELD("abc", 0123, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-2113 {
+    SELECT FIELD("abc", 0xAACC, NULL);
+}
+expect error {
+}
+
+test t-2128 {
+    SELECT FIELD("abc", 0xAACC, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-2200 {
+    SELECT FIELD("abc", "한국어 시험", "Å å");
+}
+expect {
+    0
+}
+
+test t-2219 {
+    SELECT FIELD("abc", "한국어 시험", _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-2225 {
+    SELECT FIELD("abc", "😊😂🤢", "a");
+}
+expect {
+    0
+}
+
+test t-2282 {
+    SELECT FIELD("abc", 9223372036854775807, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-2331 {
+    SELECT FIELD("abc", 999999999999999999999999, _latin1 0xFF);
+}
+expect {
+    2
+}
+
+test t-2360 {
+    SELECT FIELD("abc", _binary 'Müller' , -1);
+}
+expect {
+    1
+}
+
+test t-2370 {
+    SELECT FIELD("abc", _binary 'Müller' , -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-2398 {
+    SELECT FIELD("abc", _latin1 0xFF, "Å å");
+}
+expect {
+    0
+}
+
+test t-2476 {
+    SELECT FIELD(1, "", "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-2485 {
+    SELECT FIELD(1, "", _latin1 0xFF);
+}
+expect {
+    0
+}
+
+test t-2527 {
+    SELECT FIELD(1, "abc", _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-2582 {
+    SELECT FIELD(1, 0123, 0xAACC);
+}
+expect {
+    0
+}
+
+test t-2638 {
+    SELECT FIELD(1, 3.1415926, _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-2722 {
+    SELECT FIELD(1, "😊😂🤢", -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-2736 {
+    SELECT FIELD(1, '123', 0xAACC);
+}
+expect {
+    0
+}
+
+test t-2770 {
+    SELECT FIELD(1, 9223372036854775807, _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-2863 {
+    SELECT FIELD(1, _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    0
+}
+
+test t-2899 {
+    SELECT FIELD(1, _latin1 0xFF, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-2909 {
+    SELECT FIELD(-1, "Å å", 1);
+}
+expect {
+    0
+}
+
+test t-3019 {
+    SELECT FIELD(-1, 1, 1);
+}
+expect {
+    0
+}
+
+test t-3054 {
+    SELECT FIELD(-1, -1, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-3068 {
+    SELECT FIELD(-1, 0123, "中文测试");
+}
+expect {
+    0
+}
+
+test t-3075 {
+    SELECT FIELD(-1, 0123, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-3099 {
+    SELECT FIELD(-1, 0xAACC, _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-3157 {
+    SELECT FIELD(-1, "日本語テスト", "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-3212 {
+    SELECT FIELD(-1, '123', "Å å");
+}
+expect {
+    0
+}
+
+test t-3224 {
+    SELECT FIELD(-1, '123', "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-3291 {
+    SELECT FIELD(-1, 999999999999999999999999, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-3295 {
+    SELECT FIELD(-1, 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-3345 {
+    SELECT FIELD(-1, _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    0
+}
+
+test t-3354 {
+    SELECT FIELD(-1, _utf8mb4 'abcABCÅå', "中文测试");
+}
+expect {
+    0
+}
+
+test t-3357 {
+    SELECT FIELD(-1, _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-3365 {
+    SELECT FIELD(-1, _utf8mb4 'abcABCÅå', _latin1 0xFF);
+}
+expect {
+    0
+}
+
+test t-3388 {
+    SELECT FIELD(0123, "Å å", "Å å");
+}
+expect {
+    0
+}
+
+test t-3408 {
+    SELECT FIELD(0123, "Å å", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-3444 {
+    SELECT FIELD(0123, "", "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-3558 {
+    SELECT FIELD(0123, 0123, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-3630 {
+    SELECT FIELD(0123, "日本語テスト", "Å å");
+}
+expect {
+    0
+}
+
+test t-3692 {
+    SELECT FIELD(0123, "😊😂🤢", -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-3803 {
+    SELECT FIELD(0123, -999999999999999999999999, _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-3831 {
+    SELECT FIELD(0123, _utf8mb4 'abcABCÅå', "a");
+}
+expect {
+    0
+}
+
+test t-3839 {
+    SELECT FIELD(0123, _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-3850 {
+    SELECT FIELD(0123, _latin1 0xFF, "Å å");
+}
+expect {
+    0
+}
+
+test t-3878 {
+    SELECT FIELD(0xAACC, "Å å", -1);
+}
+expect {
+    0
+}
+
+test t-3884 {
+    SELECT FIELD(0xAACC, "Å å", "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-3908 {
+    SELECT FIELD(0xAACC, NULL, '123');
+}
+expect {
+    0
+}
+
+test t-4013 {
+    SELECT FIELD(0xAACC, -1, 3.1415926);
+}
+expect {
+    0
+}
+
+test t-4077 {
+    SELECT FIELD(0xAACC, 3.1415926, 0123);
+}
+expect {
+    0
+}
+
+test t-4119 {
+    SELECT FIELD(0xAACC, "日本語テスト", 1);
+}
+expect {
+    0
+}
+
+test t-4196 {
+    SELECT FIELD(0xAACC, '123', -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-4236 {
+    SELECT FIELD(0xAACC, -9223372036854775808, "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-4270 {
+    SELECT FIELD(0xAACC, -999999999999999999999999, "");
+}
+expect {
+    0
+}
+
+test t-4370 {
+    SELECT FIELD(3.1415926, "Å å", '123');
+}
+expect {
+    0
+}
+
+test t-4422 {
+    SELECT FIELD(3.1415926, "a", "Å å");
+}
+expect {
+    0
+}
+
+test t-4456 {
+    SELECT FIELD(3.1415926, "abc", "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-4543 {
+    SELECT FIELD(3.1415926, 0xAACC, "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-4621 {
+    SELECT FIELD(3.1415926, "한국어 시험", NULL);
+}
+expect {
+    0
+}
+
+test t-4631 {
+    SELECT FIELD(3.1415926, "한국어 시험", "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-4697 {
+    SELECT FIELD(3.1415926, 9223372036854775807, "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-4744 {
+    SELECT FIELD(3.1415926, 999999999999999999999999, '123');
+}
+expect {
+    0
+}
+
+test t-4747 {
+    SELECT FIELD(3.1415926, 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-4780 {
+    SELECT FIELD(3.1415926, _binary 'Müller' , -1);
+}
+expect {
+    0
+}
+
+test t-4836 {
+    SELECT FIELD(3.1415926, _latin1 0xFF, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-4845 {
+    SELECT FIELD("中文测试", "Å å", 1);
+}
+expect {
+    1
+}
+
+test t-4866 {
+    SELECT FIELD("中文测试", NULL, "abc");
+}
+expect {
+    0
+}
+
+test t-4942 {
+    SELECT FIELD("中文测试", "abc", '123');
+}
+expect {
+    0
+}
+
+test t-4956 {
+    SELECT FIELD("中文测试", 1, -1);
+}
+expect {
+    0
+}
+
+test t-4981 {
+    SELECT FIELD("中文测试", -1, 3.1415926);
+}
+expect {
+    0
+}
+
+test t-5023 {
+    SELECT FIELD("中文测试", 0xAACC, 0123);
+}
+expect {
+    0
+}
+
+test t-5032 {
+    SELECT FIELD("中文测试", 0xAACC, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-5053 {
+    SELECT FIELD("中文测试", 3.1415926, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-5072 {
+    SELECT FIELD("中文测试", "中文测试", "한국어 시험");
+}
+expect {
+    1
+}
+
+test t-5111 {
+    SELECT FIELD("中文测试", "한국어 시험", 0123);
+}
+expect {
+    1
+}
+
+test t-5122 {
+    SELECT FIELD("中文测试", "한국어 시험", -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-5129 {
+    SELECT FIELD("中文测试", "😊😂🤢", "a");
+}
+expect {
+    0
+}
+
+test t-5149 {
+    SELECT FIELD("中文测试", '123', NULL);
+}
+expect {
+    0
+}
+
+test t-5210 {
+    SELECT FIELD("中文测试", -9223372036854775808, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-5291 {
+    SELECT FIELD("中文测试", _utf8mb4 'abcABCÅå', "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-5293 {
+    SELECT FIELD("中文测试", _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-5324 {
+    SELECT FIELD("日本語テスト", "Å å", "Å å");
+}
+expect {
+    0
+}
+
+test t-5377 {
+    SELECT FIELD("日本語テスト", "", 3.1415926);
+}
+expect {
+    1
+}
+
+test t-5379 {
+    SELECT FIELD("日本語テスト", "", "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-5403 {
+    SELECT FIELD("日本語テスト", "a", "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-5469 {
+    SELECT FIELD("日本語テスト", -1, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-5476 {
+    SELECT FIELD("日本語テスト", -1, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-5500 {
+    SELECT FIELD("日本語テスト", 0xAACC, "Å å");
+}
+expect error {
+}
+
+test t-5534 {
+    SELECT FIELD("日本語テスト", 3.1415926, "한국어 시험");
+}
+expect {
+    2
+}
+
+test t-5556 {
+    SELECT FIELD("日本語テスト", "中文测试", "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-5564 {
+    SELECT FIELD("日本語テスト", "中文测试", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-5574 {
+    SELECT FIELD("日本語テスト", "日本語テスト", 0xAACC);
+}
+expect {
+    1
+}
+
+test t-5674 {
+    SELECT FIELD("日本語テスト", 9223372036854775807, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+test t-5721 {
+    SELECT FIELD("日本語テスト", -999999999999999999999999, NULL);
+}
+expect {
+    0
+}
+
+test t-5722 {
+    SELECT FIELD("日本語テスト", -999999999999999999999999, "");
+}
+expect {
+    2
+}
+
+test t-5742 {
+    SELECT FIELD("日本語テスト", _binary 'Müller' , "Å å");
+}
+expect {
+    0
+}
+
+test t-5777 {
+    SELECT FIELD("日本語テスト", _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-5778 {
+    SELECT FIELD("日本語テスト", _utf8mb4 'abcABCÅå', '123');
+}
+expect {
+    0
+}
+
+test t-5802 {
+    SELECT FIELD("日本語テスト", _latin1 0xFF, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-5810 {
+    SELECT FIELD("한국어 시험", "Å å", "");
+}
+expect {
+    0
+}
+
+test t-5828 {
+    SELECT FIELD("한국어 시험", "Å å", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-5833 {
+    SELECT FIELD("한국어 시험", NULL, "a");
+}
+expect {
+    0
+}
+
+test t-5858 {
+    SELECT FIELD("한국어 시험", "", -1);
+}
+expect {
+    1
+}
+
+test t-5886 {
+    SELECT FIELD("한국어 시험", "a", "한국어 시험");
+}
+expect {
+    2
+}
+
+test t-5888 {
+    SELECT FIELD("한국어 시험", "a", '123');
+}
+expect {
+    0
+}
+
+test t-5896 {
+    SELECT FIELD("한국어 시험", "abc", "Å å");
+}
+expect {
+    0
+}
+
+test t-5983 {
+    SELECT FIELD("한국어 시험", 0123, _latin1 0xFF);
+}
+expect {
+    2
+}
+
+test t-6035 {
+    SELECT FIELD("한국어 시험", "中文测试", 0123);
+}
+expect {
+    1
+}
+
+test t-6088 {
+    SELECT FIELD("한국어 시험", "한국어 시험", -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-6104 {
+    SELECT FIELD("한국어 시험", "😊😂🤢", "中文测试");
+}
+expect {
+    0
+}
+
+test t-6167 {
+    SELECT FIELD("한국어 시험", -9223372036854775808, 0123);
+}
+expect {
+    0
+}
+
+test t-6172 {
+    SELECT FIELD("한국어 시험", -9223372036854775808, "한국어 시험");
+}
+expect {
+    2
+}
+
+test t-6264 {
+    SELECT FIELD("한국어 시험", _utf8mb4 'abcABCÅå', -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-6277 {
+    SELECT FIELD("한국어 시험", _latin1 0xFF, 0123);
+}
+expect {
+    1
+}
+
+test t-6356 {
+    SELECT FIELD("😊😂🤢", "", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-6385 {
+    SELECT FIELD("😊😂🤢", "abc", 1);
+}
+expect {
+    1
+}
+
+test t-6437 {
+    SELECT FIELD("😊😂🤢", -1, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-6458 {
+    SELECT FIELD("😊😂🤢", 0123, "한국어 시험");
+}
+expect {
+    2
+}
+
+test t-6477 {
+    SELECT FIELD("😊😂🤢", 0xAACC, 3.1415926);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-6542 {
+    SELECT FIELD("😊😂🤢", "日本語テスト", 0xAACC);
+}
+expect error {
+}
+
+test t-6567 {
+    SELECT FIELD("😊😂🤢", "한국어 시험", "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-6592 {
+    SELECT FIELD("😊😂🤢", "😊😂🤢", '123');
+}
+expect {
+    1
+}
+
+test t-6619 {
+    SELECT FIELD("😊😂🤢", '123', _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-6641 {
+    SELECT FIELD("😊😂🤢", 9223372036854775807, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-6646 {
+    SELECT FIELD("😊😂🤢", -9223372036854775808, "");
+}
+expect {
+    2
+}
+
+test t-6692 {
+    SELECT FIELD("😊😂🤢", -999999999999999999999999, "abc");
+}
+expect {
+    2
+}
+
+test t-6781 {
+    SELECT FIELD('123', "Å å", 1);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-6806 {
+    SELECT FIELD('123', NULL, 0xAACC);
+}
+expect error {
+}
+
+test t-6826 {
+    SELECT FIELD('123', "", -1);
+}
+expect {
+    0
+}
+
+test t-6916 {
+    SELECT FIELD('123', -1, 0xAACC);
+}
+expect {
+    0
+}
+
+test t-6987 {
+    SELECT FIELD('123', 3.1415926, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-7042 {
+    SELECT FIELD('123', "한국어 시험", "");
+}
+expect {
+    0
+}
+
+test t-7065 {
+    SELECT FIELD('123', "😊😂🤢", "a");
+}
+expect {
+    0
+}
+
+test t-7107 {
+    SELECT FIELD('123', 9223372036854775807, NULL);
+}
+expect {
+    0
+}
+
+test t-7141 {
+    SELECT FIELD('123', -9223372036854775808, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-7144 {
+    SELECT FIELD('123', -9223372036854775808, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-7167 {
+    SELECT FIELD('123', 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-7185 {
+    SELECT FIELD('123', -999999999999999999999999, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-7195 {
+    SELECT FIELD('123', _binary 'Müller' , NULL);
+}
+expect {
+    0
+}
+
+test t-7220 {
+    SELECT FIELD('123', _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    0
+}
+
+test t-7244 {
+    SELECT FIELD('123', _latin1 0xFF, -1);
+}
+expect {
+    0
+}
+
+test t-7282 {
+    SELECT FIELD(9223372036854775807, NULL, "Å å");
+}
+expect {
+    0
+}
+
+test t-7451 {
+    SELECT FIELD(9223372036854775807, 0xAACC, 9223372036854775807);
+}
+expect {
+    2
+}
+
+test t-7455 {
+    SELECT FIELD(9223372036854775807, 0xAACC, _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-7473 {
+    SELECT FIELD(9223372036854775807, 3.1415926, 9223372036854775807);
+}
+expect {
+    2
+}
+
+test t-7537 {
+    SELECT FIELD(9223372036854775807, "한국어 시험", "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-7648 {
+    SELECT FIELD(9223372036854775807, 999999999999999999999999, '123');
+}
+expect {
+    0
+}
+
+test t-7695 {
+    SELECT FIELD(9223372036854775807, _binary 'Müller' , 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-7701 {
+    SELECT FIELD(9223372036854775807, _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    0
+}
+
+test t-7722 {
+    SELECT FIELD(9223372036854775807, _latin1 0xFF, "Å å");
+}
+expect {
+    0
+}
+
+test t-7736 {
+    SELECT FIELD(9223372036854775807, _latin1 0xFF, '123');
+}
+expect {
+    0
+}
+
+test t-7769 {
+    SELECT FIELD(-9223372036854775808, NULL, "a");
+}
+expect {
+    0
+}
+
+test t-7792 {
+    SELECT FIELD(-9223372036854775808, "", "abc");
+}
+expect {
+    0
+}
+
+test t-7832 {
+    SELECT FIELD(-9223372036854775808, "abc", "Å å");
+}
+expect {
+    0
+}
+
+test t-7921 {
+    SELECT FIELD(-9223372036854775808, 0xAACC, NULL);
+}
+expect {
+    0
+}
+
+test t-7931 {
+    SELECT FIELD(-9223372036854775808, 0xAACC, "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-7935 {
+    SELECT FIELD(-9223372036854775808, 0xAACC, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-8025 {
+    SELECT FIELD(-9223372036854775808, "한국어 시험", 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-8056 {
+    SELECT FIELD(-9223372036854775808, '123', "abc");
+}
+expect {
+    0
+}
+
+test t-8168 {
+    SELECT FIELD(-9223372036854775808, _binary 'Müller' , -1);
+}
+expect {
+    0
+}
+
+test t-8269 {
+    SELECT FIELD(999999999999999999999999, NULL, _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-8288 {
+    SELECT FIELD(999999999999999999999999, "", -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-8297 {
+    SELECT FIELD(999999999999999999999999, "a", "a");
+}
+expect {
+    0
+}
+
+test t-8305 {
+    SELECT FIELD(999999999999999999999999, "a", "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-8327 {
+    SELECT FIELD(999999999999999999999999, "abc", "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-8422 {
+    SELECT FIELD(999999999999999999999999, 0xAACC, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-8440 {
+    SELECT FIELD(999999999999999999999999, 3.1415926, '123');
+}
+expect {
+    0
+}
+
+test t-8473 {
+    SELECT FIELD(999999999999999999999999, "日本語テスト", "a");
+}
+expect {
+    0
+}
+
+test t-8476 {
+    SELECT FIELD(999999999999999999999999, "日本語テスト", -1);
+}
+expect {
+    0
+}
+
+test t-8554 {
+    SELECT FIELD(999999999999999999999999, '123', -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-8603 {
+    SELECT FIELD(999999999999999999999999, 999999999999999999999999, NULL);
+}
+expect {
+    1
+}
+
+test t-8655 {
+    SELECT FIELD(999999999999999999999999, _binary 'Müller' , 3.1415926);
+}
+expect {
+    0
+}
+
+test t-8670 {
+    SELECT FIELD(999999999999999999999999, _utf8mb4 'abcABCÅå', "");
+}
+expect {
+    0
+}
+
+test t-8674 {
+    SELECT FIELD(999999999999999999999999, _utf8mb4 'abcABCÅå', -1);
+}
+expect {
+    0
+}
+
+test t-8693 {
+    SELECT FIELD(999999999999999999999999, _latin1 0xFF, "a");
+}
+expect {
+    0
+}
+
+test t-8738 {
+    SELECT FIELD(-999999999999999999999999, NULL, "abc");
+}
+expect {
+    0
+}
+
+test t-8744 {
+    SELECT FIELD(-999999999999999999999999, NULL, "中文测试");
+}
+expect {
+    0
+}
+
+test t-8749 {
+    SELECT FIELD(-999999999999999999999999, NULL, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-8780 {
+    SELECT FIELD(-999999999999999999999999, "a", "");
+}
+expect {
+    0
+}
+
+test t-8815 {
+    SELECT FIELD(-999999999999999999999999, "abc", 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-9058 {
+    SELECT FIELD(-999999999999999999999999, 9223372036854775807, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-9059 {
+    SELECT FIELD(-999999999999999999999999, 9223372036854775807, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-9067 {
+    SELECT FIELD(-999999999999999999999999, -9223372036854775808, "a");
+}
+expect {
+    0
+}
+
+test t-9074 {
+    SELECT FIELD(-999999999999999999999999, -9223372036854775808, "中文测试");
+}
+expect {
+    0
+}
+
+test t-9078 {
+    SELECT FIELD(-999999999999999999999999, -9223372036854775808, '123');
+}
+expect {
+    0
+}
+
+test t-9091 {
+    SELECT FIELD(-999999999999999999999999, 999999999999999999999999, 1);
+}
+expect {
+    0
+}
+
+test t-9160 {
+    SELECT FIELD(-999999999999999999999999, _utf8mb4 'abcABCÅå', 0xAACC);
+}
+expect {
+    0
+}
+
+test t-9169 {
+    SELECT FIELD(-999999999999999999999999, _utf8mb4 'abcABCÅå', 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-9212 {
+    SELECT FIELD(_binary 'Müller' , "Å å", -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-9222 {
+    SELECT FIELD(_binary 'Müller' , NULL, "abc");
+}
+expect {
+    0
+}
+
+test t-9282 {
+    SELECT FIELD(_binary 'Müller' , "a", _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-9298 {
+    SELECT FIELD(_binary 'Müller' , "abc", '123');
+}
+expect {
+    0
+}
+
+test t-9442 {
+    SELECT FIELD(_binary 'Müller' , "日本語テスト", "abc");
+}
+expect {
+    0
+}
+
+test t-9473 {
+    SELECT FIELD(_binary 'Müller' , "한국어 시험", "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-9517 {
+    SELECT FIELD(_binary 'Müller' , '123', "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-9544 {
+    SELECT FIELD(_binary 'Müller' , 9223372036854775807, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-9672 {
+    SELECT FIELD(_binary 'Müller' , _latin1 0xFF, '123');
+}
+expect {
+    0
+}
+
+test t-9730 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', "", -1);
+}
+expect {
+    1
+}
+
+test t-9762 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', "a", -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-9783 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', "abc", 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-9788 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', "abc", _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+test t-9801 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 1, "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-9862 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 0xAACC, -1);
+}
+expect {
+    0
+}
+
+test t-9894 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 3.1415926, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-9972 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', "😊😂🤢", -1);
+}
+expect {
+    1
+}
+
+test t-9994 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', '123', -1);
+}
+expect {
+    0
+}
+
+test t-10007 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', '123', _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-10056 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 999999999999999999999999, "");
+}
+expect {
+    2
+}
+
+test t-10124 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', "abc");
+}
+expect {
+    1
+}
+
+test t-10139 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-10166 {
+    SELECT FIELD(_latin1 0xFF, "Å å", "");
+}
+expect {
+    0
+}
+
+test t-10232 {
+    SELECT FIELD(_latin1 0xFF, "a", "");
+}
+expect {
+    0
+}
+
+test t-10337 {
+    SELECT FIELD(_latin1 0xFF, 0123, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xE4\xB8\xAD\xE6\x96\x87...' from utf8mb4 to latin1
+test t-10398 {
+    SELECT FIELD(_latin1 0xFF, "中文测试", '123');
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xED\x95\x9C\xEA\xB5\xAD...' from utf8mb4 to latin1
+test t-10440 {
+    SELECT FIELD(_latin1 0xFF, "한국어 시험", "한국어 시험");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10453 {
+    SELECT FIELD(_latin1 0xFF, "😊😂🤢", "a");
+}
+expect error {
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xF0\x9F\x98\x8A\xF0\x9F...' from utf8mb4 to latin1
+test t-10460 {
+    SELECT FIELD(_latin1 0xFF, "😊😂🤢", "中文测试");
+}
+expect error {
+}
+
+test t-10477 {
+    SELECT FIELD(_latin1 0xFF, '123', 1);
+}
+expect {
+    0
+}
+
+test t-10562 {
+    SELECT FIELD(_latin1 0xFF, -999999999999999999999999, "");
+}
+expect {
+    2
+}
+
+test t-10676 {
+    SELECT FIELD(0, -1, 0);
+}
+expect {
+    2
+}
+
+test t-10739 {
+    SELECT FIELD(0, 1.5e0, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-10747 {
+    SELECT FIELD(0, -1.5e0, 1);
+}
+expect {
+    0
+}
+
+test t-10770 {
+    SELECT FIELD(0, 9223372036854775810.4, 3.141592653589793);
+}
+expect {
+    0
+}
+
+test t-10787 {
+    SELECT FIELD(0, -9223372036854775810.4, 5e-324);
+}
+expect {
+    0
+}
+
+test t-10913 {
+    SELECT FIELD(1, NULL, 5e-324);
+}
+expect {
+    0
+}
+
+test t-10937 {
+    SELECT FIELD(1, 1.5e0, -9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-10969 {
+    SELECT FIELD(1, 9223372036854775810.4, 5e-324);
+}
+expect {
+    0
+}
+
+test t-11001 {
+    SELECT FIELD(1, 1.7976931348623157e308, '1.5');
+}
+expect {
+    0
+}
+
+test t-11016 {
+    SELECT FIELD(1, 1.401298464324817e-45, NULL);
+}
+expect {
+    0
+}
+
+test t-11033 {
+    SELECT FIELD(1, 5e-324, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-11104 {
+    SELECT FIELD(-1, NULL, 9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-11161 {
+    SELECT FIELD(-1, 9223372036854775810.4, -9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-11220 {
+    SELECT FIELD(-1, 1.401298464324817e-45, 1.401298464324817e-45);
+}
+expect {
+    0
+}
+
+test t-11361 {
+    SELECT FIELD('1.5', 9223372036854775810.4, 5e-324);
+}
+expect {
+    0
+}
+
+test t-11380 {
+    SELECT FIELD('1.5', 3.141592653589793, NULL);
+}
+expect {
+    0
+}
+
+test t-11432 {
+    SELECT FIELD(NULL, 0, 0);
+}
+expect {
+    0
+}
+
+test t-11482 {
+    SELECT FIELD(NULL, '1.5', 9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-11491 {
+    SELECT FIELD(NULL, NULL, '1.5');
+}
+expect {
+    0
+}
+
+test t-11589 {
+    SELECT FIELD(NULL, 1.7976931348623157e308, '1.5');
+}
+expect {
+    0
+}
+
+test t-11635 {
+    SELECT FIELD('ABC', 0, -1.5e0);
+}
+expect {
+    1
+}
+
+test t-11679 {
+    SELECT FIELD('ABC', '1.5', -9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-11698 {
+    SELECT FIELD('ABC', 'ABC', 0);
+}
+expect {
+    1
+}
+
+test t-11803 {
+    SELECT FIELD('ABC', 1.401298464324817e-45, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-11931 {
+    SELECT FIELD(1.5e0, -1.5e0, -9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-11991 {
+    SELECT FIELD(1.5e0, 1.7976931348623157e308, 5e-324);
+}
+expect {
+    0
+}
+
+test t-11997 {
+    SELECT FIELD(1.5e0, 1.401298464324817e-45, 'ABC');
+}
+expect {
+    0
+}
+
+test t-12019 {
+    SELECT FIELD(1.5e0, 5e-324, 5e-324);
+}
+expect {
+    0
+}
+
+test t-12041 {
+    SELECT FIELD(-1.5e0, 1, -1.5e0);
+}
+expect {
+    2
+}
+
+test t-12174 {
+    SELECT FIELD(-1.5e0, 1.7976931348623157e308, 0);
+}
+expect {
+    0
+}
+
+test t-12203 {
+    SELECT FIELD(-1.5e0, 5e-324, 1);
+}
+expect {
+    0
+}
+
+test t-12244 {
+    SELECT FIELD(9223372036854775810.4, -1, 0);
+}
+expect {
+    0
+}
+
+test t-12316 {
+    SELECT FIELD(9223372036854775810.4, -1.5e0, -1);
+}
+expect {
+    0
+}
+
+test t-12388 {
+    SELECT FIELD(9223372036854775810.4, 1.401298464324817e-45, NULL);
+}
+expect {
+    0
+}
+
+test t-12394 {
+    SELECT FIELD(9223372036854775810.4, 1.401298464324817e-45, 3.141592653589793);
+}
+expect {
+    0
+}
+
+test t-12403 {
+    SELECT FIELD(9223372036854775810.4, 5e-324, 'ABC');
+}
+expect {
+    0
+}
+
+test t-12411 {
+    SELECT FIELD(9223372036854775810.4, 5e-324, 5e-324);
+}
+expect {
+    0
+}
+
+test t-12414 {
+    SELECT FIELD(-9223372036854775810.4, 0, -1);
+}
+expect {
+    0
+}
+
+test t-12451 {
+    SELECT FIELD(-9223372036854775810.4, -1, 1.7976931348623157e308);
+}
+expect {
+    0
+}
+
+test t-12473 {
+    SELECT FIELD(-9223372036854775810.4, NULL, 'ABC');
+}
+expect {
+    0
+}
+
+test t-12490 {
+    SELECT FIELD(-9223372036854775810.4, 'ABC', 9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-12506 {
+    SELECT FIELD(-9223372036854775810.4, 1.5e0, 3.141592653589793);
+}
+expect {
+    0
+}
+
+test t-12579 {
+    SELECT FIELD(-9223372036854775810.4, 1.7976931348623157e308, 5e-324);
+}
+expect {
+    0
+}
+
+test t-12670 {
+    SELECT FIELD(3.141592653589793, NULL, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-12857 {
+    SELECT FIELD(1.7976931348623157e308, '1.5', 1.7976931348623157e308);
+}
+expect {
+    2
+}
+
+test t-12885 {
+    SELECT FIELD(1.7976931348623157e308, 'ABC', 1.7976931348623157e308);
+}
+expect {
+    2
+}
+
+test t-13051 {
+    SELECT FIELD(1.401298464324817e-45, '1.5', -9223372036854775810.4);
+}
+expect {
+    0
+}
+
+test t-13067 {
+    SELECT FIELD(1.401298464324817e-45, NULL, 1.7976931348623157e308);
+}
+expect {
+    0
+}
+
+test t-13179 {
+    SELECT FIELD(1.401298464324817e-45, 1.401298464324817e-45, 1.7976931348623157e308);
+}
+expect {
+    1
+}
+
+test t-13194 {
+    SELECT FIELD(1.401298464324817e-45, 5e-324, 1.401298464324817e-45);
+}
+expect {
+    2
+}
+
+test t-13198 {
+    SELECT FIELD(5e-324, 0, -1);
+}
+expect {
+    0
+}
+
+test t-13236 {
+    SELECT FIELD(5e-324, -1, 1.401298464324817e-45);
+}
+expect {
+    0
+}
+
+test t-13239 {
+    SELECT FIELD(5e-324, '1.5', 1);
+}
+expect {
+    0
+}
+
+test t-13252 {
+    SELECT FIELD(5e-324, NULL, 0);
+}
+expect {
+    0
+}
+
+test t-13306 {
+    SELECT FIELD(5e-324, -1.5e0, 1.401298464324817e-45);
+}
+expect {
+    0
+}
+
+test t-13337 {
+    SELECT FIELD(5e-324, 3.141592653589793, 1);
+}
+expect {
+    0
+}
+
+test t-13341 {
+    SELECT FIELD(5e-324, 3.141592653589793, 'ABC');
+}
+expect {
+    0
+}
+
+test t-13460 {
+    SELECT FIELD("Å å", '1.5', "");
+}
+expect {
+    0
+}
+
+test t-13530 {
+    SELECT FIELD("Å å", 1.5e0, -1);
+}
+expect {
+    0
+}
+
+test t-13568 {
+    SELECT FIELD("Å å", 9223372036854775810.4, "Å å");
+}
+expect {
+    2
+}
+
+test t-13589 {
+    SELECT FIELD("Å å", 9223372036854775810.4, _latin1 0xFF);
+}
+expect {
+    2
+}
+
+test t-13623 {
+    SELECT FIELD("Å å", 3.141592653589793, "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-13630 {
+    SELECT FIELD("Å å", 3.141592653589793, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-13631 {
+    SELECT FIELD("Å å", 3.141592653589793, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-13632 {
+    SELECT FIELD("Å å", 3.141592653589793, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+test t-13635 {
+    SELECT FIELD("Å å", 1.7976931348623157e308, NULL);
+}
+expect {
+    0
+}
+
+test t-13646 {
+    SELECT FIELD("Å å", 1.7976931348623157e308, "한국어 시험");
+}
+expect {
+    2
+}
+
+test t-13880 {
+    SELECT FIELD(NULL, 9223372036854775810.4, "abc");
+}
+expect {
+    0
+}
+
+test t-13936 {
+    SELECT FIELD(NULL, 3.141592653589793, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-13985 {
+    SELECT FIELD(NULL, 1.401298464324817e-45, _latin1 0xFF);
+}
+expect {
+    0
+}
+
+test t-14026 {
+    SELECT FIELD("", 0, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-14120 {
+    SELECT FIELD("", 'ABC', "");
+}
+expect {
+    2
+}
+
+test t-14153 {
+    SELECT FIELD("", 1.5e0, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-14195 {
+    SELECT FIELD("", 9223372036854775810.4, "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-14203 {
+    SELECT FIELD("", 9223372036854775810.4, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-14212 {
+    SELECT FIELD("", -9223372036854775810.4, -1);
+}
+expect {
+    0
+}
+
+test t-14226 {
+    SELECT FIELD("", -9223372036854775810.4, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+test t-14232 {
+    SELECT FIELD("", 3.141592653589793, "abc");
+}
+expect {
+    2
+}
+
+test t-14274 {
+    SELECT FIELD("", 1.401298464324817e-45, "");
+}
+expect {
+    2
+}
+
+test t-14307 {
+    SELECT FIELD("", 5e-324, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-14324 {
+    SELECT FIELD("a", 0, 0xAACC);
+}
+expect {
+    1
+}
+
+test t-14327 {
+    SELECT FIELD("a", 0, "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-14430 {
+    SELECT FIELD("a", 'ABC', "abc");
+}
+expect {
+    0
+}
+
+test t-14466 {
+    SELECT FIELD("a", 1.5e0, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-14485 {
+    SELECT FIELD("a", -1.5e0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-14487 {
+    SELECT FIELD("a", -1.5e0, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-14495 {
+    SELECT FIELD("a", 9223372036854775810.4, "a");
+}
+expect {
+    2
+}
+
+test t-14496 {
+    SELECT FIELD("a", 9223372036854775810.4, "abc");
+}
+expect {
+    2
+}
+
+test t-14566 {
+    SELECT FIELD("a", 1.7976931348623157e308, 0xAACC);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-14698 {
+    SELECT FIELD("abc", '1.5', 0xAACC);
+}
+expect error {
+}
+
+test t-14799 {
+    SELECT FIELD("abc", -1.5e0, _latin1 0xFF);
+}
+expect {
+    2
+}
+
+test t-14814 {
+    SELECT FIELD("abc", 9223372036854775810.4, '123');
+}
+expect {
+    0
+}
+
+test t-14828 {
+    SELECT FIELD("abc", -9223372036854775810.4, -1);
+}
+expect {
+    0
+}
+
+test t-14857 {
+    SELECT FIELD("abc", 3.141592653589793, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-14873 {
+    SELECT FIELD("abc", 1.7976931348623157e308, 0123);
+}
+expect {
+    0
+}
+
+test t-14876 {
+    SELECT FIELD("abc", 1.7976931348623157e308, "中文测试");
+}
+expect {
+    2
+}
+
+test t-14925 {
+    SELECT FIELD("abc", 5e-324, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-14940 {
+    SELECT FIELD(1, 0, 0xAACC);
+}
+expect {
+    0
+}
+
+test t-15101 {
+    SELECT FIELD(1, -1.5e0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-15166 {
+    SELECT FIELD(1, 3.141592653589793, '123');
+}
+expect {
+    0
+}
+
+test t-15187 {
+    SELECT FIELD(1, 1.7976931348623157e308, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-15189 {
+    SELECT FIELD(1, 1.7976931348623157e308, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-15234 {
+    SELECT FIELD(1, 5e-324, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-15521 {
+    SELECT FIELD(-1, 1.401298464324817e-45, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-15541 {
+    SELECT FIELD(-1, 5e-324, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-15555 {
+    SELECT FIELD(0123, 0, 0123);
+}
+expect {
+    2
+}
+
+test t-15677 {
+    SELECT FIELD(0123, 'ABC', _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-15786 {
+    SELECT FIELD(0123, 3.141592653589793, -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-15836 {
+    SELECT FIELD(0123, 5e-324, "");
+}
+expect {
+    0
+}
+
+test t-15933 {
+    SELECT FIELD(0xAACC, '1.5', "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-15983 {
+    SELECT FIELD(0xAACC, 'ABC', 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-15984 {
+    SELECT FIELD(0xAACC, 'ABC', -999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-16023 {
+    SELECT FIELD(0xAACC, -1.5e0, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-16049 {
+    SELECT FIELD(0xAACC, 9223372036854775810.4, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-16057 {
+    SELECT FIELD(0xAACC, -9223372036854775810.4, "a");
+}
+expect {
+    0
+}
+
+test t-16107 {
+    SELECT FIELD(0xAACC, 1.7976931348623157e308, 3.1415926);
+}
+expect {
+    0
+}
+
+test t-16132 {
+    SELECT FIELD(0xAACC, 1.401298464324817e-45, "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-16173 {
+    SELECT FIELD(3.1415926, 0, 3.1415926);
+}
+expect {
+    2
+}
+
+test t-16236 {
+    SELECT FIELD(3.1415926, '1.5', -1);
+}
+expect {
+    0
+}
+
+test t-16334 {
+    SELECT FIELD(3.1415926, -1.5e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-16365 {
+    SELECT FIELD(3.1415926, -9223372036854775810.4, "a");
+}
+expect {
+    0
+}
+
+test t-16465 {
+    SELECT FIELD(3.1415926, 5e-324, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-16483 {
+    SELECT FIELD("中文测试", 0, "日本語テスト");
+}
+expect {
+    1
+}
+
+test t-16558 {
+    SELECT FIELD("中文测试", '1.5', _utf8mb4 'abcABCÅå');
+}
+expect {
+    0
+}
+
+test t-16649 {
+    SELECT FIELD("中文测试", 9223372036854775810.4, NULL);
+}
+expect {
+    0
+}
+
+test t-16655 {
+    SELECT FIELD("中文测试", 9223372036854775810.4, 0123);
+}
+expect {
+    0
+}
+
+test t-16663 {
+    SELECT FIELD("中文测试", 9223372036854775810.4, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-16765 {
+    SELECT FIELD("中文测试", 5e-324, 0123);
+}
+expect {
+    0
+}
+
+test t-16976 {
+    SELECT FIELD("日本語テスト", 9223372036854775810.4, _utf8mb4 'abcABCÅå');
+}
+expect {
+    2
+}
+
+test t-17014 {
+    SELECT FIELD("日本語テスト", 3.141592653589793, '123');
+}
+expect {
+    0
+}
+
+test t-17029 {
+    SELECT FIELD("日本語テスト", 1.7976931348623157e308, 0123);
+}
+expect {
+    0
+}
+
+test t-17036 {
+    SELECT FIELD("日本語テスト", 1.7976931348623157e308, '123');
+}
+expect {
+    0
+}
+
+test t-17068 {
+    SELECT FIELD("日本語テスト", 5e-324, "");
+}
+expect {
+    2
+}
+
+test t-17224 {
+    SELECT FIELD("한국어 시험", 1.5e0, "abc");
+}
+expect {
+    2
+}
+
+test t-17273 {
+    SELECT FIELD("한국어 시험", 9223372036854775810.4, 3.1415926);
+}
+expect {
+    0
+}
+
+test t-17278 {
+    SELECT FIELD("한국어 시험", 9223372036854775810.4, '123');
+}
+expect {
+    0
+}
+
+test t-17288 {
+    SELECT FIELD("한국어 시험", -9223372036854775810.4, "");
+}
+expect {
+    2
+}
+
+test t-17330 {
+    SELECT FIELD("한국어 시험", 1.7976931348623157e308, "Å å");
+}
+expect {
+    2
+}
+
+test t-17375 {
+    SELECT FIELD("한국어 시험", 5e-324, NULL);
+}
+expect {
+    0
+}
+
+test t-17544 {
+    SELECT FIELD("😊😂🤢", 1.5e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-17557 {
+    SELECT FIELD("😊😂🤢", -1.5e0, 0123);
+}
+expect {
+    0
+}
+
+test t-17583 {
+    SELECT FIELD("😊😂🤢", 9223372036854775810.4, "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-17605 {
+    SELECT FIELD("😊😂🤢", -9223372036854775810.4, "日本語テスト");
+}
+expect {
+    2
+}
+
+test t-17613 {
+    SELECT FIELD("😊😂🤢", -9223372036854775810.4, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-17657 {
+    SELECT FIELD("😊😂🤢", 1.7976931348623157e308, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-17718 {
+    SELECT FIELD('123', 0, '123');
+}
+expect {
+    2
+}
+
+test t-17779 {
+    SELECT FIELD('123', '1.5', 3.1415926);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 HY000 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test t-17822 {
+    SELECT FIELD('123', 'ABC', 0xAACC);
+}
+expect error {
+}
+
+test t-17824 {
+    SELECT FIELD('123', 'ABC', "中文测试");
+}
+expect {
+    0
+}
+
+test t-17873 {
+    SELECT FIELD('123', -1.5e0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-17970 {
+    SELECT FIELD('123', 1.401298464324817e-45, "");
+}
+expect {
+    0
+}
+
+test t-18017 {
+    SELECT FIELD(9223372036854775807, 0, 1);
+}
+expect {
+    0
+}
+
+test t-18163 {
+    SELECT FIELD(9223372036854775807, 1.5e0, _binary 'Müller' );
+}
+expect {
+    0
+}
+
+test t-18178 {
+    SELECT FIELD(9223372036854775807, -1.5e0, "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-18284 {
+    SELECT FIELD(9223372036854775807, 1.401298464324817e-45, 0xAACC);
+}
+expect {
+    0
+}
+
+test t-18310 {
+    SELECT FIELD(9223372036854775807, 5e-324, "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-18535 {
+    SELECT FIELD(-9223372036854775808, -9223372036854775810.4, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-18538 {
+    SELECT FIELD(-9223372036854775808, -9223372036854775810.4, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-18606 {
+    SELECT FIELD(-9223372036854775808, 5e-324, "Å å");
+}
+expect {
+    0
+}
+
+test t-18617 {
+    SELECT FIELD(-9223372036854775808, 5e-324, "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-18746 {
+    SELECT FIELD(999999999999999999999999, 'ABC', 0xAACC);
+}
+expect {
+    0
+}
+
+test t-18751 {
+    SELECT FIELD(999999999999999999999999, 'ABC', "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-18793 {
+    SELECT FIELD(999999999999999999999999, -1.5e0, "日本語テスト");
+}
+expect {
+    0
+}
+
+test t-18796 {
+    SELECT FIELD(999999999999999999999999, -1.5e0, '123');
+}
+expect {
+    0
+}
+
+test t-18808 {
+    SELECT FIELD(999999999999999999999999, 9223372036854775810.4, "abc");
+}
+expect {
+    0
+}
+
+test t-18921 {
+    SELECT FIELD(999999999999999999999999, 5e-324, 0123);
+}
+expect {
+    0
+}
+
+test t-18935 {
+    SELECT FIELD(999999999999999999999999, 5e-324, _latin1 0xFF);
+}
+expect {
+    0
+}
+
+test t-19051 {
+    SELECT FIELD(-999999999999999999999999, 'ABC', 1);
+}
+expect {
+    0
+}
+
+test t-19158 {
+    SELECT FIELD(-999999999999999999999999, 3.141592653589793, "");
+}
+expect {
+    0
+}
+
+test t-19169 {
+    SELECT FIELD(-999999999999999999999999, 3.141592653589793, "😊😂🤢");
+}
+expect {
+    0
+}
+
+test t-19263 {
+    SELECT FIELD(_binary 'Müller' , 0, _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-19322 {
+    SELECT FIELD(_binary 'Müller' , '1.5', "한국어 시험");
+}
+expect {
+    0
+}
+
+test t-19433 {
+    SELECT FIELD(_binary 'Müller' , 9223372036854775810.4, "😊😂🤢");
+}
+expect {
+    2
+}
+
+test t-19445 {
+    SELECT FIELD(_binary 'Müller' , -9223372036854775810.4, "a");
+}
+expect {
+    2
+}
+
+test t-19488 {
+    SELECT FIELD(_binary 'Müller' , 1.7976931348623157e308, "");
+}
+expect {
+    2
+}
+
+test t-19505 {
+    SELECT FIELD(_binary 'Müller' , 1.7976931348623157e308, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-19570 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 0, -999999999999999999999999);
+}
+expect {
+    1
+}
+
+test t-19571 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 0, _binary 'Müller' );
+}
+expect {
+    1
+}
+
+test t-19572 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 0, _utf8mb4 'abcABCÅå');
+}
+expect {
+    1
+}
+
+test t-19732 {
+    SELECT FIELD(_utf8mb4 'abcABCÅå', 9223372036854775810.4, "abc");
+}
+expect {
+    2
+}
+
+test t-19991 {
+    SELECT FIELD(_latin1 0xFF, 'ABC', _latin1 0xFF);
+}
+expect {
+    2
+}
+
+test t-20057 {
+    SELECT FIELD(_latin1 0xFF, 9223372036854775810.4, _latin1 0xFF);
+}
+expect {
+    2
+}
+
+test t-20092 {
+    SELECT FIELD(_latin1 0xFF, 3.141592653589793, "한국어 시험");
+}
+expect {
+    2
+}
+
+test t-20097 {
+    SELECT FIELD(_latin1 0xFF, 3.141592653589793, 999999999999999999999999);
+}
+expect {
+    0
+}
+
+test t-20099 {
+    SELECT FIELD(_latin1 0xFF, 3.141592653589793, _binary 'Müller' );
+}
+expect {
+    2
+}
+
+test t-20111 {
+    SELECT FIELD(_latin1 0xFF, 1.7976931348623157e308, 3.1415926);
+}
+expect {
+    0
+}
+
+test t-20175 {
+    SELECT FIELD(0, 0, -255);
+}
+expect {
+    1
+}
+
+test t-20221 {
+    SELECT FIELD(0, 1, 1.1);
+}
+expect {
+    0
+}
+
+test t-20232 {
+    SELECT FIELD(0, 1, 1.0e0);
+}
+expect {
+    0
+}
+
+test t-20242 {
+    SELECT FIELD(0, 1, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-20344 {
+    SELECT FIELD(0, 255, "foobar");
+}
+expect {
+    2
+}
+
+test t-20370 {
+    SELECT FIELD(0, 1.0, 13);
+}
+expect {
+    0
+}
+
+test t-20414 {
+    SELECT FIELD(0, 1.1, -1);
+}
+expect {
+    0
+}
+
+test t-20435 {
+    SELECT FIELD(0, 1.1, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-20446 {
+    SELECT FIELD(0, 1.1, X'00');
+}
+expect {
+    2
+}
+
+test t-20450 {
+    SELECT FIELD(0, 1.1, _binary "foobar1234");
+}
+expect {
+    2
+}
+
+test t-20467 {
+    SELECT FIELD(0, -1, 1.5);
+}
+expect {
+    0
+}
+
+test t-20473 {
+    SELECT FIELD(0, -1, 255.0);
+}
+expect {
+    0
+}
+
+test t-20482 {
+    SELECT FIELD(0, -1, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-20504 {
+    SELECT FIELD(0, -255, 0);
+}
+expect {
+    2
+}
+
+test t-20631 {
+    SELECT FIELD(0, 9, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-20672 {
+    SELECT FIELD(0, 13, 9e0);
+}
+expect {
+    0
+}
+
+test t-20687 {
+    SELECT FIELD(0, 13, "1abcd");
+}
+expect {
+    0
+}
+
+test t-20735 {
+    SELECT FIELD(0, 1.5, "1abcd");
+}
+expect {
+    0
+}
+
+test t-20755 {
+    SELECT FIELD(0, -1.5, 1.5);
+}
+expect {
+    0
+}
+
+test t-20778 {
+    SELECT FIELD(0, -1.5, "0");
+}
+expect {
+    2
+}
+
+test t-20791 {
+    SELECT FIELD(0, -1.5, _binary X'40');
+}
+expect {
+    2
+}
+
+test t-20875 {
+    SELECT FIELD(0, '-1.5', 0x1);
+}
+expect {
+    0
+}
+
+test t-20898 {
+    SELECT FIELD(0, 0.0e0, 13);
+}
+expect {
+    1
+}
+
+test t-20928 {
+    SELECT FIELD(0, 0.0e0, NULL);
+}
+expect {
+    1
+}
+
+test t-21015 {
+    SELECT FIELD(0, 255.0, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-21066 {
+    SELECT FIELD(0, 1.5e0, "0");
+}
+expect {
+    2
+}
+
+test t-21095 {
+    SELECT FIELD(0, -1.5e0, 0.0e0);
+}
+expect {
+    2
+}
+
+test t-21121 {
+    SELECT FIELD(0, -1.5e0, _binary "foobar");
+}
+expect {
+    2
+}
+
+test t-21123 {
+    SELECT FIELD(0, -1.5e0, 64);
+}
+expect {
+    0
+}
+
+test t-21284 {
+    SELECT FIELD(0, 7e0, -1.5);
+}
+expect {
+    0
+}
+
+test t-21331 {
+    SELECT FIELD(0, 9e0, 1.5);
+}
+expect {
+    0
+}
+
+test t-21397 {
+    SELECT FIELD(0, 13e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-21417 {
+    SELECT FIELD(0, 18446744073709551615, 1);
+}
+expect {
+    0
+}
+
+test t-21450 {
+    SELECT FIELD(0, 18446744073709551615, "0");
+}
+expect {
+    2
+}
+
+test t-21480 {
+    SELECT FIELD(0, 9223372036854775807, 1.0e0);
+}
+expect {
+    0
+}
+
+test t-21487 {
+    SELECT FIELD(0, 9223372036854775807, 7e0);
+}
+expect {
+    0
+}
+
+test t-21534 {
+    SELECT FIELD(0, 9223372036854775808, -255e0);
+}
+expect {
+    0
+}
+
+test t-21603 {
+    SELECT FIELD(0, -9223372036854775808, 64);
+}
+expect {
+    0
+}
+
+test t-21659 {
+    SELECT FIELD(0, -9223372036854775809, 255);
+}
+expect {
+    0
+}
+
+test t-21703 {
+    SELECT FIELD(0, -9223372036854775809, _binary X'40');
+}
+expect {
+    2
+}
+
+test t-21705 {
+    SELECT FIELD(0, "foobar", 1);
+}
+expect {
+    1
+}
+
+test t-21708 {
+    SELECT FIELD(0, "foobar", 1.0);
+}
+expect {
+    1
+}
+
+test t-21837 {
+    SELECT FIELD(0, "0", X'ff');
+}
+expect {
+    1
+}
+
+test t-21850 {
+    SELECT FIELD(0, 0x1, 0xFF);
+}
+expect {
+    0
+}
+
+test t-21861 {
+    SELECT FIELD(0, 0x1, '1.5');
+}
+expect {
+    0
+}
+
+test t-21914 {
+    SELECT FIELD(0, -0x1, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-22007 {
+    SELECT FIELD(0, X'00', 0.0e0);
+}
+expect {
+    1
+}
+
+test t-22097 {
+    SELECT FIELD(0, NULL, 9);
+}
+expect {
+    0
+}
+
+test t-22132 {
+    SELECT FIELD(0, NULL, '64');
+}
+expect {
+    0
+}
+
+test t-22165 {
+    SELECT FIELD(0, _binary "foobar", -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-22175 {
+    SELECT FIELD(0, _binary "foobar", "1abcd");
+}
+expect {
+    1
+}
+
+test t-22200 {
+    SELECT FIELD(0, _binary "foobar1234", 1.0e0);
+}
+expect {
+    1
+}
+
+test t-22202 {
+    SELECT FIELD(0, _binary "foobar1234", 1.5e0);
+}
+expect {
+    1
+}
+
+test t-22206 {
+    SELECT FIELD(0, _binary "foobar1234", -255e0);
+}
+expect {
+    1
+}
+
+test t-22235 {
+    SELECT FIELD(0, 64, 255);
+}
+expect {
+    0
+}
+
+test t-22274 {
+    SELECT FIELD(0, 64, _binary "foobar1234");
+}
+expect {
+    2
+}
+
+test t-22284 {
+    SELECT FIELD(0, '64', 1.0);
+}
+expect {
+    0
+}
+
+test t-22301 {
+    SELECT FIELD(0, '64', -1e0);
+}
+expect {
+    0
+}
+
+test t-22320 {
+    SELECT FIELD(0, '64', NULL);
+}
+expect {
+    0
+}
+
+test t-22354 {
+    SELECT FIELD(0, _binary '64', 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-22372 {
+    SELECT FIELD(0, _binary '64', '64');
+}
+expect {
+    0
+}
+
+test t-22391 {
+    SELECT FIELD(0, X'40', 0.0e0);
+}
+expect {
+    2
+}
+
+test t-22576 {
+    SELECT FIELD(1, 0xFF, 7);
+}
+expect {
+    0
+}
+
+test t-22587 {
+    SELECT FIELD(1, 0xFF, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-22924 {
+    SELECT FIELD(1, 9, 1.1e0);
+}
+expect {
+    0
+}
+
+test t-23033 {
+    SELECT FIELD(1, 1.5, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-23040 {
+    SELECT FIELD(1, 1.5, NULL);
+}
+expect {
+    0
+}
+
+test t-23066 {
+    SELECT FIELD(1, -1.5, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-23089 {
+    SELECT FIELD(1, -1.5, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-23138 {
+    SELECT FIELD(1, '1.5', _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-23197 {
+    SELECT FIELD(1, 0.0e0, 1.1);
+}
+expect {
+    0
+}
+
+test t-23267 {
+    SELECT FIELD(1, 1.0e0, 9223372036854775807);
+}
+expect {
+    1
+}
+
+test t-23345 {
+    SELECT FIELD(1, 1.5e0, 9);
+}
+expect {
+    0
+}
+
+test t-23374 {
+    SELECT FIELD(1, 1.5e0, X'00');
+}
+expect {
+    0
+}
+
+test t-23392 {
+    SELECT FIELD(1, -1.5e0, 7);
+}
+expect {
+    0
+}
+
+test t-23434 {
+    SELECT FIELD(1, 1.1e0, 0xFF);
+}
+expect {
+    0
+}
+
+test t-23483 {
+    SELECT FIELD(1, -1e0, 255);
+}
+expect {
+    0
+}
+
+test t-23499 {
+    SELECT FIELD(1, -1e0, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-23562 {
+    SELECT FIELD(1, -255e0, "0");
+}
+expect {
+    0
+}
+
+test t-23652 {
+    SELECT FIELD(1, 9e0, 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-23653 {
+    SELECT FIELD(1, 9e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-23683 {
+    SELECT FIELD(1, 13e0, 1.5);
+}
+expect {
+    0
+}
+
+test t-23704 {
+    SELECT FIELD(1, 13e0, "foobar");
+}
+expect {
+    0
+}
+
+test t-23713 {
+    SELECT FIELD(1, 13e0, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-23766 {
+    SELECT FIELD(1, 18446744073709551615, X'40');
+}
+expect {
+    0
+}
+
+test t-23785 {
+    SELECT FIELD(1, 9223372036854775807, 255.0);
+}
+expect {
+    0
+}
+
+test t-23838 {
+    SELECT FIELD(1, 9223372036854775808, -255e0);
+}
+expect {
+    0
+}
+
+test t-23903 {
+    SELECT FIELD(1, -9223372036854775808, "1abcd");
+}
+expect {
+    2
+}
+
+test t-23939 {
+    SELECT FIELD(1, 18446744073709551616, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-23989 {
+    SELECT FIELD(1, -9223372036854775809, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-24008 {
+    SELECT FIELD(1, "foobar", 0);
+}
+expect {
+    0
+}
+
+test t-24024 {
+    SELECT FIELD(1, "foobar", 1.0e0);
+}
+expect {
+    2
+}
+
+test t-24039 {
+    SELECT FIELD(1, "foobar", -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-24045 {
+    SELECT FIELD(1, "foobar", X'ff');
+}
+expect {
+    0
+}
+
+test t-24121 {
+    SELECT FIELD(1, "0", 255.0);
+}
+expect {
+    0
+}
+
+test t-24124 {
+    SELECT FIELD(1, "0", 1.1e0);
+}
+expect {
+    0
+}
+
+test t-24153 {
+    SELECT FIELD(1, 0x1, 1);
+}
+expect {
+    1
+}
+
+test t-24428 {
+    SELECT FIELD(1, NULL, -0x1);
+}
+expect {
+    0
+}
+
+test t-24472 {
+    SELECT FIELD(1, _binary "foobar", "foobar");
+}
+expect {
+    0
+}
+
+test t-24485 {
+    SELECT FIELD(1, _binary "foobar", _binary '64');
+}
+expect {
+    0
+}
+
+test t-24489 {
+    SELECT FIELD(1, _binary "foobar1234", 1);
+}
+expect {
+    2
+}
+
+test t-24491 {
+    SELECT FIELD(1, _binary "foobar1234", 255);
+}
+expect {
+    0
+}
+
+test t-24621 {
+    SELECT FIELD(1, '64', X'ff');
+}
+expect {
+    0
+}
+
+test t-24835 {
+    SELECT FIELD(0xFF, 1, 1.5);
+}
+expect {
+    0
+}
+
+test t-24935 {
+    SELECT FIELD(0xFF, 255, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-24951 {
+    SELECT FIELD(0xFF, 255, -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-25006 {
+    SELECT FIELD(0xFF, 1.0, X'00');
+}
+expect {
+    0
+}
+
+test t-25046 {
+    SELECT FIELD(0xFF, 1.1, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-25094 {
+    SELECT FIELD(0xFF, -1, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-25109 {
+    SELECT FIELD(0xFF, -1, _binary '64');
+}
+expect {
+    0
+}
+
+test t-25116 {
+    SELECT FIELD(0xFF, -255, 1.0);
+}
+expect {
+    0
+}
+
+test t-25136 {
+    SELECT FIELD(0xFF, -255, 9e0);
+}
+expect {
+    0
+}
+
+test t-25233 {
+    SELECT FIELD(0xFF, 9, 13e0);
+}
+expect {
+    0
+}
+
+test t-25279 {
+    SELECT FIELD(0xFF, 13, 7e0);
+}
+expect {
+    0
+}
+
+test t-25300 {
+    SELECT FIELD(0xFF, 13, '64');
+}
+expect {
+    0
+}
+
+test t-25323 {
+    SELECT FIELD(0xFF, 1.5, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-25351 {
+    SELECT FIELD(0xFF, 1.5, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-25386 {
+    SELECT FIELD(0xFF, -1.5, "0");
+}
+expect {
+    0
+}
+
+test t-25430 {
+    SELECT FIELD(0xFF, '1.5', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-25435 {
+    SELECT FIELD(0xFF, '1.5', 0x1);
+}
+expect {
+    0
+}
+
+test t-25469 {
+    SELECT FIELD(0xFF, '-1.5', -1e0);
+}
+expect {
+    0
+}
+
+test t-25470 {
+    SELECT FIELD(0xFF, '-1.5', -255e0);
+}
+expect {
+    0
+}
+
+test t-25541 {
+    SELECT FIELD(0xFF, 0.0e0, _binary '64');
+}
+expect {
+    0
+}
+
+test t-25589 {
+    SELECT FIELD(0xFF, 1.0e0, _binary '64');
+}
+expect {
+    0
+}
+
+test t-25707 {
+    SELECT FIELD(0xFF, -1.5e0, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-25810 {
+    SELECT FIELD(0xFF, -1e0, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-25813 {
+    SELECT FIELD(0xFF, -1e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-25828 {
+    SELECT FIELD(0xFF, -1e0, '64');
+}
+expect {
+    0
+}
+
+test t-25874 {
+    SELECT FIELD(0xFF, -255e0, _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-25899 {
+    SELECT FIELD(0xFF, 7e0, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-25908 {
+    SELECT FIELD(0xFF, 7e0, 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-25928 {
+    SELECT FIELD(0xFF, 9e0, 0);
+}
+expect {
+    0
+}
+
+test t-25939 {
+    SELECT FIELD(0xFF, 9e0, 1.5);
+}
+expect {
+    0
+}
+
+test t-25955 {
+    SELECT FIELD(0xFF, 9e0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-26016 {
+    SELECT FIELD(0xFF, 13e0, NULL);
+}
+expect {
+    0
+}
+
+test t-26059 {
+    SELECT FIELD(0xFF, 18446744073709551615, 0x1);
+}
+expect {
+    0
+}
+
+test t-26081 {
+    SELECT FIELD(0xFF, 9223372036854775807, 9);
+}
+expect {
+    0
+}
+
+test t-26115 {
+    SELECT FIELD(0xFF, 9223372036854775807, 64);
+}
+expect {
+    0
+}
+
+test t-26118 {
+    SELECT FIELD(0xFF, 9223372036854775807, X'40');
+}
+expect {
+    0
+}
+
+test t-26226 {
+    SELECT FIELD(0xFF, 18446744073709551616, 13);
+}
+expect {
+    0
+}
+
+test t-26243 {
+    SELECT FIELD(0xFF, 18446744073709551616, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-26326 {
+    SELECT FIELD(0xFF, "foobar", '-1.5');
+}
+expect {
+    0
+}
+
+test t-26339 {
+    SELECT FIELD(0xFF, "foobar", 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-26463 {
+    SELECT FIELD(0xFF, 0x1, -255);
+}
+expect {
+    0
+}
+
+test t-26477 {
+    SELECT FIELD(0xFF, 0x1, -1e0);
+}
+expect {
+    0
+}
+
+test t-26481 {
+    SELECT FIELD(0xFF, 0x1, 13e0);
+}
+expect {
+    0
+}
+
+test t-26530 {
+    SELECT FIELD(0xFF, -0x1, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-26598 {
+    SELECT FIELD(0xFF, X'ff', X'40');
+}
+expect {
+    1
+}
+
+test t-26633 {
+    SELECT FIELD(0xFF, X'00', "foobar1234");
+}
+expect {
+    0
+}
+
+test t-26644 {
+    SELECT FIELD(0xFF, X'00', '64');
+}
+expect {
+    0
+}
+
+test t-26651 {
+    SELECT FIELD(0xFF, "1abcd", 255);
+}
+expect {
+    2
+}
+
+test t-26663 {
+    SELECT FIELD(0xFF, "1abcd", 0.0e0);
+}
+expect {
+    0
+}
+
+test t-26753 {
+    SELECT FIELD(0xFF, _binary "foobar", 9);
+}
+expect {
+    0
+}
+
+test t-26794 {
+    SELECT FIELD(0xFF, _binary "foobar1234", 0xFF);
+}
+expect {
+    2
+}
+
+test t-26840 {
+    SELECT FIELD(0xFF, 64, 0);
+}
+expect {
+    0
+}
+
+test t-26855 {
+    SELECT FIELD(0xFF, 64, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-26863 {
+    SELECT FIELD(0xFF, 64, 7e0);
+}
+expect {
+    0
+}
+
+test t-26883 {
+    SELECT FIELD(0xFF, 64, 64);
+}
+expect {
+    0
+}
+
+test t-26905 {
+    SELECT FIELD(0xFF, '64', 255.0);
+}
+expect {
+    2
+}
+
+test t-26912 {
+    SELECT FIELD(0xFF, '64', 9e0);
+}
+expect {
+    0
+}
+
+test t-27019 {
+    SELECT FIELD(0xFF, X'40', 0x1);
+}
+expect {
+    0
+}
+
+test t-27155 {
+    SELECT FIELD(255, 1, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-27245 {
+    SELECT FIELD(255, 255, -1e0);
+}
+expect {
+    1
+}
+
+test t-27329 {
+    SELECT FIELD(255, 1.1, 9);
+}
+expect {
+    0
+}
+
+test t-27352 {
+    SELECT FIELD(255, 1.1, "foobar");
+}
+expect {
+    0
+}
+
+test t-27368 {
+    SELECT FIELD(255, -1, 0);
+}
+expect {
+    0
+}
+
+test t-27416 {
+    SELECT FIELD(255, -255, 0);
+}
+expect {
+    0
+}
+
+test t-27497 {
+    SELECT FIELD(255, 7, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-27545 {
+    SELECT FIELD(255, 9, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-27567 {
+    SELECT FIELD(255, 13, -255);
+}
+expect {
+    0
+}
+
+test t-27683 {
+    SELECT FIELD(255, -1.5, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-27713 {
+    SELECT FIELD(255, '1.5', 9);
+}
+expect {
+    0
+}
+
+test t-27736 {
+    SELECT FIELD(255, '1.5', "foobar");
+}
+expect {
+    0
+}
+
+test t-27737 {
+    SELECT FIELD(255, '1.5', "foobar1234");
+}
+expect {
+    0
+}
+
+test t-27771 {
+    SELECT FIELD(255, '-1.5', -1.5e0);
+}
+expect {
+    0
+}
+
+test t-27841 {
+    SELECT FIELD(255, 0.0e0, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-27879 {
+    SELECT FIELD(255, 1.0e0, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-27911 {
+    SELECT FIELD(255, 255.0, 0.0e0);
+}
+expect {
+    1
+}
+
+test t-27945 {
+    SELECT FIELD(255, 1.5e0, 1);
+}
+expect {
+    0
+}
+
+test t-28022 {
+    SELECT FIELD(255, -1.5e0, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-28033 {
+    SELECT FIELD(255, -1.5e0, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-28165 {
+    SELECT FIELD(255, -255e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-28168 {
+    SELECT FIELD(255, -255e0, "foobar");
+}
+expect {
+    0
+}
+
+test t-28183 {
+    SELECT FIELD(255, -255e0, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-28189 {
+    SELECT FIELD(255, 7e0, 1.1);
+}
+expect {
+    0
+}
+
+test t-28211 {
+    SELECT FIELD(255, 7e0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-28224 {
+    SELECT FIELD(255, 7e0, NULL);
+}
+expect {
+    0
+}
+
+test t-28302 {
+    SELECT FIELD(255, 13e0, -255e0);
+}
+expect {
+    0
+}
+
+test t-28311 {
+    SELECT FIELD(255, 13e0, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-28337 {
+    SELECT FIELD(255, 18446744073709551615, 9);
+}
+expect {
+    0
+}
+
+test t-28425 {
+    SELECT FIELD(255, 9223372036854775808, 1);
+}
+expect {
+    0
+}
+
+test t-28434 {
+    SELECT FIELD(255, 9223372036854775808, 13);
+}
+expect {
+    0
+}
+
+test t-28466 {
+    SELECT FIELD(255, 9223372036854775808, _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-28484 {
+    SELECT FIELD(255, -9223372036854775808, -1.5);
+}
+expect {
+    0
+}
+
+test t-28568 {
+    SELECT FIELD(255, -9223372036854775809, 0);
+}
+expect {
+    0
+}
+
+test t-28595 {
+    SELECT FIELD(255, -9223372036854775809, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-28607 {
+    SELECT FIELD(255, -9223372036854775809, "1abcd");
+}
+expect {
+    0
+}
+
+test t-28674 {
+    SELECT FIELD(255, "foobar1234", 13);
+}
+expect {
+    0
+}
+
+test t-28724 {
+    SELECT FIELD(255, "0", -1.5);
+}
+expect {
+    0
+}
+
+test t-28768 {
+    SELECT FIELD(255, 0x1, 7);
+}
+expect {
+    0
+}
+
+test t-28856 {
+    SELECT FIELD(255, X'ff', 0);
+}
+expect {
+    1
+}
+
+test t-28884 {
+    SELECT FIELD(255, X'ff', 9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-28902 {
+    SELECT FIELD(255, X'ff', X'40');
+}
+expect {
+    1
+}
+
+test t-28908 {
+    SELECT FIELD(255, X'00', 1.0);
+}
+expect {
+    0
+}
+
+test t-28928 {
+    SELECT FIELD(255, X'00', 9e0);
+}
+expect {
+    0
+}
+
+test t-28929 {
+    SELECT FIELD(255, X'00', 13e0);
+}
+expect {
+    0
+}
+
+test t-28970 {
+    SELECT FIELD(255, "1abcd", 1.5e0);
+}
+expect {
+    0
+}
+
+test t-28973 {
+    SELECT FIELD(255, "1abcd", -1e0);
+}
+expect {
+    0
+}
+
+test t-29030 {
+    SELECT FIELD(255, NULL, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-29068 {
+    SELECT FIELD(255, _binary "foobar", 1.1e0);
+}
+expect {
+    0
+}
+
+test t-29119 {
+    SELECT FIELD(255, _binary "foobar1234", 7e0);
+}
+expect {
+    0
+}
+
+test t-29170 {
+    SELECT FIELD(255, 64, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-29210 {
+    SELECT FIELD(255, '64', 1.5e0);
+}
+expect {
+    0
+}
+
+test t-29288 {
+    SELECT FIELD(255, X'40', 0);
+}
+expect {
+    0
+}
+
+test t-29303 {
+    SELECT FIELD(255, X'40', 0.0e0);
+}
+expect {
+    0
+}
+
+test t-29384 {
+    SELECT FIELD(1.0, 0, 0);
+}
+expect {
+    0
+}
+
+test t-29394 {
+    SELECT FIELD(1.0, 0, 13);
+}
+expect {
+    0
+}
+
+test t-29410 {
+    SELECT FIELD(1.0, 0, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-29486 {
+    SELECT FIELD(1.0, 0xFF, -1);
+}
+expect {
+    0
+}
+
+test t-29523 {
+    SELECT FIELD(1.0, 0xFF, 64);
+}
+expect {
+    0
+}
+
+test t-29573 {
+    SELECT FIELD(1.0, 255, _binary '64');
+}
+expect {
+    0
+}
+
+test t-29632 {
+    SELECT FIELD(1.0, 1.1, 7);
+}
+expect {
+    0
+}
+
+test t-29675 {
+    SELECT FIELD(1.0, -1, 255);
+}
+expect {
+    0
+}
+
+test t-29697 {
+    SELECT FIELD(1.0, -1, 13e0);
+}
+expect {
+    0
+}
+
+test t-29702 {
+    SELECT FIELD(1.0, -1, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-29733 {
+    SELECT FIELD(1.0, -255, '1.5');
+}
+expect {
+    0
+}
+
+test t-29742 {
+    SELECT FIELD(1.0, -255, -255e0);
+}
+expect {
+    0
+}
+
+test t-29752 {
+    SELECT FIELD(1.0, -255, "foobar");
+}
+expect {
+    0
+}
+
+test t-29920 {
+    SELECT FIELD(1.0, 1.5, 7);
+}
+expect {
+    0
+}
+
+test t-29933 {
+    SELECT FIELD(1.0, 1.5, -1e0);
+}
+expect {
+    0
+}
+
+test t-29939 {
+    SELECT FIELD(1.0, 1.5, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-29955 {
+    SELECT FIELD(1.0, 1.5, 64);
+}
+expect {
+    0
+}
+
+test t-29956 {
+    SELECT FIELD(1.0, 1.5, '64');
+}
+expect {
+    0
+}
+
+test t-30005 {
+    SELECT FIELD(1.0, -1.5, _binary '64');
+}
+expect {
+    0
+}
+
+test t-30017 {
+    SELECT FIELD(1.0, '1.5', 9);
+}
+expect {
+    0
+}
+
+test t-30040 {
+    SELECT FIELD(1.0, '1.5', "foobar");
+}
+expect {
+    0
+}
+
+test t-30047 {
+    SELECT FIELD(1.0, '1.5', "1abcd");
+}
+expect {
+    2
+}
+
+test t-30064 {
+    SELECT FIELD(1.0, '-1.5', 7);
+}
+expect {
+    0
+}
+
+test t-30109 {
+    SELECT FIELD(1.0, 0.0e0, 1.1);
+}
+expect {
+    0
+}
+
+test t-30113 {
+    SELECT FIELD(1.0, 0.0e0, 9);
+}
+expect {
+    0
+}
+
+test t-30143 {
+    SELECT FIELD(1.0, 0.0e0, "1abcd");
+}
+expect {
+    2
+}
+
+test t-30195 {
+    SELECT FIELD(1.0, 1.0e0, 64);
+}
+expect {
+    1
+}
+
+test t-30205 {
+    SELECT FIELD(1.0, 255.0, 1.1);
+}
+expect {
+    0
+}
+
+test t-30213 {
+    SELECT FIELD(1.0, 255.0, '1.5');
+}
+expect {
+    0
+}
+
+test t-30296 {
+    SELECT FIELD(1.0, -1.5e0, 0);
+}
+expect {
+    0
+}
+
+test t-30316 {
+    SELECT FIELD(1.0, -1.5e0, 1.1e0);
+}
+expect {
+    0
+}
+
+test t-30347 {
+    SELECT FIELD(1.0, 1.1e0, 255);
+}
+expect {
+    0
+}
+
+test t-30359 {
+    SELECT FIELD(1.0, 1.1e0, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-30398 {
+    SELECT FIELD(1.0, -1e0, -1);
+}
+expect {
+    0
+}
+
+test t-30437 {
+    SELECT FIELD(1.0, -1e0, _binary '64');
+}
+expect {
+    0
+}
+
+test t-30492 {
+    SELECT FIELD(1.0, 7e0, 1.0);
+}
+expect {
+    2
+}
+
+test t-30509 {
+    SELECT FIELD(1.0, 7e0, -1e0);
+}
+expect {
+    0
+}
+
+test t-30519 {
+    SELECT FIELD(1.0, 7e0, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-30551 {
+    SELECT FIELD(1.0, 9e0, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-30580 {
+    SELECT FIELD(1.0, 9e0, '64');
+}
+expect {
+    0
+}
+
+test t-30600 {
+    SELECT FIELD(1.0, 13e0, 1.0e0);
+}
+expect {
+    2
+}
+
+test t-30775 {
+    SELECT FIELD(1.0, 9223372036854775808, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-30830 {
+    SELECT FIELD(1.0, 18446744073709551616, -1);
+}
+expect {
+    0
+}
+
+test t-30842 {
+    SELECT FIELD(1.0, 18446744073709551616, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-31022 {
+    SELECT FIELD(1.0, "0", -1);
+}
+expect {
+    0
+}
+
+test t-31096 {
+    SELECT FIELD(1.0, 0x1, "foobar");
+}
+expect {
+    1
+}
+
+test t-31198 {
+    SELECT FIELD(1.0, X'ff', X'00');
+}
+expect {
+    0
+}
+
+test t-31247 {
+    SELECT FIELD(1.0, X'00', "1abcd");
+}
+expect {
+    2
+}
+
+test t-31287 {
+    SELECT FIELD(1.0, "1abcd", -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-31364 {
+    SELECT FIELD(1.0, _binary "foobar", -1.5);
+}
+expect {
+    0
+}
+
+test t-31377 {
+    SELECT FIELD(1.0, _binary "foobar", 13e0);
+}
+expect {
+    0
+}
+
+test t-31388 {
+    SELECT FIELD(1.0, _binary "foobar", -0x1);
+}
+expect {
+    0
+}
+
+test t-31454 {
+    SELECT FIELD(1.0, 64, -1);
+}
+expect {
+    0
+}
+
+test t-31489 {
+    SELECT FIELD(1.0, 64, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-31507 {
+    SELECT FIELD(1.0, '64', 1.5);
+}
+expect {
+    0
+}
+
+test t-31509 {
+    SELECT FIELD(1.0, '64', '1.5');
+}
+expect {
+    0
+}
+
+test t-31558 {
+    SELECT FIELD(1.0, _binary '64', '-1.5');
+}
+expect {
+    0
+}
+
+test t-31581 {
+    SELECT FIELD(1.0, _binary '64', X'ff');
+}
+expect {
+    0
+}
+
+test t-31633 {
+    SELECT FIELD(1.0, X'40', _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-31690 {
+    SELECT FIELD(1.1, 0, 0xFF);
+}
+expect {
+    0
+}
+
+test t-31721 {
+    SELECT FIELD(1.1, 0, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-31766 {
+    SELECT FIELD(1.1, 1, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-31786 {
+    SELECT FIELD(1.1, 0xFF, 0xFF);
+}
+expect {
+    0
+}
+
+test t-31816 {
+    SELECT FIELD(1.1, 0xFF, "foobar");
+}
+expect {
+    0
+}
+
+test t-31882 {
+    SELECT FIELD(1.1, 1.0, 0xFF);
+}
+expect {
+    0
+}
+
+test t-31890 {
+    SELECT FIELD(1.1, 1.0, 13);
+}
+expect {
+    0
+}
+
+test t-31935 {
+    SELECT FIELD(1.1, 1.1, -255);
+}
+expect {
+    1
+}
+
+test t-31953 {
+    SELECT FIELD(1.1, 1.1, 13e0);
+}
+expect {
+    1
+}
+
+test t-31956 {
+    SELECT FIELD(1.1, 1.1, 9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-32009 {
+    SELECT FIELD(1.1, -1, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-32064 {
+    SELECT FIELD(1.1, -255, NULL);
+}
+expect {
+    0
+}
+
+test t-32070 {
+    SELECT FIELD(1.1, -255, X'40');
+}
+expect {
+    0
+}
+
+test t-32072 {
+    SELECT FIELD(1.1, 7, 0);
+}
+expect {
+    0
+}
+
+test t-32098 {
+    SELECT FIELD(1.1, 7, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-32114 {
+    SELECT FIELD(1.1, 7, _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-32124 {
+    SELECT FIELD(1.1, 9, 1.0);
+}
+expect {
+    0
+}
+
+test t-32145 {
+    SELECT FIELD(1.1, 9, 13e0);
+}
+expect {
+    0
+}
+
+test t-32151 {
+    SELECT FIELD(1.1, 9, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-32156 {
+    SELECT FIELD(1.1, 9, -0x1);
+}
+expect {
+    0
+}
+
+test t-32213 {
+    SELECT FIELD(1.1, 13, _binary '64');
+}
+expect {
+    0
+}
+
+test t-32270 {
+    SELECT FIELD(1.1, -1.5, -1);
+}
+expect {
+    0
+}
+
+test t-32337 {
+    SELECT FIELD(1.1, '1.5', 13e0);
+}
+expect {
+    0
+}
+
+test t-32373 {
+    SELECT FIELD(1.1, '-1.5', '1.5');
+}
+expect {
+    0
+}
+
+test t-32377 {
+    SELECT FIELD(1.1, '-1.5', 255.0);
+}
+expect {
+    0
+}
+
+test t-32432 {
+    SELECT FIELD(1.1, 0.0e0, 9e0);
+}
+expect {
+    0
+}
+
+test t-32437 {
+    SELECT FIELD(1.1, 0.0e0, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-32477 {
+    SELECT FIELD(1.1, 1.0e0, -1e0);
+}
+expect {
+    0
+}
+
+test t-32563 {
+    SELECT FIELD(1.1, 1.5e0, 1.5);
+}
+expect {
+    0
+}
+
+test t-32640 {
+    SELECT FIELD(1.1, -1.5e0, NULL);
+}
+expect {
+    0
+}
+
+test t-32687 {
+    SELECT FIELD(1.1, 1.1e0, "1abcd");
+}
+expect {
+    1
+}
+
+test t-32692 {
+    SELECT FIELD(1.1, 1.1e0, '64');
+}
+expect {
+    1
+}
+
+test t-32697 {
+    SELECT FIELD(1.1, -1e0, 1);
+}
+expect {
+    0
+}
+
+test t-32740 {
+    SELECT FIELD(1.1, -1e0, '64');
+}
+expect {
+    0
+}
+
+test t-32742 {
+    SELECT FIELD(1.1, -1e0, X'40');
+}
+expect {
+    0
+}
+
+test t-32767 {
+    SELECT FIELD(1.1, -255e0, 7e0);
+}
+expect {
+    0
+}
+
+test t-32796 {
+    SELECT FIELD(1.1, 7e0, 1.0);
+}
+expect {
+    0
+}
+
+test t-32879 {
+    SELECT FIELD(1.1, 9e0, "1abcd");
+}
+expect {
+    0
+}
+
+test t-32896 {
+    SELECT FIELD(1.1, 13e0, 7);
+}
+expect {
+    0
+}
+
+test t-32901 {
+    SELECT FIELD(1.1, 13e0, '1.5');
+}
+expect {
+    0
+}
+
+test t-32947 {
+    SELECT FIELD(1.1, 18446744073709551615, 1.5);
+}
+expect {
+    0
+}
+
+test t-32951 {
+    SELECT FIELD(1.1, 18446744073709551615, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-33013 {
+    SELECT FIELD(1.1, 9223372036854775807, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-33019 {
+    SELECT FIELD(1.1, 9223372036854775807, 0x1);
+}
+expect {
+    0
+}
+
+test t-33054 {
+    SELECT FIELD(1.1, 9223372036854775808, -255e0);
+}
+expect {
+    0
+}
+
+test t-33163 {
+    SELECT FIELD(1.1, 18446744073709551616, 0x1);
+}
+expect {
+    0
+}
+
+test t-33180 {
+    SELECT FIELD(1.1, -9223372036854775809, 1.0);
+}
+expect {
+    0
+}
+
+test t-33220 {
+    SELECT FIELD(1.1, -9223372036854775809, '64');
+}
+expect {
+    0
+}
+
+test t-33223 {
+    SELECT FIELD(1.1, -9223372036854775809, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-33255 {
+    SELECT FIELD(1.1, "foobar", -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-33263 {
+    SELECT FIELD(1.1, "foobar", "1abcd");
+}
+expect {
+    0
+}
+
+test t-33352 {
+    SELECT FIELD(1.1, "0", "foobar");
+}
+expect {
+    0
+}
+
+test t-33376 {
+    SELECT FIELD(1.1, 0x1, 7);
+}
+expect {
+    0
+}
+
+test t-33377 {
+    SELECT FIELD(1.1, 0x1, 9);
+}
+expect {
+    0
+}
+
+test t-33416 {
+    SELECT FIELD(1.1, -0x1, 0);
+}
+expect {
+    0
+}
+
+test t-33468 {
+    SELECT FIELD(1.1, X'ff', 1.0);
+}
+expect {
+    0
+}
+
+test t-33489 {
+    SELECT FIELD(1.1, X'ff', 13e0);
+}
+expect {
+    0
+}
+
+test t-33563 {
+    SELECT FIELD(1.1, "1abcd", 255);
+}
+expect {
+    0
+}
+
+test t-33623 {
+    SELECT FIELD(1.1, NULL, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-33631 {
+    SELECT FIELD(1.1, NULL, 7e0);
+}
+expect {
+    0
+}
+
+test t-33646 {
+    SELECT FIELD(1.1, NULL, X'00');
+}
+expect {
+    0
+}
+
+test t-33732 {
+    SELECT FIELD(1.1, _binary "foobar1234", 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-33748 {
+    SELECT FIELD(1.1, _binary "foobar1234", '64');
+}
+expect {
+    0
+}
+
+test t-33947 {
+    SELECT FIELD(1.1, _binary X'40', 255);
+}
+expect {
+    0
+}
+
+test t-34016 {
+    SELECT FIELD(-1, 0, 9e0);
+}
+expect {
+    0
+}
+
+test t-34057 {
+    SELECT FIELD(-1, 1, 255.0);
+}
+expect {
+    0
+}
+
+test t-34106 {
+    SELECT FIELD(-1, 0xFF, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-34155 {
+    SELECT FIELD(-1, 255, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-34162 {
+    SELECT FIELD(-1, 255, 18446744073709551615);
+}
+expect {
+    2
+}
+
+test t-34166 {
+    SELECT FIELD(-1, 255, 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-34199 {
+    SELECT FIELD(-1, 1.0, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-34223 {
+    SELECT FIELD(-1, 1.0, "1abcd");
+}
+expect {
+    0
+}
+
+test t-34244 {
+    SELECT FIELD(-1, 1.1, -1.5);
+}
+expect {
+    0
+}
+
+test t-34321 {
+    SELECT FIELD(-1, -1, _binary "foobar");
+}
+expect {
+    1
+}
+
+test t-34326 {
+    SELECT FIELD(-1, -1, X'40');
+}
+expect {
+    1
+}
+
+test t-34334 {
+    SELECT FIELD(-1, -255, -1);
+}
+expect {
+    2
+}
+
+test t-34409 {
+    SELECT FIELD(-1, 7, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-34415 {
+    SELECT FIELD(-1, 7, "1abcd");
+}
+expect {
+    0
+}
+
+test t-34428 {
+    SELECT FIELD(-1, 9, 1.0);
+}
+expect {
+    0
+}
+
+test t-34435 {
+    SELECT FIELD(-1, 9, 1.5);
+}
+expect {
+    0
+}
+
+test t-34450 {
+    SELECT FIELD(-1, 9, 18446744073709551615);
+}
+expect {
+    2
+}
+
+test t-34452 {
+    SELECT FIELD(-1, 9, 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-34482 {
+    SELECT FIELD(-1, 13, 13);
+}
+expect {
+    0
+}
+
+test t-34510 {
+    SELECT FIELD(-1, 13, X'00');
+}
+expect {
+    0
+}
+
+test t-34531 {
+    SELECT FIELD(-1, 1.5, 1.5);
+}
+expect {
+    0
+}
+
+test t-34564 {
+    SELECT FIELD(-1, 1.5, '64');
+}
+expect {
+    0
+}
+
+test t-34636 {
+    SELECT FIELD(-1, '1.5', 1.1e0);
+}
+expect {
+    0
+}
+
+test t-34647 {
+    SELECT FIELD(-1, '1.5', -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-34649 {
+    SELECT FIELD(-1, '1.5', "foobar1234");
+}
+expect {
+    0
+}
+
+test t-34707 {
+    SELECT FIELD(-1, '-1.5', 64);
+}
+expect {
+    0
+}
+
+test t-34829 {
+    SELECT FIELD(-1, 255.0, -1e0);
+}
+expect {
+    2
+}
+
+test t-34831 {
+    SELECT FIELD(-1, 255.0, 7e0);
+}
+expect {
+    0
+}
+
+test t-35022 {
+    SELECT FIELD(-1, -1e0, -255e0);
+}
+expect {
+    1
+}
+
+test t-35040 {
+    SELECT FIELD(-1, -1e0, NULL);
+}
+expect {
+    1
+}
+
+test t-35041 {
+    SELECT FIELD(-1, -1e0, _binary "foobar");
+}
+expect {
+    1
+}
+
+test t-35093 {
+    SELECT FIELD(-1, -255e0, _binary '64');
+}
+expect {
+    0
+}
+
+test t-35120 {
+    SELECT FIELD(-1, 7e0, 9e0);
+}
+expect {
+    0
+}
+
+test t-35128 {
+    SELECT FIELD(-1, 7e0, "foobar");
+}
+expect {
+    0
+}
+
+test t-35129 {
+    SELECT FIELD(-1, 7e0, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-35138 {
+    SELECT FIELD(-1, 7e0, _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-35154 {
+    SELECT FIELD(-1, 9e0, 13);
+}
+expect {
+    0
+}
+
+test t-35210 {
+    SELECT FIELD(-1, 13e0, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-35240 {
+    SELECT FIELD(-1, 18446744073709551615, 0);
+}
+expect {
+    1
+}
+
+test t-35254 {
+    SELECT FIELD(-1, 18446744073709551615, '-1.5');
+}
+expect {
+    0
+}
+
+test t-35286 {
+    SELECT FIELD(-1, 18446744073709551615, X'40');
+}
+expect {
+    0
+}
+
+test t-35402 {
+    SELECT FIELD(-1, -9223372036854775808, 1.5e0);
+}
+expect {
+    0
+}
+
+test t-35432 {
+    SELECT FIELD(-1, 18446744073709551616, 0);
+}
+expect {
+    0
+}
+
+test t-35434 {
+    SELECT FIELD(-1, 18446744073709551616, 0xFF);
+}
+expect {
+    0
+}
+
+test t-35485 {
+    SELECT FIELD(-1, -9223372036854775809, 1.1);
+}
+expect {
+    0
+}
+
+test t-35492 {
+    SELECT FIELD(-1, -9223372036854775809, -1.5);
+}
+expect {
+    0
+}
+
+test t-35513 {
+    SELECT FIELD(-1, -9223372036854775809, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-35527 {
+    SELECT FIELD(-1, -9223372036854775809, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-35632 {
+    SELECT FIELD(-1, "0", 7);
+}
+expect {
+    0
+}
+
+test t-35693 {
+    SELECT FIELD(-1, 0x1, -1e0);
+}
+expect {
+    2
+}
+
+test t-35740 {
+    SELECT FIELD(-1, -0x1, 1.1e0);
+}
+expect {
+    1
+}
+
+test t-35813 {
+    SELECT FIELD(-1, X'ff', _binary '64');
+}
+expect {
+    0
+}
+
+test t-35919 {
+    SELECT FIELD(-1, NULL, -255);
+}
+expect {
+    0
+}
+
+test t-35976 {
+    SELECT FIELD(-1, _binary "foobar", 1.0e0);
+}
+expect {
+    0
+}
+
+test t-36001 {
+    SELECT FIELD(-1, _binary "foobar", _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-36054 {
+    SELECT FIELD(-1, _binary "foobar1234", X'40');
+}
+expect {
+    0
+}
+
+test t-36129 {
+    SELECT FIELD(-1, '64', 13e0);
+}
+expect {
+    0
+}
+
+test t-36187 {
+    SELECT FIELD(-1, _binary '64', 0x1);
+}
+expect {
+    0
+}
+
+test t-36330 {
+    SELECT FIELD(-255, 0, "0");
+}
+expect {
+    0
+}
+
+test t-36331 {
+    SELECT FIELD(-255, 0, 0x1);
+}
+expect {
+    0
+}
+
+test t-36385 {
+    SELECT FIELD(-255, 1, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-36386 {
+    SELECT FIELD(-255, 1, _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-36424 {
+    SELECT FIELD(-255, 0xFF, "foobar");
+}
+expect {
+    0
+}
+
+test t-36464 {
+    SELECT FIELD(-255, 255, 9e0);
+}
+expect {
+    0
+}
+
+test t-36466 {
+    SELECT FIELD(-255, 255, 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-36479 {
+    SELECT FIELD(-255, 255, "1abcd");
+}
+expect {
+    0
+}
+
+test t-36499 {
+    SELECT FIELD(-255, 1.0, 1.5);
+}
+expect {
+    0
+}
+
+test t-36508 {
+    SELECT FIELD(-255, 1.0, 1.1e0);
+}
+expect {
+    0
+}
+
+test t-36543 {
+    SELECT FIELD(-255, 1.1, -255);
+}
+expect {
+    2
+}
+
+test t-36567 {
+    SELECT FIELD(-255, 1.1, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-36661 {
+    SELECT FIELD(-255, -255, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-36765 {
+    SELECT FIELD(-255, 9, X'ff');
+}
+expect {
+    0
+}
+
+test t-36791 {
+    SELECT FIELD(-255, 13, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-36793 {
+    SELECT FIELD(-255, 13, 255.0);
+}
+expect {
+    0
+}
+
+test t-36877 {
+    SELECT FIELD(-255, -1.5, 1.1);
+}
+expect {
+    0
+}
+
+test t-36928 {
+    SELECT FIELD(-255, '1.5', 7);
+}
+expect {
+    0
+}
+
+test t-36931 {
+    SELECT FIELD(-255, '1.5', 1.5);
+}
+expect {
+    0
+}
+
+test t-36951 {
+    SELECT FIELD(-255, '1.5', -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-37060 {
+    SELECT FIELD(-255, 0.0e0, '64');
+}
+expect {
+    0
+}
+
+test t-37110 {
+    SELECT FIELD(-255, 1.0e0, X'40');
+}
+expect {
+    0
+}
+
+test t-37150 {
+    SELECT FIELD(-255, 255.0, X'00');
+}
+expect {
+    0
+}
+
+test t-37159 {
+    SELECT FIELD(-255, 255.0, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-37171 {
+    SELECT FIELD(-255, 1.5e0, 1.5);
+}
+expect {
+    0
+}
+
+test t-37176 {
+    SELECT FIELD(-255, 1.5e0, 1.0e0);
+}
+expect {
+    0
+}
+
+test t-37279 {
+    SELECT FIELD(-255, 1.1e0, 7e0);
+}
+expect {
+    0
+}
+
+test t-37376 {
+    SELECT FIELD(-255, -255e0, 9e0);
+}
+expect {
+    1
+}
+
+test t-37383 {
+    SELECT FIELD(-255, -255e0, -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-37402 {
+    SELECT FIELD(-255, 7e0, 0xFF);
+}
+expect {
+    0
+}
+
+test t-37411 {
+    SELECT FIELD(-255, 7e0, 1.5);
+}
+expect {
+    0
+}
+
+test t-37414 {
+    SELECT FIELD(-255, 7e0, '-1.5');
+}
+expect {
+    0
+}
+
+test t-37419 {
+    SELECT FIELD(-255, 7e0, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-37465 {
+    SELECT FIELD(-255, 9e0, 255.0);
+}
+expect {
+    0
+}
+
+test t-37484 {
+    SELECT FIELD(-255, 9e0, -0x1);
+}
+expect {
+    0
+}
+
+test t-37490 {
+    SELECT FIELD(-255, 9e0, _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-37553 {
+    SELECT FIELD(-255, 18446744073709551615, 9);
+}
+expect {
+    0
+}
+
+test t-37655 {
+    SELECT FIELD(-255, 9223372036854775808, 0.0e0);
+}
+expect {
+    0
+}
+
+test t-37689 {
+    SELECT FIELD(-255, -9223372036854775808, 1);
+}
+expect {
+    0
+}
+
+test t-37717 {
+    SELECT FIELD(-255, -9223372036854775808, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-37757 {
+    SELECT FIELD(-255, 18446744073709551616, -1e0);
+}
+expect {
+    0
+}
+
+test t-37773 {
+    SELECT FIELD(-255, 18446744073709551616, X'ff');
+}
+expect {
+    0
+}
+
+test t-37791 {
+    SELECT FIELD(-255, -9223372036854775809, -255);
+}
+expect {
+    2
+}
+
+test t-37800 {
+    SELECT FIELD(-255, -9223372036854775809, 1.0e0);
+}
+expect {
+    0
+}
+
+test t-37820 {
+    SELECT FIELD(-255, -9223372036854775809, -0x1);
+}
+expect {
+    0
+}
+
+test t-37867 {
+    SELECT FIELD(-255, "foobar", 0x1);
+}
+expect {
+    0
+}
+
+test t-37877 {
+    SELECT FIELD(-255, "foobar", _binary '64');
+}
+expect {
+    0
+}
+
+test t-37916 {
+    SELECT FIELD(-255, "foobar1234", -0x1);
+}
+expect {
+    0
+}
+
+test t-37922 {
+    SELECT FIELD(-255, "foobar1234", _binary "foobar1234");
+}
+expect {
+    0
+}
+
+test t-37939 {
+    SELECT FIELD(-255, "0", 1.5);
+}
+expect {
+    0
+}
+
+test t-37951 {
+    SELECT FIELD(-255, "0", 7e0);
+}
+expect {
+    0
+}
+
+test t-37986 {
+    SELECT FIELD(-255, 0x1, 13);
+}
+expect {
+    0
+}
+
+test t-38064 {
+    SELECT FIELD(-255, -0x1, NULL);
+}
+expect {
+    0
+}
+
+test t-38090 {
+    SELECT FIELD(-255, X'ff', 1.5e0);
+}
+expect {
+    0
+}
+
+test t-38103 {
+    SELECT FIELD(-255, X'ff', -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-38240 {
+    SELECT FIELD(-255, NULL, 9e0);
+}
+expect {
+    0
+}
+
+test t-38243 {
+    SELECT FIELD(-255, NULL, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-38280 {
+    SELECT FIELD(-255, _binary "foobar", 1.0e0);
+}
+expect {
+    0
+}
+
+test t-38362 {
+    SELECT FIELD(-255, 64, 0xFF);
+}
+expect {
+    0
+}
+
+test t-38389 {
+    SELECT FIELD(-255, 64, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-38400 {
+    SELECT FIELD(-255, 64, NULL);
+}
+expect {
+    0
+}
+
+test t-38435 {
+    SELECT FIELD(-255, '64', 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-38492 {
+    SELECT FIELD(-255, _binary '64', -0x1);
+}
+expect {
+    0
+}
+
+test t-38499 {
+    SELECT FIELD(-255, _binary '64', 64);
+}
+expect {
+    0
+}
+
+test t-38522 {
+    SELECT FIELD(-255, X'40', 1.5e0);
+}
+expect {
+    0
+}
+
+test t-38578 {
+    SELECT FIELD(-255, _binary X'40', 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-38584 {
+    SELECT FIELD(-255, _binary X'40', "foobar");
+}
+expect {
+    0
+}
+
+test t-38605 {
+    SELECT FIELD(7, 0, 1.1);
+}
+expect {
+    0
+}
+
+test t-38701 {
+    SELECT FIELD(7, 0xFF, 1.1);
+}
+expect {
+    0
+}
+
+test t-38705 {
+    SELECT FIELD(7, 0xFF, 9);
+}
+expect {
+    0
+}
+
+test t-38737 {
+    SELECT FIELD(7, 0xFF, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-38751 {
+    SELECT FIELD(7, 255, -255);
+}
+expect {
+    0
+}
+
+test t-38757 {
+    SELECT FIELD(7, 255, '1.5');
+}
+expect {
+    0
+}
+
+test t-38789 {
+    SELECT FIELD(7, 255, _binary '64');
+}
+expect {
+    0
+}
+
+test t-38820 {
+    SELECT FIELD(7, 1.0, 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-38852 {
+    SELECT FIELD(7, 1.1, -1.5);
+}
+expect {
+    0
+}
+
+test t-38878 {
+    SELECT FIELD(7, 1.1, X'00');
+}
+expect {
+    0
+}
+
+test t-38879 {
+    SELECT FIELD(7, 1.1, "1abcd");
+}
+expect {
+    0
+}
+
+test t-38959 {
+    SELECT FIELD(7, -255, 7e0);
+}
+expect {
+    2
+}
+
+test t-38970 {
+    SELECT FIELD(7, -255, "0");
+}
+expect {
+    0
+}
+
+test t-39093 {
+    SELECT FIELD(7, 13, '1.5');
+}
+expect {
+    0
+}
+
+test t-39176 {
+    SELECT FIELD(7, -1.5, 0);
+}
+expect {
+    0
+}
+
+test t-39347 {
+    SELECT FIELD(7, 0.0e0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-39396 {
+    SELECT FIELD(7, 1.0e0, 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-39421 {
+    SELECT FIELD(7, 255.0, 1.1);
+}
+expect {
+    0
+}
+
+test t-39444 {
+    SELECT FIELD(7, 255.0, 9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-39470 {
+    SELECT FIELD(7, 1.5e0, -1);
+}
+expect {
+    0
+}
+
+test t-39505 {
+    SELECT FIELD(7, 1.5e0, _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-39507 {
+    SELECT FIELD(7, 1.5e0, 64);
+}
+expect {
+    0
+}
+
+test t-39513 {
+    SELECT FIELD(7, -1.5e0, 1);
+}
+expect {
+    0
+}
+
+test t-39522 {
+    SELECT FIELD(7, -1.5e0, 13);
+}
+expect {
+    0
+}
+
+test t-39599 {
+    SELECT FIELD(7, 1.1e0, "1abcd");
+}
+expect {
+    0
+}
+
+test t-39639 {
+    SELECT FIELD(7, -1e0, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-39652 {
+    SELECT FIELD(7, -1e0, '64');
+}
+expect {
+    0
+}
+
+test t-39653 {
+    SELECT FIELD(7, -1e0, _binary '64');
+}
+expect {
+    0
+}
+
+test t-39727 {
+    SELECT FIELD(7, 7e0, 7e0);
+}
+expect {
+    1
+}
+
+test t-39751 {
+    SELECT FIELD(7, 7e0, _binary X'40');
+}
+expect {
+    1
+}
+
+test t-39776 {
+    SELECT FIELD(7, 9e0, 9e0);
+}
+expect {
+    0
+}
+
+test t-39790 {
+    SELECT FIELD(7, 9e0, X'00');
+}
+expect {
+    0
+}
+
+test t-39888 {
+    SELECT FIELD(7, 18446744073709551615, NULL);
+}
+expect {
+    0
+}
+
+test t-39905 {
+    SELECT FIELD(7, 9223372036854775807, 9);
+}
+expect {
+    0
+}
+
+test t-39934 {
+    SELECT FIELD(7, 9223372036854775807, X'00');
+}
+expect {
+    0
+}
+
+test t-40003 {
+    SELECT FIELD(7, -9223372036854775808, 1.5);
+}
+expect {
+    0
+}
+
+test t-40006 {
+    SELECT FIELD(7, -9223372036854775808, '-1.5');
+}
+expect {
+    0
+}
+
+test t-40063 {
+    SELECT FIELD(7, 18446744073709551616, 7e0);
+}
+expect {
+    2
+}
+
+test t-40101 {
+    SELECT FIELD(7, -9223372036854775809, '1.5');
+}
+expect {
+    0
+}
+
+test t-40215 {
+    SELECT FIELD(7, "foobar1234", -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-40384 {
+    SELECT FIELD(7, X'ff', 7);
+}
+expect {
+    2
+}
+
+test t-40402 {
+    SELECT FIELD(7, X'ff', 18446744073709551615);
+}
+expect {
+    0
+}
+
+test t-40412 {
+    SELECT FIELD(7, X'ff', -0x1);
+}
+expect {
+    0
+}
+
+test t-40458 {
+    SELECT FIELD(7, X'00', "0");
+}
+expect {
+    0
+}
+
+test t-40502 {
+    SELECT FIELD(7, "1abcd", 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-40505 {
+    SELECT FIELD(7, "1abcd", "foobar1234");
+}
+expect {
+    0
+}
+
+test t-40511 {
+    SELECT FIELD(7, "1abcd", "1abcd");
+}
+expect {
+    0
+}
+
+test t-40517 {
+    SELECT FIELD(7, "1abcd", _binary '64');
+}
+expect {
+    0
+}
+
+test t-40523 {
+    SELECT FIELD(7, NULL, 255);
+}
+expect {
+    0
+}
+
+test t-40589 {
+    SELECT FIELD(7, _binary "foobar", -1e0);
+}
+expect {
+    0
+}
+
+test t-40609 {
+    SELECT FIELD(7, _binary "foobar", _binary "foobar");
+}
+expect {
+    0
+}
+
+test t-40613 {
+    SELECT FIELD(7, _binary "foobar", _binary '64');
+}
+expect {
+    0
+}
+
+test t-40722 {
+    SELECT FIELD(7, '64', 13);
+}
+expect {
+    0
+}
+
+test t-40988 {
+    SELECT FIELD(9, 1, -0x1);
+}
+expect {
+    0
+}
+
+test t-41002 {
+    SELECT FIELD(9, 0xFF, 0xFF);
+}
+expect {
+    0
+}
+
+test t-41109 {
+    SELECT FIELD(9, 1.0, '1.5');
+}
+expect {
+    0
+}
+
+test t-41123 {
+    SELECT FIELD(9, 1.0, 9223372036854775807);
+}
+expect {
+    0
+}
+
+test t-41147 {
+    SELECT FIELD(9, 1.1, 255);
+}
+expect {
+    0
+}
+
+test t-41201 {
+    SELECT FIELD(9, -1, 9);
+}
+expect {
+    2
+}
+
+test t-41244 {
+    SELECT FIELD(9, -255, 1.0);
+}
+expect {
+    0
+}
+
+test t-41246 {
+    SELECT FIELD(9, -255, -1);
+}
+expect {
+    0
+}
+
+test t-41249 {
+    SELECT FIELD(9, -255, 9);
+}
+expect {
+    2
+}
+
+test t-41293 {
+    SELECT FIELD(9, 7, 1.1);
+}
+expect {
+    0
+}
+
+test t-41322 {
+    SELECT FIELD(9, 7, "0");
+}
+expect {
+    0
+}
+
+test t-41325 {
+    SELECT FIELD(9, 7, X'ff');
+}
+expect {
+    0
+}
+
+test t-41335 {
+    SELECT FIELD(9, 7, _binary X'40');
+}
+expect {
+    0
+}
+
+test t-41382 {
+    SELECT FIELD(9, 9, X'40');
+}
+expect {
+    1
+}
+
+test t-41461 {
+    SELECT FIELD(9, 1.5, -9223372036854775808);
+}
+expect {
+    0
+}
+
+test t-41526 {
+    SELECT FIELD(9, -1.5, X'40');
+}
+expect {
+    0
+}
+
+test t-41529 {
+    SELECT FIELD(9, '1.5', 1);
+}
+expect {
+    0
+}
+
+test t-41599 {
+    SELECT FIELD(9, '-1.5', 7e0);
+}
+expect {
+    0
+}
+
+test t-41643 {
+    SELECT FIELD(9, 0.0e0, -1.5e0);
+}
+expect {
+    0
+}
+
+test t-41669 {
+    SELECT FIELD(9, 0.0e0, _binary '64');
+}
+expect {
+    0
+}
+
+test t-41684 {
+    SELECT FIELD(9, 1.0e0, -1.5);
+}
+expect {
+    0
+}
+
+test t-41704 {
+    SELECT FIELD(9, 1.0e0, "foobar");
+}
+expect {
+    0
+}
+
+test t-41775 {
+    SELECT FIELD(9, 1.5e0, -255);
+}
+expect {
+    0
+}

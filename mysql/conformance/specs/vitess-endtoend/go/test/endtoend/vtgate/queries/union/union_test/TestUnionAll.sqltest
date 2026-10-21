@@ -1,0 +1,150 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/union/union_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1(
+                   id1 bigint,
+                   id2 bigint,
+                   primary key(id1)
+) Engine=InnoDB;
+}
+
+setup s2 {
+    create table t2(
+                   id3 bigint,
+                   id4 bigint,
+                   primary key(id3)
+) Engine=InnoDB;
+}
+
+setup s3 {
+    insert into t1(id1, id2) values(1, 1), (2, 2);
+}
+
+setup s4 {
+    create table t2(
+                   id3 bigint,
+                   id4 bigint,
+                   primary key(id3)
+) Engine=InnoDB;
+    insert into t1(id1, id2) values(1, 1), (2, 2);
+    insert into t2(id3, id4) values(3, 3), (4, 4);
+}
+
+@setup s1
+test l89 {
+    insert into t1(id1, id2) values(1, 1), (2, 2);
+}
+expect unordered {
+}
+
+@setup s2
+test l90 {
+    insert into t2(id3, id4) values(3, 3), (4, 4);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s3
+test l96 {
+    select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s4
+test l99 {
+    (select id1,id2 from t1 order by id1) union all (select id3,id4 from t2 order by id3);
+}
+expect unordered {
+    1|1
+    2|2
+    3|3
+    4|4
+}
+
+@setup s1
+@setup s4
+test l103 {
+    (select id1,id2 from t1) union all (select id3,id4 from t2);
+}
+expect unordered {
+    1|1
+    2|2
+    3|3
+    4|4
+}
+
+@setup s1
+@setup s3
+test l107 {
+    select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1;
+}
+expect unordered {
+    1
+    1
+    2
+    2
+}
+
+@setup s1
+@setup s3
+test l114 {
+    select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8);
+}
+expect unordered {
+    1
+    1
+    2
+    2
+}
+
+@setup s1
+@setup s4
+test l119 {
+    select id1, id2 from t1 where id1 = 1 union all select id3,id4 from t2 where id3 = 3 union all select id1, id2 from t1 where id1 = 2 union all select id3,id4 from t2 where id3 = 4;
+}
+expect unordered {
+    1|1
+    2|2
+    3|3
+    4|4
+}
+
+@setup s1
+@setup s4
+test l124 {
+    select sum(case when col = 1 then 1 else 0 end) 
+from (
+	select id1 as col from t1 
+	union all 
+	select id3 as col from t2
+) as t;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s4
+test l131 {
+    select sum(id1+id2+foo) 
+from (
+	select id1, id2, id1+id2 as foo from t1 
+	union all 
+	select id3, id4, id4*id4 from t2
+	union all 
+	select id3, id4, id1+id4 from t1 join t2 on id3 + 1 = id1
+) as t;
+}
+expect unordered {
+    51
+}

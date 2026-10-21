@@ -1,0 +1,161 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT REVERSE("Å å");
+}
+expect {
+    å Å
+}
+
+test t-1 {
+    SELECT REVERSE(NULL);
+}
+expect {
+    NULL
+}
+
+test t-2 {
+    SELECT REVERSE("");
+}
+expect {
+    
+}
+
+test t-3 {
+    SELECT REVERSE("a");
+}
+expect {
+    a
+}
+
+test t-4 {
+    SELECT REVERSE("abc");
+}
+expect {
+    cba
+}
+
+test t-5 {
+    SELECT REVERSE(1);
+}
+expect {
+    1
+}
+
+test t-6 {
+    SELECT REVERSE(-1);
+}
+expect {
+    1-
+}
+
+test t-7 {
+    SELECT REVERSE(0123);
+}
+expect {
+    321
+}
+
+test t-8 {
+    SELECT REVERSE(0xAACC);
+}
+expect {
+    ̪
+}
+
+test t-9 {
+    SELECT REVERSE(3.1415926);
+}
+expect {
+    6295141.3
+}
+
+test t-10 {
+    SELECT REVERSE("中文测试");
+}
+expect {
+    试测文中
+}
+
+test t-11 {
+    SELECT REVERSE("日本語テスト");
+}
+expect {
+    トステ語本日
+}
+
+test t-12 {
+    SELECT REVERSE("한국어 시험");
+}
+expect {
+    험시 어국한
+}
+
+test t-13 {
+    SELECT REVERSE("😊😂🤢");
+}
+expect {
+    🤢😂😊
+}
+
+test t-14 {
+    SELECT REVERSE('123');
+}
+expect {
+    321
+}
+
+test t-15 {
+    SELECT REVERSE(9223372036854775807);
+}
+expect {
+    7085774586302733229
+}
+
+test t-16 {
+    SELECT REVERSE(-9223372036854775808);
+}
+expect {
+    8085774586302733229-
+}
+
+test t-17 {
+    SELECT REVERSE(999999999999999999999999);
+}
+expect {
+    999999999999999999999999
+}
+
+test t-18 {
+    SELECT REVERSE(-999999999999999999999999);
+}
+expect {
+    999999999999999999999999-
+}
+
+test t-19 {
+    SELECT REVERSE(_binary 'Müller' );
+}
+expect {
+    rell��M
+}
+
+test t-20 {
+    SELECT REVERSE(_utf8mb4 'abcABCÅå');
+}
+expect {
+    åÅCBAcba
+}
+
+test t-21 {
+    SELECT REVERSE(_latin1 0xFF);
+}
+expect {
+    ÿ
+}

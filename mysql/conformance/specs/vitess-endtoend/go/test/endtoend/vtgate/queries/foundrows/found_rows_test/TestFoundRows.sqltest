@@ -1,0 +1,125 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/foundrows/found_rows_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t2
+(
+    id3 bigint,
+    id4 bigint,
+    primary key (id3)
+) Engine=InnoDB;
+}
+
+setup s2 {
+    delete from t2;
+}
+
+setup s3 {
+    delete from t2;
+}
+
+setup s4 {
+    insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3);
+}
+
+@setup s1
+test l32 {
+    delete from t2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l35 {
+    delete from t2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l40 {
+    insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l48 {
+    select * from t2;
+}
+expect unordered {
+    1|2
+    2|2
+    3|3
+    4|3
+    5|3
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l49 {
+    select * from t2 order by id3 limit 2;
+}
+expect {
+    1|2
+    2|2
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l50 {
+    select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2;
+}
+expect {
+    1|2
+    2|2
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l51 {
+    select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2;
+}
+expect {
+    4|3
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l52 {
+    select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2;
+}
+expect {
+    3|3
+    4|3
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l53 {
+    select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1;
+}
+expect unordered {
+    3|1
+}

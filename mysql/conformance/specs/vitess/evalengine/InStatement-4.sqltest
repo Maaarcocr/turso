@@ -1,0 +1,1134 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-136763 {
+    SELECT -9223372036854775808 IN ('64', 'FOO', -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-136788 {
+    SELECT -9223372036854775808 NOT IN ('64', _latin1 'FOO');
+}
+expect {
+    1
+}
+
+test t-136917 {
+    SELECT _latin1 'foo' NOT IN (-1, -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-137041 {
+    SELECT 'FOO' IN ('foo', -9223372036854775808);
+}
+expect {
+    1
+}
+
+test t-137250 {
+    SELECT -9223372036854775809 IN (18446744073709551616, 'foo');
+}
+expect {
+    0
+}
+
+test t-137295 {
+    SELECT 18446744073709551616 NOT IN (-9223372036854775809, _latin1 'FOO', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-137299 {
+    SELECT 18446744073709551616 IN ("foobar", "foobar1234", 18446744073709551616);
+}
+expect {
+    1
+}
+
+test t-137307 {
+    SELECT 18446744073709551616 IN ("foobar", "0", 18446744073709551616);
+}
+expect {
+    1
+}
+
+test t-137340 {
+    SELECT 18446744073709551616 NOT IN ("foobar", 64);
+}
+expect {
+    1
+}
+
+test t-137351 {
+    SELECT 18446744073709551616 NOT IN ("foobar", '64', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-137415 {
+    SELECT 18446744073709551616 NOT IN ("foobar", 'BAR', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-137468 {
+    SELECT 18446744073709551616 NOT IN ("foobar1234", 64);
+}
+expect {
+    1
+}
+
+test t-137488 {
+    SELECT 18446744073709551616 IN ("foobar1234", -1);
+}
+expect {
+    0
+}
+
+test t-137547 {
+    SELECT 18446744073709551616 IN ("foobar1234", _latin1 'foo', 18446744073709551616);
+}
+expect {
+    1
+}
+
+test t-137590 {
+    SELECT "0" NOT IN (18446744073709551616, 64);
+}
+expect {
+    1
+}
+
+test t-137663 {
+    SELECT 18446744073709551616 NOT IN ("0", 'BAR', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-137665 {
+    SELECT _latin1 'foo' IN ("0", 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-137863 {
+    SELECT 18446744073709551616 NOT IN ("1abcd", 'bar', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-137896 {
+    SELECT 18446744073709551616 IN (NULL, 64);
+}
+expect {
+    NULL
+}
+
+test t-137913 {
+    SELECT NULL IN (NULL, 18446744073709551616);
+}
+expect {
+    NULL
+}
+
+test t-137965 {
+    SELECT 'FOO' NOT IN (NULL, 18446744073709551616);
+}
+expect {
+    NULL
+}
+
+test t-138059 {
+    SELECT 18446744073709551616 IN (64, 'BAR', 18446744073709551616);
+}
+expect {
+    1
+}
+
+test t-138076 {
+    SELECT 18446744073709551616 NOT IN (64, _latin1 'FOO');
+}
+expect {
+    1
+}
+
+test t-138119 {
+    SELECT 18446744073709551616 NOT IN ('64', 'foo', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-138458 {
+    SELECT 'bar' IN (18446744073709551616, _latin1 'foo');
+}
+expect {
+    0
+}
+
+test t-138465 {
+    SELECT _latin1 'FOO' IN ('bar', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-138491 {
+    SELECT 18446744073709551616 IN ('FOO', _latin1 'FOO', 18446744073709551616);
+}
+expect {
+    1
+}
+
+test t-138504 {
+    SELECT 18446744073709551616 IN ('BAR', _latin1 'FOO');
+}
+expect {
+    0
+}
+
+test t-138505 {
+    SELECT _latin1 'FOO' IN ('BAR', 18446744073709551616);
+}
+expect {
+    0
+}
+
+test t-138514 {
+    SELECT _latin1 'foo' IN (18446744073709551616, _latin1 'FOO');
+}
+expect {
+    1
+}
+
+test t-138548 {
+    SELECT -9223372036854775809 NOT IN ("foobar", "1abcd");
+}
+expect {
+    1
+}
+
+test t-138567 {
+    SELECT -9223372036854775809 NOT IN ("foobar", 64, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-138649 {
+    SELECT _latin1 'FOO' IN ("foobar", -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-138789 {
+    SELECT -0x1 NOT IN ("0", -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139025 {
+    SELECT 64 IN ("1abcd", -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-139092 {
+    SELECT -9223372036854775809 NOT IN ("1abcd", 'FOO');
+}
+expect {
+    1
+}
+
+test t-139103 {
+    SELECT -9223372036854775809 NOT IN ("1abcd", 'BAR', -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-139126 {
+    SELECT NULL NOT IN (-9223372036854775809, 64);
+}
+expect {
+    NULL
+}
+
+test t-139148 {
+    SELECT -9223372036854775809 NOT IN (NULL, -1);
+}
+expect {
+    NULL
+}
+
+test t-139193 {
+    SELECT 'BAR' IN (NULL, -9223372036854775809);
+}
+expect {
+    NULL
+}
+
+test t-139203 {
+    SELECT -9223372036854775809 IN (NULL, _latin1 'foo', -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139221 {
+    SELECT '64' NOT IN (64, -9223372036854775809);
+}
+expect {
+    0
+}
+
+test t-139276 {
+    SELECT -9223372036854775809 NOT IN (64, 'FOO');
+}
+expect {
+    1
+}
+
+test t-139277 {
+    SELECT 'FOO' NOT IN (64, -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139354 {
+    SELECT '64' IN (-9223372036854775809, 'FOO');
+}
+expect {
+    0
+}
+
+test t-139579 {
+    SELECT -9223372036854775809 IN (1, 'foo', -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139613 {
+    SELECT _latin1 'foo' NOT IN (1, -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139701 {
+    SELECT 'BAR' NOT IN ('FOO', -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139723 {
+    SELECT -9223372036854775809 IN ('BAR', _latin1 'foo', -9223372036854775809);
+}
+expect {
+    1
+}
+
+test t-139755 {
+    SELECT "foobar" IN ("foobar1234", -0x1, "foobar");
+}
+expect {
+    1
+}
+
+test t-139771 {
+    SELECT "foobar" IN ("foobar1234", NULL, "foobar");
+}
+expect {
+    1
+}
+
+test t-139843 {
+    SELECT "foobar" IN ("foobar1234", 'FOO', "foobar");
+}
+expect {
+    1
+}
+
+test t-139846 {
+    SELECT "foobar1234" NOT IN ("foobar", 'FOO');
+}
+expect {
+    1
+}
+
+test t-139881 {
+    SELECT "1abcd" IN ("0", "foobar");
+}
+expect {
+    0
+}
+
+test t-139968 {
+    SELECT "foobar" IN ("0", 'BAR');
+}
+expect {
+    0
+}
+
+test t-139977 {
+    SELECT _latin1 'foo' IN ("0", "foobar");
+}
+expect {
+    0
+}
+
+test t-139985 {
+    SELECT _latin1 'FOO' IN ("0", "foobar");
+}
+expect {
+    0
+}
+
+test t-140048 {
+    SELECT "foobar" IN (-0x1, 1);
+}
+expect {
+    0
+}
+
+test t-140080 {
+    SELECT "foobar" IN (-0x1, 'BAR');
+}
+expect {
+    0
+}
+
+test t-140083 {
+    SELECT "foobar" IN (-0x1, 'BAR', "foobar");
+}
+expect {
+    1
+}
+
+test t-140208 {
+    SELECT "foobar" IN (NULL, 64);
+}
+expect {
+    NULL
+}
+
+test t-140282 {
+    SELECT NULL IN ("foobar", 'BAR');
+}
+expect {
+    NULL
+}
+
+test t-140320 {
+    SELECT "foobar" IN (64, -1);
+}
+expect {
+    0
+}
+
+test t-140367 {
+    SELECT "foobar" NOT IN (64, 'FOO', "foobar");
+}
+expect {
+    0
+}
+
+test t-140421 {
+    SELECT 1 NOT IN ('64', "foobar");
+}
+expect {
+    1
+}
+
+test t-140603 {
+    SELECT "foobar" IN (-1, _latin1 'FOO', "foobar");
+}
+expect {
+    1
+}
+
+test t-140657 {
+    SELECT _latin1 'FOO' IN (0, "foobar");
+}
+expect {
+    1
+}
+
+test t-140693 {
+    SELECT 'BAR' NOT IN (1, "foobar");
+}
+expect {
+    1
+}
+
+test t-140715 {
+    SELECT "foobar" IN ('foo', 'bar', "foobar");
+}
+expect {
+    1
+}
+
+test t-140762 {
+    SELECT 'bar' IN ("foobar", 'BAR');
+}
+expect {
+    1
+}
+
+test t-140936 {
+    SELECT "foobar1234" IN ("0", _latin1 'foo');
+}
+expect {
+    0
+}
+
+test t-140963 {
+    SELECT "foobar1234" IN (-0x1, NULL, "foobar1234");
+}
+expect {
+    1
+}
+
+test t-140983 {
+    SELECT "foobar1234" NOT IN (-0x1, '64', "foobar1234");
+}
+expect {
+    0
+}
+
+test t-141018 {
+    SELECT -0x1 IN ("foobar1234", 'foo');
+}
+expect {
+    0
+}
+
+test t-141122 {
+    SELECT "1abcd" IN ("foobar1234", 'foo');
+}
+expect {
+    0
+}
+
+test t-141241 {
+    SELECT 'BAR' IN (NULL, "foobar1234");
+}
+expect {
+    NULL
+}
+
+test t-141273 {
+    SELECT NULL IN (64, "foobar1234");
+}
+expect {
+    NULL
+}
+
+test t-141332 {
+    SELECT "foobar1234" NOT IN (64, 'BAR');
+}
+expect {
+    1
+}
+
+test t-141397 {
+    SELECT 'bar' NOT IN ('64', "foobar1234");
+}
+expect {
+    1
+}
+
+test t-141533 {
+    SELECT 'bar' NOT IN (-1, "foobar1234");
+}
+expect {
+    1
+}
+
+test t-141545 {
+    SELECT 'BAR' IN (-1, "foobar1234");
+}
+expect {
+    0
+}
+
+test t-141547 {
+    SELECT "foobar1234" IN (-1, 'BAR', "foobar1234");
+}
+expect {
+    1
+}
+
+test t-141565 {
+    SELECT _latin1 'FOO' NOT IN (-1, "foobar1234");
+}
+expect {
+    1
+}
+
+test t-141659 {
+    SELECT "foobar1234" IN (1, _latin1 'foo', "foobar1234");
+}
+expect {
+    1
+}
+
+test t-141710 {
+    SELECT 'foo' NOT IN ("foobar1234", _latin1 'FOO');
+}
+expect {
+    0
+}
+
+test t-141768 {
+    SELECT "foobar1234" IN ('BAR', _latin1 'foo');
+}
+expect {
+    0
+}
+
+test t-141769 {
+    SELECT _latin1 'foo' IN ('BAR', "foobar1234");
+}
+expect {
+    0
+}
+
+test t-141891 {
+    SELECT "0" IN (-0x1, _latin1 'foo', "0");
+}
+expect {
+    1
+}
+
+test t-141923 {
+    SELECT "0" IN ("1abcd", '64', "0");
+}
+expect {
+    1
+}
+
+test t-141924 {
+    SELECT "0" NOT IN ("1abcd", '64');
+}
+expect {
+    1
+}
+
+test t-141936 {
+    SELECT "0" IN ("1abcd", -1);
+}
+expect {
+    0
+}
+
+test t-141999 {
+    SELECT "0" NOT IN ("1abcd", _latin1 'foo', "0");
+}
+expect {
+    0
+}
+
+test t-142113 {
+    SELECT NULL IN (64, "0");
+}
+expect {
+    NULL
+}
+
+test t-142127 {
+    SELECT "0" NOT IN (64, -1, "0");
+}
+expect {
+    0
+}
+
+test t-142147 {
+    SELECT "0" IN (64, 'foo', "0");
+}
+expect {
+    1
+}
+
+test t-142149 {
+    SELECT 'foo' NOT IN (64, "0");
+}
+expect {
+    1
+}
+
+test t-142198 {
+    SELECT '64' NOT IN ("0", NULL);
+}
+expect {
+    NULL
+}
+
+test t-142211 {
+    SELECT "0" IN ('64', 0, "0");
+}
+expect {
+    1
+}
+
+test t-142367 {
+    SELECT "0" NOT IN (-1, 'foo', "0");
+}
+expect {
+    0
+}
+
+test t-142553 {
+    SELECT 'FOO' IN ('bar', "0");
+}
+expect {
+    0
+}
+
+test t-142592 {
+    SELECT "0" IN ('FOO', _latin1 'foo');
+}
+expect {
+    0
+}
+
+test t-142603 {
+    SELECT "0" IN ('FOO', _latin1 'FOO', "0");
+}
+expect {
+    1
+}
+
+test t-142639 {
+    SELECT -0x1 NOT IN ("1abcd", NULL, -0x1);
+}
+expect {
+    0
+}
+
+test t-142641 {
+    SELECT 64 IN ("1abcd", -0x1);
+}
+expect {
+    0
+}
+
+test t-142844 {
+    SELECT -0x1 NOT IN (64, NULL);
+}
+expect {
+    NULL
+}
+
+test t-142880 {
+    SELECT -0x1 IN (64, 'bar');
+}
+expect {
+    0
+}
+
+test t-143251 {
+    SELECT -0x1 IN ('foo', 'FOO', -0x1);
+}
+expect {
+    1
+}
+
+test t-143378 {
+    SELECT NULL IN ("1abcd", NULL);
+}
+expect {
+    NULL
+}
+
+test t-143383 {
+    SELECT "1abcd" NOT IN (NULL, NULL, "1abcd");
+}
+expect {
+    0
+}
+
+test t-143403 {
+    SELECT "1abcd" IN (NULL, 1, "1abcd");
+}
+expect {
+    1
+}
+
+test t-143473 {
+    SELECT -1 IN (64, "1abcd");
+}
+expect {
+    0
+}
+
+test t-143484 {
+    SELECT "1abcd" NOT IN (64, 0);
+}
+expect {
+    1
+}
+
+test t-143556 {
+    SELECT "1abcd" NOT IN ('64', -1);
+}
+expect {
+    1
+}
+
+test t-143739 {
+    SELECT "1abcd" IN (-1, 'BAR', "1abcd");
+}
+expect {
+    1
+}
+
+test t-143866 {
+    SELECT 'foo' IN ("1abcd", 'bar');
+}
+expect {
+    0
+}
+
+test t-143883 {
+    SELECT "1abcd" IN ('foo', 'BAR', "1abcd");
+}
+expect {
+    1
+}
+
+test t-143924 {
+    SELECT "1abcd" NOT IN ('bar', _latin1 'foo');
+}
+expect {
+    1
+}
+
+test t-143946 {
+    SELECT 'FOO' IN ("1abcd", _latin1 'foo');
+}
+expect {
+    1
+}
+
+test t-143966 {
+    SELECT 'BAR' NOT IN ("1abcd", _latin1 'foo');
+}
+expect {
+    1
+}
+
+test t-144033 {
+    SELECT 'bar' IN (64, NULL);
+}
+expect {
+    NULL
+}
+
+test t-144061 {
+    SELECT _latin1 'foo' NOT IN (64, NULL);
+}
+expect {
+    NULL
+}
+
+test t-144138 {
+    SELECT '64' IN (NULL, _latin1 'foo');
+}
+expect {
+    NULL
+}
+
+test t-144144 {
+    SELECT NULL IN ('64', _latin1 'FOO');
+}
+expect {
+    NULL
+}
+
+test t-144180 {
+    SELECT NULL NOT IN (NULL, 'foo');
+}
+expect {
+    NULL
+}
+
+test t-144195 {
+    SELECT NULL IN (NULL, 'FOO', NULL);
+}
+expect {
+    NULL
+}
+
+test t-144361 {
+    SELECT 'FOO' IN (1, NULL);
+}
+expect {
+    NULL
+}
+
+test t-144394 {
+    SELECT 'foo' IN (NULL, 'bar');
+}
+expect {
+    NULL
+}
+
+test t-144414 {
+    SELECT 'foo' NOT IN (NULL, 'BAR');
+}
+expect {
+    NULL
+}
+
+test t-144509 {
+    SELECT _latin1 'FOO' NOT IN (_latin1 'foo', NULL);
+}
+expect {
+    0
+}
+
+test t-144515 {
+    SELECT 64 IN ('64', NULL, 64);
+}
+expect {
+    1
+}
+
+test t-144552 {
+    SELECT 64 IN ('64', 'bar');
+}
+expect {
+    1
+}
+
+test t-144572 {
+    SELECT 64 NOT IN ('64', 'BAR');
+}
+expect {
+    0
+}
+
+test t-144589 {
+    SELECT _latin1 'FOO' NOT IN ('64', 64);
+}
+expect {
+    1
+}
+
+test t-144617 {
+    SELECT 'foo' IN (NULL, 64);
+}
+expect {
+    NULL
+}
+
+test t-144723 {
+    SELECT 64 IN (-1, _latin1 'FOO', 64);
+}
+expect {
+    1
+}
+
+test t-144815 {
+    SELECT 64 NOT IN (1, 'BAR', 64);
+}
+expect {
+    0
+}
+
+test t-144841 {
+    SELECT 'FOO' IN ('foo', 64);
+}
+expect {
+    1
+}
+
+test t-144897 {
+    SELECT _latin1 'FOO' IN ('bar', 64);
+}
+expect {
+    0
+}
+
+test t-144923 {
+    SELECT 64 IN ('FOO', _latin1 'FOO', 64);
+}
+expect {
+    1
+}
+
+test t-144940 {
+    SELECT 64 NOT IN ('BAR', _latin1 'FOO');
+}
+expect {
+    1
+}
+
+test t-144941 {
+    SELECT _latin1 'FOO' NOT IN ('BAR', 64);
+}
+expect {
+    1
+}
+
+test t-144947 {
+    SELECT 64 IN (_latin1 'foo', _latin1 'FOO', 64);
+}
+expect {
+    1
+}
+
+test t-144963 {
+    SELECT '64' IN (NULL, 0, '64');
+}
+expect {
+    1
+}
+
+test t-145019 {
+    SELECT '64' IN (NULL, _latin1 'FOO', '64');
+}
+expect {
+    1
+}
+
+test t-145061 {
+    SELECT 'FOO' NOT IN (-1, '64');
+}
+expect {
+    1
+}
+
+test t-145081 {
+    SELECT _latin1 'FOO' IN (-1, '64');
+}
+expect {
+    0
+}
+
+test t-145103 {
+    SELECT '64' NOT IN (0, 'foo', '64');
+}
+expect {
+    0
+}
+
+test t-145119 {
+    SELECT '64' NOT IN (0, 'FOO', '64');
+}
+expect {
+    0
+}
+
+test t-145187 {
+    SELECT '64' IN (1, _latin1 'FOO', '64');
+}
+expect {
+    1
+}
+
+test t-145199 {
+    SELECT '64' NOT IN ('foo', 'bar', '64');
+}
+expect {
+    0
+}
+
+test t-145295 {
+    SELECT '64' NOT IN ('BAR', _latin1 'foo', '64');
+}
+expect {
+    0
+}
+
+test t-145305 {
+    SELECT _latin1 'FOO' IN (_latin1 'foo', '64');
+}
+expect {
+    1
+}
+
+test t-146130 {
+    SELECT 'bar' IN ('foo', _latin1 'foo');
+}
+expect {
+    0
+}
+
+test t-146144 {
+    SELECT 'foo' IN ('FOO', 'BAR');
+}
+expect {
+    1
+}
+
+test t-146152 {
+    SELECT 'foo' IN ('FOO', _latin1 'foo');
+}
+expect {
+    1
+}
+
+test t-146182 {
+    SELECT 'BAR' NOT IN ('foo', _latin1 'FOO');
+}
+expect {
+    1
+}
+
+test t-146208 {
+    SELECT 'bar' IN ('FOO', _latin1 'FOO');
+}
+expect {
+    0
+}
+
+test t-146213 {
+    SELECT _latin1 'FOO' NOT IN ('FOO', 'bar');
+}
+expect {
+    0
+}
+
+test t-146222 {
+    SELECT 'BAR' NOT IN ('bar', _latin1 'foo');
+}
+expect {
+    0
+}
+
+test t-146227 {
+    SELECT 'bar' IN ('BAR', _latin1 'FOO', 'bar');
+}
+expect {
+    1
+}
+
+test t-146246 {
+    SELECT 'BAR' NOT IN ('FOO', _latin1 'foo');
+}
+expect {
+    1
+}

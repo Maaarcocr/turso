@@ -1,0 +1,392 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-36399 {
+    SELECT CONCAT(_utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', "😊😂🤢");
+}
+expect {
+    abcABCÅåabcABCÅå😊😂🤢
+}
+
+test t-36411 {
+    SELECT CONCAT(_utf8mb4 'abcABCÅå', _latin1 0xFF, "a");
+}
+expect {
+    abcABCÅåÿa
+}
+
+test t-36412 {
+    SELECT CONCAT(_utf8mb4 'abcABCÅå', _latin1 0xFF, "abc");
+}
+expect {
+    abcABCÅåÿabc
+}
+
+test t-36422 {
+    SELECT CONCAT(_utf8mb4 'abcABCÅå', _latin1 0xFF, '123');
+}
+expect {
+    abcABCÅåÿ123
+}
+
+test t-36423 {
+    SELECT CONCAT(_utf8mb4 'abcABCÅå', _latin1 0xFF, 9223372036854775807);
+}
+expect {
+    abcABCÅåÿ9223372036854775807
+}
+
+test t-36463 {
+    SELECT CONCAT(_latin1 0xFF, NULL, "日本語テスト");
+}
+expect {
+    NULL
+}
+
+test t-36465 {
+    SELECT CONCAT(_latin1 0xFF, NULL, "😊😂🤢");
+}
+expect {
+    NULL
+}
+
+test t-36466 {
+    SELECT CONCAT(_latin1 0xFF, NULL, '123');
+}
+expect {
+    NULL
+}
+
+test t-36468 {
+    SELECT CONCAT(_latin1 0xFF, NULL, -9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-36475 {
+    SELECT CONCAT(_latin1 0xFF, "", NULL);
+}
+expect {
+    NULL
+}
+
+test t-36482 {
+    SELECT CONCAT(_latin1 0xFF, "", 0xAACC);
+}
+expect {
+    ���
+}
+
+test t-36486 {
+    SELECT CONCAT(_latin1 0xFF, "", "한국어 시험");
+}
+expect {
+    ÿ한국어 시험
+}
+
+test t-36492 {
+    SELECT CONCAT(_latin1 0xFF, "", -999999999999999999999999);
+}
+expect {
+    ÿ-999999999999999999999999
+}
+
+test t-36499 {
+    SELECT CONCAT(_latin1 0xFF, "a", "a");
+}
+expect {
+    ÿaa
+}
+
+test t-36505 {
+    SELECT CONCAT(_latin1 0xFF, "a", 3.1415926);
+}
+expect {
+    ÿa3.1415926
+}
+
+test t-36508 {
+    SELECT CONCAT(_latin1 0xFF, "a", "한국어 시험");
+}
+expect {
+    ÿa한국어 시험
+}
+
+test t-36513 {
+    SELECT CONCAT(_latin1 0xFF, "a", 999999999999999999999999);
+}
+expect {
+    ÿa999999999999999999999999
+}
+
+test t-36518 {
+    SELECT CONCAT(_latin1 0xFF, "abc", "Å å");
+}
+expect {
+    ÿabcÅ å
+}
+
+test t-36525 {
+    SELECT CONCAT(_latin1 0xFF, "abc", 0123);
+}
+expect {
+    ÿabc123
+}
+
+test t-36554 {
+    SELECT CONCAT(_latin1 0xFF, 1, '123');
+}
+expect {
+    ÿ1123
+}
+
+test t-36558 {
+    SELECT CONCAT(_latin1 0xFF, 1, -999999999999999999999999);
+}
+expect {
+    ÿ1-999999999999999999999999
+}
+
+test t-36567 {
+    SELECT CONCAT(_latin1 0xFF, -1, 1);
+}
+expect {
+    ÿ-11
+}
+
+test t-36568 {
+    SELECT CONCAT(_latin1 0xFF, -1, -1);
+}
+expect {
+    ÿ-1-1
+}
+
+test t-36569 {
+    SELECT CONCAT(_latin1 0xFF, -1, 0123);
+}
+expect {
+    ÿ-1123
+}
+
+test t-36576 {
+    SELECT CONCAT(_latin1 0xFF, -1, '123');
+}
+expect {
+    ÿ-1123
+}
+
+test t-36606 {
+    SELECT CONCAT(_latin1 0xFF, 0xAACC, "Å å");
+}
+expect {
+    ���Å å
+}
+
+test t-36616 {
+    SELECT CONCAT(_latin1 0xFF, 0xAACC, "中文测试");
+}
+expect {
+    ���中文测试
+}
+
+test t-36619 {
+    SELECT CONCAT(_latin1 0xFF, 0xAACC, "😊😂🤢");
+}
+expect {
+    ���😊😂🤢
+}
+
+test t-36621 {
+    SELECT CONCAT(_latin1 0xFF, 0xAACC, 9223372036854775807);
+}
+expect {
+    ���9223372036854775807
+}
+
+test t-36623 {
+    SELECT CONCAT(_latin1 0xFF, 0xAACC, 999999999999999999999999);
+}
+expect {
+    ���999999999999999999999999
+}
+
+test t-36637 {
+    SELECT CONCAT(_latin1 0xFF, 3.1415926, 3.1415926);
+}
+expect {
+    ÿ3.14159263.1415926
+}
+
+test t-36642 {
+    SELECT CONCAT(_latin1 0xFF, 3.1415926, '123');
+}
+expect {
+    ÿ3.1415926123
+}
+
+test t-36644 {
+    SELECT CONCAT(_latin1 0xFF, 3.1415926, -9223372036854775808);
+}
+expect {
+    ÿ3.1415926-9223372036854775808
+}
+
+test t-36665 {
+    SELECT CONCAT(_latin1 0xFF, "中文测试", 9223372036854775807);
+}
+expect {
+    ÿ中文测试9223372036854775807
+}
+
+test t-36678 {
+    SELECT CONCAT(_latin1 0xFF, "日本語テスト", -1);
+}
+expect {
+    ÿ日本語テスト-1
+}
+
+test t-36683 {
+    SELECT CONCAT(_latin1 0xFF, "日本語テスト", "日本語テスト");
+}
+expect {
+    ÿ日本語テスト日本語テスト
+}
+
+test t-36684 {
+    SELECT CONCAT(_latin1 0xFF, "日本語テスト", "한국어 시험");
+}
+expect {
+    ÿ日本語テスト한국어 시험
+}
+
+test t-36686 {
+    SELECT CONCAT(_latin1 0xFF, "日本語テスト", '123');
+}
+expect {
+    ÿ日本語テスト123
+}
+
+test t-36709 {
+    SELECT CONCAT(_latin1 0xFF, "한국어 시험", 9223372036854775807);
+}
+expect {
+    ÿ한국어 시험9223372036854775807
+}
+
+test t-36747 {
+    SELECT CONCAT(_latin1 0xFF, '123', 3.1415926);
+}
+expect {
+    ÿ1233.1415926
+}
+
+test t-36786 {
+    SELECT CONCAT(_latin1 0xFF, -9223372036854775808, "abc");
+}
+expect {
+    ÿ-9223372036854775808abc
+}
+
+test t-36801 {
+    SELECT CONCAT(_latin1 0xFF, -9223372036854775808, _binary 'Müller' );
+}
+expect {
+    �-9223372036854775808Müller
+}
+
+test t-36807 {
+    SELECT CONCAT(_latin1 0xFF, 999999999999999999999999, "a");
+}
+expect {
+    ÿ999999999999999999999999a
+}
+
+test t-36820 {
+    SELECT CONCAT(_latin1 0xFF, 999999999999999999999999, -9223372036854775808);
+}
+expect {
+    ÿ999999999999999999999999-9223372036854775808
+}
+
+test t-36821 {
+    SELECT CONCAT(_latin1 0xFF, 999999999999999999999999, 999999999999999999999999);
+}
+expect {
+    ÿ999999999999999999999999999999999999999999999999
+}
+
+test t-36827 {
+    SELECT CONCAT(_latin1 0xFF, -999999999999999999999999, NULL);
+}
+expect {
+    NULL
+}
+
+test t-36837 {
+    SELECT CONCAT(_latin1 0xFF, -999999999999999999999999, "日本語テスト");
+}
+expect {
+    ÿ-999999999999999999999999日本語テスト
+}
+
+test t-36842 {
+    SELECT CONCAT(_latin1 0xFF, -999999999999999999999999, -9223372036854775808);
+}
+expect {
+    ÿ-999999999999999999999999-9223372036854775808
+}
+
+test t-36846 {
+    SELECT CONCAT(_latin1 0xFF, -999999999999999999999999, _utf8mb4 'abcABCÅå');
+}
+expect {
+    ÿ-999999999999999999999999abcABCÅå
+}
+
+test t-36848 {
+    SELECT CONCAT(_latin1 0xFF, _binary 'Müller' , "Å å");
+}
+expect {
+    �MüllerÅ å
+}
+
+test t-36853 {
+    SELECT CONCAT(_latin1 0xFF, _binary 'Müller' , 1);
+}
+expect {
+    �Müller1
+}
+
+test t-36859 {
+    SELECT CONCAT(_latin1 0xFF, _binary 'Müller' , "日本語テスト");
+}
+expect {
+    �Müller日本語テスト
+}
+
+test t-36860 {
+    SELECT CONCAT(_latin1 0xFF, _binary 'Müller' , "한국어 시험");
+}
+expect {
+    �Müller한국어 시험
+}
+
+test t-36865 {
+    SELECT CONCAT(_latin1 0xFF, _binary 'Müller' , 999999999999999999999999);
+}
+expect {
+    �Müller999999999999999999999999
+}
+
+test t-36871 {
+    SELECT CONCAT(_latin1 0xFF, _utf8mb4 'abcABCÅå', NULL);
+}
+expect {
+    NULL
+}

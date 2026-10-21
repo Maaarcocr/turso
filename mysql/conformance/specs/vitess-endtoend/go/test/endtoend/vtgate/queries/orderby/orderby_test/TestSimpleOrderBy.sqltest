@@ -1,0 +1,41 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/orderby/orderby_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    insert into t1(id1, id2) values (0,10),(1,9),(2,8),(3,7),(4,6),(5,5);
+}
+
+@setup s1
+test l52 {
+    insert into t1(id1, id2) values (0,10),(1,9),(2,8),(3,7),(4,6),(5,5);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l53 {
+    SELECT id2 FROM t1 ORDER BY id2 ASC;
+}
+expect {
+    5
+    6
+    7
+    8
+    9
+    10
+}

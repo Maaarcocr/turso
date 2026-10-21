@@ -1,0 +1,42 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT COLLATION('foobar');
+}
+expect {
+    utf8mb4_0900_ai_ci
+}
+
+test t-1 {
+    SELECT COLLATION(_latin1 'foobar');
+}
+expect {
+    latin1_swedish_ci
+}
+
+test t-2 {
+    SELECT COLLATION(_utf8mb4 'foobar' COLLATE utf8mb4_general_ci);
+}
+expect {
+    utf8mb4_general_ci
+}
+
+test t-3 {
+    SELECT COLLATION('foobar' COLLATE utf8mb4_general_ci);
+}
+expect {
+    utf8mb4_general_ci
+}
+
+# mysql-error: 1253 42000 COLLATION 'utf8mb4_general_ci' is not valid for CHARACTER SET 'latin1'
+test t-4 {
+    SELECT COLLATION(_latin1 'foobar' COLLATE utf8mb4_general_ci);
+}
+expect error {
+}

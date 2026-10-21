@@ -1,0 +1,102 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/random/random_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE emp (
+ EMPNO bigint NOT NULL,
+ ENAME VARCHAR(10),
+ JOB VARCHAR(9),
+ MGR bigint,
+ HIREDATE DATE,
+ SAL bigint,
+ COMM bigint,
+ DEPTNO bigint,
+ GRADE ENUM('A', 'B', 'C', 'D', 'E'),
+ SKILLS SET('sql', 'go', 'java', 'python'),
+ META JSON,
+ PRIMARY KEY (EMPNO)
+) Engine = InnoDB
+  COLLATE = utf8mb4_general_ci;
+}
+
+@setup s1
+test l353 {
+    select empno, grade, skills, meta from emp order by empno;
+}
+expect {
+}
+
+@setup s1
+test l356 {
+    select empno, grade + 0 from emp order by empno;
+}
+expect {
+}
+
+@setup s1
+test l357 {
+    select empno, cast(grade as unsigned) from emp order by empno;
+}
+expect {
+}
+
+@setup s1
+test l358 {
+    select empno from emp where grade = 3 order by empno;
+}
+expect {
+}
+
+@setup s1
+test l359 {
+    select empno from emp where grade > 2 order by empno;
+}
+expect {
+}
+
+@setup s1
+test l362 {
+    select empno from emp where grade = 'C' order by empno;
+}
+expect {
+}
+
+@setup s1
+test l363 {
+    select grade, empno from emp order by grade, empno;
+}
+expect {
+}
+
+@setup s1
+test l366 {
+    select empno, skills from emp order by empno;
+}
+expect {
+}
+
+@setup s1
+test l367 {
+    select empno from emp where find_in_set('go', skills) order by empno;
+}
+expect {
+}
+
+@setup s1
+test l370 {
+    select empno, json_extract(meta, '$.lvl') from emp order by empno;
+}
+expect {
+}
+
+@setup s1
+test l371 {
+    select empno from emp where json_extract(meta, '$.lvl') > 7 order by empno;
+}
+expect {
+}

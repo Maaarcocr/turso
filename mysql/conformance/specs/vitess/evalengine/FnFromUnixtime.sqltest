@@ -1,0 +1,2261 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-0 {
+    SELECT FROM_UNIXTIME(0);
+}
+expect {
+    1970-01-01 00:00:00
+}
+
+test t-1 {
+    SELECT FROM_UNIXTIME(0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-2 {
+    SELECT FROM_UNIXTIME(1);
+}
+expect {
+    1970-01-01 00:00:01
+}
+
+test t-3 {
+    SELECT FROM_UNIXTIME(1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-4 {
+    SELECT FROM_UNIXTIME(255);
+}
+expect {
+    1970-01-01 00:04:15
+}
+
+test t-5 {
+    SELECT FROM_UNIXTIME(255, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 04 001 0 12 January 01 AM 12:04:15 AM 15 15 00:04:15 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-6 {
+    SELECT FROM_UNIXTIME(' 0 ');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-7 {
+    SELECT FROM_UNIXTIME(' 0 ', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-8 {
+    SELECT FROM_UNIXTIME(' 1 ');
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-9 {
+    SELECT FROM_UNIXTIME(' 1 ', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-10 {
+    SELECT FROM_UNIXTIME(' 255 ');
+}
+expect {
+    1970-01-01 00:04:15.000000
+}
+
+test t-11 {
+    SELECT FROM_UNIXTIME(' 255 ', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 04 001 0 12 January 01 AM 12:04:15 AM 15 15 00:04:15 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-12 {
+    SELECT FROM_UNIXTIME('\t1foo\t');
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-13 {
+    SELECT FROM_UNIXTIME('\t1foo\t', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-14 {
+    SELECT FROM_UNIXTIME(' 255 foo');
+}
+expect {
+    1970-01-01 00:04:15.000000
+}
+
+test t-15 {
+    SELECT FROM_UNIXTIME(' 255 foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 04 001 0 12 January 01 AM 12:04:15 AM 15 15 00:04:15 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-16 {
+    SELECT FROM_UNIXTIME(0.0e0);
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-17 {
+    SELECT FROM_UNIXTIME(0.0e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-18 {
+    SELECT FROM_UNIXTIME(1.0e0);
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-19 {
+    SELECT FROM_UNIXTIME(1.0e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-20 {
+    SELECT FROM_UNIXTIME(1.5e0);
+}
+expect {
+    1970-01-01 00:00:01.500000
+}
+
+test t-21 {
+    SELECT FROM_UNIXTIME(1.5e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 500000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-22 {
+    SELECT FROM_UNIXTIME(-1.5e0);
+}
+expect {
+    NULL
+}
+
+test t-23 {
+    SELECT FROM_UNIXTIME(-1.5e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-24 {
+    SELECT FROM_UNIXTIME(1.1e0);
+}
+expect {
+    1970-01-01 00:00:01.100000
+}
+
+test t-25 {
+    SELECT FROM_UNIXTIME(1.1e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 100000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-26 {
+    SELECT FROM_UNIXTIME(-1.1e0);
+}
+expect {
+    NULL
+}
+
+test t-27 {
+    SELECT FROM_UNIXTIME(-1.1e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-28 {
+    SELECT FROM_UNIXTIME(-1.7e0);
+}
+expect {
+    NULL
+}
+
+test t-29 {
+    SELECT FROM_UNIXTIME(-1.7e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-30 {
+    SELECT FROM_UNIXTIME(0.0);
+}
+expect {
+    1970-01-01 00:00:00.0
+}
+
+test t-31 {
+    SELECT FROM_UNIXTIME(0.0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-32 {
+    SELECT FROM_UNIXTIME(0.000);
+}
+expect {
+    1970-01-01 00:00:00.000
+}
+
+test t-33 {
+    SELECT FROM_UNIXTIME(0.000, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-34 {
+    SELECT FROM_UNIXTIME(1.5);
+}
+expect {
+    1970-01-01 00:00:01.5
+}
+
+test t-35 {
+    SELECT FROM_UNIXTIME(1.5, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 500000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-36 {
+    SELECT FROM_UNIXTIME(-1.5);
+}
+expect {
+    NULL
+}
+
+test t-37 {
+    SELECT FROM_UNIXTIME(-1.5, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-38 {
+    SELECT FROM_UNIXTIME(1.1);
+}
+expect {
+    1970-01-01 00:00:01.1
+}
+
+test t-39 {
+    SELECT FROM_UNIXTIME(1.1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 100000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-40 {
+    SELECT FROM_UNIXTIME(1.7);
+}
+expect {
+    1970-01-01 00:00:01.7
+}
+
+test t-41 {
+    SELECT FROM_UNIXTIME(1.7, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 700000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-42 {
+    SELECT FROM_UNIXTIME(-1.1);
+}
+expect {
+    NULL
+}
+
+test t-43 {
+    SELECT FROM_UNIXTIME(-1.1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-44 {
+    SELECT FROM_UNIXTIME(-1.7);
+}
+expect {
+    NULL
+}
+
+test t-45 {
+    SELECT FROM_UNIXTIME(-1.7, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-46 {
+    SELECT FROM_UNIXTIME('1.5');
+}
+expect {
+    1970-01-01 00:00:01.500000
+}
+
+test t-47 {
+    SELECT FROM_UNIXTIME('1.5', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 500000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-48 {
+    SELECT FROM_UNIXTIME('-1.5');
+}
+expect {
+    NULL
+}
+
+test t-49 {
+    SELECT FROM_UNIXTIME('-1.5', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-50 {
+    SELECT FROM_UNIXTIME('foobar');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-51 {
+    SELECT FROM_UNIXTIME('foobar', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-52 {
+    SELECT FROM_UNIXTIME(_utf8 'foobar');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-53 {
+    SELECT FROM_UNIXTIME(_utf8 'foobar', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-54 {
+    SELECT FROM_UNIXTIME('');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-55 {
+    SELECT FROM_UNIXTIME('', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-56 {
+    SELECT FROM_UNIXTIME(_binary 'foobar');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-57 {
+    SELECT FROM_UNIXTIME(_binary 'foobar', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-58 {
+    SELECT FROM_UNIXTIME(0x0);
+}
+expect {
+    1970-01-01 00:00:00
+}
+
+test t-59 {
+    SELECT FROM_UNIXTIME(0x0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-60 {
+    SELECT FROM_UNIXTIME(0x1);
+}
+expect {
+    1970-01-01 00:00:01
+}
+
+test t-61 {
+    SELECT FROM_UNIXTIME(0x1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-62 {
+    SELECT FROM_UNIXTIME(0xff);
+}
+expect {
+    1970-01-01 00:04:15
+}
+
+test t-63 {
+    SELECT FROM_UNIXTIME(0xff, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 04 001 0 12 January 01 AM 12:04:15 AM 15 15 00:04:15 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-64 {
+    SELECT FROM_UNIXTIME(X'00');
+}
+expect {
+    1970-01-01 00:00:00
+}
+
+test t-65 {
+    SELECT FROM_UNIXTIME(X'00', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-66 {
+    SELECT FROM_UNIXTIME(X'01');
+}
+expect {
+    1970-01-01 00:00:01
+}
+
+test t-67 {
+    SELECT FROM_UNIXTIME(X'01', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-68 {
+    SELECT FROM_UNIXTIME(X'ff');
+}
+expect {
+    1970-01-01 00:04:15
+}
+
+test t-69 {
+    SELECT FROM_UNIXTIME(X'ff', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 04 001 0 12 January 01 AM 12:04:15 AM 15 15 00:04:15 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-70 {
+    SELECT FROM_UNIXTIME(0b1001);
+}
+expect {
+    1970-01-01 00:00:09
+}
+
+test t-71 {
+    SELECT FROM_UNIXTIME(0b1001, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:09 AM 09 09 00:00:09 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-72 {
+    SELECT FROM_UNIXTIME(b'1001');
+}
+expect {
+    1970-01-01 00:00:09
+}
+
+test t-73 {
+    SELECT FROM_UNIXTIME(b'1001', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:09 AM 09 09 00:00:09 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-74 {
+    SELECT FROM_UNIXTIME(0x9);
+}
+expect {
+    1970-01-01 00:00:09
+}
+
+test t-75 {
+    SELECT FROM_UNIXTIME(0x9, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:09 AM 09 09 00:00:09 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-76 {
+    SELECT FROM_UNIXTIME(x'09');
+}
+expect {
+    1970-01-01 00:00:09
+}
+
+test t-77 {
+    SELECT FROM_UNIXTIME(x'09', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:09 AM 09 09 00:00:09 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-78 {
+    SELECT FROM_UNIXTIME(NULL);
+}
+expect {
+    NULL
+}
+
+test t-79 {
+    SELECT FROM_UNIXTIME(NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-80 {
+    SELECT FROM_UNIXTIME(true);
+}
+expect {
+    1970-01-01 00:00:01
+}
+
+test t-81 {
+    SELECT FROM_UNIXTIME(true, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-82 {
+    SELECT FROM_UNIXTIME(false);
+}
+expect {
+    1970-01-01 00:00:00
+}
+
+test t-83 {
+    SELECT FROM_UNIXTIME(false, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-84 {
+    SELECT FROM_UNIXTIME(NULL * 1);
+}
+expect {
+    NULL
+}
+
+test t-85 {
+    SELECT FROM_UNIXTIME(NULL * 1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-86 {
+    SELECT FROM_UNIXTIME(1 * NULL);
+}
+expect {
+    NULL
+}
+
+test t-87 {
+    SELECT FROM_UNIXTIME(1 * NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-88 {
+    SELECT FROM_UNIXTIME(NULL * NULL);
+}
+expect {
+    NULL
+}
+
+test t-89 {
+    SELECT FROM_UNIXTIME(NULL * NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-90 {
+    SELECT FROM_UNIXTIME(NULL / 1);
+}
+expect {
+    NULL
+}
+
+test t-91 {
+    SELECT FROM_UNIXTIME(NULL / 1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-92 {
+    SELECT FROM_UNIXTIME(1 / NULL);
+}
+expect {
+    NULL
+}
+
+test t-93 {
+    SELECT FROM_UNIXTIME(1 / NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-94 {
+    SELECT FROM_UNIXTIME(NULL / NULL);
+}
+expect {
+    NULL
+}
+
+test t-95 {
+    SELECT FROM_UNIXTIME(NULL / NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-96 {
+    SELECT FROM_UNIXTIME(NULL + 1);
+}
+expect {
+    NULL
+}
+
+test t-97 {
+    SELECT FROM_UNIXTIME(NULL + 1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-98 {
+    SELECT FROM_UNIXTIME(1 + NULL);
+}
+expect {
+    NULL
+}
+
+test t-99 {
+    SELECT FROM_UNIXTIME(1 + NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-100 {
+    SELECT FROM_UNIXTIME(NULL + NULL);
+}
+expect {
+    NULL
+}
+
+test t-101 {
+    SELECT FROM_UNIXTIME(NULL + NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-102 {
+    SELECT FROM_UNIXTIME(NULL - 1);
+}
+expect {
+    NULL
+}
+
+test t-103 {
+    SELECT FROM_UNIXTIME(NULL - 1, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-104 {
+    SELECT FROM_UNIXTIME(1 - NULL);
+}
+expect {
+    NULL
+}
+
+test t-105 {
+    SELECT FROM_UNIXTIME(1 - NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-106 {
+    SELECT FROM_UNIXTIME(NULL - NULL);
+}
+expect {
+    NULL
+}
+
+test t-107 {
+    SELECT FROM_UNIXTIME(NULL - NULL, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-108 {
+    SELECT FROM_UNIXTIME(0xFF666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-109 {
+    SELECT FROM_UNIXTIME(0xFF666F6F626172FF, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-110 {
+    SELECT FROM_UNIXTIME(0x666F6F626172FF);
+}
+expect {
+    NULL
+}
+
+test t-111 {
+    SELECT FROM_UNIXTIME(0x666F6F626172FF, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-112 {
+    SELECT FROM_UNIXTIME(0xFF666F6F626172);
+}
+expect {
+    NULL
+}
+
+test t-113 {
+    SELECT FROM_UNIXTIME(0xFF666F6F626172, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-114 {
+    SELECT FROM_UNIXTIME(9223372036854775807);
+}
+expect {
+    NULL
+}
+
+test t-115 {
+    SELECT FROM_UNIXTIME(9223372036854775807, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-116 {
+    SELECT FROM_UNIXTIME(-9223372036854775808);
+}
+expect {
+    NULL
+}
+
+test t-117 {
+    SELECT FROM_UNIXTIME(-9223372036854775808, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-118 {
+    SELECT FROM_UNIXTIME(18446744073709551615);
+}
+expect {
+    NULL
+}
+
+test t-119 {
+    SELECT FROM_UNIXTIME(18446744073709551615, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-120 {
+    SELECT FROM_UNIXTIME(18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-121 {
+    SELECT FROM_UNIXTIME(18446744073709540000e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-122 {
+    SELECT FROM_UNIXTIME(-18446744073709540000e0);
+}
+expect {
+    NULL
+}
+
+test t-123 {
+    SELECT FROM_UNIXTIME(-18446744073709540000e0, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-124 {
+    SELECT FROM_UNIXTIME(JSON_OBJECT());
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-125 {
+    SELECT FROM_UNIXTIME(JSON_OBJECT(), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-126 {
+    SELECT FROM_UNIXTIME(JSON_ARRAY());
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-127 {
+    SELECT FROM_UNIXTIME(JSON_ARRAY(), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-128 {
+    SELECT FROM_UNIXTIME(time '10:04:58');
+}
+expect {
+    1970-01-02 03:54:18
+}
+
+test t-129 {
+    SELECT FROM_UNIXTIME(time '10:04:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 000000 03 03 03 54 002 3 3 January 01 AM 03:54:18 AM 18 18 03:54:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-130 {
+    SELECT FROM_UNIXTIME(time '31:34:58');
+}
+expect {
+    1970-01-04 15:04:18
+}
+
+test t-131 {
+    SELECT FROM_UNIXTIME(time '31:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Sun Jan 1 4th 04 4 000000 15 03 03 04 004 15 3 January 01 PM 03:04:18 PM 18 18 15:04:18 01 01 01 01 Sunday 0 1970 1970 1970 70 % 
+}
+
+test t-132 {
+    SELECT FROM_UNIXTIME(time '32:34:58');
+}
+expect {
+    1970-01-04 17:50:58
+}
+
+test t-133 {
+    SELECT FROM_UNIXTIME(time '32:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Sun Jan 1 4th 04 4 000000 17 05 05 50 004 17 5 January 01 PM 05:50:58 PM 58 58 17:50:58 01 01 01 01 Sunday 0 1970 1970 1970 70 % 
+}
+
+test t-134 {
+    SELECT FROM_UNIXTIME(time '130:34:58');
+}
+expect {
+    1970-01-16 02:04:18
+}
+
+test t-135 {
+    SELECT FROM_UNIXTIME(time '130:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 16th 16 16 000000 02 02 02 04 016 2 2 January 01 AM 02:04:18 AM 18 18 02:04:18 02 03 02 03 Friday 5 1970 1970 1970 70 % 
+}
+
+test t-136 {
+    SELECT FROM_UNIXTIME(time '5 10:34:58');
+}
+expect {
+    1970-01-16 02:04:18
+}
+
+test t-137 {
+    SELECT FROM_UNIXTIME(time '5 10:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 16th 16 16 000000 02 02 02 04 016 2 2 January 01 AM 02:04:18 AM 18 18 02:04:18 02 03 02 03 Friday 5 1970 1970 1970 70 % 
+}
+
+test t-138 {
+    SELECT FROM_UNIXTIME(time '10:04:58.1');
+}
+expect {
+    1970-01-02 03:54:18.1
+}
+
+test t-139 {
+    SELECT FROM_UNIXTIME(time '10:04:58.1', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 100000 03 03 03 54 002 3 3 January 01 AM 03:54:18 AM 18 18 03:54:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-140 {
+    SELECT FROM_UNIXTIME(time '31:34:58.4');
+}
+expect {
+    1970-01-04 15:04:18.4
+}
+
+test t-141 {
+    SELECT FROM_UNIXTIME(time '31:34:58.4', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Sun Jan 1 4th 04 4 400000 15 03 03 04 004 15 3 January 01 PM 03:04:18 PM 18 18 15:04:18 01 01 01 01 Sunday 0 1970 1970 1970 70 % 
+}
+
+test t-142 {
+    SELECT FROM_UNIXTIME(time '32:34:58.5');
+}
+expect {
+    1970-01-04 17:50:58.5
+}
+
+test t-143 {
+    SELECT FROM_UNIXTIME(time '32:34:58.5', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Sun Jan 1 4th 04 4 500000 17 05 05 50 004 17 5 January 01 PM 05:50:58 PM 58 58 17:50:58 01 01 01 01 Sunday 0 1970 1970 1970 70 % 
+}
+
+test t-144 {
+    SELECT FROM_UNIXTIME(time '130:34:58.6');
+}
+expect {
+    1970-01-16 02:04:18.6
+}
+
+test t-145 {
+    SELECT FROM_UNIXTIME(time '130:34:58.6', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 16th 16 16 600000 02 02 02 04 016 2 2 January 01 AM 02:04:18 AM 18 18 02:04:18 02 03 02 03 Friday 5 1970 1970 1970 70 % 
+}
+
+test t-146 {
+    SELECT FROM_UNIXTIME(time '5 10:34:58.9');
+}
+expect {
+    1970-01-16 02:04:18.9
+}
+
+test t-147 {
+    SELECT FROM_UNIXTIME(time '5 10:34:58.9', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 16th 16 16 900000 02 02 02 04 016 2 2 January 01 AM 02:04:18 AM 18 18 02:04:18 02 03 02 03 Friday 5 1970 1970 1970 70 % 
+}
+
+test t-148 {
+    SELECT FROM_UNIXTIME(date '2000-01-01');
+}
+expect {
+    1970-08-20 11:35:01
+}
+
+test t-149 {
+    SELECT FROM_UNIXTIME(date '2000-01-01', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Aug 8 20th 20 20 000000 11 11 11 35 232 11 11 August 08 AM 11:35:01 AM 01 01 11:35:01 33 34 33 34 Thursday 4 1970 1970 1970 70 % 
+}
+
+test t-150 {
+    SELECT FROM_UNIXTIME(timestamp '2000-01-01 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-151 {
+    SELECT FROM_UNIXTIME(timestamp '2000-01-01 10:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-152 {
+    SELECT FROM_UNIXTIME(timestamp '2000-01-01 10:34:58.123456');
+}
+expect {
+    NULL
+}
+
+test t-153 {
+    SELECT FROM_UNIXTIME(timestamp '2000-01-01 10:34:58.123456', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-154 {
+    SELECT FROM_UNIXTIME(timestamp '2000-01-01 10:34:58.978654');
+}
+expect {
+    NULL
+}
+
+test t-155 {
+    SELECT FROM_UNIXTIME(timestamp '2000-01-01 10:34:58.978654', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-156 {
+    SELECT FROM_UNIXTIME(timestamp '2024-12-30 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-157 {
+    SELECT FROM_UNIXTIME(timestamp '2024-12-30 10:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-158 {
+    SELECT FROM_UNIXTIME(20000101103458);
+}
+expect {
+    NULL
+}
+
+test t-159 {
+    SELECT FROM_UNIXTIME(20000101103458, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-160 {
+    SELECT FROM_UNIXTIME(20000101103458.1234);
+}
+expect {
+    NULL
+}
+
+test t-161 {
+    SELECT FROM_UNIXTIME(20000101103458.1234, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-162 {
+    SELECT FROM_UNIXTIME(20000101103458.123456);
+}
+expect {
+    NULL
+}
+
+test t-163 {
+    SELECT FROM_UNIXTIME(20000101103458.123456, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-164 {
+    SELECT FROM_UNIXTIME(20000101);
+}
+expect {
+    1970-08-20 11:35:01
+}
+
+test t-165 {
+    SELECT FROM_UNIXTIME(20000101, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Aug 8 20th 20 20 000000 11 11 11 35 232 11 11 August 08 AM 11:35:01 AM 01 01 11:35:01 33 34 33 34 Thursday 4 1970 1970 1970 70 % 
+}
+
+test t-166 {
+    SELECT FROM_UNIXTIME(103458);
+}
+expect {
+    1970-01-02 04:44:18
+}
+
+test t-167 {
+    SELECT FROM_UNIXTIME(103458, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 000000 04 04 04 44 002 4 4 January 01 AM 04:44:18 AM 18 18 04:44:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-168 {
+    SELECT FROM_UNIXTIME(103458.123456);
+}
+expect {
+    1970-01-02 04:44:18.123456
+}
+
+test t-169 {
+    SELECT FROM_UNIXTIME(103458.123456, "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 123456 04 04 04 44 002 4 4 January 01 AM 04:44:18 AM 18 18 04:44:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-170 {
+    SELECT FROM_UNIXTIME('20000101103458');
+}
+expect {
+    NULL
+}
+
+test t-171 {
+    SELECT FROM_UNIXTIME('20000101103458', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-172 {
+    SELECT FROM_UNIXTIME('20000101103458.1234');
+}
+expect {
+    NULL
+}
+
+test t-173 {
+    SELECT FROM_UNIXTIME('20000101103458.1234', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-174 {
+    SELECT FROM_UNIXTIME('20000101103458.123456');
+}
+expect {
+    NULL
+}
+
+test t-175 {
+    SELECT FROM_UNIXTIME('20000101103458.123456', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-176 {
+    SELECT FROM_UNIXTIME('20000101');
+}
+expect {
+    1970-08-20 11:35:01.000000
+}
+
+test t-177 {
+    SELECT FROM_UNIXTIME('20000101', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Aug 8 20th 20 20 000000 11 11 11 35 232 11 11 August 08 AM 11:35:01 AM 01 01 11:35:01 33 34 33 34 Thursday 4 1970 1970 1970 70 % 
+}
+
+test t-178 {
+    SELECT FROM_UNIXTIME('103458');
+}
+expect {
+    1970-01-02 04:44:18.000000
+}
+
+test t-179 {
+    SELECT FROM_UNIXTIME('103458', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 000000 04 04 04 44 002 4 4 January 01 AM 04:44:18 AM 18 18 04:44:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-180 {
+    SELECT FROM_UNIXTIME('103458.123456');
+}
+expect {
+    1970-01-02 04:44:18.123456
+}
+
+test t-181 {
+    SELECT FROM_UNIXTIME('103458.123456', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 123456 04 04 04 44 002 4 4 January 01 AM 04:44:18 AM 18 18 04:44:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-182 {
+    SELECT FROM_UNIXTIME('20000101103458foo');
+}
+expect {
+    NULL
+}
+
+test t-183 {
+    SELECT FROM_UNIXTIME('20000101103458foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-184 {
+    SELECT FROM_UNIXTIME('20000101103458.1234foo');
+}
+expect {
+    NULL
+}
+
+test t-185 {
+    SELECT FROM_UNIXTIME('20000101103458.1234foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-186 {
+    SELECT FROM_UNIXTIME('20000101103458.123456foo');
+}
+expect {
+    NULL
+}
+
+test t-187 {
+    SELECT FROM_UNIXTIME('20000101103458.123456foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-188 {
+    SELECT FROM_UNIXTIME('20000101foo');
+}
+expect {
+    1970-08-20 11:35:01.000000
+}
+
+test t-189 {
+    SELECT FROM_UNIXTIME('20000101foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Aug 8 20th 20 20 000000 11 11 11 35 232 11 11 August 08 AM 11:35:01 AM 01 01 11:35:01 33 34 33 34 Thursday 4 1970 1970 1970 70 % 
+}
+
+test t-190 {
+    SELECT FROM_UNIXTIME('103458foo');
+}
+expect {
+    1970-01-02 04:44:18.000000
+}
+
+test t-191 {
+    SELECT FROM_UNIXTIME('103458foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 000000 04 04 04 44 002 4 4 January 01 AM 04:44:18 AM 18 18 04:44:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-192 {
+    SELECT FROM_UNIXTIME('103458.123456foo');
+}
+expect {
+    1970-01-02 04:44:18.123456
+}
+
+test t-193 {
+    SELECT FROM_UNIXTIME('103458.123456foo', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Fri Jan 1 2nd 02 2 123456 04 04 04 44 002 4 4 January 01 AM 04:44:18 AM 18 18 04:44:18 00 01 52 01 Friday 5 1969 1970 1970 70 % 
+}
+
+test t-194 {
+    SELECT FROM_UNIXTIME(time '-10:04:58');
+}
+expect {
+    NULL
+}
+
+test t-195 {
+    SELECT FROM_UNIXTIME(time '-10:04:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-196 {
+    SELECT FROM_UNIXTIME(time '-31:34:58');
+}
+expect {
+    NULL
+}
+
+test t-197 {
+    SELECT FROM_UNIXTIME(time '-31:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-198 {
+    SELECT FROM_UNIXTIME(time '-32:34:58');
+}
+expect {
+    NULL
+}
+
+test t-199 {
+    SELECT FROM_UNIXTIME(time '-32:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-200 {
+    SELECT FROM_UNIXTIME(time'00:00:01.0000');
+}
+expect {
+    1970-01-01 00:00:01.0000
+}
+
+test t-201 {
+    SELECT FROM_UNIXTIME(time'00:00:01.0000', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-202 {
+    SELECT FROM_UNIXTIME(time'00:00:59.01011');
+}
+expect {
+    1970-01-01 00:00:59.01011
+}
+
+test t-203 {
+    SELECT FROM_UNIXTIME(time'00:00:59.01011', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 010110 00 12 12 00 001 0 12 January 01 AM 12:00:59 AM 59 59 00:00:59 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-204 {
+    SELECT FROM_UNIXTIME(time'00:00:59.2132234');
+}
+expect {
+    1970-01-01 00:00:59.213223
+}
+
+test t-205 {
+    SELECT FROM_UNIXTIME(time'00:00:59.2132234', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 213223 00 12 12 00 001 0 12 January 01 AM 12:00:59 AM 59 59 00:00:59 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-206 {
+    SELECT FROM_UNIXTIME(time '-101:34:58');
+}
+expect {
+    NULL
+}
+
+test t-207 {
+    SELECT FROM_UNIXTIME(time '-101:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-208 {
+    SELECT FROM_UNIXTIME(time '-5 10:34:58');
+}
+expect {
+    NULL
+}
+
+test t-209 {
+    SELECT FROM_UNIXTIME(time '-5 10:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-210 {
+    SELECT FROM_UNIXTIME('10:04:58');
+}
+expect {
+    1970-01-01 00:00:10.000000
+}
+
+test t-211 {
+    SELECT FROM_UNIXTIME('10:04:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:10 AM 10 10 00:00:10 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-212 {
+    SELECT FROM_UNIXTIME('101:34:58');
+}
+expect {
+    1970-01-01 00:01:41.000000
+}
+
+test t-213 {
+    SELECT FROM_UNIXTIME('101:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 01 001 0 12 January 01 AM 12:01:41 AM 41 41 00:01:41 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-214 {
+    SELECT FROM_UNIXTIME('5 10:34:58');
+}
+expect {
+    1970-01-01 00:00:05.000000
+}
+
+test t-215 {
+    SELECT FROM_UNIXTIME('5 10:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:05 AM 05 05 00:00:05 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-216 {
+    SELECT FROM_UNIXTIME('2000-01-01');
+}
+expect {
+    1970-01-01 00:33:20.000000
+}
+
+test t-217 {
+    SELECT FROM_UNIXTIME('2000-01-01', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 33 001 0 12 January 01 AM 12:33:20 AM 20 20 00:33:20 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-218 {
+    SELECT FROM_UNIXTIME('2000-01-01 12:34:58');
+}
+expect {
+    1970-01-01 00:33:20.000000
+}
+
+test t-219 {
+    SELECT FROM_UNIXTIME('2000-01-01 12:34:58', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 33 001 0 12 January 01 AM 12:33:20 AM 20 20 00:33:20 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-220 {
+    SELECT FROM_UNIXTIME('0000-02-29');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-221 {
+    SELECT FROM_UNIXTIME('0000-02-29', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-222 {
+    SELECT FROM_UNIXTIME('0000-01-03');
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-223 {
+    SELECT FROM_UNIXTIME('0000-01-03', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-224 {
+    SELECT FROM_UNIXTIME('1969-02-18');
+}
+expect {
+    1970-01-01 00:32:49.000000
+}
+
+test t-225 {
+    SELECT FROM_UNIXTIME('1969-02-18', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 32 001 0 12 January 01 AM 12:32:49 AM 49 49 00:32:49 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-226 {
+    SELECT FROM_UNIXTIME('1970-01-01 00:00:01');
+}
+expect {
+    1970-01-01 00:32:50.000000
+}
+
+test t-227 {
+    SELECT FROM_UNIXTIME('1970-01-01 00:00:01', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 32 001 0 12 January 01 AM 12:32:50 AM 50 50 00:32:50 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-228 {
+    SELECT FROM_UNIXTIME('3001-02-19 00:00:00');
+}
+expect {
+    1970-01-01 00:50:01.000000
+}
+
+test t-229 {
+    SELECT FROM_UNIXTIME('3001-02-19 00:00:00', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 50 001 0 12 January 01 AM 12:50:01 AM 01 01 00:50:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-230 {
+    SELECT FROM_UNIXTIME('3001-02-18 23:59:59');
+}
+expect {
+    1970-01-01 00:50:01.000000
+}
+
+test t-231 {
+    SELECT FROM_UNIXTIME('3001-02-18 23:59:59', "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 50 001 0 12 January 01 AM 12:50:01 AM 01 01 00:50:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-232 {
+    SELECT FROM_UNIXTIME(cast(0 as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-233 {
+    SELECT FROM_UNIXTIME(cast(0 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-234 {
+    SELECT FROM_UNIXTIME(cast(1 as json));
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-235 {
+    SELECT FROM_UNIXTIME(cast(1 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-236 {
+    SELECT FROM_UNIXTIME(cast(true as json));
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-237 {
+    SELECT FROM_UNIXTIME(cast(true as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-238 {
+    SELECT FROM_UNIXTIME(cast(false as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-239 {
+    SELECT FROM_UNIXTIME(cast(false as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-240 {
+    SELECT FROM_UNIXTIME(cast('\{\}' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-241 {
+    SELECT FROM_UNIXTIME(cast('\{\}' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-242 {
+    SELECT FROM_UNIXTIME(cast('[]' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-243 {
+    SELECT FROM_UNIXTIME(cast('[]' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-244 {
+    SELECT FROM_UNIXTIME(cast('null' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-245 {
+    SELECT FROM_UNIXTIME(cast('null' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-246 {
+    SELECT FROM_UNIXTIME(cast('true' as json));
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-247 {
+    SELECT FROM_UNIXTIME(cast('true' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-248 {
+    SELECT FROM_UNIXTIME(cast('false' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-249 {
+    SELECT FROM_UNIXTIME(cast('false' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-252 {
+    SELECT FROM_UNIXTIME(cast(2 as json));
+}
+expect {
+    1970-01-01 00:00:02.000000
+}
+
+test t-253 {
+    SELECT FROM_UNIXTIME(cast(2 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:02 AM 02 02 00:00:02 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-254 {
+    SELECT FROM_UNIXTIME(cast(1.1 as json));
+}
+expect {
+    1970-01-01 00:00:01.100000
+}
+
+test t-255 {
+    SELECT FROM_UNIXTIME(cast(1.1 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 100000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-256 {
+    SELECT FROM_UNIXTIME(cast(-1.1 as json));
+}
+expect {
+    NULL
+}
+
+test t-257 {
+    SELECT FROM_UNIXTIME(cast(-1.1 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-258 {
+    SELECT FROM_UNIXTIME(cast(9223372036854775807 as json));
+}
+expect {
+    NULL
+}
+
+test t-259 {
+    SELECT FROM_UNIXTIME(cast(9223372036854775807 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-260 {
+    SELECT FROM_UNIXTIME(cast(18446744073709551615 as json));
+}
+expect {
+    NULL
+}
+
+test t-261 {
+    SELECT FROM_UNIXTIME(cast(18446744073709551615 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-262 {
+    SELECT FROM_UNIXTIME(cast('1' as json));
+}
+expect {
+    1970-01-01 00:00:01.000000
+}
+
+test t-263 {
+    SELECT FROM_UNIXTIME(cast('1' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-264 {
+    SELECT FROM_UNIXTIME(cast('2' as json));
+}
+expect {
+    1970-01-01 00:00:02.000000
+}
+
+test t-265 {
+    SELECT FROM_UNIXTIME(cast('2' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:02 AM 02 02 00:00:02 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-266 {
+    SELECT FROM_UNIXTIME(cast('1.1' as json));
+}
+expect {
+    1970-01-01 00:00:01.100000
+}
+
+test t-267 {
+    SELECT FROM_UNIXTIME(cast('1.1' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 100000 00 12 12 00 001 0 12 January 01 AM 12:00:01 AM 01 01 00:00:01 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-268 {
+    SELECT FROM_UNIXTIME(cast('-1.1' as json));
+}
+expect {
+    NULL
+}
+
+test t-269 {
+    SELECT FROM_UNIXTIME(cast('-1.1' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-270 {
+    SELECT FROM_UNIXTIME(cast('9223372036854775807' as json));
+}
+expect {
+    NULL
+}
+
+test t-271 {
+    SELECT FROM_UNIXTIME(cast('9223372036854775807' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-272 {
+    SELECT FROM_UNIXTIME(cast('18446744073709551615' as json));
+}
+expect {
+    NULL
+}
+
+test t-273 {
+    SELECT FROM_UNIXTIME(cast('18446744073709551615' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect {
+    NULL
+}
+
+test t-274 {
+    SELECT FROM_UNIXTIME(cast('"foo"' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-275 {
+    SELECT FROM_UNIXTIME(cast('"foo"' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-276 {
+    SELECT FROM_UNIXTIME(cast('"bar"' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-277 {
+    SELECT FROM_UNIXTIME(cast('"bar"' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-278 {
+    SELECT FROM_UNIXTIME(cast('invalid' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test t-279 {
+    SELECT FROM_UNIXTIME(cast('invalid' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect error {
+}
+
+test t-280 {
+    SELECT FROM_UNIXTIME(cast(_binary' "foo"' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-281 {
+    SELECT FROM_UNIXTIME(cast(_binary' "foo"' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-282 {
+    SELECT FROM_UNIXTIME(cast(_binary '"bar"' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-283 {
+    SELECT FROM_UNIXTIME(cast(_binary '"bar"' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-284 {
+    SELECT FROM_UNIXTIME(cast(0xFF666F6F626172FF as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-285 {
+    SELECT FROM_UNIXTIME(cast(0xFF666F6F626172FF as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-286 {
+    SELECT FROM_UNIXTIME(cast(0x666F6F626172FF as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-287 {
+    SELECT FROM_UNIXTIME(cast(0x666F6F626172FF as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-288 {
+    SELECT FROM_UNIXTIME(cast(0b01 as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-289 {
+    SELECT FROM_UNIXTIME(cast(0b01 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-290 {
+    SELECT FROM_UNIXTIME(cast(0b001 as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-291 {
+    SELECT FROM_UNIXTIME(cast(0b001 as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-292 {
+    SELECT FROM_UNIXTIME(cast('["a"]' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-293 {
+    SELECT FROM_UNIXTIME(cast('["a"]' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-294 {
+    SELECT FROM_UNIXTIME(cast('["ab"]' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-295 {
+    SELECT FROM_UNIXTIME(cast('["ab"]' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-296 {
+    SELECT FROM_UNIXTIME(cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-297 {
+    SELECT FROM_UNIXTIME(cast('["ab", "cd", "ef"]' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-298 {
+    SELECT FROM_UNIXTIME(cast('["ab", "ef"]' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-299 {
+    SELECT FROM_UNIXTIME(cast('["ab", "ef"]' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-300 {
+    SELECT FROM_UNIXTIME(cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-301 {
+    SELECT FROM_UNIXTIME(cast('\{"a": 1, "b": 2\}' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-302 {
+    SELECT FROM_UNIXTIME(cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-303 {
+    SELECT FROM_UNIXTIME(cast('\{"b": 2, "a": 1\}' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-304 {
+    SELECT FROM_UNIXTIME(cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-305 {
+    SELECT FROM_UNIXTIME(cast('\{"c": 1, "b": 2\}' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-306 {
+    SELECT FROM_UNIXTIME(cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-307 {
+    SELECT FROM_UNIXTIME(cast('\{"b": 2, "c": 1\}' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-308 {
+    SELECT FROM_UNIXTIME(cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-309 {
+    SELECT FROM_UNIXTIME(cast(' "b": 2\}' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-310 {
+    SELECT FROM_UNIXTIME(cast('"a": 1' as json));
+}
+expect error {
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-311 {
+    SELECT FROM_UNIXTIME(cast('"a": 1' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect error {
+}
+
+test t-312 {
+    SELECT FROM_UNIXTIME(cast(date '2000-01-01' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-313 {
+    SELECT FROM_UNIXTIME(cast(date '2000-01-01' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-314 {
+    SELECT FROM_UNIXTIME(cast(date '2000-01-02' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-315 {
+    SELECT FROM_UNIXTIME(cast(date '2000-01-02' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-316 {
+    SELECT FROM_UNIXTIME(cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-317 {
+    SELECT FROM_UNIXTIME(cast(timestamp '2000-01-01 12:34:58' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-318 {
+    SELECT FROM_UNIXTIME(cast(time '12:34:56' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-319 {
+    SELECT FROM_UNIXTIME(cast(time '12:34:56' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-320 {
+    SELECT FROM_UNIXTIME(cast(time '12:34:58' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-321 {
+    SELECT FROM_UNIXTIME(cast(time '12:34:58' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}
+
+test t-322 {
+    SELECT FROM_UNIXTIME(cast(time '5 12:34:58' as json));
+}
+expect {
+    1970-01-01 00:00:00.000000
+}
+
+test t-323 {
+    SELECT FROM_UNIXTIME(cast(time '5 12:34:58' as json), "%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% ");
+}
+expect raw {
+Thu Jan 1 1st 01 1 000000 00 12 12 00 001 0 12 January 01 AM 12:00:00 AM 00 00 00:00:00 00 01 52 01 Thursday 4 1969 1970 1970 70 % 
+}

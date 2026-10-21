@@ -1,0 +1,83 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/subquery/subquery_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t2
+(
+    id3 bigint,
+    id4 bigint,
+    primary key (id3)
+) Engine = InnoDB;
+}
+
+setup s2 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+}
+
+setup s3 {
+    create table t2
+(
+    id3 bigint,
+    id4 bigint,
+    primary key (id3)
+) Engine = InnoDB;
+    insert into t1(id1, id2) values(0,0),(1,1);
+    insert into t2(id3, id4) values(1,2),(5,7);
+}
+
+setup s4 {
+    insert into t1(id1, id2) values(0,0),(1,1);
+}
+
+@setup s1
+test l166 {
+    insert into t2(id3, id4) values(1,2),(5,7);
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+test l167 {
+    SELECT max((select min(id2) from t1)) FROM t2;
+}
+expect unordered {
+    0
+}
+
+@setup s2
+@setup s4
+test l168 {
+    SELECT max((select group_concat(id1, id2) from t1 where id1 = 1)) FROM t1 where id1 = 1;
+}
+expect unordered {
+    11
+}
+
+@setup s2
+@setup s4
+test l169 {
+    SELECT max((select min(id2) from t1 where id2 = 1)) FROM dual;
+}
+expect unordered {
+    1
+}
+
+@setup s2
+@setup s3
+test l170 {
+    SELECT max((select min(id2) from t1)) FROM t2 where id4 = 7;
+}
+expect unordered {
+    0
+}

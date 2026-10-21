@@ -1,0 +1,630 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/vt/vtgate/evalengine/testcases/cases.go
+# license: Apache-2.0
+@database :memory:
+
+test t-227950 {
+    SELECT CONCAT_WS(_binary 'Müller' , _utf8mb4 'abcABCÅå', cast(date '2000-01-01' as json));
+}
+expect {
+    abcABCÅåMüller"2000-01-01"
+}
+
+test t-227959 {
+    SELECT CONCAT_WS(_binary 'Müller' , _latin1 0xFF, ' 0 ');
+}
+expect raw {
+�Müller 0 
+}
+
+test t-228106 {
+    SELECT CONCAT_WS(_binary 'Müller' , _latin1 0xFF, cast('\{"a": 1, "b": 2\}' as json));
+}
+expect {
+    ÿMüller\{"a": 1, "b": 2\}
+}
+
+test t-228130 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "Å å", 1.1e0);
+}
+expect {
+    Å åabcABCÅå1.1
+}
+
+test t-228159 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "Å å", false);
+}
+expect {
+    Å åabcABCÅå0
+}
+
+test t-228644 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "a", true);
+}
+expect {
+    aabcABCÅå1
+}
+
+test t-228713 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "a", '2000-01-01 12:34:58');
+}
+expect {
+    aabcABCÅå2000-01-01 12:34:58
+}
+
+test t-228972 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 1, NULL * NULL);
+}
+expect {
+    1
+}
+
+test t-229002 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 1, date '2000-01-01');
+}
+expect {
+    1abcABCÅå2000-01-01
+}
+
+test t-229144 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', -1, 0xFF666F6F626172FF);
+}
+expect {
+    -1abcABCÅå�foobar�
+}
+
+test t-229200 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', -1, '0000-02-29');
+}
+expect {
+    -1abcABCÅå0000-02-29
+}
+
+test t-229277 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 0123, 'foobar');
+}
+expect {
+    123abcABCÅåfoobar
+}
+
+test t-229319 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 0123, time '130:34:58');
+}
+expect {
+    123abcABCÅå130:34:58
+}
+
+test t-229339 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 0123, '20000101103458.123456');
+}
+expect {
+    123abcABCÅå20000101103458.123456
+}
+
+test t-229343 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 0123, '20000101103458foo');
+}
+expect {
+    123abcABCÅå20000101103458foo
+}
+
+test t-229416 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 0xAACC, 255);
+}
+expect {
+    ��abcABCÅå255
+}
+
+test t-229464 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 0xAACC, NULL + NULL);
+}
+expect {
+    ��
+}
+
+test t-229577 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 3.1415926, 1);
+}
+expect {
+    3.1415926abcABCÅå1
+}
+
+test t-229586 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 3.1415926, 1.5e0);
+}
+expect {
+    3.1415926abcABCÅå1.5
+}
+
+test t-229650 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 3.1415926, date '2000-01-01');
+}
+expect {
+    3.1415926abcABCÅå2000-01-01
+}
+
+test t-229688 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 3.1415926, '1969-02-18');
+}
+expect {
+    3.1415926abcABCÅå1969-02-18
+}
+
+test t-229734 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 3.1415926, cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    3.1415926abcABCÅå"2000-01-01 12:34:58.000000"
+}
+
+test t-229867 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "中文测试", cast(9223372036854775807 as json));
+}
+expect {
+    中文测试abcABCÅå9223372036854775807
+}
+
+test t-229891 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "中文测试", cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    中文测试abcABCÅå\{"b": 2, "c": 1\}
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-229893 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "中文测试", cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-229921 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "日本語テスト", -1.1);
+}
+expect {
+    日本語テストabcABCÅå-1.1
+}
+
+test t-229963 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "日本語テスト", JSON_ARRAY());
+}
+expect {
+    日本語テストabcABCÅå[]
+}
+
+test t-230008 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "日本語テスト", '2000-01-01');
+}
+expect {
+    日本語テストabcABCÅå2000-01-01
+}
+
+test t-230126 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "한국어 시험", time '10:04:58');
+}
+expect {
+    한국어 시험abcABCÅå10:04:58
+}
+
+test t-230238 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "😊😂🤢", -1.7e0);
+}
+expect {
+    😊😂🤢abcABCÅå-1.7
+}
+
+test t-230287 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "😊😂🤢", JSON_ARRAY());
+}
+expect {
+    😊😂🤢abcABCÅå[]
+}
+
+test t-230316 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', "😊😂🤢", '20000101103458.1234foo');
+}
+expect {
+    😊😂🤢abcABCÅå20000101103458.1234foo
+}
+
+test t-230530 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', '123', cast(0b01 as json));
+}
+expect {
+    123abcABCÅå"base64:type15:AQ=="
+}
+
+test t-230658 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 9223372036854775807, '0000-02-29');
+}
+expect {
+    9223372036854775807abcABCÅå0000-02-29
+}
+
+test t-230959 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 999999999999999999999999, '20000101103458.123456');
+}
+expect {
+    999999999999999999999999abcABCÅå20000101103458.123456
+}
+
+test t-230970 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', 999999999999999999999999, time '-31:34:58');
+}
+expect {
+    999999999999999999999999abcABCÅå-31:34:58
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-231188 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', -999999999999999999999999, cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-231336 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', _binary 'Müller' , cast(_binary' "foo"' as json));
+}
+expect {
+    MüllerabcABCÅå"base64:type15:ICJmb28i"
+}
+
+test t-231344 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', _binary 'Müller' , cast('["ab", "cd", "ef"]' as json));
+}
+expect {
+    MüllerabcABCÅå["ab", "cd", "ef"]
+}
+
+test t-231347 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', _binary 'Müller' , cast('\{"b": 2, "a": 1\}' as json));
+}
+expect {
+    MüllerabcABCÅå\{"a": 1, "b": 2\}
+}
+
+test t-231379 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', -1.1);
+}
+expect {
+    abcABCÅåabcABCÅå-1.1
+}
+
+test t-231500 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', _utf8mb4 'abcABCÅå', cast(0xFF666F6F626172FF as json));
+}
+expect {
+    abcABCÅåabcABCÅå"base64:type15:/2Zvb2Jhcv8="
+}
+
+test t-231643 {
+    SELECT CONCAT_WS(_utf8mb4 'abcABCÅå', _latin1 0xFF, cast('true' as json));
+}
+expect {
+    ÿabcABCÅåtrue
+}
+
+test t-231699 {
+    SELECT CONCAT_WS(_latin1 0xFF, "Å å", 1.5);
+}
+expect {
+    Å åÿ1.5
+}
+
+test t-231704 {
+    SELECT CONCAT_WS(_latin1 0xFF, "Å å", -1.7);
+}
+expect {
+    Å åÿ-1.7
+}
+
+test t-231866 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL, -1.7);
+}
+expect {
+    -1.7
+}
+
+test t-231893 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL, 1 + NULL);
+}
+expect {
+    
+}
+
+test t-231919 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL, timestamp '2000-01-01 10:34:58');
+}
+expect {
+    2000-01-01 10:34:58
+}
+
+test t-231937 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL, '20000101103458.123456foo');
+}
+expect {
+    20000101103458.123456foo
+}
+
+test t-231982 {
+    SELECT CONCAT_WS(_latin1 0xFF, NULL, cast('"bar"' as json));
+}
+expect {
+    "bar"
+}
+
+test t-232228 {
+    SELECT CONCAT_WS(_latin1 0xFF, "a", 18446744073709540000e0);
+}
+expect {
+    aÿ1.844674407370954e19
+}
+
+test t-232250 {
+    SELECT CONCAT_WS(_latin1 0xFF, "a", 20000101);
+}
+expect {
+    aÿ20000101
+}
+
+test t-232597 {
+    SELECT CONCAT_WS(_latin1 0xFF, 1, '10:04:58');
+}
+expect {
+    1ÿ10:04:58
+}
+
+test t-232837 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0123, -1.1);
+}
+expect {
+    123ÿ-1.1
+}
+
+test t-232857 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0123, false);
+}
+expect {
+    123ÿ0
+}
+
+test t-232883 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0123, time '130:34:58');
+}
+expect {
+    123ÿ130:34:58
+}
+
+test t-232923 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0123, '5 10:34:58');
+}
+expect {
+    123ÿ5 10:34:58
+}
+
+test t-233049 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0xAACC, time '32:34:58.5');
+}
+expect {
+    ���32:34:58.5
+}
+
+test t-233091 {
+    SELECT CONCAT_WS(_latin1 0xFF, 0xAACC, '1970-01-01 00:00:01');
+}
+expect {
+    ���1970-01-01 00:00:01
+}
+
+test t-233232 {
+    SELECT CONCAT_WS(_latin1 0xFF, 3.1415926, '20000101103458.1234foo');
+}
+expect {
+    3.1415926ÿ20000101103458.1234foo
+}
+
+test t-233364 {
+    SELECT CONCAT_WS(_latin1 0xFF, "中文测试", JSON_OBJECT());
+}
+expect {
+    中文测试ÿ\{\}
+}
+
+test t-233461 {
+    SELECT CONCAT_WS(_latin1 0xFF, "中文测试", cast(time '12:34:56' as json));
+}
+expect {
+    中文测试ÿ"12:34:56.000000"
+}
+
+test t-233508 {
+    SELECT CONCAT_WS(_latin1 0xFF, "日本語テスト", NULL * NULL);
+}
+expect {
+    日本語テスト
+}
+
+test t-233561 {
+    SELECT CONCAT_WS(_latin1 0xFF, "日本語テスト", time '-10:04:58');
+}
+expect {
+    日本語テストÿ-10:04:58
+}
+
+test t-233587 {
+    SELECT CONCAT_WS(_latin1 0xFF, "日本語テスト", cast('true' as json));
+}
+expect {
+    日本語テストÿtrue
+}
+
+test t-233691 {
+    SELECT CONCAT_WS(_latin1 0xFF, "한국어 시험", time '31:34:58');
+}
+expect {
+    한국어 시험ÿ31:34:58
+}
+
+test t-233770 {
+    SELECT CONCAT_WS(_latin1 0xFF, "한국어 시험", cast(0b01 as json));
+}
+expect {
+    한국어 시험ÿ"base64:type15:AQ=="
+}
+
+test t-233792 {
+    SELECT CONCAT_WS(_latin1 0xFF, "😊😂🤢", ' 1 ');
+}
+expect raw {
+😊😂🤢ÿ 1 
+}
+
+test t-233813 {
+    SELECT CONCAT_WS(_latin1 0xFF, "😊😂🤢", 'foobar');
+}
+expect {
+    😊😂🤢ÿfoobar
+}
+
+test t-233832 {
+    SELECT CONCAT_WS(_latin1 0xFF, "😊😂🤢", NULL * NULL);
+}
+expect {
+    😊😂🤢
+}
+
+test t-233884 {
+    SELECT CONCAT_WS(_latin1 0xFF, "😊😂🤢", '103458.123456foo');
+}
+expect {
+    😊😂🤢ÿ103458.123456foo
+}
+
+test t-233916 {
+    SELECT CONCAT_WS(_latin1 0xFF, "😊😂🤢", cast(-1.1 as json));
+}
+expect {
+    😊😂🤢ÿ-1.1
+}
+
+test t-233933 {
+    SELECT CONCAT_WS(_latin1 0xFF, "😊😂🤢", cast(0b001 as json));
+}
+expect {
+    😊😂🤢ÿ"base64:type15:AQ=="
+}
+
+test t-234001 {
+    SELECT CONCAT_WS(_latin1 0xFF, '123', NULL - 1);
+}
+expect {
+    123
+}
+
+test t-234024 {
+    SELECT CONCAT_WS(_latin1 0xFF, '123', date '2000-01-01');
+}
+expect {
+    123ÿ2000-01-01
+}
+
+test t-234255 {
+    SELECT CONCAT_WS(_latin1 0xFF, 9223372036854775807, cast(0x666F6F626172FF as json));
+}
+expect {
+    9223372036854775807ÿ"base64:type15:Zm9vYmFy/w=="
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 3.
+test t-234267 {
+    SELECT CONCAT_WS(_latin1 0xFF, 9223372036854775807, cast('"a": 1' as json));
+}
+expect error {
+}
+
+test t-234311 {
+    SELECT CONCAT_WS(_latin1 0xFF, -9223372036854775808, 0x9);
+}
+expect raw {
+-9223372036854775808�	
+}
+
+test t-234347 {
+    SELECT CONCAT_WS(_latin1 0xFF, -9223372036854775808, time '5 10:34:58.9');
+}
+expect {
+    -9223372036854775808ÿ130:34:58.9
+}
+
+test t-234363 {
+    SELECT CONCAT_WS(_latin1 0xFF, -9223372036854775808, '103458');
+}
+expect {
+    -9223372036854775808ÿ103458
+}
+
+test t-234386 {
+    SELECT CONCAT_WS(_latin1 0xFF, -9223372036854775808, '1969-02-18');
+}
+expect {
+    -9223372036854775808ÿ1969-02-18
+}
+
+test t-234568 {
+    SELECT CONCAT_WS(_latin1 0xFF, 999999999999999999999999, cast('2' as json));
+}
+expect {
+    999999999999999999999999ÿ2
+}
+
+test t-234610 {
+    SELECT CONCAT_WS(_latin1 0xFF, -999999999999999999999999, 1.1e0);
+}
+expect {
+    -999999999999999999999999ÿ1.1
+}
+
+test t-234754 {
+    SELECT CONCAT_WS(_latin1 0xFF, -999999999999999999999999, cast(date '2000-01-01' as json));
+}
+expect {
+    -999999999999999999999999ÿ"2000-01-01"
+}
+
+test t-234897 {
+    SELECT CONCAT_WS(_latin1 0xFF, _binary 'Müller' , cast('"foo"' as json));
+}
+expect {
+    Müllerÿ"foo"
+}
+
+test t-234937 {
+    SELECT CONCAT_WS(_latin1 0xFF, _utf8mb4 'abcABCÅå', 0.0);
+}
+expect {
+    abcABCÅåÿ0.0
+}
+
+test t-234942 {
+    SELECT CONCAT_WS(_latin1 0xFF, _utf8mb4 'abcABCÅå', 1.7);
+}
+expect {
+    abcABCÅåÿ1.7
+}
+
+# mysql-error: 3141 22032 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test t-235076 {
+    SELECT CONCAT_WS(_latin1 0xFF, _utf8mb4 'abcABCÅå', cast(' "b": 2\}' as json));
+}
+expect error {
+}
+
+test t-235237 {
+    SELECT CONCAT_WS(_latin1 0xFF, _latin1 0xFF, cast('\{"b": 2, "c": 1\}' as json));
+}
+expect {
+    ÿÿ\{"b": 2, "c": 1\}
+}

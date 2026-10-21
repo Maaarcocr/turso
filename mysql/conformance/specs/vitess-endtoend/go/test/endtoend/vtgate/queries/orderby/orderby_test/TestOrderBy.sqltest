@@ -1,0 +1,135 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/orderby/orderby_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t4
+(
+    id1 bigint,
+    id2 varchar(10),
+    primary key (id1)
+) ENGINE = InnoDB
+  DEFAULT charset = utf8mb4
+  COLLATE = utf8mb4_general_ci;
+}
+
+setup s2 {
+    insert into t4(id1, id2) values(1,'a'), (2,'Abc'), (3,'b'), (4,'c'), (5,'test');
+}
+
+setup s3 {
+    insert into t4(id1, id2) values(6,'d'), (7,'e'), (8,'F');
+}
+
+setup s4 {
+    delete from t4;
+}
+
+@setup s1
+test l69 {
+    insert into t4(id1, id2) values(1,'a'), (2,'Abc'), (3,'b'), (4,'c'), (5,'test');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l70 {
+    insert into t4(id1, id2) values(6,'d'), (7,'e'), (8,'F');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l72 {
+    select id1, id2 from t4 order by id2 desc;
+}
+expect {
+    5|test
+    8|F
+    7|e
+    6|d
+    4|c
+    3|b
+    2|Abc
+    1|a
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l74 {
+    select id1, id2 from t4 order by id1 desc;
+}
+expect {
+    8|F
+    7|e
+    6|d
+    5|test
+    4|c
+    3|b
+    2|Abc
+    1|a
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l76 {
+    select id1, id2 from t4 order by reverse(id2) desc;
+}
+expect {
+    5|test
+    8|F
+    7|e
+    6|d
+    2|Abc
+    4|c
+    3|b
+    1|a
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l80 {
+    delete from t4;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l84 {
+    select id1, id2 from t4 order by id2 desc;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l85 {
+    select id1, id2 from t4 order by id1 desc;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l86 {
+    select id1, id2 from t4 order by reverse(id2) desc;
+}
+expect {
+}

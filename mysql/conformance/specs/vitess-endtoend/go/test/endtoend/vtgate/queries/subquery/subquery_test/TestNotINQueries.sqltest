@@ -1,0 +1,67 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/subquery/subquery_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
+) Engine = InnoDB;
+    insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6);
+}
+
+@setup s1
+test l69 {
+    SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1 WHERE id2 > 10) ORDER BY id2;
+}
+expect {
+    1
+    2
+    3
+    4
+    5
+    6
+}
+
+@setup s1
+test l72 {
+    SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 3) ORDER BY id2;
+}
+expect {
+    1
+    2
+    3
+    4
+}
+
+@setup s1
+test l73 {
+    SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1 WHERE id2 > 3) ORDER BY id2;
+}
+expect {
+    1
+    2
+    3
+    4
+}
+
+@setup s1
+test l76 {
+    SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1) ORDER BY id2;
+}
+expect {
+}
+
+@setup s1
+test l77 {
+    SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id2 FROM t1) ORDER BY id2;
+}
+expect {
+    1
+}

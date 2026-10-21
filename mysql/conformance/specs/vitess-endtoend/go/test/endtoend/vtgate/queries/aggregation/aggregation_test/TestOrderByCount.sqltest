@@ -1,0 +1,41 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/vitessio/vitess.git @ e157537374a15996987346ea6d356d1ca7e8aeec
+#   go/test/endtoend/vtgate/queries/aggregation/aggregation_test.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t9
+(
+    id1 bigint,
+    id2 varchar(10),
+    id3 varchar(10),
+    primary key (id1)
+) ENGINE = InnoDB
+  DEFAULT charset = utf8mb4
+  COLLATE = utf8mb4_general_ci;
+}
+
+setup s2 {
+    insert into t9(id1, id2, id3) values(1, '1', '1'), (2, '2', '2'), (3, '2', '2'), (4, '3', '3'), (5, '3', '3'), (6, '3', '3');
+}
+
+@setup s1
+test l458 {
+    insert into t9(id1, id2, id3) values(1, '1', '1'), (2, '2', '2'), (3, '2', '2'), (4, '3', '3'), (5, '3', '3'), (6, '3', '3');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l460 {
+    SELECT t9.id2 FROM t9 GROUP BY t9.id2 ORDER BY COUNT(t9.id2) DESC;
+}
+expect {
+    3
+    2
+    1
+}
