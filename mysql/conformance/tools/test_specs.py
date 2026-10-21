@@ -46,9 +46,20 @@ class BlockModelTests(unittest.TestCase):
 
     def test_statements_split_back(self):
         statements = ["CREATE TABLE t(a INT)", "INSERT INTO t VALUES(1) -- tail", "SELECT 'a\nb'",
-                      "SELECT 1 # hash"]
+                      "SELECT 1 # hash", "SELECT 'x;\ny' AS `;`", "SELECT 2;"[:-1]]
         text = LIB.sql_block_text(statements, "    ")
         self.assertEqual(LIB.split_block_statements(text), statements)
+
+    def test_mysql_statement_splitting(self):
+        text = ("SELECT 'a;b', \"c\\\";d\", `e;f`, 'g'';h' -- x;y\n; SELECT 2 # z;\n;"
+                "/* ; */ SELECT 3;;  -- only a comment\n")
+        self.assertEqual(LIB.mysql_statements(text), [
+            "SELECT 'a;b', \"c\\\";d\", `e;f`, 'g'';h' -- x;y", "SELECT 2 # z;", "/* ; */ SELECT 3",
+            "-- only a comment"])
+        self.assertEqual(LIB.mysql_statements("SELECT 1--2; SELECT 3"), ["SELECT 1--2", "SELECT 3"])
+        self.assertIsNotNone(LIB.statement_representable(
+            "CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN SET NEW.a = 1; SET NEW.b = 2; END"))
+        self.assertIsNone(LIB.statement_representable("SELECT 'x;\ny'"))
 
     def test_statement_representability(self):
         self.assertIsNone(LIB.statement_representable("SELECT 1"))
@@ -105,6 +116,19 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(LIB.from_width("SELECT * FROM t1 JOIN t2 ON 1 LEFT JOIN t3 ON 1 ORDER BY 1"), 3)
         self.assertEqual(LIB.from_width("SELECT * FROM (SELECT 1 FROM a, b) AS x, t2"), 2)
         self.assertEqual(LIB.from_width("SELECT (SELECT max(b) FROM u, v) FROM t"), 2)
+
+    def test_server_mutations_are_refused(self):
+        for statement in ["SET GLOBAL sql_mode = ''", "set @@global.max_connections = 10",
+                          "SET SESSION a = 1, PERSIST b = 2", "SET PASSWORD = 'x'",
+                          "ALTER USER CURRENT_USER() IDENTIFIED BY 'x'", "GRANT ALL ON *.* TO root@'%'",
+                          "INSTALL PLUGIN x SONAME 'x.so'", "CREATE TABLESPACE ts ADD DATAFILE 'a.ibd'",
+                          "XA START 'x'", "RESET MASTER", "KILL 12", "STOP REPLICA",
+                          "/* c */ SET GLOBAL x = 1"]:
+            self.assertIsNotNone(LIB.server_mutation(statement), statement)
+        for statement in ["SET sql_mode = ''", "SET SESSION time_zone = '+01:00'", "SELECT @@GLOBAL.sql_mode",
+                          "CREATE USER u@'%'", "GRANT SELECT ON db.* TO u", "SELECT 'SET GLOBAL'",
+                          "CREATE TABLE t(a INT) TABLESPACE_X = 1"[:24]]:
+            self.assertIsNone(LIB.server_mutation(statement), statement)
 
     def test_side_effect_lanes(self):
         self.assertTrue(LIB.is_read_only("SELECT a FROM t"))
@@ -379,6 +403,53 @@ class RecorderPlanTests(unittest.TestCase):
         self.assertEqual(tests_by_name["l4"]["expect_kind"], "error")
         self.assertIn("mysql-error: 1365 22012 Division by 0", tests_by_name["l4"]["comments"])
         self.assertEqual(tests_by_name["l4"]["setups"], ["s1", "s2"])
+
+
+class RecorderPolicyTests(unittest.TestCase):
+    def test_test_names_for_ids_outside_their_group(self):
+        plan = REC.GroupPlan("matrixone/dir/case.sql")
+        record = candidate("L12", [], ["SELECT 1"])
+        record["id"] = "matrixone/dir/case:L12"
+        self.assertEqual(REC.test_name(REC.Candidate(record, -1, "chain"), plan), "l12")
+        plan = REC.GroupPlan("vitess/evalengine/JSONExtract")
+        record["id"] = "vitess/evalengine/JSONExtract:7"
+        self.assertEqual(REC.test_name(REC.Candidate(record, -1, "chain"), plan), "t-7")
+
+    def test_server_mutations_are_never_planned(self):
+        buckets = __import__("collections").Counter()
+        details = __import__("collections").defaultdict(list)
+        with tempfile.TemporaryDirectory() as directory:
+            plans = REC.load_candidates([write_candidates(directory, [
+                candidate("L1", ["CREATE TABLE t(a INT)"], ["SET GLOBAL max_connections = 1"]),
+                candidate("L2", ["SET GLOBAL sql_mode = ''"], ["SELECT 1 FROM t"]),
+                candidate("L3", ["  CREATE TABLE t(a INT)  "], ["SELECT a FROM t\n"]),
+            ])], buckets, details)
+        plan = plans["src/g"]
+        self.assertEqual(buckets["unsupported-environment"], 2)
+        self.assertEqual([c.id for c in plan.candidates], ["src/g:L3"])
+        self.assertEqual(plan.candidates[0].record["sql"], ["SELECT a FROM t"])
+        self.assertEqual(plan.statement[plan.candidates[0].node], "CREATE TABLE t(a INT)")
+
+    def test_local_only_follows_the_lock(self):
+        args = __import__("argparse").Namespace(local=False)
+        with tempfile.TemporaryDirectory() as directory:
+            lock = pathlib.Path(directory) / "sources.lock.toml"
+            lock.write_text('schema_version = 1\n[[source]]\nid = "a"\nspec_sources = ["src"]\n'
+                            'redistribute_generated_cases = true\n[[source]]\nid = "b"\n'
+                            'spec_sources = ["other"]\nredistribute_generated_cases = false\n')
+            saved = REC.LOCK
+            REC.LOCK = lock
+            try:
+                plan = REC.GroupPlan("src/g")
+                plan.candidates.append(REC.Candidate(candidate("L1", [], ["SELECT 1"]), -1, "chain"))
+                self.assertEqual(REC.local_only("src", [plan], args), (False, ""))
+                self.assertTrue(REC.local_only("other", [plan], args)[0])
+                self.assertTrue(REC.local_only("unknown", [plan], args)[0])
+                self.assertTrue(REC.local_only("src", [plan], __import__("argparse").Namespace(local=True))[0])
+                plan.candidates[0].record["source"]["license"] = "GPL-2.0-only"
+                self.assertTrue(REC.local_only("src", [plan], args)[0])
+            finally:
+                REC.LOCK = saved
 
 
 class ScoreTests(unittest.TestCase):

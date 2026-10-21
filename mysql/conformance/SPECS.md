@@ -16,13 +16,15 @@ highest level that is fully cleared plus the next failures to work on.
 ```text
 mysql/conformance/
 ├── my-sqltests/          owned specs; every one must pass (CI gate)
+├── corpus/
+│   └── sources.lock.toml pinned upstream repositories, revisions, licenses
 ├── specs/
-│   ├── sources.lock.toml pinned upstream repositories, revisions, licenses
-│   └── <source>/         recorded imported specs (ratcheted, see below)
-│       ├── REPORT.md     extraction/recording bucket counts for the source
-│       └── <dir>/
-│           ├── *.sqltest      shards of at most 1,000 tests
-│           └── manifest.jsonl one record per test in this directory
+│   ├── <source>/         recorded imported specs (ratcheted, see below)
+│   │   ├── REPORT.md     extraction/recording bucket counts for the source
+│   │   └── <dir>/
+│   │       ├── *.sqltest      shards of at most 1,000 tests
+│   │       └── manifest.jsonl one record per test in this directory
+│   └── local/<source>/   recordings that must not be committed (ignored)
 ├── candidates/           importer output: unrecorded candidate JSONL (ignored)
 ├── .sources/             fetch-sources.sh checkouts (ignored)
 ├── .record-cache/        per-group oracle runs, makes recording resumable (ignored)
@@ -34,14 +36,15 @@ A manifest record looks like
 `{"id": "sqllogictest/select1:L1234", "test": "select1.sqltest::l1234",
 "level": 352, "source": {"path": "test/select1.test", "line": 1234,
 "license": "CC0-1.0"}}`; `test` is relative to `specs/<source>/` and the
-repository and revision are in `REPORT.md` and `sources.lock.toml`. Manifests
-are split per directory and leave out feature tags (counted in `REPORT.md`,
-kept in the candidates) to keep every file small.
+repository and revision are in `REPORT.md` and `corpus/sources.lock.toml`.
+Manifests are split per directory (and continue in `manifest-2.jsonl`, ...
+after 20,000 records) and leave out feature tags (counted in `REPORT.md`, kept
+in the candidates) to keep every file small.
 
 ## Pipeline
 
 1. **Fetch.** `./fetch-sources.sh [id...]` checks out every source in
-   `specs/sources.lock.toml` at its pinned revision into `.sources/`.
+   `corpus/sources.lock.toml` at its pinned revision into `.sources/`.
 2. **Import.** A source importer turns upstream tests into candidate JSONL
    (schema below). Importers never invent expected results.
 3. **Record.** `tools/record_mysql.py` runs every candidate against the pinned
@@ -81,11 +84,20 @@ SQL-visible behavior. Re-recording the same candidates is byte-identical;
 interrupted runs resume from `.record-cache/`. Every emitted file is validated
 with `sqltest check`.
 
-Scoring a replay:
+A source is committed under `specs/<source>/` only when its
+`corpus/sources.lock.toml` entry lists it in `spec_sources` and has
+`redistribute_generated_cases = true`, and no candidate is GPL-licensed;
+otherwise (or with `--local`) it is recorded into the ignored
+`specs/local/<source>/`. TiDB and MatrixOne are local for now: some of their
+tests look ported from GPL MySQL MTR. `--import-report` takes the importer's
+JSON report or `IMPORT_REPORT.md` and copies it into `REPORT.md`.
+
+Scoring a replay (`make -C mysql/conformance run-specs` writes the report to
+`target/mysql-specs-report.json`, the default input):
 
 ```bash
-python3 mysql/conformance/tools/score.py results.json            # gate
-python3 mysql/conformance/tools/score.py results.json --update   # ratchet
+python3 mysql/conformance/tools/score.py            # gate
+python3 mysql/conformance/tools/score.py --update   # ratchet
 ```
 
 `baseline.txt` holds one `<source>/<dir>/<shard>.sqltest::<test>` per line
@@ -208,7 +220,9 @@ A test is not emitted, and is counted in `REPORT.md`, when:
 
 - MySQL returns different results in the two independent runs, or setup
   statements fail differently (`nondeterministic`); unordered results are
-  compared as sorted multisets, ordered results exactly;
+  compared as sorted multisets, ordered results exactly. The two runs freeze
+  the session clock at different instants (`SET timestamp`), so results that
+  depend on the current time are caught here;
 - a value contains `|`, a line break or another control character, leading
   whitespace in the first column or trailing whitespace in the last, an
   unordered result has an empty single-value row, or the SQL or output cannot
@@ -223,6 +237,10 @@ A test is not emitted, and is counted in `REPORT.md`, when:
   (`error-quarantined`): for imported cases these mostly mean the importer did
   not reproduce the case's dialect or context;
 - a statement times out or loses the connection (`timeout`);
+- a statement would change server-global state that dropping the test's
+  databases and users cannot undo: global or persisted variables, plugins,
+  tablespaces, replication, the root account, XA transactions
+  (`unsupported-environment`; never executed);
 - the importer could not extract it statically (`dynamic`), it is a duplicate
   id or a duplicate of another candidate's setup, sql and ordering
   (`duplicate`), or it violates the schema (`invalid`).
@@ -230,7 +248,8 @@ A test is not emitted, and is counted in `REPORT.md`, when:
 ## Execution model of the recorder
 
 Semantics are always "fresh database and session, run the setup, run the
-sql". Candidates are scheduled into lanes:
+sql". Leading and trailing whitespace of every statement is dropped. Candidates
+are scheduled into lanes:
 
 - **chain**: read-only `sql` (`SELECT`, `WITH`, `SHOW`, ... without user
   variables, `INTO`, locking or previous-statement functions such as
@@ -271,6 +290,6 @@ least 100 per file, and all of `evidence/` and `select*` within those caps.
 ## Licensing
 
 Only permissively licensed sources are checked in. Each source's license is
-recorded in every manifest record, in `specs/sources.lock.toml` and in
+recorded in every manifest record, in `corpus/sources.lock.toml` and in
 `NOTICE.md`. GPL sources (MySQL MTR, MariaDB) are recorded into `specs/local/`,
 which is ignored by git and never committed.

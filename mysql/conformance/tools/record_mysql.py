@@ -39,7 +39,7 @@ except ImportError:  # unit tests of the pure functions do not need a driver
     pymysql = None
 
 # Bump when a change alters recorded results, so cached group runs are redone.
-RECORDER_VERSION = 1
+RECORDER_VERSION = 2
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 CONFORMANCE = ROOT / "mysql/conformance"
@@ -48,6 +48,14 @@ TARGET = tomllib.loads((CONFORMANCE / "target.toml").read_text())
 DEFAULT_MAX_ROWS = 100
 DEFAULT_MAX_EXPECT_BYTES = 16 * 1024
 MAX_TESTS_PER_SHARD = 1000
+MAX_RECORDS_PER_MANIFEST = 20_000
+LOCK = CONFORMANCE / "corpus/sources.lock.toml"
+
+# The two determinism runs freeze the session clock at different instants
+# (different year, month, day, time and fraction), so results that depend on
+# NOW(), CURRENT_TIMESTAMP defaults and the like differ and are classified
+# nondeterministic instead of being recorded.
+RUN_TIMESTAMPS = {"a": "1700000000.250000", "b": "1913137217.750000"}
 
 # Errors that an imported case most likely produces because the importer could
 # not reproduce its context (a dialect it was not written for, or setup that
@@ -258,6 +266,7 @@ class GroupPlan:
     children: dict = dataclasses.field(default_factory=dict)
     candidates: list = dataclasses.field(default_factory=list)
     node_problem: list = dataclasses.field(default_factory=list)
+    node_forbidden: list = dataclasses.field(default_factory=list)
 
     def child(self, parent, statement):
         key = (parent, statement)
@@ -269,7 +278,12 @@ class GroupPlan:
             self.statement.append(statement)
             inherited = self.node_problem[parent] if parent >= 0 else None
             self.node_problem.append(inherited or LIB.statement_representable(statement))
+            inherited = self.node_forbidden[parent] if parent >= 0 else None
+            self.node_forbidden.append(inherited or LIB.server_mutation(statement))
         return node
+
+    def forbidden_at(self, node):
+        return self.node_forbidden[node]
 
     def path(self, node):
         nodes = []
@@ -328,6 +342,8 @@ def load_candidates(paths, buckets, details):
                 if record["id"] in seen_ids:
                     buckets["duplicate"] += 1
                     continue
+                record["setup"] = [LIB.rust_trim(statement) for statement in record["setup"]]
+                record["sql"] = [LIB.rust_trim(statement) for statement in record["sql"]]
                 group = record["group"]
                 plan = plans.get(group)
                 if plan is None:
@@ -353,6 +369,12 @@ def load_candidates(paths, buckets, details):
                     buckets["duplicate"] += 1
                     continue
                 plan.content.add(key)
+                forbidden = next(filter(None, (LIB.server_mutation(s) for s in record["sql"])), None)
+                forbidden = forbidden or (plan.forbidden_at(node) if node >= 0 else None)
+                if forbidden:
+                    buckets["unsupported-environment"] += 1
+                    details["unsupported-environment"].append(forbidden)
+                    continue
                 if has_global:
                     lane = "exclusive"
                 else:
@@ -390,6 +412,8 @@ class Session:
         problems = check_session(self.conn, [])
         if problems:
             raise RuntimeError("; ".join(problems))
+        with self.conn.cursor() as cursor:
+            cursor.execute(f"SET timestamp = {RUN_TIMESTAMPS[runner.label]}")
         self.alive = True
 
     def execute(self, sql, max_rows):
@@ -607,7 +631,11 @@ def worker_run(job):
     plan, label, lanes = job
     runner = Runner(_WORKER["dsn"], label, _WORKER["timeout"], _WORKER["max_rows"])
     started = time.monotonic()
-    result = runner.run_plan(plan, lanes)
+    try:
+        result = runner.run_plan(plan, lanes)
+    except Exception as error:  # one broken group must not abort the whole run
+        return plan["name"], label, {"failed": f"{type(error).__name__}: {error}",
+                                     "node_errors": {}, "results": {}}
     result["seconds"] = round(time.monotonic() - started, 3)
     return plan["name"], label, result
 
@@ -736,9 +764,12 @@ def build_shards(plan, outcomes):
 
 
 def test_name(candidate, plan):
+    """The id after its group (`<group>:L12` -> `l12`), else after its last ':'."""
     remainder = candidate.id
     if remainder.startswith(plan.name):
         remainder = remainder[len(plan.name):]
+    elif ":" in remainder:
+        remainder = remainder.rsplit(":", 1)[1]
     return slug(remainder) if slug(remainder) != "t-" else slug(candidate.id)
 
 
@@ -852,8 +883,24 @@ def group_header(plan, tests):
     }
 
 
-def is_gpl(plan):
-    return any("GPL" in c.record["source"]["license"].upper() for c in plan.candidates)
+def local_only(source, plans, args):
+    """Whether a source's recordings must stay in the ignored specs/local/.
+
+    Sources are committed only when their entry in corpus/sources.lock.toml
+    (matched through `spec_sources`) allows redistributing generated cases and
+    no candidate carries a GPL license.
+    """
+    if args.local:
+        return True, "--local"
+    if any("GPL" in c.record["source"]["license"].upper() for plan in plans for c in plan.candidates):
+        return True, "GPL-licensed candidates"
+    lock = tomllib.loads(LOCK.read_text()) if LOCK.exists() else {"source": []}
+    for entry in lock["source"]:
+        if source in entry.get("spec_sources", []):
+            if entry.get("redistribute_generated_cases", False):
+                return False, ""
+            return True, f"{LOCK.name} entry {entry['id']} does not allow redistribution"
+    return True, f"no {LOCK.name} entry lists {source!r} in spec_sources"
 
 
 # ---------------------------------------------------------------------------
@@ -862,7 +909,7 @@ def is_gpl(plan):
 
 BUCKET_ORDER = [
     "recorded", "nondeterministic", "unrepresentable", "too-large", "setup-failed",
-    "error-quarantined", TIMEOUT, "duplicate", "invalid", "not-run",
+    "error-quarantined", TIMEOUT, "unsupported-environment", "duplicate", "invalid", "not-run",
 ]
 
 
@@ -881,7 +928,15 @@ def write_report(path, source, stats, importer_report, server):
     lines.append(f"- recorder version: {RECORDER_VERSION}; row limit {stats['max_rows']}; "
                  f"expect limit {stats['max_expect_bytes']} bytes")
     lines.append("")
-    if importer_report:
+    if isinstance(importer_report, str):
+        lines.append("## Extraction")
+        lines.append("")
+        for line in importer_report.strip().splitlines():
+            if line.startswith("# "):
+                continue
+            lines.append("#" + line if line.startswith("#") else line)
+        lines.append("")
+    elif importer_report:
         lines.append("## Extraction")
         lines.append("")
         lines.append("| count | value |")
@@ -913,7 +968,8 @@ def write_report(path, source, stats, importer_report, server):
                        ("Quarantined errors by errno", "quarantined_errnos"),
                        ("Dropped setup statements by errno", "dropped_errnos"),
                        ("Unrepresentable reasons", "unrepresentable"),
-                       ("Setup failures", "setup_failed")):
+                       ("Setup failures", "setup_failed"),
+                       ("Unsupported environment (never run)", "unsupported")):
         counter = stats[key]
         if not counter:
             continue
@@ -995,7 +1051,10 @@ def run_all(plans, dsn, args, cache_dir):
             runs[name][label] = result
             pending[name] -= 1
             done += 1
-            if pending[name] == 0 and not any(c.lane == "exclusive" for c in by_name[name].candidates):
+            if "failed" in result:
+                log(f"group {name} run {label} failed: {result['failed']}")
+            elif (pending[name] == 0 and "failed" not in runs[name].get("a" if label == "b" else "b", {})
+                  and not any(c.lane == "exclusive" for c in by_name[name].candidates)):
                 save_cache(cache_dir, by_name[name], runs[name], args.max_rows)
             if done % 50 == 0 or done == len(order):
                 elapsed = time.monotonic() - started
@@ -1007,11 +1066,17 @@ def run_all(plans, dsn, args, cache_dir):
             for label in ("a", "b"):
                 runner = Runner(dsn, label, args.timeout, args.max_rows)
                 runner.baseline_databases, runner.baseline_users = server_baseline(dsn)
-                result = runner.run_plan(runnable, ("exclusive",))
+                try:
+                    result = runner.run_plan(runnable, ("exclusive",))
+                except Exception as error:
+                    log(f"group {runnable['name']} exclusive run {label} failed: {error}")
+                    runs[runnable["name"]][label]["failed"] = str(error)
+                    continue
                 merged = runs[runnable["name"]][label]
                 merged["node_errors"].update(result["node_errors"])
                 merged["results"].update(result["results"])
-            save_cache(cache_dir, by_name[runnable["name"]], runs[runnable["name"]], args.max_rows)
+            if not any("failed" in runs[runnable["name"]][label] for label in ("a", "b")):
+                save_cache(cache_dir, by_name[runnable["name"]], runs[runnable["name"]], args.max_rows)
     return runs
 
 
@@ -1102,8 +1167,10 @@ def record(args):
             container.stop()
     elapsed = time.monotonic() - started
 
-    gpl = any(is_gpl(plan) for plan in plan_list)
-    out_dir = args.out_dir / ("local" if gpl else "") / source
+    local, why = local_only(source, plan_list, args)
+    if local:
+        log(f"{source} is recorded into specs/local/ (not committed): {why}")
+    out_dir = args.out_dir / ("local" if local else "") / source
     if out_dir.exists():
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
@@ -1116,6 +1183,7 @@ def record(args):
         "dropped_errnos": collections.Counter(),
         "unrepresentable": collections.Counter(),
         "setup_failed": collections.Counter(),
+        "unsupported": collections.Counter(details["unsupported-environment"]),
         "levels": collections.Counter(),
         "features": collections.Counter(),
         "directories": collections.Counter(),
@@ -1174,10 +1242,16 @@ def record(args):
     # One manifest per shard directory keeps every file small; "test" is
     # relative to specs/<source>/ and repo/revision are in REPORT.md.
     for directory, items in sorted(manifests.items()):
-        with open(out_dir / directory / "manifest.jsonl", "w", encoding="utf-8") as handle:
-            for item in items:
-                handle.write(LIB.dumps_jsonl(item) + "\n")
-    importer_report = json.loads(args.import_report.read_text()) if args.import_report else None
+        for start in range(0, len(items), MAX_RECORDS_PER_MANIFEST):
+            number = start // MAX_RECORDS_PER_MANIFEST + 1
+            name = "manifest.jsonl" if number == 1 else f"manifest-{number}.jsonl"
+            with open(out_dir / directory / name, "w", encoding="utf-8") as handle:
+                for item in items[start:start + MAX_RECORDS_PER_MANIFEST]:
+                    handle.write(LIB.dumps_jsonl(item) + "\n")
+    importer_report = None
+    if args.import_report:
+        text = args.import_report.read_text()
+        importer_report = text if args.import_report.suffix == ".md" else json.loads(text)
     write_report(out_dir / "REPORT.md", source, stats, importer_report, server)
     check_files(written, args)
     log(f"recorded {stats['tests']} tests into {stats['shards']} shards under {out_dir} "
@@ -1280,6 +1354,8 @@ def main(argv=None):
     parser.add_argument("--no-check", action="store_true", help="do not run sqltest check")
     parser.add_argument("--invalid-fails", action="store_true", help="exit nonzero if any candidate is invalid")
     parser.add_argument("--verify", action="store_true", help="re-run checked-in specs and report drift")
+    parser.add_argument("--local", action="store_true",
+                        help="record into specs/local/ (ignored by git) regardless of the lock file")
     args = parser.parse_args(argv)
     if pymysql is None:
         raise SystemExit("record_mysql.py needs PyMySQL (pip install pymysql)")
