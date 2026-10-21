@@ -339,8 +339,13 @@ class Parser:
             if token.kind == "ident" and self.is_op(index + 1, ":"):
                 key = token.text
                 index += 2
-            node, index = self.parse_value(index)
-            elements.append((key, node))
+            node, after = self.parse_value(index)
+            if after == index:
+                # Statement syntax inside braces is not a literal element; skip it.
+                after = index + 1
+            else:
+                elements.append((key, node))
+            index = after
         return Node("composite", elements, self.tokens[brace].line)
 
     def declarations(self, start=0, end=None):

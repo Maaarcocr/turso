@@ -34,6 +34,7 @@ Importers turn permissively licensed upstream suites into candidate JSONL for th
 
 ```bash
 python3 -I mysql/conformance/tools/import_vitess.py --source /path/to/vitess      # 150,000-case sample; --all or --target N
+python3 -I mysql/conformance/tools/import_vitess_endtoend.py --source /path/to/vitess
 python3 -I mysql/conformance/tools/import_tidb.py --source /path/to/tidb
 python3 -I mysql/conformance/tools/import_matrixone.py --source /path/to/matrixone
 python3 -I mysql/conformance/tools/import_gms.py --source /path/to/go-mysql-server
