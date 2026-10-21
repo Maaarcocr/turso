@@ -145,7 +145,7 @@ jobs:
   sqltest-tursomysql:
     name: Run SQL tests (tursomysql backend)
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: useblacksmith/rust-cache@v3
@@ -156,6 +156,20 @@ jobs:
         run: make -C mysql/conformance build
       - name: Run tests
         run: make -C mysql/conformance run
+      # The recorded MySQL specs are a ratchet: every spec listed in
+      # mysql/conformance/baseline.txt must keep passing. Add newly passing
+      # specs with `python3 mysql/conformance/tools/score.py --update`.
+      - name: Replay recorded MySQL specs
+        run: make -C mysql/conformance run-specs
+      - name: Score the replay against the baseline
+        run: make -C mysql/conformance score
+      - name: Upload the replay report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-specs-report
+          path: target/mysql-specs-report.json
+          retention-days: 14
 
   sqltest-postgres:
     name: Run SQL tests (PostgreSQL)

@@ -11,6 +11,25 @@ observable behavior is recorded from the reference implementation, every spec
 carries provenance and a difficulty level, and the scoreboard reports the
 highest level that is fully cleared plus the next failures to work on.
 
+## Status
+
+First baseline (`baseline.txt`, 2026-10-21): **183,657 of the 302,599
+committed specs pass** (60.7%), replayed through `tursomysql` with
+`expect unordered` compared as multisets.
+
+| Source | Specs | Passing | Highest cleared level |
+|---|---:|---:|---:|
+| sqllogictest | 149,919 | 138,601 | 101 |
+| vitess | 143,556 | 42,134 | none (lowest level 3 fails) |
+| go-mysql-server | 8,390 | 2,856 | 0 |
+| vitess-endtoend | 734 | 66 | none (lowest level 63 fails) |
+| all | 302,599 | 183,657 | 0 |
+
+A debug replay with three processes takes about 44 minutes (115 CPU-minutes;
+the sqllogictest `index/` setups dominate). CI replays a release build on
+every pull request in `.github/workflows/sqltest.yml` and fails when a
+baseline spec stops passing.
+
 ## Layout
 
 ```text
