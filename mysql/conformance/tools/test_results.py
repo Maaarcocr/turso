@@ -105,7 +105,7 @@ class Fixture:
         plans, buckets, details = load_plans(self.files)
         self.plans = plans
         outcomes = {plan.name: REC.classify_group(plan, RUNS, 1 << 20) for plan in plans}
-        withheld = REC.withhold_sql_echoes(plans, outcomes)
+        withheld = REC.withhold_sql_echoes(plans, outcomes, REC.candidate_statements(self.files))
         stats = REC.new_stats(buckets, details, 100, 1 << 14)
         for plan in plans:
             REC.tally_outcomes(plan, outcomes[plan.name], RUNS, stats)
@@ -197,27 +197,31 @@ class ResultsFormatTests(unittest.TestCase):
             candidate("L1", [], ["SELECT INFO FROM information_schema.PROCESSLIST"]),
             candidate("L2", ["CREATE TABLE t(a INT)"], ["SHOW WARNINGS"]),
             candidate("L3", [], ["SELECT 'BEGIN'"]),
-            candidate("L4", [], ["SELECT 'abc'"]),
+            candidate("L4", [], ["SELECT 'cost(select * from t1)'"]),
+            candidate("L5", [], ["SELECT 'abc'"]),
+            candidate("L6", [], ["select * from t1"]),
         ]
-        plans, _, _ = load_plans([write_jsonl(pathlib.Path(tempfile.mkdtemp()) / "c.jsonl", records)])
+        path = write_jsonl(pathlib.Path(tempfile.mkdtemp()) / "c.jsonl", records)
+        plans, _, _ = load_plans([path])
         [plan] = plans
-        warning = ("Warning|1064|Optimizer hint syntax error near 'CREATE TABLE t(a INT)' at line 1")
+
+        def rows(*lines):
+            return {"bucket": "recorded", "kind": "rows", "lines": list(lines), "dropped": [], "raw": False}
+
         outcomes = {
-            0: {"bucket": "recorded", "kind": "rows", "lines": ["SELECT  INFO FROM information_schema.PROCESSLIST"],
-                "dropped": [], "raw": False},
-            1: {"bucket": "recorded", "kind": "rows", "lines": [warning.replace("CREATE TABLE t(a INT)", "TABLE t(a INT)")],
-                "dropped": [], "raw": False},
-            2: {"bucket": "recorded", "kind": "rows", "lines": ["BEGIN"], "dropped": [], "raw": False},
-            3: {"bucket": "recorded", "kind": "error", "error": [1, "x", "near 'abc' at line 1"], "dropped": []},
+            0: rows("SELECT  INFO FROM information_schema.PROCESSLIST"),  # its own statement
+            1: rows("Warning|1064|Optimizer hint syntax error near 'TABLE t(a INT)' at line 1"),  # quoted SQL
+            2: rows("BEGIN"),  # too short to count
+            3: rows("cost(select * from t1)"),  # another candidate's statement inside a string
+            4: {"bucket": "recorded", "kind": "error", "error": [1, "x", "near 'abc' at line 1"], "dropped": []},
+            5: rows("1"),
         }
-        self.assertTrue(REC.echoes_sql(plan, plan.candidates[0], outcomes[0]))
-        self.assertTrue(REC.echoes_sql(plan, plan.candidates[1], outcomes[1]))
-        self.assertFalse(REC.echoes_sql(plan, plan.candidates[2], outcomes[2]))  # too short to count
-        self.assertFalse(REC.echoes_sql(plan, plan.candidates[3], outcomes[3]))
         by_group = {plan.name: dict(outcomes)}
-        self.assertEqual(REC.withhold_sql_echoes(plans, by_group), 2)
-        self.assertEqual([by_group[plan.name][i]["bucket"] for i in range(4)],
-                         ["echoes-sql", "echoes-sql", "recorded", "recorded"])
+        self.assertEqual(REC.withhold_sql_echoes(plans, by_group, REC.candidate_statements([path])), 3)
+        self.assertEqual([by_group[plan.name][i]["bucket"] for i in range(6)],
+                         ["echoes-sql", "echoes-sql", "recorded", "echoes-sql", "recorded", "recorded"])
+        self.assertTrue(REC.quotes_sql("x near 'abcdefghijkl' at line 2"))
+        self.assertFalse(REC.quotes_sql("x near 'abcdefghijk' at line 2"))
 
     def test_find_sql_echoes_scans_every_statement(self):
         entries = [{"id": "a", "rows": ["1|x", "SELECT b FROM t WHERE c = 1|2"]},
@@ -229,6 +233,8 @@ class ResultsFormatTests(unittest.TestCase):
                          [("a", "SELECT b FROM t WHERE c = 1"), ("c", "CREATE TABLE u(a INT)")])
         self.assertEqual(REC.find_sql_echoes([{"id": "e", "rows": ["SELECT x FROM y"]}], statements),
                          [("e", "SELECT x FROM y")])
+        self.assertEqual(REC.find_sql_echoes([{"id": "f", "rows": ["near 'SELECT b FROM' at line 1"]}], []),
+                         [("f", "quoted SQL text")])
 
     def test_results_only_needs_a_non_redistributable_lock_entry_with_an_importer(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -319,7 +325,7 @@ class CommittedResultsTests(unittest.TestCase):
                         self.assertTrue(entry["id"].startswith(directory.name + "/"), entry["id"])
                         self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
                         self.assertIn(entry["bucket"], BUCKETS)
-                        self.assertNotRegex(" ".join(REC.result_texts(entry)), r"\bnear '.{12,}' at line \d")
+                        self.assertFalse(any(REC.quotes_sql(text) for text in REC.result_texts(entry)), line[:300])
                 self.assertEqual(count, meta["candidates"])
 
     def test_committed_results_contain_no_candidate_sql(self):
