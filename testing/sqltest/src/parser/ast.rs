@@ -17,6 +17,8 @@ pub enum Backend {
     Tursopg,
     /// A real PostgreSQL server, driven over the PostgreSQL wire protocol
     Postgres,
+    /// In-process Turso with the MySQL frontend dialect
+    Tursomysql,
 }
 
 impl Backend {
@@ -27,6 +29,7 @@ impl Backend {
         Backend::Js,
         Backend::Tursopg,
         Backend::Postgres,
+        Backend::Tursomysql,
     ];
 }
 
@@ -38,6 +41,7 @@ impl Display for Backend {
             Backend::Js => write!(f, "js"),
             Backend::Tursopg => write!(f, "tursopg"),
             Backend::Postgres => write!(f, "postgres"),
+            Backend::Tursomysql => write!(f, "tursomysql"),
         }
     }
 }
@@ -52,8 +56,9 @@ impl FromStr for Backend {
             "js" => Ok(Backend::Js),
             "tursopg" => Ok(Backend::Tursopg),
             "postgres" => Ok(Backend::Postgres),
+            "tursomysql" => Ok(Backend::Tursomysql),
             _ => Err(format!(
-                "unknown backend '{s}', valid backends are: rust, cli, js, tursopg, postgres"
+                "unknown backend '{s}', valid backends are: rust, cli, js, tursopg, postgres, tursomysql"
             )),
         }
     }
@@ -327,6 +332,8 @@ pub enum SkipCondition {
     Sqlite,
     /// Skip when running against a real PostgreSQL server
     Postgres,
+    /// Skip when running on the tursomysql backend
+    Tursomysql,
 }
 
 /// What we expect from executing the SQL

@@ -571,8 +571,12 @@ impl Parser {
                 self.advance();
                 Ok(ast::SkipCondition::Postgres)
             }
+            Some(Token::Identifier(name)) if name == "tursomysql" => {
+                self.advance();
+                Ok(ast::SkipCondition::Tursomysql)
+            }
             Some(token) => Err(self.error(format!(
-                "expected skip condition (mvcc, sqlite, postgres), got {token}"
+                "expected skip condition (mvcc, sqlite, postgres, tursomysql), got {token}"
             ))),
             None => Err(self.error("expected skip condition, got EOF".to_string())),
         }
@@ -1546,8 +1550,9 @@ expect {
 
         let err = parse(input).unwrap_err();
         assert!(
-            err.to_string()
-                .contains("expected skip condition (mvcc, sqlite, postgres), got mysql"),
+            err.to_string().contains(
+                "expected skip condition (mvcc, sqlite, postgres, tursomysql), got mysql"
+            ),
             "{err}"
         );
     }
@@ -1662,6 +1667,42 @@ expect @tursopg {
         assert_eq!(file.tests[0].modifiers.backend, Some(ast::Backend::Tursopg));
         assert!(matches!(
             file.tests[0].expectations.for_backend(ast::Backend::Tursopg),
+            Expectation::Exact(rows) if rows == &vec!["2".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_parse_tursomysql_backend_and_skip_condition() {
+        let input = r#"
+@database :memory:
+
+@backend tursomysql
+@skip-if tursomysql "MySQL renders this differently"
+test select-1 {
+    SELECT 1;
+}
+expect {
+    1
+}
+expect @tursomysql {
+    2
+}
+"#;
+
+        let file = parse(input).unwrap();
+        assert_eq!(
+            file.tests[0].modifiers.backend,
+            Some(ast::Backend::Tursomysql)
+        );
+        assert_eq!(
+            file.tests[0].modifiers.skip,
+            vec![ast::Skip {
+                reason: "MySQL renders this differently".to_string(),
+                condition: Some(ast::SkipCondition::Tursomysql),
+            }]
+        );
+        assert!(matches!(
+            file.tests[0].expectations.for_backend(ast::Backend::Tursomysql),
             Expectation::Exact(rows) if rows == &vec!["2".to_string()]
         ));
     }

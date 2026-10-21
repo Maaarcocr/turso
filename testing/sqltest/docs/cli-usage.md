@@ -30,7 +30,7 @@ sqltest run <PATHS>... [OPTIONS]
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--backend <NAME>` | | `rust` | Where the tests run: `rust`, `cli`, `js`, `tursopg`, or `postgres` (see [Backends](#backends)) |
+| `--backend <NAME>` | | `rust` | Where the tests run: `rust`, `cli`, `js`, `tursopg`, `postgres`, or `tursomysql` (see [Backends](#backends)) |
 | `--binary <PATH>` | | `tursodb` | Path to the tursodb CLI binary |
 | `--filter <PATTERN>` | `-f` | | Filter tests by name (glob pattern) |
 | `--jobs <N>` | `-j` | CPU count | Maximum concurrent test jobs |
@@ -47,6 +47,7 @@ sqltest run <PATHS>... [OPTIONS]
 | `js` | The Turso JavaScript bindings, in a Node.js process |
 | `tursopg` | A `tursopg` server that `--binary` names. The runner starts one server for each test database. |
 | `postgres` | The real PostgreSQL server at `--postgres-dsn` |
+| `tursomysql` | Turso with the MySQL frontend, in the runner process. Statements split like the `mysql` client splits them, and values print as MySQL's text protocol sends them (`NULL`, `1e15`). Only `:memory:` and `:temp:` databases. |
 
 #### Examples
 
@@ -72,6 +73,9 @@ sqltest run sqlite/conformance/sqlite-sqltests/ -j 4
 
 # JSON output for CI
 sqltest run sqlite/conformance/sqlite-sqltests/ -o json
+
+# Run the MySQL frontend's owned specs
+sqltest run mysql/conformance/my-sqltests/ --backend tursomysql
 
 # Run the PostgreSQL corpus against a real PostgreSQL server
 sqltest run postgres/conformance/pg-sqltests/ --backend postgres \

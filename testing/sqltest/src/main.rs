@@ -5,9 +5,9 @@ use sqltest::{
     DatabaseLocation, DefaultDatabases, Format, GeneratorConfig, INTEGRITY_FIXTURE_RELATIVE_PATHS,
     OutputFormat, ParseError, RunnerConfig, SnapshotUpdateMode, TestRunner,
     backends::cli::CliBackend, backends::js::JsBackend, backends::postgres::PostgresBackend,
-    backends::rust::RustBackend, backends::tursopg::TursopgBackend, create_output,
-    find_all_pending_snapshots, generate_database, generate_integrity_fixture, load_test_files,
-    summarize, tcl_converter,
+    backends::rust::RustBackend, backends::tursomysql::TursomysqlBackend,
+    backends::tursopg::TursopgBackend, create_output, find_all_pending_snapshots,
+    generate_database, generate_integrity_fixture, load_test_files, summarize, tcl_converter,
 };
 use std::process::ExitCode;
 use std::rc::Rc;
@@ -37,7 +37,8 @@ enum Commands {
 
         /// Backend to use: "rust" (native), "cli" (subprocess), "js" (JavaScript
         /// bindings), "tursopg" (tursopg server over the PostgreSQL wire protocol),
-        /// or "postgres" (the real PostgreSQL server at --postgres-dsn)
+        /// "postgres" (the real PostgreSQL server at --postgres-dsn), or
+        /// "tursomysql" (in-process Turso with the MySQL frontend)
         #[arg(long, default_value = "rust")]
         backend: String,
 
@@ -470,6 +471,15 @@ async fn run_tests(
                 })
                 .await
         }
+        "tursomysql" => {
+            let runner = TestRunner::new(TursomysqlBackend).with_config(config);
+            runner
+                .run_loaded_tests(loaded, |result| {
+                    output.write_test(result);
+                    output.flush();
+                })
+                .await
+        }
         "postgres" => {
             let dsn = postgres_dsn.expect("--postgres-dsn is checked above");
             let backend = match PostgresBackend::connect(&dsn, Duration::from_secs(timeout)).await {
@@ -489,7 +499,7 @@ async fn run_tests(
         }
         other => {
             eprintln!(
-                "Error: unknown backend '{other}'. Use 'rust', 'cli', 'js', 'tursopg', or 'postgres'"
+                "Error: unknown backend '{other}'. Use 'rust', 'cli', 'js', 'tursopg', 'postgres', or 'tursomysql'"
             );
             return ExitCode::from(2);
         }
