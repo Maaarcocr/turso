@@ -455,9 +455,9 @@ mined from Apache-2.0 go-mysql-server enginetest fixtures at commit
 `478bed778dd282aa13aa48ebd75b0549ebe75698`:
 
 - 67 Go fixture files scanned
-- 13,130 static query assertions extracted
+- 13,129 static query assertions extracted
 - 5,004 setup statements extracted
-- 13,519 unique candidates after deduplication
+- 13,518 unique candidates after deduplication
 - 4,494 positive syntax expectations
 - 506 source error cases kept as `unknown` pending MySQL-oracle classification
 
