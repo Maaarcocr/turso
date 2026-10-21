@@ -28,6 +28,19 @@ The recorded corpus and its pipeline are described in [`SPECS.md`](SPECS.md).
 
 The compatibility target is frozen in `target.toml`. Feature prerequisites and stage-by-stage status are tracked in `curriculum.toml`.
 
+## Spec candidate importers
+
+Importers turn permissively licensed upstream suites into candidate JSONL for the recorder (schema in [`SPECS.md`](SPECS.md)). They read pinned source checkouts as text only, never use upstream expected results, and write `candidates/<source>/*.jsonl` plus an `IMPORT_REPORT.md` with extraction and filter counts:
+
+```bash
+python3 -I mysql/conformance/tools/import_vitess.py --source /path/to/vitess      # 150,000-case sample; --all or --target N
+python3 -I mysql/conformance/tools/import_tidb.py --source /path/to/tidb
+python3 -I mysql/conformance/tools/import_matrixone.py --source /path/to/matrixone
+python3 -I mysql/conformance/tools/import_gms.py --source /path/to/go-mysql-server
+```
+
+Revisions are pinned in `corpus/sources.lock.toml`. The script importers replay a dependency slice of each file as setup (`--max-setup`, `--max-candidates-per-file` and `--max-setup-per-file` bound replay cost) and mark it `setup_errors: drop` because vendor statements are mixed into the scripts.
+
 ## Mined implementation curriculum
 
 The quantity-first corpus miner and source pins live under [`corpus/`](corpus/README.md). Five thousand Apache-licensed go-mysql-server cases are checked in and can be regenerated with:
