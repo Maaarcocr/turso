@@ -118,7 +118,7 @@ pub(super) fn insert(args: &[Value]) -> Result<Value> {
         length.value
     };
     let start = text.char_length(0, (start.value - 1) as usize);
-    if start + 1 > text.len() {
+    if start > text.len() {
         return text.into_value();
     }
     let length = text
