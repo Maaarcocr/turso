@@ -10,6 +10,7 @@ source tree is executed or imported.
 """
 
 import collections
+import functools
 import hashlib
 import json
 import pathlib
@@ -361,8 +362,17 @@ def _call_names(tokens):
     return names
 
 
+@functools.lru_cache(maxsize=1 << 16)
 def features_of(sql):
-    """Return the set of feature tags used by one SQL statement."""
+    """Return the (frozen) set of feature tags used by one SQL statement.
+
+    Cached: script importers classify the same setup statements once per
+    candidate.
+    """
+    return frozenset(_features_of(sql))
+
+
+def _features_of(sql):
     tokens = significant_tokens(sql)
     features = set()
     if not tokens:

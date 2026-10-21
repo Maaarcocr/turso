@@ -15,7 +15,8 @@ export CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}
 python3 -m unittest mysql/conformance/tools/test_mining.py mysql/conformance/tools/test_import_common.py \
     mysql/conformance/tools/test_import_vitess.py mysql/conformance/tools/test_import_replay.py \
     mysql/conformance/tools/test_import_gms.py mysql/conformance/tools/test_import_vitess_endtoend.py \
-    mysql/conformance/tools/test_specs.py mysql/conformance/tools/test_results.py
+    mysql/conformance/tools/test_specs.py mysql/conformance/tools/test_results.py \
+    mysql/conformance/tools/test_import_mtr.py
 python3 mysql/conformance/tools/validate_corpus.py mysql/conformance/corpus/go-mysql-server
 "$CARGO_BIN" test -p turso_mysql_parser -p turso_mysql -p tursomysql
 make -C mysql/conformance CARGO="$CARGO_BIN" check run

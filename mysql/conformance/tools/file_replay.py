@@ -286,6 +286,9 @@ class MoTesterParser(ScriptParser):
 # Statement analysis
 # ---------------------------------------------------------------------------
 
+# Statement.skip prefixes of statements that run in another session.
+SESSION_REGIONS = ("connection", "mo session")
+
 SESSION_KEYWORDS = {"set", "begin", "commit", "rollback", "savepoint", "release", "prepare", "deallocate"}
 QUERY_FIRST = {"select", "with", "table", "values", "execute"}
 SHOW_ALLOWED = re.compile(
@@ -646,6 +649,9 @@ class Profile:
     parser_class = MysqltestParser
 
     rewrite_note = ""
+    # Objects created by skipped statements (another session, or statements a
+    # static reading cannot place) are tracked, so reads of them are tainted.
+    track_skipped_objects = False
 
     def own_database(self, relative):
         return None
@@ -653,6 +659,34 @@ class Profile:
     def rewrite(self, sql):
         """Source-specific syntax normalization that does not change MySQL semantics."""
         return sql
+
+    def finish_report(self, report):
+        """Add source-specific tables to the import report."""
+
+    def report_directory(self, relative):
+        """The directory a file's candidates are counted under in the import report."""
+        return relative.split("/", 1)[0] if "/" in relative else "."
+
+    def exclusion(self, relative):
+        """Why a file (path relative to ``root``) is not imported, ``""``, or None to ignore it uncounted."""
+        top = relative.split("/", 1)[0] if "/" in relative else "."
+        excluded = self.excluded_dirs.get(top) or self.excluded_files.get(relative)
+        if not excluded:
+            for prefix, reason in self.excluded_dirs.items():
+                if relative.startswith(prefix + "/"):
+                    return reason
+        return excluded or ""
+
+    def read_statements(self, path, relative, report):
+        """Parse one file into statements; ``None`` when the file turns out to be excluded."""
+        data = path.read_bytes()
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            # Statements with invalid bytes keep surrogates and are filtered later.
+            text = data.decode("utf-8", errors="surrogateescape")
+            report.count("files with invalid UTF-8")
+        return self.parser_class(report).parse(text)
 
     def group(self, relative):
         return f"{self.name}/{relative}"
@@ -706,7 +740,7 @@ class StatementPreparer:
             if statement.kind == "use" and not statement.skip:
                 current = statement.db
         for statement in statements:
-            if statement.kind == "setup" and not statement.skip:
+            if statement.kind == "setup" and (not statement.skip or self.profile.track_skipped_objects):
                 for _op, qualifier, name in object_effects(statement.sql):
                     known[qualifier or statement.db].add(name)
         for statement in statements:
@@ -775,12 +809,14 @@ class Replayer:
     statements only.
     """
 
-    def __init__(self, report, dispositions, uses_autocommit=False):
+    def __init__(self, report, dispositions, uses_autocommit=False, track_skipped_objects=False):
         self.report = report
+        self.track_skipped_objects = track_skipped_objects
         self.dispositions = dispositions
         self.alive = {}
         self.generation = collections.Counter()
         self.members = collections.defaultdict(list)
+        self.member_indexes = collections.defaultdict(list)  # parallel to members, increasing
         self.ended_by = {}
         self.tainted = {}
         self.live_dependencies = collections.defaultdict(set)
@@ -844,14 +880,29 @@ class Replayer:
                     mentions.add(dependency)
                     frontier.append(dependency)
         if statement.skip:
-            where = statement.skip.rsplit(" ", 1)[0]
-            if kind in ("query", "warnings"):
-                self.report.filter(f"runs in another session ({where})")
+            if statement.skip.startswith(SESSION_REGIONS):
+                label = f"runs in another session ({statement.skip.rsplit(' ', 1)[0]})"
+                taint = "modified outside the replayed session"
             else:
-                self.dispositions[f"skipped: runs in another session ({where})"] += 1
+                # Statements a static reading cannot place (an undecidable
+                # mysqltest condition, unresolved variables).
+                label = f"not statically replayable ({statement.skip})"
+                taint = "modified by a statement that is not statically replayable"
+            if kind in ("query", "warnings"):
+                self.report.filter(label)
+            else:
+                self.dispositions[f"skipped: {label}"] += 1
                 if persist:
                     for name in mentions:
-                        self.tainted.setdefault(self.current(name), "modified outside the replayed session")
+                        self.tainted.setdefault(self.current(name), taint)
+                    if self.track_skipped_objects:
+                        # An object such a statement may create exists with a
+                        # tainted generation, so later reads are dropped.
+                        for op, name in effects:
+                            if op == "create" and not alive.get(name, False):
+                                self.generation[name] += 1
+                                alive[name] = True
+                            self.tainted.setdefault(self.current(name), taint)
             return False
         if not persist:
             # Only reads are analyzed; definitions would change shared state.
@@ -914,6 +965,7 @@ class Replayer:
         elif kind in ("setup", "session"):
             for key in needs:
                 self.members[key].append(statement)
+                self.member_indexes[key].append(statement.index)
             for variable in session.system_targets:
                 self.system_sets[variable].append(statement)
             if TRANSACTION.match(statement.sql):
@@ -930,6 +982,9 @@ class Replayer:
         included = {}
         needed_keys = set()
         anchor_indexes = {anchor.index for anchor in anchors}
+        # Every member of a key before position processed[key] is included,
+        # so only the members after it need a look (keeps slices linear).
+        processed = {}
 
         def close(work):
             while work:
@@ -938,10 +993,15 @@ class Replayer:
                     if key in self.tainted:
                         return self.tainted[key]
                     needed_keys.add(key)
-                    for member in self.members.get(key, ()):
-                        if member.index < statement.index and member.index not in included:
+                    start = processed.get(key, 0)
+                    end = bisect.bisect_left(self.member_indexes.get(key, ()), statement.index)
+                    if end <= start:
+                        continue
+                    for member in self.members[key][start:end]:
+                        if member.index not in included:
                             included[member.index] = member
                             work.append(member)
+                    processed[key] = end
             return ""
 
         taint = close(list(anchors))
@@ -1029,15 +1089,9 @@ class FileImporter:
 
     def import_file(self, path, relative):
         report = self.report
-        data = path.read_bytes()
-        try:
-            text = data.decode("utf-8")
-        except UnicodeDecodeError:
-            # Statements with invalid bytes keep surrogates and are filtered later.
-            text = data.decode("utf-8", errors="surrogateescape")
-            report.count("files with invalid UTF-8")
-        parser = self.profile.parser_class(report)
-        statements = parser.parse(text)
+        statements = self.profile.read_statements(path, relative, report)
+        if statements is None:
+            return []
         report.count("statements parsed", len(statements))
         self.preparer.prepare(statements, self.profile.own_database(relative) or "")
         return self._candidates(statements, relative)
@@ -1047,7 +1101,7 @@ class FileImporter:
         uses_autocommit = any(
             statement.kind == "session" and re.search(r"\bautocommit\b", statement.sql, re.I) for statement in statements
         )
-        replayer = Replayer(report, self.dispositions, uses_autocommit)
+        replayer = Replayer(report, self.dispositions, uses_autocommit, self.profile.track_skipped_objects)
         candidates = []
         file_setup = 0
         for statement in statements:
@@ -1251,13 +1305,10 @@ def run_profile(profile, source, output, budget, limit_files=None, write=True):
     scanned = 0
     for path in files:
         relative = path.relative_to(root).as_posix()
-        top = relative.split("/", 1)[0] if "/" in relative else "."
-        excluded = profile.excluded_dirs.get(top) or profile.excluded_files.get(relative)
-        if not excluded:
-            for prefix, reason in profile.excluded_dirs.items():
-                if relative.startswith(prefix + "/"):
-                    excluded = reason
-                    break
+        top = profile.report_directory(relative)
+        excluded = profile.exclusion(relative)
+        if excluded is None:
+            continue  # outside the paths the profile imports
         if excluded:
             report.filter(f"excluded file ({excluded})")
             report.count("files excluded")
@@ -1289,6 +1340,7 @@ def run_profile(profile, source, output, budget, limit_files=None, write=True):
         [(f"{bucket}-{bucket + 9}" if bucket < 200 else "200+", count) for bucket, count in sorted(importer.setup_hist.items())],
     )
     report.table("Levels", ["level", "candidates"], common.level_histogram(candidates))
+    profile.finish_report(report)
     for note in profile.notes:
         report.note(note)
     report.note(
