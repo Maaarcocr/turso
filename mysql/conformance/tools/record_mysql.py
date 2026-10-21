@@ -12,6 +12,13 @@ through the setup; everything else runs isolated.
 
 `--verify` re-runs the checked-in shards of a source against MySQL and reports
 every test whose recorded expectation no longer matches.
+
+Reusable entry points (no MySQL needed once outcomes exist):
+`load_candidates` builds per-group setup tries from candidate JSONL;
+`classify_group` turns two cached runs into per-candidate outcomes;
+`render_expectation` turns a recorded outcome into its expect block;
+`write_specs` writes shards and manifests from (plans, outcomes);
+`tally_outcomes` and `write_report` produce REPORT.md.
 """
 
 import argparse
@@ -798,6 +805,32 @@ def test_name(candidate, plan):
     return slug(remainder) if slug(remainder) != "t-" else slug(candidate.id)
 
 
+def render_expectation(outcome, ordered):
+    """Turn a recorded outcome into (comment lines, expect block text).
+
+    `outcome` is a "recorded" outcome of `classify_group`: {"kind": "rows",
+    "lines": [...], "raw": bool} or {"kind": "error", "error": [errno,
+    sqlstate, message]}. The comment lines go before the test's decorators.
+    """
+    comments = []
+    if outcome["kind"] == "error":
+        errno, sqlstate, message = outcome["error"]
+        comments.append(f"# mysql-error: {errno} {sqlstate} {message}")
+        opening = "expect error {"
+    elif outcome.get("raw"):
+        opening = "expect raw {"
+    elif ordered:
+        opening = "expect {"
+    else:
+        opening = "expect unordered {"
+    lines = [opening]
+    if outcome["kind"] == "rows" and outcome["lines"]:
+        render = LIB.render_raw_block_lines if outcome.get("raw") else LIB.render_block_lines
+        lines.append(render(outcome["lines"])[:-1])
+    lines.append("}")
+    return comments, "\n".join(lines)
+
+
 def render_shard(plan, tests, outcomes, header):
     """Render one shard. Returns (text, [(candidate, name)])."""
     # Cut points: nodes with tests, plus branch points between them.
@@ -852,27 +885,15 @@ def render_shard(plan, tests, outcomes, header):
         if header["multi_path"]:
             source = record["source"]
             lines.append(f"# source: {source['path']}:{source['line']}")
-        if outcome["kind"] == "error":
-            errno, sqlstate, message = outcome["error"]
-            lines.append(f"# mysql-error: {errno} {sqlstate} {message}")
+        comments, expect = render_expectation(outcome, record["ordered"])
+        lines.extend(comments)
         for segment in segments_for(candidate.node) if candidate.node >= 0 else []:
             lines.append(f"@setup {segment}")
         body = LIB.escape_block(LIB.sql_block_text(record["sql"], "    "))
         lines.append(f"test {name} {{")
         lines.append(f"    {body}")
         lines.append("}")
-        if outcome["kind"] == "error":
-            lines.append("expect error {")
-        elif outcome.get("raw"):
-            lines.append("expect raw {")
-        elif record["ordered"]:
-            lines.append("expect {")
-        else:
-            lines.append("expect unordered {")
-        if outcome["kind"] == "rows" and outcome["lines"]:
-            render = LIB.render_raw_block_lines if outcome.get("raw") else LIB.render_block_lines
-            lines.append(render(outcome["lines"])[:-1])
-        lines.append("}")
+        lines.append(expect)
         blocks.append("\n".join(lines))
 
     out = [
@@ -959,10 +980,10 @@ def write_report(path, source, stats, importer_report, server):
     if isinstance(importer_report, str):
         lines.append("## Extraction")
         lines.append("")
-        for line in importer_report.strip().splitlines():
-            if line.startswith("# "):
-                continue
-            lines.append("#" + line if line.startswith("#") else line)
+        body = [line for line in importer_report.strip().splitlines() if not line.startswith("# ")]
+        while body and not body[0].strip():
+            body.pop(0)
+        lines.extend("#" + line if line.startswith("#") else line for line in body)
         lines.append("")
     elif importer_report:
         lines.append("## Extraction")
@@ -1156,6 +1177,103 @@ def check_files(paths, args):
     log(f"sqltest check accepted {len(paths)} files")
 
 
+def new_stats(buckets, details, max_rows, max_expect_bytes):
+    """Counters that `tally_outcomes` and `write_specs` fill for REPORT.md."""
+    return {
+        "buckets": buckets,
+        "provenance": collections.defaultdict(set),
+        "recorded_errnos": collections.Counter(),
+        "quarantined_errnos": collections.Counter(),
+        "dropped_errnos": collections.Counter(),
+        "unrepresentable": collections.Counter(),
+        "setup_failed": collections.Counter(),
+        "unsupported": collections.Counter(details["unsupported-environment"]),
+        "levels": collections.Counter(),
+        "features": collections.Counter(),
+        "directories": collections.Counter(),
+        "tests": 0, "tests_rows": 0, "tests_error": 0, "shards": 0, "dropped_statements": 0,
+        "max_rows": max_rows, "max_expect_bytes": max_expect_bytes,
+    }
+
+
+def tally_outcomes(plan, outcomes, runs, stats):
+    """Count one group's buckets, quarantined errnos and dropped statements."""
+    buckets = stats["buckets"]
+    for candidate in plan.candidates:
+        for key in ("repo", "revision", "license"):
+            stats["provenance"][key].add(candidate.record["source"][key])
+    node_errors = {int(k): v for k, v in runs["a"]["node_errors"].items()}
+    dropped_nodes = set()
+    for candidate in plan.candidates:
+        outcome = outcomes[candidate.index]
+        buckets[outcome["bucket"]] += 1
+        if outcome["bucket"] == "error-quarantined":
+            errno = int(outcome["detail"])
+            stats["quarantined_errnos"][f"{errno} {QUARANTINED_ERRNOS[errno]}"] += 1
+        elif outcome["bucket"] == "unrepresentable":
+            stats["unrepresentable"][outcome["detail"]] += 1
+        elif outcome["bucket"] == "setup-failed":
+            stats["setup_failed"][outcome["detail"][:80]] += 1
+        elif outcome["bucket"] == "recorded":
+            dropped_nodes.update(outcome["dropped"])
+    for node in dropped_nodes:
+        stats["dropped_errnos"][node_errors[node][0]] += 1
+    stats["dropped_statements"] += len(dropped_nodes)
+
+
+def write_specs(out_dir, plans, outcomes_by_group, stats):
+    """Write the shards and per-directory manifests of one source.
+
+    `plans` are `GroupPlan`s (setup trie plus candidates, see
+    `load_candidates`), `outcomes_by_group` maps a group name to
+    {candidate index: outcome} as returned by `classify_group`; only
+    "recorded" outcomes are written. Returns the written shard paths.
+    """
+    manifests = collections.defaultdict(list)
+    written = []
+    for plan in plans:
+        outcomes = outcomes_by_group[plan.name]
+        for shard_path, tests in build_shards(plan, outcomes):
+            header = group_header(plan, tests)
+            text, named = render_shard(plan, tests, outcomes, header)
+            target = out_dir / shard_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+            written.append(target)
+            stats["shards"] += 1
+            directory = str(pathlib.PurePosixPath(shard_path).parent)
+            paths = sorted({c.record["source"]["path"] for c, _ in named})
+            entry = {
+                "shard": shard_path,
+                "group": plan.name,
+                "repo": header["repo"],
+                "revision": header["revision"],
+                "license": header["license"],
+                "paths": paths,
+                "tests": [],
+            }
+            manifests[directory].append(entry)
+            for candidate, name in named:
+                outcome = outcomes[candidate.index]
+                record = candidate.record
+                stats["tests"] += 1
+                stats[f"tests_{outcome['kind']}"] += 1
+                if outcome["kind"] == "error":
+                    stats["recorded_errnos"][outcome["error"][0]] += 1
+                stats["levels"][record["level"] // 100 * 100] += 1
+                stats["features"].update(record["features"])
+                stats["directories"][directory] += 1
+                entry["tests"].append([name, record["id"], record["level"],
+                                       paths.index(record["source"]["path"]), record["source"]["line"]])
+    # One manifest per shard directory with one record per shard keeps the
+    # files small: per test only [name, id, level, path index, line].
+    for directory, entries in sorted(manifests.items()):
+        with open(out_dir / directory / "manifest.jsonl", "w", encoding="utf-8") as handle:
+            for entry in entries:
+                handle.write(LIB.dumps_jsonl(entry) + "\n")
+    return written
+
+
 def record(args):
     buckets = collections.Counter()
     details = collections.defaultdict(list)
@@ -1203,83 +1321,12 @@ def record(args):
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
 
-    stats = {
-        "buckets": buckets,
-        "provenance": collections.defaultdict(set),
-        "recorded_errnos": collections.Counter(),
-        "quarantined_errnos": collections.Counter(),
-        "dropped_errnos": collections.Counter(),
-        "unrepresentable": collections.Counter(),
-        "setup_failed": collections.Counter(),
-        "unsupported": collections.Counter(details["unsupported-environment"]),
-        "levels": collections.Counter(),
-        "features": collections.Counter(),
-        "directories": collections.Counter(),
-        "tests": 0, "tests_rows": 0, "tests_error": 0, "shards": 0, "dropped_statements": 0,
-        "max_rows": args.max_rows, "max_expect_bytes": args.max_expect_bytes,
-    }
-    manifests = collections.defaultdict(list)
-    written = []
-    source_meta = None
+    stats = new_stats(buckets, details, args.max_rows, args.max_expect_bytes)
+    outcomes_by_group = {}
     for plan in plan_list:
-        for candidate in plan.candidates:
-            for key in ("repo", "revision", "license"):
-                stats["provenance"][key].add(candidate.record["source"][key])
-        outcomes = classify_group(plan, runs[plan.name], args.max_expect_bytes)
-        node_errors = {int(k): v for k, v in runs[plan.name]["a"]["node_errors"].items()}
-        dropped_nodes = set()
-        for candidate in plan.candidates:
-            outcome = outcomes[candidate.index]
-            buckets[outcome["bucket"]] += 1
-            if outcome["bucket"] == "error-quarantined":
-                stats["quarantined_errnos"][f"{outcome['detail']} {QUARANTINED_ERRNOS[int(outcome['detail'])]}"] += 1
-            elif outcome["bucket"] == "unrepresentable":
-                stats["unrepresentable"][outcome["detail"]] += 1
-            elif outcome["bucket"] == "setup-failed":
-                stats["setup_failed"][outcome["detail"][:80]] += 1
-            elif outcome["bucket"] == "recorded":
-                dropped_nodes.update(outcome["dropped"])
-        for node in dropped_nodes:
-            stats["dropped_errnos"][node_errors[node][0]] += 1
-        stats["dropped_statements"] += len(dropped_nodes)
-        for shard_path, tests in build_shards(plan, outcomes):
-            header = group_header(plan, tests)
-            text, named = render_shard(plan, tests, outcomes, header)
-            target = out_dir / shard_path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(text, encoding="utf-8")
-            written.append(target)
-            stats["shards"] += 1
-            directory = str(pathlib.PurePosixPath(shard_path).parent)
-            paths = sorted({c.record["source"]["path"] for c, _ in named})
-            entry = {
-                "shard": shard_path,
-                "group": plan.name,
-                "repo": header["repo"],
-                "revision": header["revision"],
-                "license": header["license"],
-                "paths": paths,
-                "tests": [],
-            }
-            manifests[directory].append(entry)
-            for candidate, name in named:
-                outcome = outcomes[candidate.index]
-                record = candidate.record
-                stats["tests"] += 1
-                stats[f"tests_{outcome['kind']}"] += 1
-                if outcome["kind"] == "error":
-                    stats["recorded_errnos"][outcome["error"][0]] += 1
-                stats["levels"][record["level"] // 100 * 100] += 1
-                stats["features"].update(record["features"])
-                stats["directories"][directory] += 1
-                entry["tests"].append([name, record["id"], record["level"],
-                                       paths.index(record["source"]["path"]), record["source"]["line"]])
-    # One manifest per shard directory with one record per shard keeps the
-    # files small: per test only [name, id, level, path index, line].
-    for directory, entries in sorted(manifests.items()):
-        with open(out_dir / directory / "manifest.jsonl", "w", encoding="utf-8") as handle:
-            for entry in entries:
-                handle.write(LIB.dumps_jsonl(entry) + "\n")
+        outcomes_by_group[plan.name] = classify_group(plan, runs[plan.name], args.max_expect_bytes)
+        tally_outcomes(plan, outcomes_by_group[plan.name], runs[plan.name], stats)
+    written = write_specs(out_dir, plan_list, outcomes_by_group, stats)
     importer_report = None
     if args.import_report:
         text = args.import_report.read_text()

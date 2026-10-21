@@ -445,6 +445,35 @@ class RecorderPlanTests(unittest.TestCase):
         self.assertEqual(tests_by_name["l5"]["expect_lines"], ["  "])
 
 
+class WriteSpecsTests(unittest.TestCase):
+    def test_write_specs_from_candidates_and_outcomes(self):
+        buckets = __import__("collections").Counter()
+        details = __import__("collections").defaultdict(list)
+        with tempfile.TemporaryDirectory() as directory:
+            plans = REC.load_candidates([write_candidates(directory, [
+                candidate("L1", ["CREATE TABLE t(a INT)"], ["SELECT a FROM t"], ordered=False),
+                candidate("L2", [], ["SELECT 1/0"]),
+            ])], buckets, details)
+            plan = plans["src/g"]
+            outcomes = {
+                0: {"bucket": "recorded", "kind": "rows", "lines": ["1", "2"], "dropped": [], "raw": False},
+                1: {"bucket": "recorded", "kind": "error", "error": [1365, "22012", "Division by 0"], "dropped": []},
+            }
+            stats = REC.new_stats(buckets, details, 100, 1 << 14)
+            out = pathlib.Path(directory) / "specs" / "src"
+            written = REC.write_specs(out, [plan], {"src/g": outcomes}, stats)
+            self.assertEqual([p.name for p in written], ["g.sqltest"])
+            parsed = LIB.read_sqltest(written[0].read_text())
+            manifest = json.loads((out / "manifest.jsonl").read_text())
+        self.assertEqual([t["name"] for t in parsed["tests"]], ["l1", "l2"])
+        self.assertEqual(manifest["tests"], [["l1", "src/g:L1", 100, 0, 1], ["l2", "src/g:L2", 100, 0, 2]])
+        self.assertEqual((stats["tests"], stats["tests_rows"], stats["tests_error"]), (2, 1, 1))
+        comments, block = REC.render_expectation(outcomes[1], True)
+        self.assertEqual(comments, ["# mysql-error: 1365 22012 Division by 0"])
+        self.assertEqual(block, "expect error {\n}")
+        self.assertEqual(REC.render_expectation(outcomes[0], False)[1], "expect unordered {\n    1\n    2\n}")
+
+
 class RecorderPolicyTests(unittest.TestCase):
     def test_test_names_for_ids_outside_their_group(self):
         plan = REC.GroupPlan("matrixone/dir/case.sql")
