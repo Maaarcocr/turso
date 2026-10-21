@@ -128,14 +128,18 @@ class Replay:
         running["stdout"].close()
         running["stderr"].close()
         report = None
+        unreadable = False
         if returncode in (0, 1, 2) and not running["killed"]:
             # The runner exits 0 or 1 after writing its report, and 2 when it
-            # refuses its arguments; anything else is a crash.
+            # refuses its arguments; anything else is a crash. Output that is
+            # not a report (a statement that prints to stdout) is handled like
+            # a crash, so the file's other tests still get their outcomes.
             try:
                 report = json.loads(output)
             except ValueError:
-                raise SystemExit(f"sqltest wrote no report for {job.describe()} "
-                                 f"({describe_status(returncode)}): {errors.strip()}")
+                if returncode == 2:
+                    raise SystemExit(f"sqltest refused {job.describe()}: {errors.strip()}")
+                unreadable = True
 
         if report is not None:
             results = [r for f in report.get("files", []) for r in f.get("results", [])]
@@ -153,6 +157,8 @@ class Replay:
 
         if running["killed"]:
             status = f"killed after {self.args.process_timeout} s"
+        elif unreadable:
+            status = f"wrote stdout that is not a JSON report ({output[:80]!r})"
         else:
             status = describe_status(returncode)
         tail = errors.strip()[-1500:]
