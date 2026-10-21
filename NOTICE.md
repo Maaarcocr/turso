@@ -112,17 +112,23 @@ This project includes a Python port of the Vitess evalengine test case generator
 * License: licenses/mysql/vitess-apache-license.md (Apache License v2.0)
 * Homepage: https://github.com/vitessio/vitess
 
-This project includes MySQL specification cases derived from TiDB integration tests (tests/integrationtest), distributed by PingCAP, Inc.:
+This project includes MySQL 8.4.10 results recorded for specification cases derived from TiDB integration tests (tests/integrationtest), distributed by PingCAP, Inc. (mysql/conformance/results/tidb; the cases' SQL is not included and is regenerated from the pinned source):
 
 * Copyright: PingCAP, Inc.
 * License: licenses/mysql/tidb-apache-license.md (Apache License v2.0)
 * Homepage: https://github.com/pingcap/tidb
 
-This project includes MySQL specification cases derived from MatrixOne distributed test cases (test/distributed/cases), distributed by Matrix Origin:
+This project includes MySQL 8.4.10 results recorded for specification cases derived from MatrixOne distributed test cases (test/distributed/cases), distributed by Matrix Origin (mysql/conformance/results/matrixone; the cases' SQL is not included and is regenerated from the pinned source):
 
 * Copyright: Matrix Origin
 * License: licenses/mysql/matrixone-apache-license.md (Apache License v2.0)
 * Homepage: https://github.com/matrixorigin/matrixone
+
+mysql/conformance/results/mysql-mtr contains MySQL 8.4.10 results for statements of the MySQL Server mysql-test suite, identified by test file path and line. No mysql-test SQL is included; the scripts (GPL-2.0-only) are read from a pinned checkout fetched by mysql/conformance/fetch-sources.sh and are never committed:
+
+* Copyright: Oracle and/or its affiliates
+* License of the scripts: GPL-2.0-only (not redistributed here)
+* Homepage: https://github.com/mysql/mysql-server
 
 This project includes MySQL specification cases derived from the sqllogictest scripts by D. Richard Hipp, with expected results recorded from MySQL:
 

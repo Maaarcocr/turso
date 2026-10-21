@@ -33,6 +33,12 @@ The compatibility target is frozen in `target.toml`. Feature prerequisites and s
 
 `specs/` holds a large corpus of `.sqltest` specs whose expected results were recorded once from MySQL 8.4.10: 302,599 from sqllogictest, Vitess and go-mysql-server, of which 183,657 pass in the first baseline (see the status in [`SPECS.md`](SPECS.md#status)). The pipeline (fetch pinned sources, import candidates, record against the pinned container, replay through `tursomysql`, score against `baseline.txt`) and the file formats are specified in [`SPECS.md`](SPECS.md).
 
+GPL or license-unclear suites (MySQL's own mysql-test, TiDB, MatrixOne) commit only MySQL's results, without SQL, under `results/`. Their specs are rebuilt locally from the pinned sources, without a MySQL server, and scored against `baseline-local.txt` ([`SPECS.md`](SPECS.md#results-only-sources)):
+
+```bash
+make -C mysql/conformance materialize-local run-local-specs score-local
+```
+
 ## Spec candidate importers
 
 Importers turn permissively licensed upstream suites into candidate JSONL for the recorder (schema in [`SPECS.md`](SPECS.md)). They read pinned source checkouts as text only, never use upstream expected results, and write `candidates/<source>/*.jsonl` plus an `IMPORT_REPORT.md` with extraction and filter counts:
@@ -43,6 +49,7 @@ python3 -I mysql/conformance/tools/import_vitess_endtoend.py --source /path/to/v
 python3 -I mysql/conformance/tools/import_tidb.py --source /path/to/tidb
 python3 -I mysql/conformance/tools/import_matrixone.py --source /path/to/matrixone
 python3 -I mysql/conformance/tools/import_gms.py --source /path/to/go-mysql-server
+python3 -I mysql/conformance/tools/import_mtr.py --source /path/to/mysql-server   # GPL: results-only
 ```
 
 Revisions are pinned in `corpus/sources.lock.toml`. The script importers replay a dependency slice of each file as setup (`--max-setup`, `--max-candidates-per-file` and `--max-setup-per-file` bound replay cost) and mark it `setup_errors: drop` because vendor statements are mixed into the scripts.
@@ -61,6 +68,6 @@ A second recipe extracts a balanced 5,000-case syntax curriculum from the offici
 CARGO=/path/to/cargo ./mysql/conformance/mine-mtr.sh
 ```
 
-Set either miner's `*_LIMIT=0` variable to extract every eligible static case. Generated MTR SQL stays local pending licensing review.
+Set either miner's `*_LIMIT=0` variable to extract every eligible static case. Generated MTR SQL stays local (GPL-2.0-only); only MySQL's results for `tools/import_mtr.py` candidates are committed.
 
 Unsupported owned cases are assertions, not skips. When a feature is implemented, move its cases to successful execution coverage and add `.sqltest` specs recorded from MySQL where values or diagnostics are observable. Never weaken or delete a rejection case merely because it starts succeeding.

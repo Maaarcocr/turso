@@ -43,12 +43,16 @@ mysql/conformance/
 │   │   └── <dir>/
 │   │       ├── *.sqltest      shards of at most 1,000 tests
 │   │       └── manifest.jsonl one record per shard in this directory
-│   └── local/<source>/   recordings that must not be committed (ignored)
+│   └── local/<source>/   specs that must not be committed (ignored), rebuilt
+│                         from results/ by tools/materialize.py
+├── results/<source>/     MySQL's results for sources whose SQL is not
+│                         committed (see Results-only sources)
 ├── candidates/           importer output: unrecorded candidate JSONL (ignored)
 ├── .sources/             fetch-sources.sh checkouts (ignored)
 ├── .record-cache/        per-group oracle runs, makes recording resumable (ignored)
 ├── baseline.txt          ids of recorded specs that currently pass
-└── tools/                importers, recorder, scoreboard
+├── baseline-local.txt    the same for specs/local/ (test ids only)
+└── tools/                importers, recorder, materializer, scoreboard
 ```
 
 Each `manifest.jsonl` line describes one shard of its directory:
@@ -116,9 +120,12 @@ A source is committed under `specs/<source>/` only when its
 `corpus/sources.lock.toml` entry lists it in `spec_sources` and has
 `redistribute_generated_cases = true`, and no candidate is GPL-licensed;
 otherwise (or with `--local`) it is recorded into the ignored
-`specs/local/<source>/`. TiDB and MatrixOne are local for now: some of their
-tests look ported from GPL MySQL MTR. `--import-report` takes the importer's
-JSON report or `IMPORT_REPORT.md` and copies it into `REPORT.md`.
+`specs/local/<source>/`. TiDB, MatrixOne (some of their tests look ported
+from GPL MySQL MTR) and MySQL's own mysql-test suite (GPL-2.0-only) are
+recorded with `--results-only`, which also commits their results without SQL
+(see [Results-only sources](#results-only-sources)). `--import-report` takes
+the importer's JSON report or `IMPORT_REPORT.md` and copies it into
+`REPORT.md`.
 
 Scoring a replay (`make -C mysql/conformance run-specs` writes the report to
 `target/mysql-specs-report.json`, the default input):
@@ -309,7 +316,103 @@ A test is not emitted, and is counted in `REPORT.md`, when:
   (`unsupported-environment`; never executed);
 - the importer could not extract it statically (`dynamic`), it is a duplicate
   id or a duplicate of another candidate's setup, sql and ordering
-  (`duplicate`), or it violates the schema (`invalid`).
+  (`duplicate`), or it violates the schema (`invalid`);
+- with `--results-only`, the result reproduces the candidate's own SQL: one of
+  its statements (12 characters or longer, whitespace normalized), or a
+  statement fragment MySQL quotes in a `near '...'` diagnostic
+  (`echoes-sql`), so committed results never carry source SQL.
+
+## Results-only sources
+
+GPL or license-unclear suites (`redistribute_generated_cases = false` in
+`corpus/sources.lock.toml`) must not have their SQL committed. For them the
+repository keeps only what MySQL answered, and anyone (and CI) can rebuild
+runnable specs from a pinned checkout without a MySQL server:
+
+```bash
+make -C mysql/conformance materialize-local   # fetch, import, join -> specs/local/
+make -C mysql/conformance run-local-specs     # replay through tools/replay.py
+make -C mysql/conformance score-local         # gate against baseline-local.txt
+python3 mysql/conformance/tools/score.py --local --update   # ratchet
+```
+
+Recording (needs MySQL; the lock entry must name the importer in
+`importers.<source>`):
+
+```bash
+mysql/conformance/fetch-sources.sh mysql-mtr-8.4.10
+python3 -I mysql/conformance/tools/import_mtr.py \
+    --source mysql/conformance/.sources/mysql-mtr-8.4.10 --output mysql/conformance/candidates/mysql-mtr
+python3 -I mysql/conformance/tools/record_mysql.py mysql/conformance/candidates/mysql-mtr/*.jsonl \
+    --import-report mysql/conformance/candidates/mysql-mtr/IMPORT_REPORT.md --results-only
+```
+
+`--results-only` writes the usual ignored `specs/local/<source>/` and the
+committed `results/<source>/`:
+
+- `<group>.jsonl`, one file per candidate group (the shard unit) with one line
+  per candidate that reached classification, in candidate order:
+
+  ```json
+  {"id":"tidb/cte:L44","sha256":"397f2b52…","ordered":true,"bucket":"recorded","rows":["1|1|1|4","1|0|0|4",…]}
+  {"id":"tidb/collation_misc:L40","sha256":"d738e35e…","ordered":false,"bucket":"recorded","error":[1253,"42000","COLLATION 'utf8mb4_unicode_ci' is not valid for CHARACTER SET 'latin1'"],"dropped":[[3,1273],[4,1302]]}
+  {"id":"tidb/collation_pointget:L72","sha256":"74575753…","ordered":false,"bucket":"error-quarantined","detail":"1054"}
+  ```
+
+  `sha256` covers the candidate's effective setup (after `setup_base`), sql,
+  `ordered` and `setup_errors` (`record_mysql.candidate_digest`). Recorded
+  outcomes carry `rows` (rendered lines; `raw` for `expect raw`) or `error`
+  `[errno, SQLSTATE, message]`; `dropped` lists setup statements that failed
+  in MySQL as `[position in the effective setup, errno]`. Other buckets keep
+  only the `detail` REPORT.md counts (an errno, a fixed reason, or the first
+  80 characters of a setup failure). There is never a SQL or setup field.
+- `meta.json`: lock entry id, repository, revision, license, the importer
+  command, a SHA-256 of the candidate files, recorder version, row and size
+  limits and the oracle's server profile.
+- `REPORT.md`: the recording's report (the same file as
+  `specs/local/<source>/REPORT.md`).
+
+Re-recording the same candidates writes byte-identical results.
+`tools/materialize.py [source...]` checks out the pinned revision with
+fetch-sources.sh into `.sources/` (or takes `--checkout`), re-runs the stored
+importer command under `python3 -I` into `candidates/<source>/`, and joins
+candidates with results by id. A result is used only when its SHA-256 and
+`ordered` match the regenerated candidate; otherwise the candidate is counted
+as `stale-result`, and candidates without a result as `no-result` (results
+without a candidate are reported as orphaned). It then writes
+`specs/local/<source>/` with the recorder's own `write_specs` and
+`write_report`, so when nothing is stale the shards, manifests and REPORT.md
+are byte-identical to a direct recording; it reports whether the candidate
+digest and REPORT.md match the committed ones (`--strict` fails on any stale
+or missing result or a different REPORT.md; `--reuse-candidates` skips the
+fetch and import).
+`tools/test_results.py` checks that committed results are well formed and,
+when a source's candidates are imported locally, that no candidate statement
+occurs in its results.
+
+Local specs are replayed and scored separately from the committed corpus:
+`score.py` ignores `specs/local/` unless `--local`, which reads
+`specs/local/`, `baseline-local.txt` and the `run-local-specs` report, so the
+committed `baseline.txt` never depends on locally materialized specs. A
+replay with `INCLUDE_LOCAL=1 make run-specs` can be scored both ways.
+
+| Source | Results records | Recorded specs | Withheld (`echoes-sql`) | Results size |
+|---|---:|---:|---:|---:|
+| tidb | 12,932 | 11,721 | 111 | 2.7 MB |
+| matrixone | 24,657 | 21,507 | 0 | 5.2 MB |
+| mysql-mtr | 68,190 | 62,440 | 40 | 15.3 MB |
+
+First local baseline (`baseline-local.txt`, 2026-10-21): **15,539 of the
+95,668 local specs pass** (tidb 1,309 of 11,721; matrixone 5,483 of 21,507;
+mysql-mtr 8,747 of 62,440). Most failures are setup blocks the frontend does
+not run yet (`SET`, `PREPARE`, table options). A debug replay with three
+processes takes about 6 minutes (15.5 CPU-minutes). Specs that crash their
+process and are reported as errors: `lpad`/`rpad`/`repeat` with huge lengths
+(Turso allocates the whole result; 37 tests in `mysql-mtr/t/{lpad,rpad}` and
+`matrixone/function/func_string_{lpad_rpad,repeat}`), and three
+`mysql-mtr/t/func_gconcat` tests whose `GROUP_CONCAT` with three or more
+arguments makes Turso print the argument count to stdout
+(`core/dialect/sqlite/mod.rs`), which `tools/replay.py` treats like a crash.
 
 ## Execution model of the recorder
 
@@ -357,9 +460,55 @@ and all of `evidence/` and `select*` within those caps; the whole sample
 replays about 4M setup statements (guard: 6M). `--all` emits every eligible
 candidate for local use.
 
+### MySQL mysql-test (`tools/import_mtr.py`)
+
+Reads MySQL 8.4.10's own `mysql-test` scripts (GPL-2.0-only, results-only)
+statically, the way `mysqltest` would run them against the default server, and
+never uses MySQL's `.result` files:
+
+- Commands and statements are split like mysqltest's `read_line`: `--command`
+  lines end at the line end, everything else at the current delimiter outside
+  `'`, `"` and `` ` `` quotes; heredocs of `perl`/`write_file` are skipped.
+- `--source` includes are inlined; `let`, `eval`, `inc`, `dec` and `expr` are
+  evaluated when their values are known (an unset variable reads as "", as in
+  mysqltest; MTR's upper-case environment and `$mysql_errno` are unknown);
+  `if`/`while` blocks run when their conditions can be decided, loops are
+  unrolled (at most 20,000 iterations and 64 MiB of SQL per file).
+  Read-only queries in `let $v = \`...\`` are ordinary statements.
+- Statements under an undecidable condition, with unresolved variables, or
+  modifying queries in variables are *not statically replayable*: they never
+  become candidates or setup, and objects they create or touch taint later
+  candidates that need them.
+- `--error`, `--sorted_result` (unordered) and the masks (`--replace_*`,
+  `--lowercase_result`, `--disable_result_log`, whose statements are not
+  emitted) apply as in mysqltest; `--disable_testcase` regions are dropped.
+- A file is excluded, with a counted reason, when it opens other connections,
+  runs shell or perl commands, sleeps outside undecidable blocks, sources an
+  include for debug builds, replication or binary logs, NDB, plugins or
+  components, server restarts or asynchronous waits, has server option files
+  other than SQL-invisible ones, or reaches a `--skip` that the pinned profile
+  is not known to pass (runtime requirement checks of includes that the
+  oracle meets, such as `have_innodb_16k.inc`, are listed in
+  `IGNORED_INCLUDES`).
+- Only `mysql-test/t`, `include/` and the SQL-level suites `collations`,
+  `engines`, `funcs_1`, `funcs_2`, `gcol`, `gis`, `innodb_fts`, `innodb_gis`,
+  `json` and `parts` are imported; the lock entry fetches exactly these paths
+  and an include outside them excludes its file, so a sparse checkout imports
+  the same candidates as a full one.
+
+Candidates are `tools/file_replay.py` dependency slices in database `test`
+(at most 120 setup statements per candidate, 1,000 candidates and 20,000
+setup statements per file). Ids are `mysql-mtr/<path>:L<line>` with the line
+of the top-level command (a `--source` or `while` line for statements it
+produces) and an ordinal suffix. The pinned import scans 2,253 test files
+(1,130 excluded) and emits 68,315 candidates with 818,884 setup statements;
+`results/mysql-mtr/REPORT.md` has every count.
+
 ## Licensing
 
-Only permissively licensed sources are checked in. Each source's license is
-recorded in every manifest record, in `corpus/sources.lock.toml` and in
-`NOTICE.md`. GPL sources (MySQL MTR, MariaDB) are recorded into `specs/local/`,
-which is ignored by git and never committed.
+Only permissively licensed sources have their specs checked in. Each source's
+license is recorded in every manifest record, in `corpus/sources.lock.toml`
+and in `NOTICE.md`. GPL or license-unclear sources (MySQL MTR, TiDB,
+MatrixOne) commit only MySQL's results under `results/` (ids, SHA-256s and
+MySQL's output, never their SQL); their specs live in the ignored
+`specs/local/` and are rebuilt from a pinned checkout.
