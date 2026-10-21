@@ -112,21 +112,15 @@ EXCLUDING_INCLUDES = [
 ]
 
 # Includes that only check a requirement the pinned oracle meets (or only set
-# output masks); they are not inlined.
+# output masks); they are not inlined. Any other `--skip` under an undecidable
+# condition excludes its file.
 IGNORED_INCLUDES = {
     "include/big_test.inc",
     "include/count_sessions.inc",
-    "include/have_archive.inc",
-    "include/have_blackhole.inc",
-    "include/no_protocol.inc",
-    "include/no_ps_protocol.inc",
-    "include/not_asan_windows.inc",
-    "include/not_sparc_debug.inc",
-    "include/not_threadpool.inc",
-    "include/not_tsan.inc",
-    "include/wait_until_count_sessions.inc",
     "include/elide_costs.inc",
     "include/have_64bit.inc",
+    "include/have_archive.inc",
+    "include/have_blackhole.inc",
     "include/have_case_sensitive_file_system.inc",
     "include/have_innodb.inc",
     "include/have_innodb_16k.inc",
@@ -137,18 +131,21 @@ IGNORED_INCLUDES = {
     "include/have_myisam.inc",
     "include/have_nodebug.inc",
     "include/have_partition.inc",
+    "include/no_protocol.inc",
+    "include/no_ps_protocol.inc",
     "include/no_valgrind_without_big.inc",
     "include/not_asan.inc",
+    "include/not_asan_windows.inc",
     "include/not_hypergraph.inc",
     "include/not_parallel.inc",
+    "include/not_sparc_debug.inc",
+    "include/not_threadpool.inc",
+    "include/not_tsan.inc",
     "include/not_ubsan.inc",
     "include/not_valgrind.inc",
     "include/not_windows.inc",
+    "include/wait_until_count_sessions.inc",
 }
-
-# Includes with a runtime `--skip` check that the pinned profile passes; a
-# `--skip` under an undecidable condition anywhere else excludes the file.
-SATISFIED_REQUIREMENTS = set()
 
 # mysqltest environment of a default MTR run, as far as conditions use it.
 ENVIRONMENT = {"BIG_TEST": "1", "VALGRIND_TEST": "0", "HYPERGRAPH_TEST": "0"}
@@ -159,7 +156,7 @@ HARMLESS_OPTIONS = re.compile(
     r"^--(loose[-_])?(skip[-_])?(log[-_]bin\S*|log[-_]replica[-_]updates|slow[-_]query[-_]log\S*|"
     r"general[-_]log\S*|log[-_]output\S*|long[-_]query[-_]time\S*|log[-_]queries[-_]not[-_]using[-_]indexes|"
     r"secure[-_]file[-_]priv\S*|local[-_]infile\S*|replica[-_]preserve[-_]commit[-_]order|"
-    r"innodb[-_]flush[-_]log[-_]at[-_]trx[-_]commit\S*|sync[-_]binlog\S*|max[-_]allowed[-_]packet\S*)$",
+    r"innodb[-_]flush[-_]log[-_]at[-_]trx[-_]commit\S*|sync[-_]binlog\S*)$",
     re.I,
 )
 
@@ -386,24 +383,20 @@ def build_blocks(items):
     """Nest items into ``Block``s; raises FileExcluded when unbalanced."""
     root = []
     stack = [root]
-    blocks = [None]
     for item in items:
         if item.kind in ("if", "while"):
             block = Block(item.kind, item.line, item.text)
             stack[-1].append(block)
             stack.append(block.body)
-            blocks.append(block)
         elif item.kind == "else":
             previous = stack[-1][-1] if stack[-1] else None
             if not isinstance(previous, Block) or previous.kind != "if":
                 raise FileExcluded("unbalanced mysqltest blocks")
             stack.append(previous.otherwise)
-            blocks.append(previous)
         elif item.kind == "end":
             if len(stack) == 1:
                 raise FileExcluded("unbalanced mysqltest blocks")
             stack.pop()
-            blocks.pop()
         else:
             stack[-1].append(item)
     if len(stack) != 1:
@@ -687,9 +680,7 @@ class Interpreter:
                 raise FileExcluded("skipped by the test itself")
             if len(self.stack) == 1:
                 raise FileExcluded("runtime requirement check in the test")
-            relative = self.relative(self.stack[-1])
-            if relative not in SATISFIED_REQUIREMENTS:
-                raise FileExcluded("runtime requirement check in an include", relative)
+            raise FileExcluded("runtime requirement check in an include", self.relative(self.stack[-1]))
         elif name == "die":
             if not dynamic:
                 raise FileExcluded("dies")
