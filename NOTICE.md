@@ -105,3 +105,9 @@ This project includes MySQL specification cases derived from go-mysql-server eng
 * Copyright: DoltHub, Inc. and contributors
 * License: licenses/mysql/go-mysql-server-apache-license.md (Apache License v2.0)
 * Homepage: https://github.com/dolthub/go-mysql-server
+
+This project includes MySQL specification cases derived from the sqllogictest scripts by D. Richard Hipp, with expected results recorded from MySQL:
+
+* Copyright: D. Richard Hipp (2008)
+* License: licenses/mysql/sqllogictest-cc0-license.md (CC0 1.0, one of the licenses offered by the authors)
+* Homepage: https://www.sqlite.org/sqllogictest

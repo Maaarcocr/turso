@@ -13,6 +13,7 @@ export CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}
 "$CARGO_BIN" fmt --all -- --check
 "$CARGO_BIN" fmt --manifest-path mysql/conformance/tools/mtr-miner/Cargo.toml --all -- --check
 python3 -m unittest mysql/conformance/tools/test_mining.py
+python3 -m unittest mysql/conformance/tools/test_specs.py
 python3 mysql/conformance/tools/validate_corpus.py mysql/conformance/corpus/go-mysql-server
 "$CARGO_BIN" test -p turso_mysql_parser -p turso_mysql -p tursomysql
 "$CARGO_BIN" test --manifest-path mysql/conformance/tools/mtr-miner/Cargo.toml
