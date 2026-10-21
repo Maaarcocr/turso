@@ -18,6 +18,7 @@ relative to specs/).
 import argparse
 import collections
 import json
+import os
 import pathlib
 import sys
 
@@ -70,7 +71,7 @@ def source_dir_of(manifest, specs_root):
 
 def load_manifests(specs_root):
     specs = {}
-    for manifest in sorted(specs_root.rglob("manifest.jsonl")):
+    for manifest in sorted(specs_root.rglob("manifest*.jsonl")):
         source = source_dir_of(manifest, specs_root)
         with open(manifest, encoding="utf-8") as handle:
             for line in handle:
@@ -109,7 +110,8 @@ def highest_cleared(items, passed):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("results", nargs="+", type=pathlib.Path, help="sqltest --output json files")
+    parser.add_argument("results", nargs="*", type=pathlib.Path,
+                        help="sqltest --output json files (default: the make run-specs report)")
     parser.add_argument("--specs", type=pathlib.Path, default=CONFORMANCE / "specs")
     parser.add_argument("--baseline", type=pathlib.Path, default=CONFORMANCE / "baseline.txt")
     parser.add_argument("--update", action="store_true", help="add newly passing specs to the baseline")
@@ -117,6 +119,11 @@ def main(argv=None):
                         help="with --update, also drop baseline entries that no longer pass")
     parser.add_argument("--next", type=int, default=20, help="failures to list at the lowest failing level")
     args = parser.parse_args(argv)
+    if not args.results:
+        target = pathlib.Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
+        args.results = [target / "mysql-specs-report.json"]
+        if not args.results[0].exists():
+            parser.error(f"{args.results[0]} does not exist; run make -C mysql/conformance run-specs")
 
     specs = load_manifests(args.specs)
     outcomes, replayed_files = load_results(args.results, args.specs)

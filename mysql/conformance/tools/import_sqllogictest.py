@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Import SQLite sqllogictest scripts as MySQL spec candidates.
 
-Reads the pinned sqllogictest checkout (see mysql/conformance/specs/sources.lock.toml),
+Reads the pinned sqllogictest checkout (see mysql/conformance/corpus/sources.lock.toml),
 keeps only records that the reference harness would run for the `mysql` engine,
 and writes candidate JSONL in the schema of mysql/conformance/SPECS.md.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch the pinned spec sources listed in specs/sources.lock.toml.
+# Fetch the pinned spec sources listed in corpus/sources.lock.toml.
 #
 #   mysql/conformance/fetch-sources.sh [source-id...]
 #
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-LOCK=${MYSQL_SPEC_LOCK:-$HERE/specs/sources.lock.toml}
+LOCK=${MYSQL_SPEC_LOCK:-$HERE/corpus/sources.lock.toml}
 DEST=${MYSQL_SPEC_SOURCES:-$HERE/.sources}
 
 mapfile -t ENTRIES < <(python3 -I - "$LOCK" "$@" <<'PY'

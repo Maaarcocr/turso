@@ -1,3 +1,9 @@
+# Pinned upstream sources. `mysql/conformance/fetch-sources.sh [id...]` checks
+# each one out at exactly `revision` (sparse: only `paths`) into the ignored
+# mysql/conformance/.sources/<id>. `spec_sources` lists the candidate id
+# prefixes (specs/<source>/) an entry produces; the recorder commits a source's
+# specs only when its entry has redistribute_generated_cases = true and writes
+# all others to the ignored specs/local/.
 schema_version = 1
 
 [[source]]
@@ -17,6 +23,7 @@ revision = "478bed778dd282aa13aa48ebd75b0549ebe75698"
 paths = ["enginetest/queries", "enginetest/scriptgen/setup/scripts", "enginetest/sqllogictest/testdata"]
 license = "Apache-2.0"
 redistribute_generated_cases = true
+spec_sources = ["go-mysql-server"]
 notes = "Syntax miner: tools/mine_go_mysql_server.py. Structured spec candidates: tools/import_gms.py (also reads enginetest/*.go drivers and enginetest/scriptgen/setup/{setup_data.sg.go,helper.go})."
 
 [[source]]
@@ -26,6 +33,7 @@ revision = "e157537374a15996987346ea6d356d1ca7e8aeec"
 paths = ["go/vt/vtgate/evalengine/testcases", "go/test/endtoend/vtgate/queries", "go/test/endtoend/vtgate/vitess_tester"]
 license = "Apache-2.0"
 redistribute_generated_cases = true
+spec_sources = ["vitess", "vitess-endtoend"]
 notes = "tools/import_vitess.py ports the evalengine generator loops (the three Go files are pinned by SHA-256); tools/import_vitess_endtoend.py reads the MySQL comparison tests."
 
 [[source]]
@@ -34,8 +42,9 @@ repository = "https://github.com/pingcap/tidb.git"
 revision = "13544e9b1472f5c69c05e1ed607adcb3c151d53e"
 paths = ["tests/integrationtest/t"]
 license = "Apache-2.0"
-redistribute_generated_cases = true
-notes = "tools/import_tidb.py; TiDB result files are not used."
+redistribute_generated_cases = false
+spec_sources = ["tidb"]
+notes = "tools/import_tidb.py; TiDB result files are not used. Recorded specs stay local (specs/local/) until the user decides: some tests look ported from GPL MySQL MTR."
 
 [[source]]
 id = "matrixone-distributed-cases"
@@ -43,5 +52,16 @@ repository = "https://github.com/matrixorigin/matrixone.git"
 revision = "7038c8520e5fc1ba456914b3c389ccedb69e22f7"
 paths = ["test/distributed/cases"]
 license = "Apache-2.0"
+redistribute_generated_cases = false
+spec_sources = ["matrixone"]
+notes = "tools/import_matrixone.py; MatrixOne result files are not used. Recorded specs stay local (specs/local/) until the user decides: some tests look ported from GPL MySQL MTR."
+
+[[source]]
+id = "sqllogictest"
+repository = "https://github.com/gregrahn/sqllogictest.git"
+revision = "c93ac416f05635ff5cc490009add936d9753d01d"
+paths = ["test", "COPYRIGHT.md"]
+license = "CC0-1.0"
 redistribute_generated_cases = true
-notes = "tools/import_matrixone.py; MatrixOne result files are not used."
+spec_sources = ["sqllogictest"]
+notes = "tools/import_sqllogictest.py. SQLite sqllogictest scripts (mirror of sqlite.org/sqllogictest); COPYRIGHT.md offers GPL, BSD, MIT or CC0 at the user's choice and the corpus uses CC0-1.0. Only SQL, statement order and sort modes are used; SQLite's expected results are never copied."
