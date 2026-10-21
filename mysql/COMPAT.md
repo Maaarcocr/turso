@@ -71,6 +71,76 @@ Known gaps:
 - Generated columns are lowered, but Turso only creates them with the experimental generated-columns option, which the MySQL frontend does not enable.
 - Not lowered: `TEMPORARY` tables, `CREATE TABLE ... LIKE`/`AS SELECT`, qualified `db.table` names, `ZEROFILL`, `BINARY(n)`, spatial types, `FULLTEXT`/`SPATIAL` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
+## SELECT statements and expressions
+
+`SELECT` statements are lowered by `mysql/parser/query.rs` (statement
+structure), `expr.rs` (expressions) and `literal.rs` (literals) into the shared
+Turso AST. Anything listed under "Falls back" is rejected by the lowering, so
+the statement is parsed by the SQLite fallback exactly as before.
+
+Parsing uses sqlparser's MySQL dialect wrapped in `mysql/parser/dialect.rs`,
+which applies MySQL 8.4 operator precedence (`!` and unary `-`/`~` above `^`,
+then `* / DIV % MOD`, `+ -`, `<< >>`, `&`, `|`, `IN`/`LIKE`/`BETWEEN`,
+comparisons, `IS`, `NOT`, `AND &&`, `XOR`, `OR ||`), reads `INTERVAL expr
+unit` and `EXTRACT(unit FROM expr)` with every MySQL unit, and applies MySQL's
+string escapes: `\0 \b \n \r \t \Z`, a doubled quote, `\%` and `\_` keep their
+backslash, and `\x` is `x` for any other character (so `\a` and `\f` are `a`
+and `f`).
+
+Lowered:
+
+| Syntax | Lowering |
+|---|---|
+| `SELECT [ALL \| DISTINCT \| DISTINCTROW]`, `*`, `t.*`, aliases (also `'string'` and `"string"` aliases) | Same clauses |
+| `FROM` tables (`db.t` as a schema), aliases, comma joins, `[INNER] JOIN`, `CROSS JOIN`, `LEFT/RIGHT [OUTER] JOIN`, `NATURAL`, `ON`, `USING`, derived tables, `LATERAL`, parenthesized joins, `FROM DUAL` | Same clauses (`FROM DUAL` is no `FROM`) |
+| `WHERE`, `GROUP BY` (expressions, aliases, ordinals), `HAVING`, `WINDOW`, `ORDER BY [ASC \| DESC]`, `LIMIT n`, `LIMIT n OFFSET m`, `LIMIT m, n` | Same clauses |
+| `UNION [ALL \| DISTINCT]`, `INTERSECT`, `EXCEPT`, parenthesized members with their own `ORDER BY`/`LIMIT`, `WITH [RECURSIVE]` with column lists, `VALUES ROW(...)` | Same; a member that has its own `ORDER BY`/`LIMIT`, or a right operand that is itself a set operation (`INTERSECT` binds tighter), becomes `SELECT * FROM (...)` |
+| Window functions with `PARTITION BY`, `ORDER BY`, `ROWS`/`RANGE` frames and named windows | Same |
+| Column references, `?` parameters (numbered in text order), `CASE`, `IN` lists and subqueries, `BETWEEN`, `EXISTS`, scalar subqueries, row values, `IS [NOT] NULL/TRUE/FALSE/UNKNOWN`, `= ANY (subquery)`, `<> ALL (subquery)` | Same expressions; `IS UNKNOWN` is `IS NULL`; `= ANY` is `IN`, `<> ALL` is `NOT IN` |
+| `a DIV b` | `CAST(a / b AS INTEGER)`: truncates toward zero, `NULL` for a zero divisor |
+| `MOD`, `%`, `XOR`, `&&`, `\|\|`, `!`, `^`, `<=>` | `%`; `(NOT a) <> (NOT b)`; `AND`; `OR`; `NOT`; `(a \| b) - (a & b)` (only when neither side calls a function or has a subquery, since both sides appear twice); `IS` |
+| `a LIKE p [ESCAPE c]`, `REGEXP`, `RLIKE` | `LIKE` with `ESCAPE '\'` unless the pattern is a string without backslashes (MySQL's default escape character); a dangling escape at the end of a literal pattern matches itself, as in MySQL; `REGEXP` operator |
+| Function calls | Passed through by name, so SQLite built-ins and the MySQL functions in `mysql/frontend/functions` both resolve; `COUNT(*)`, `DISTINCT` arguments and `OVER` are kept |
+| `GROUP_CONCAT(a, b, ... [ORDER BY ...] [SEPARATOR s])` | `group_concat(a \|\| b \|\| ..., s)` (Turso does not support `ORDER BY` inside aggregates yet and reports an error) |
+| `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms) |
+| `x->'path'`, `x->>'path'` | `JSON_EXTRACT(x, path)`, `JSON_UNQUOTE(JSON_EXTRACT(x, path))` |
+| `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP` (with or without `()`) | SQLite's current-time literals |
+| `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)`, `TRIM([LEADING \| TRAILING \| BOTH] [c] FROM s)` with `c` one character | `LOCATE(a, b)`, `SUBSTRING(s, a, b)`, `LTRIM/RTRIM/TRIM(s, c)` |
+| `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The same SQLite type name the fallback used, so the result is unchanged: no rounding to an integer or to `d` decimals, and no unsigned wrap-around |
+| `CAST(x AS BINARY)`, `CONVERT(x USING utf8mb4/utf8mb3/utf8/binary)` | `CAST(x AS BLOB)`, `CAST(x AS TEXT)` |
+| `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
+| Integer, decimal and scientific literals, `TRUE`, `FALSE`, `NULL` | The same literal text the SQLite parser keeps (decimals and integers above the signed 64-bit range are still SQLite numbers) |
+| `'...'`, `"..."`, `N'...'` | Text (`"..."` is a string, never an identifier) |
+| `X'..'`, `0x..`, `b'..'`, `0b..` | A blob; in a comparison with a number, a logical operator, a condition, or `\|`, `&`, `>>`, `^`, the unsigned integer value; in a comparison with a string, text |
+| `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` follows the hex literal rules |
+| `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); in a comparison with a number, a logical operator or a condition, the number MySQL uses (`20180501`) |
+| `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which fall back |
+
+Falls back to SQLite parsing: `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN`
+modifiers, `STRAIGHT_JOIN` joins, index hints, `PARTITION (...)` selection,
+`INTO`, locking reads (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`,
+`VALUES` without `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`
+and `INTERSECT ALL`, `FULL JOIN`, `NULLS FIRST/LAST`, user and system
+variables (`@a`, `@@x`), `:name` and `?N` parameters, `MATCH ... AGAINST`,
+`MEMBER OF`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other collation,
+`CAST` to `DATE`, `DATETIME`, `TIME`, `YEAR`, `JSON`, `CHAR(n)`, `BINARY(n)` or
+with a character set, `CONVERT(... USING ...)` with any other character set,
+`TRIM` of a longer string, `^` over function calls or subqueries, other
+character set introducers, `DATETIME '..'`, invalid temporal literals, odd
+`X'...'` digits, hex, bit and temporal literals in arithmetic (`+ - * / DIV %
+MOD`, unary `-`/`+`/`~`, `<<`: MySQL computes hex and bit literals as BIGINT
+UNSIGNED, which fails on negative results, and temporal arithmetic can
+overflow), and `DIV` with a literal outside the BIGINT range.
+
+Known differences that remain on the lowered path, as on the fallback: `/`
+is SQLite division (integer division for two integers) rather than MySQL's
+DECIMAL division; integer overflow becomes a REAL instead of an error; bit
+operators are signed 64-bit rather than BIGINT UNSIGNED; string comparisons and
+`LIKE` use binary or ASCII case folding rather than `utf8mb4_0900_ai_ci`;
+`WHERE` may refer to select-list aliases; `ONLY_FULL_GROUP_BY` is not
+enforced; and unaliased columns are named after the expression as sqlparser
+prints it (string literals after their value).
+
 ## JSON functions
 
 `mysql/frontend/functions/json/` implements MySQL's JSON functions for the
