@@ -86,6 +86,13 @@ class ExpectationTests(unittest.TestCase):
         self.assertIsNotNone(LIB.expectation_round_trips([["a\x01"]], True))
         self.assertIsNotNone(LIB.expectation_round_trips([["{{x}}"]], True))
 
+    def test_raw_blocks_keep_edge_whitespace(self):
+        rows = [["  a", "b "], ["", "{x}"], ["c\\", ""]]
+        self.assertIsNotNone(LIB.expectation_round_trips(rows, True))
+        self.assertIsNone(LIB.expectation_round_trips(rows, True, raw=True))
+        self.assertIsNone(LIB.expectation_round_trips([[" one row "]], False, raw=True))
+        self.assertIsNotNone(LIB.expectation_round_trips([[" a"], ["b"]], False, raw=True))
+
     def test_empty_single_value_rows(self):
         # Exact blocks keep empty lines; unordered blocks drop them.
         self.assertIsNone(LIB.expectation_round_trips([["1"], [""]], True))
@@ -346,12 +353,24 @@ class RecorderPlanTests(unittest.TestCase):
             "5": ["rows", [["a|b"]]],
         }
         results_b = dict(results_a, **{"2": ["rows", [["2"], ["1"]]]})
+        results_a["3"] = ["rows", [["b"], ["NULL"], ["a"]]]
+        results_b["3"] = ["rows", [["a"], ["b"], ["NULL"]]]
         outcomes = REC.classify_group(plan, self.runs(results_a, results_b, errors), 1 << 20)
+        self.assertEqual(outcomes[3]["lines"], ["NULL", "a", "b"])
         buckets = [outcomes[i]["bucket"] for i in range(6)]
         self.assertEqual(buckets, ["recorded", "error-quarantined", "nondeterministic", "recorded",
                                    "recorded", "unrepresentable"])
         self.assertEqual(outcomes[0]["dropped"], [1])
         self.assertEqual(outcomes[4]["kind"], "error")
+
+    def test_dropped_statements_need_not_be_representable(self):
+        trigger = "CREATE TRIGGER r AFTER INSERT ON t BEGIN SELECT 1; END"
+        plan, _ = self.plan([candidate("L1", ["CREATE TABLE t(a INT)", trigger], ["SELECT a FROM t"])])
+        dropped = {"1": [1064, "42000", "syntax"]}
+        outcomes = REC.classify_group(plan, self.runs({"0": ["rows", []]}, None, dropped), 1 << 20)
+        self.assertEqual(outcomes[0]["bucket"], "recorded")
+        outcomes = REC.classify_group(plan, self.runs({"0": ["rows", []]}, None, {}), 1 << 20)
+        self.assertEqual(outcomes[0]["bucket"], "unrepresentable")
 
     def test_setup_failure_policy(self):
         plan, _ = self.plan([
@@ -371,6 +390,7 @@ class RecorderPlanTests(unittest.TestCase):
             candidate("L2", ["DELETE FROM t WHERE a = 1 -- gone"], ["SELECT a FROM t"], base="L1", ordered=False),
             candidate("L3", [], ["SELECT '\\\\}'"]),
             candidate("L4", [], ["SELECT 1/0 FROM t"], base="L2"),
+            candidate("L5", [], ["SELECT SPACE(2)"], ordered=False),
         ])
         errors = {"2": [1146, "42S02", "missing"]}
         results = {
@@ -378,6 +398,7 @@ class RecorderPlanTests(unittest.TestCase):
             "1": ["rows", []],
             "2": ["rows", [["\\}"]]],
             "3": ["error", 1365, "22012", "Division by 0"],
+            "4": ["rows", [["  "]]],
         }
         outcomes = REC.classify_group(plan, self.runs(results, None, errors), 1 << 20)
         self.assertTrue(all(o["bucket"] == "recorded" for o in outcomes.values()))
@@ -385,7 +406,8 @@ class RecorderPlanTests(unittest.TestCase):
         self.assertEqual(path, "g.sqltest")
         header = REC.group_header(plan, tests)
         text, named = REC.render_shard(plan, tests, outcomes, header)
-        self.assertEqual([name for _, name in named], ["l1", "l2", "l3", "l4"])
+        self.assertEqual([name for _, name in named], ["l1", "l2", "l3", "l4", "l5"])
+        self.assertIn("expect raw {\n  \n}", text)
         parsed = LIB.read_sqltest(text)
         setups = parsed["setups"]
         self.assertEqual(LIB.split_block_statements(setups["s1"]),
@@ -403,6 +425,8 @@ class RecorderPlanTests(unittest.TestCase):
         self.assertEqual(tests_by_name["l4"]["expect_kind"], "error")
         self.assertIn("mysql-error: 1365 22012 Division by 0", tests_by_name["l4"]["comments"])
         self.assertEqual(tests_by_name["l4"]["setups"], ["s1", "s2"])
+        self.assertEqual(tests_by_name["l5"]["expect_kind"], "raw")
+        self.assertEqual(tests_by_name["l5"]["expect_lines"], ["  "])
 
 
 class RecorderPolicyTests(unittest.TestCase):

@@ -190,7 +190,7 @@ def read_script(path):
 
 def scan_metadata(job):
     """Pass 1: compact per-file metadata, eligible queries in stable hash order."""
-    path, root, max_rows = job
+    path, root, max_rows, max_setup = job
     relpath = path.relative_to(root).as_posix()
     group = group_name(relpath)
     stats = collections.Counter()
@@ -205,6 +205,11 @@ def scan_metadata(job):
         _, line, sql, _ordered, rows = item
         if rows > max_rows:
             stats["excluded-too-large-in-source"] += 1
+            continue
+        # The replay runs a test's whole setup in a fresh database (debug
+        # runner: about 0.75 ms per statement), so very long setups are skipped.
+        if statements > max_setup and LIB.references_tables(sql):
+            stats["excluded-long-setup"] += 1
             continue
         if WIDE_JOIN_MIN <= LIB.from_width(sql) <= MYSQL_MAX_JOIN_TABLES:
             stats["excluded-wide-join"] += 1
@@ -360,16 +365,18 @@ def main(argv=None):
     parser.add_argument("--revision", default=DEFAULT_REVISION)
     parser.add_argument("--target", type=int, default=150_000,
                         help="maximum candidates across all files (default 150000)")
-    parser.add_argument("--setup-budget", type=int, default=30_000_000,
-                        help="maximum sum over candidates of setup statements (default 30M)")
-    parser.add_argument("--file-setup-budget", type=int, default=250_000,
-                        help="maximum setup statements replayed per file (default 250000)")
+    parser.add_argument("--setup-budget", type=int, default=6_000_000,
+                        help="maximum sum over candidates of setup statements (default 6M)")
+    parser.add_argument("--file-setup-budget", type=int, default=25_000,
+                        help="maximum setup statements replayed per file (default 25000)")
     parser.add_argument("--min-per-file", type=int, default=100,
                         help="keep at least this many candidates per file when budgets allow")
     parser.add_argument("--full-families", default="evidence,select",
                         help="families kept up to their per-file caps (comma separated)")
     parser.add_argument("--max-per-file", type=int, default=1000,
                         help="maximum candidates per file, so a file fits one shard")
+    parser.add_argument("--max-setup", type=int, default=2_100,
+                        help="skip table queries that need more setup statements (default 2100)")
     parser.add_argument("--max-rows", type=int, default=100,
                         help="skip queries whose SQLite result exceeded this many rows")
     parser.add_argument("--all", action="store_true",
@@ -386,7 +393,8 @@ def main(argv=None):
     report["files"] = len(paths)
     with (concurrent.futures.ProcessPoolExecutor(max_workers=args.jobs) if args.jobs > 1
           else SerialPool()) as pool:
-        metadata = list(pool.map(scan_metadata, [(p, root, args.max_rows) for p in paths], chunksize=4))
+        metadata = list(pool.map(scan_metadata, [(p, root, args.max_rows, args.max_setup) for p in paths],
+                                 chunksize=4))
         for _relpath, stats, _statements, _lines, _setup_lens in metadata:
             report.update(stats)
 
@@ -458,6 +466,7 @@ def main(argv=None):
         "min_per_file": args.min_per_file,
         "full_families": args.full_families,
         "max_rows": args.max_rows,
+        "max_setup": args.max_setup,
         "counts": dict(sorted(report.items())),
         "candidates_by_family": dict(sorted(emitted.items())),
     }
