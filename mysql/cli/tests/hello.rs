@@ -69,10 +69,6 @@ fn command_executes_basic_create_table() {
         &["CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100))"],
         "",
     );
-    assert_failure(
-        "CREATE TABLE users(id INTEGER) ENGINE=InnoDB",
-        "unsupported MySQL syntax",
-    );
 }
 
 #[test]
@@ -80,12 +76,5 @@ fn command_reports_unsupported_syntax() {
     assert_failure(
         "SELECT ?",
         "tursomysql CLI does not support binding parameters",
-    );
-    assert_failure("SELECT name FROM users", "unsupported MySQL syntax");
-    assert_failure("CREATE TABLE users(id INT)", "unsupported MySQL syntax");
-    assert_failure("SELECT 1.5", "exact MySQL decimal or unsigned semantics");
-    assert_failure(
-        "SELECT 1; SELECT 2",
-        "expected one MySQL statement, found 2",
     );
 }

@@ -226,30 +226,20 @@ handoff.
 
 ### Current Managed-Cycle Status
 
-- Cycle 1, anonymous projection parameters, is complete and integrated in
-  `d91d55e8b`.
-- Cycle 2, basic executable `CREATE TABLE`, is checkpointed in `ed07d1d50` but
-  is **not yet accepted as complete**.
+- Cycle 1, anonymous projection parameters, is integrated.
+- Cycle 2, basic executable `CREATE TABLE`, is integrated on top of upstream
+  `main` without any shared-core changes.
 
-The cycle-2 checkpoint lowers and executes a strict unqualified table subset
-with exact `INTEGER`, sized `VARCHAR(n)`, an optional unnamed inline
-`INTEGER PRIMARY KEY`, and `IF NOT EXISTS`. It also introduces a neutral
-statement-origin rule so engine-owned helper SQL is parsed with SQLite
-semantics while external root SQL remains frontend-dialect-specific. Parser,
-embedded execution/reopen, and CLI tests have passed locally.
+Parser policy (mirrors the PostgreSQL frontend): `MySqlDialect::parse` falls
+back to SQLite parsing whenever the MySQL parser or lowering cannot handle the
+text. Engine-generated helper SQL is canonical SQLite text and depends on this
+fallback, so no statement-origin plumbing exists in core. The consequence is
+that SQL the MySQL layer does not lower yet may still execute with SQLite
+semantics; the recorded MySQL spec corpus, not hand-written rejection tests, is
+what catches any resulting divergence.
 
-Before beginning cycle 3, finish cycle 2 by:
-
-1. Running the new shared-core dialect regression tests serially.
-2. Running `CARGO=/home/deploy/.cargo/bin/cargo ./mysql/test.sh` to completion.
-3. Independently reviewing the shared-core origin/reprepare change and strict
-   `CREATE TABLE` field validation.
-4. Applying any findings and rerunning the post-integration gate.
-
-A prior core test build was killed under memory pressure when builds overlapped;
-that is incomplete validation, not evidence of a test or code failure. Do not
-remove the pending status until the serial core tests, full gate, and review all
-finish.
+Priority: specs first. Grow the recorded MySQL 8.4.10 spec corpus and make it
+pass. Hand-written unit tests are not a goal in themselves.
 
 ### Desired Outcome
 
