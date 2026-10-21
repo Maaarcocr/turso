@@ -750,6 +750,29 @@ def server_mutation(statement):
     return None
 
 
+_DIAGNOSTICS = re.compile(
+    r"^\s*SHOW\s+(COUNT\s*\(\s*\*\s*\)\s+)?(WARNINGS|ERRORS)\b|^\s*GET\s+(CURRENT\s+|STACKED\s+)?DIAGNOSTICS\b|"
+    r"@@(SESSION\.)?(WARNING_COUNT|ERROR_COUNT)\b|\bROW_COUNT\s*\(|\bFOUND_ROWS\s*\(",
+    re.I,
+)
+_STATISTICS = re.compile(
+    r"^\s*SHOW\s+(EXTENDED\s+)?(INDEX|INDEXES|KEYS|TABLE\s+STATUS)\b|"
+    r"\bINFORMATION_SCHEMA\s*\.\s*`?(STATISTICS|TABLES|PARTITIONS|INNODB_\w+)\b|"
+    r"\b(CARDINALITY|TABLE_ROWS|DATA_LENGTH|INDEX_LENGTH|DATA_FREE|AVG_ROW_LENGTH|UPDATE_TIME|CHECK_TIME)\b",
+    re.I,
+)
+
+
+def reads_diagnostics(statement):
+    """True when the result depends on the previous statement's diagnostics."""
+    return bool(_DIAGNOSTICS.search(_strip_strings(statement)))
+
+
+def reads_storage_statistics(statement):
+    """True when the result includes statistics InnoDB updates asynchronously."""
+    return bool(_STATISTICS.search(_strip_strings(statement)))
+
+
 def is_read_only(statement):
     text = _strip_strings(statement)
     return first_keyword(statement) in _READ_ONLY_FIRST and not _STATEFUL.search(text)
