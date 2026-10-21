@@ -13,12 +13,21 @@ through the setup; everything else runs isolated.
 `--verify` re-runs the checked-in shards of a source against MySQL and reports
 every test whose recorded expectation no longer matches.
 
+`--results-only` is for sources whose generated cases must not be committed
+(`redistribute_generated_cases = false` in corpus/sources.lock.toml): it writes
+the ignored `specs/local/<source>/` as usual plus the committed
+`results/<source>/`, which holds MySQL's results keyed by candidate id and a
+SHA-256 of the candidate's setup and sql, but no SQL. `tools/materialize.py`
+rebuilds the same shards from a pinned checkout and those results.
+
 Reusable entry points (no MySQL needed once outcomes exist):
 `load_candidates` builds per-group setup tries from candidate JSONL;
 `classify_group` turns two cached runs into per-candidate outcomes;
 `render_expectation` turns a recorded outcome into its expect block;
 `write_specs` writes shards and manifests from (plans, outcomes);
-`tally_outcomes` and `write_report` produce REPORT.md.
+`tally_outcomes` and `write_report` produce REPORT.md;
+`result_record`/`outcome_from_result` convert outcomes to and from results
+records, and `write_results`/`read_results` store them.
 """
 
 import argparse
@@ -56,6 +65,14 @@ DEFAULT_MAX_ROWS = 100
 DEFAULT_MAX_EXPECT_BYTES = 16 * 1024
 MAX_TESTS_PER_SHARD = 1000
 LOCK = CONFORMANCE / "corpus/sources.lock.toml"
+RESULTS = CONFORMANCE / "results"
+# Bump when the results record format changes.
+RESULTS_FORMAT = 1
+# A recorded result that contains one of its own statements of at least this
+# many characters is withheld from results/ (bucket `echoes-sql`): committed
+# results must not carry source SQL. Shorter statements (`BEGIN`, `SELECT 1`)
+# are not distinctive enough to count.
+MIN_ECHO_LENGTH = 12
 
 # The two determinism runs freeze the session clock at different instants
 # (different year, month, day, time and fraction), so results that depend on
@@ -943,13 +960,12 @@ def local_only(source, plans, args):
         return True, "--local"
     if any("GPL" in c.record["source"]["license"].upper() for plan in plans for c in plan.candidates):
         return True, "GPL-licensed candidates"
-    lock = tomllib.loads(LOCK.read_text()) if LOCK.exists() else {"source": []}
-    for entry in lock["source"]:
-        if source in entry.get("spec_sources", []):
-            if entry.get("redistribute_generated_cases", False):
-                return False, ""
-            return True, f"{LOCK.name} entry {entry['id']} does not allow redistribution"
-    return True, f"no {LOCK.name} entry lists {source!r} in spec_sources"
+    entry = lock_entry(source)
+    if entry is None:
+        return True, f"no {LOCK.name} entry lists {source!r} in spec_sources"
+    if entry.get("redistribute_generated_cases", False):
+        return False, ""
+    return True, f"{LOCK.name} entry {entry['id']} does not allow redistribution"
 
 
 # ---------------------------------------------------------------------------
@@ -958,7 +974,7 @@ def local_only(source, plans, args):
 
 BUCKET_ORDER = [
     "recorded", "nondeterministic", "unrepresentable", "too-large", "setup-failed",
-    "error-quarantined", TIMEOUT, "unsupported-environment", "duplicate", "invalid", "not-run",
+    "error-quarantined", TIMEOUT, "unsupported-environment", "echoes-sql", "duplicate", "invalid", "not-run",
 ]
 
 
@@ -1274,6 +1290,268 @@ def write_specs(out_dir, plans, outcomes_by_group, stats):
     return written
 
 
+# ---------------------------------------------------------------------------
+# Results-only output (sources whose SQL must not be committed)
+# ---------------------------------------------------------------------------
+
+# Non-recorded buckets whose detail REPORT.md counts.
+RESULT_DETAIL_BUCKETS = {"error-quarantined", "unrepresentable", "setup-failed"}
+
+
+def effective_setup(plan, candidate):
+    """The setup statements a candidate runs, after `setup_base` resolution."""
+    return [plan.statement[node] for node in plan.path(candidate.node)] if candidate.node >= 0 else []
+
+
+def candidate_digest(setup, sql, ordered, setup_errors):
+    """SHA-256 of exactly the SQL (and ordering) a recorded result belongs to."""
+    body = json.dumps({"setup": setup, "sql": sql, "ordered": ordered, "setup_errors": setup_errors},
+                      ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def plan_digest(plan, candidate):
+    record = candidate.record
+    return candidate_digest(effective_setup(plan, candidate), record["sql"], record["ordered"],
+                            record.get("setup_errors", "fail"))
+
+
+def _normalized(text):
+    return " ".join(text.split())
+
+
+# MySQL quotes the statement text after a syntax problem in diagnostics, for
+# example in optimizer-hint warnings: "... syntax error near '<text>' at line 1".
+_NEAR_FRAGMENT = re.compile(r"\bnear '(.*?)' at line \d+")
+
+
+def echoes_sql(plan, candidate, outcome):
+    """True when a recorded result reproduces the candidate's own SQL text.
+
+    That is a complete statement of its setup or sql, or a statement fragment
+    that MySQL quotes in a diagnostic (`near '...'`). Whitespace is normalized
+    on both sides (error messages are normalized when recorded); statements
+    and fragments shorter than MIN_ECHO_LENGTH are ignored.
+    """
+    if outcome["bucket"] != "recorded":
+        return False
+    text = _normalized("\n".join(outcome["lines"]) if outcome["kind"] == "rows" else outcome["error"][2])
+    statements = [_normalized(s) for s in effective_setup(plan, candidate) + candidate.record["sql"]]
+    if any(len(statement) >= MIN_ECHO_LENGTH and statement in text for statement in statements):
+        return True
+    for fragment in _NEAR_FRAGMENT.findall(text):
+        if len(fragment) >= MIN_ECHO_LENGTH and any(fragment in statement for statement in statements):
+            return True
+    return False
+
+
+def result_texts(entry):
+    """Every string of a results entry that came from MySQL."""
+    texts = list(entry.get("rows", []))
+    if "error" in entry:
+        texts.append(entry["error"][2])
+    if "detail" in entry:
+        texts.append(entry["detail"])
+    return texts
+
+
+def find_sql_echoes(entries, statements, min_length=MIN_ECHO_LENGTH):
+    """Return [(entry id, statement)] for results that contain any of `statements`.
+
+    Used to prove that committed results carry no source SQL: `statements` are
+    all setup and sql statements of a source's candidates. Comparison is on
+    whitespace-normalized text; statements shorter than `min_length` are
+    ignored. Runs in time linear in the result text (window lookup on the
+    first `min_length` characters of each statement).
+    """
+    by_prefix = collections.defaultdict(set)
+    for statement in statements:
+        statement = _normalized(statement)
+        if len(statement) >= min_length:
+            by_prefix[statement[:min_length]].add(statement)
+    found = []
+    for entry in entries:
+        for text in result_texts(entry):
+            text = _normalized(text)
+            hit = None
+            for start in range(len(text) - min_length + 1):
+                for statement in by_prefix.get(text[start:start + min_length], ()):
+                    if text.startswith(statement, start):
+                        hit = statement
+                        break
+                if hit:
+                    break
+            if hit:
+                found.append((entry["id"], hit))
+                break
+    return found
+
+
+def withhold_sql_echoes(plans, outcomes_by_group):
+    """Replace recorded outcomes that echo source SQL with bucket `echoes-sql`."""
+    withheld = 0
+    for plan in plans:
+        outcomes = outcomes_by_group[plan.name]
+        for candidate in plan.candidates:
+            if echoes_sql(plan, candidate, outcomes[candidate.index]):
+                outcomes[candidate.index] = {"bucket": "echoes-sql", "detail": "result contains source SQL"}
+                withheld += 1
+    return withheld
+
+
+def result_record(plan, candidate, outcome, node_errors):
+    """The committed results line of one candidate: MySQL's outcome, no SQL.
+
+    `node_errors` maps setup nodes to [errno, sqlstate, message] (run a);
+    dropped setup statements are stored as [position in the effective setup,
+    errno].
+    """
+    record = candidate.record
+    entry = {"id": candidate.id, "sha256": plan_digest(plan, candidate), "ordered": record["ordered"],
+             "bucket": outcome["bucket"]}
+    if outcome["bucket"] == "recorded":
+        if outcome["kind"] == "rows":
+            entry["rows"] = outcome["lines"]
+            if outcome.get("raw"):
+                entry["raw"] = True
+        else:
+            entry["error"] = outcome["error"]
+        if outcome["dropped"]:
+            path = plan.path(candidate.node)
+            entry["dropped"] = [[path.index(node), node_errors[node][0]] for node in outcome["dropped"]]
+    elif outcome["bucket"] == "setup-failed":
+        entry["detail"] = outcome["detail"][:80]
+    elif outcome["bucket"] in RESULT_DETAIL_BUCKETS:
+        entry["detail"] = outcome["detail"]
+    return entry
+
+
+def outcome_from_result(plan, candidate, entry):
+    """Inverse of `result_record`: returns (outcome, {setup node: errno})."""
+    if entry["bucket"] != "recorded":
+        outcome = {"bucket": entry["bucket"]}
+        if "detail" in entry:
+            outcome["detail"] = entry["detail"]
+        return outcome, {}
+    path = plan.path(candidate.node)
+    dropped = entry.get("dropped", [])
+    if any(not 0 <= position < len(path) for position, _ in dropped):
+        raise ValueError(f"{candidate.id}: dropped setup position outside its setup")
+    nodes = [path[position] for position, _ in dropped]
+    errors = {path[position]: errno for position, errno in dropped}
+    if "error" in entry:
+        return {"bucket": "recorded", "kind": "error", "error": entry["error"], "dropped": nodes}, errors
+    return {"bucket": "recorded", "kind": "rows", "lines": entry["rows"], "dropped": nodes,
+            "raw": entry.get("raw", False)}, errors
+
+
+def dumps_result(entry):
+    return json.dumps(entry, ensure_ascii=False, separators=(",", ":"))
+
+
+def write_results(out_dir, plans, outcomes_by_group, runs_by_group, meta):
+    """Write results/<source>/: one JSONL file per group plus meta.json.
+
+    Every candidate that reached classification gets a line (in candidate
+    order), so REPORT.md can be rebuilt from the results alone.
+    """
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+    written = []
+    for plan in plans:
+        if not plan.candidates:
+            continue
+        node_errors = {int(k): v for k, v in runs_by_group[plan.name]["a"]["node_errors"].items()}
+        outcomes = outcomes_by_group[plan.name]
+        path = out_dir / f"{group_relpath(plan.name)}.jsonl"
+        if path in written:
+            raise SystemExit(f"two groups map to results file {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            for candidate in plan.candidates:
+                entry = result_record(plan, candidate, outcomes[candidate.index], node_errors)
+                handle.write(dumps_result(entry) + "\n")
+        written.append(path)
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True, ensure_ascii=False) + "\n",
+                                       encoding="utf-8")
+    return written
+
+
+def read_results(results_dir):
+    """Map candidate id -> results entry for every JSONL file of a source."""
+    entries = {}
+    for path in sorted(results_dir.rglob("*.jsonl")):
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                if entry["id"] in entries:
+                    raise SystemExit(f"{path}:{number}: duplicate result id {entry['id']}")
+                entries[entry["id"]] = entry
+    return entries
+
+
+def candidates_digest(paths):
+    """SHA-256 over the candidate files (sorted by name) an import produced."""
+    digest = hashlib.sha256()
+    for path in sorted(paths, key=lambda p: pathlib.Path(p).name):
+        digest.update(pathlib.Path(path).name.encode() + b"\0")
+        digest.update(pathlib.Path(path).read_bytes())
+    return digest.hexdigest()
+
+
+def lock_entry(source):
+    """The corpus/sources.lock.toml entry whose `spec_sources` lists `source`."""
+    lock = tomllib.loads(LOCK.read_text()) if LOCK.exists() else {"source": []}
+    for entry in lock["source"]:
+        if source in entry.get("spec_sources", []):
+            return entry
+    return None
+
+
+def results_only_entry(source, plans):
+    """Return (lock entry, None) when `source` may be recorded results-only, else (None, why).
+
+    Results-only output is for sources whose generated SQL must not be
+    committed; a redistributable source commits its specs instead. The entry
+    must name the importer command that materialize.py re-runs.
+    """
+    entry = lock_entry(source)
+    if entry is None:
+        return None, f"no {LOCK.name} entry lists {source!r} in spec_sources"
+    gpl = any("GPL" in c.record["source"]["license"].upper() for plan in plans for c in plan.candidates)
+    if entry.get("redistribute_generated_cases", False) and not gpl:
+        return None, (f"{LOCK.name} entry {entry['id']} allows redistribution; "
+                      f"record its specs into specs/{source}/ instead")
+    if source not in entry.get("importers", {}):
+        return None, f"{LOCK.name} entry {entry['id']} has no importers.{source} command"
+    return entry, None
+
+
+def results_meta(source, entry, plans, args, server, has_import_report):
+    """meta.json of results/<source>/: what materialize.py needs to rebuild the specs."""
+    candidates = sum(len(plan.candidates) for plan in plans)
+    return {
+        "format": RESULTS_FORMAT,
+        "source": source,
+        "lock_id": entry["id"],
+        "repository": entry["repository"],
+        "revision": entry["revision"],
+        "license": entry["license"],
+        "importer": entry["importers"][source],
+        "import_report": has_import_report,
+        "candidates_sha256": candidates_digest(args.candidates),
+        "candidates": candidates,
+        "recorder_version": RECORDER_VERSION,
+        "oracle": TARGET["docker_image"],
+        "server": server,
+        "max_rows": args.max_rows,
+        "max_expect_bytes": args.max_expect_bytes,
+    }
+
+
 def record(args):
     buckets = collections.Counter()
     details = collections.defaultdict(list)
@@ -1289,6 +1567,11 @@ def record(args):
         raise SystemExit(f"candidates span several sources {sources}; pass --source")
     source = sources[0]
     plan_list = [plans[name] for name in sorted(plans)]
+    entry = None
+    if args.results_only:
+        entry, problem = results_only_entry(source, plan_list)
+        if problem:
+            raise SystemExit(f"--results-only: {problem}")
     log(f"{sum(len(p.candidates) for p in plan_list)} candidates in {len(plan_list)} groups for {source}")
     lanes = collections.Counter(c.lane for p in plan_list for c in p.candidates)
     log(f"lanes: {dict(lanes)}")
@@ -1325,6 +1608,10 @@ def record(args):
     outcomes_by_group = {}
     for plan in plan_list:
         outcomes_by_group[plan.name] = classify_group(plan, runs[plan.name], args.max_expect_bytes)
+    if args.results_only:
+        withheld = withhold_sql_echoes(plan_list, outcomes_by_group)
+        log(f"withheld {withheld} results that contain their own source SQL")
+    for plan in plan_list:
         tally_outcomes(plan, outcomes_by_group[plan.name], runs[plan.name], stats)
     written = write_specs(out_dir, plan_list, outcomes_by_group, stats)
     importer_report = None
@@ -1335,6 +1622,13 @@ def record(args):
     check_files(written, args)
     log(f"recorded {stats['tests']} tests into {stats['shards']} shards under {out_dir} "
         f"(oracle time {elapsed:.0f}s)")
+    if args.results_only:
+        meta = results_meta(source, entry, plan_list, args, server, importer_report is not None)
+        results_dir = args.results_dir / source
+        files = write_results(results_dir, plan_list, outcomes_by_group, runs, meta)
+        shutil.copyfile(out_dir / "REPORT.md", results_dir / "REPORT.md")
+        log(f"wrote MySQL results of {sum(len(p.candidates) for p in plan_list)} candidates "
+            f"({len(files)} files, no SQL) to {results_dir}")
     log("buckets: " + ", ".join(f"{k}={v}" for k, v in sorted(buckets.items())))
     if args.invalid_fails and buckets["invalid"]:
         return 1
@@ -1435,6 +1729,10 @@ def main(argv=None):
     parser.add_argument("--verify", action="store_true", help="re-run checked-in specs and report drift")
     parser.add_argument("--local", action="store_true",
                         help="record into specs/local/ (ignored by git) regardless of the lock file")
+    parser.add_argument("--results-only", action="store_true",
+                        help="also write MySQL's results without SQL to results/<source>/ (committed) for a "
+                             "source whose specs must stay local; see tools/materialize.py")
+    parser.add_argument("--results-dir", type=pathlib.Path, default=RESULTS)
     args = parser.parse_args(argv)
     if pymysql is None:
         raise SystemExit("record_mysql.py needs PyMySQL (pip install pymysql)")
