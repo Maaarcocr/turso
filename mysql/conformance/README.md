@@ -23,6 +23,7 @@ make -C mysql/conformance check run   # syntax check, then the owned specs (must
 make -C mysql/conformance run-one FILE=my-sqltests/basics.sqltest
 make -C mysql/conformance run-specs   # recorded corpus in specs/, one process per file, JSON report
 make -C mysql/conformance score       # compare that report with baseline.txt (the CI ratchet)
+make -C mysql/conformance triage      # rank failures by blocking feature into FAILURES.md
 ```
 
 The recorded corpus and its pipeline are described in [`SPECS.md`](SPECS.md).
