@@ -6,6 +6,12 @@ use thiserror::Error;
 use turso_parser::ast;
 
 mod ddl;
+mod ddl_alter;
+mod ddl_column;
+mod ddl_default;
+mod ddl_expr;
+mod ddl_index;
+mod ddl_type;
 mod names;
 mod query;
 mod split;
@@ -53,9 +59,12 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
             query::translate_query(query, &mut context)
         }
         Statement::CreateTable(create_table) => ddl::translate_create_table(create_table),
+        Statement::CreateIndex(create_index) => ddl_index::translate_create_index(create_index),
+        Statement::AlterTable(alter_table) => ddl_alter::translate_alter_table(alter_table),
+        Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
+        Statement::Drop { .. } => ddl_alter::translate_drop(statement),
         _ => Err(MysqlParserError::Unsupported(
-            "only SELECT projections and basic CREATE TABLE are available in the bootstrap frontend"
-                .to_string(),
+            "only SELECT projections and DDL are available in the bootstrap frontend".to_string(),
         )),
     }
 }
