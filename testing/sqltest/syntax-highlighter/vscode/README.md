@@ -72,7 +72,7 @@ snapshot query-plan {
 expect { ... }           # Exact match
 expect error { ... }     # Expect error
 expect pattern { ... }   # Regex pattern match
-expect unordered { ... } # Set comparison
+expect unordered { ... } # Multiset comparison
 expect raw { ... }       # Raw output
 expect @rust { ... }     # Backend-specific expectation
 ```

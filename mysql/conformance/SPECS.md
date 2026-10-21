@@ -11,6 +11,25 @@ observable behavior is recorded from the reference implementation, every spec
 carries provenance and a difficulty level, and the scoreboard reports the
 highest level that is fully cleared plus the next failures to work on.
 
+## Status
+
+First baseline (`baseline.txt`, 2026-10-21): **183,657 of the 302,599
+committed specs pass** (60.7%), replayed through `tursomysql` with
+`expect unordered` compared as multisets.
+
+| Source | Specs | Passing | Highest cleared level |
+|---|---:|---:|---:|
+| sqllogictest | 149,919 | 138,601 | 101 |
+| vitess | 143,556 | 42,134 | none (lowest level 3 fails) |
+| go-mysql-server | 8,390 | 2,856 | 0 |
+| vitess-endtoend | 734 | 66 | none (lowest level 63 fails) |
+| all | 302,599 | 183,657 | 0 |
+
+A debug replay with three processes takes about 44 minutes (115 CPU-minutes;
+the sqllogictest `index/` setups dominate). CI replays a release build on
+every pull request in `.github/workflows/sqltest.yml` and fails when a
+baseline spec stops passing.
+
 ## Layout
 
 ```text
@@ -57,8 +76,11 @@ candidates.
    MySQL container, twice in independent databases, and writes `.sqltest`
    shards plus manifests and `REPORT.md`. Only the recorder talks to MySQL.
    `--verify` re-runs checked-in specs against MySQL and reports drift.
-4. **Replay.** `make -C mysql/conformance run` replays specs through the
-   `tursomysql` sqltest backend (embedded Turso with `MySqlDialect`).
+4. **Replay.** `make -C mysql/conformance run-specs` replays the recorded
+   specs through the `tursomysql` sqltest backend (embedded Turso with
+   `MySqlDialect`), one bounded process per file (see [Replay](#replay)).
+   `make -C mysql/conformance run` replays the owned specs, which must all
+   pass.
 5. **Score.** `tools/score.py` compares a replay with `baseline.txt`. A spec in
    the baseline that fails is a regression and fails the gate. A newly passing
    spec must be added with `--update` (the baseline only grows). It also
@@ -102,7 +124,7 @@ Scoring a replay (`make -C mysql/conformance run-specs` writes the report to
 `target/mysql-specs-report.json`, the default input):
 
 ```bash
-python3 mysql/conformance/tools/score.py            # gate
+make -C mysql/conformance run-specs score           # replay, then gate
 python3 mysql/conformance/tools/score.py --update   # ratchet
 ```
 
@@ -110,6 +132,40 @@ python3 mysql/conformance/tools/score.py --update   # ratchet
 (paths relative to `specs/`). A baseline spec that fails, errors, is skipped
 or disappears from a replayed file is a regression. `--update` refuses to drop
 entries unless `--allow-shrink` is given.
+
+## Replay
+
+`make -C mysql/conformance run-specs` checks the syntax of the committed
+sources under `specs/` and replays them with `tools/replay.py`
+(`INCLUDE_LOCAL=1` adds `specs/local/`):
+
+- Every file runs in its own `sqltest run --backend tursomysql --jobs 1`
+  process, `SPECS_JOBS` (default: the CPU count) at a time, largest files
+  first. Memory is bounded by the largest file, not by the corpus.
+- Each process runs under an address-space limit (`SPECS_MEMORY_MB`, default
+  2048), so a spec that makes Turso allocate without bound aborts its process
+  at once instead of exhausting the machine. A file whose process crashes (or
+  runs for over an hour) is replayed again one test per process: a test that
+  crashes alone is an error carrying the end of its stderr, and every other
+  test of the file keeps its real outcome.
+- The backend runs each setup or test block on a thread of its database
+  instance with a deadline (`SPECS_TIMEOUT`, default 30 seconds). Each
+  statement gets the time left as its Turso query timeout, so a long statement
+  is interrupted between bytecode steps; the test then fails with `execution
+  failed: timeout after 30s`. A statement that does not stop within 10 seconds
+  of the deadline (for example while it is being prepared) is abandoned on its
+  thread, and the test fails the same way. Timeouts are never a pass, even for
+  a spec that expects an error.
+- The per-file reports are merged into one report in the `sqltest --output
+  json` format for `tools/score.py`.
+
+Specs that cannot finish in Turso today, all failing rather than hanging or
+killing the replay (MySQL bounds both cases):
+
+| Specs | Cause |
+|---|---|
+| 17 tests of `vitess/evalengine/FnRepeat.sqltest` (`REPEAT(x, 1073741825)`) | Turso's `repeat` (`exec_repeat` in `core/functions/string.rs`) allocates the whole `len(x) × n` result, 1 to 21 GB here, with no length limit; MySQL returns `NULL` above `max_allowed_packet`. Without the address-space limit one replay process grew to 12.7 GB RSS within seconds. They crash their process and are reported as errors. |
+| `vitess-endtoend/vitess_tester/cte/queries.test.sqltest::l122` | A recursive CTE without a stop condition. MySQL aborts it after `cte_max_recursion_depth` (1000) iterations with error 3636; Turso recurses until the timeout. |
 
 ## Candidate schema (JSONL, one object per line)
 
@@ -214,9 +270,9 @@ receives:
 
 The string `'NULL'` and SQL `NULL` render identically. In exact mode an empty
 result and a single empty value both render as an empty block. `expect
-unordered` compares rows as a set (the runner's comparator), so it does not
-distinguish duplicate rows; its rows are written sorted so that re-recording is
-byte-identical. When a value starts or ends with whitespace, which `expect`
+unordered` compares rows as a multiset (the runner's comparator): order is
+free, but every row must appear as often as MySQL returned it. Its rows are
+written sorted so that re-recording is byte-identical. When a value starts or ends with whitespace, which `expect`
 blocks trim, an ordered or single-row result is written as an unindented
 `expect raw` block instead.
 

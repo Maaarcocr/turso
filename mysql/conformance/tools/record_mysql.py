@@ -1697,7 +1697,7 @@ def verify(args):
             expected = LIB.expected_rows(test["expect_lines"])
             actual = [line.split("|") if line else [""] for line in outcome["lines"]]
             if test["expect_kind"] == "unordered":
-                same = {"|".join(r) for r in expected} == {"|".join(r) for r in actual}
+                same = sorted("|".join(r) for r in expected) == sorted("|".join(r) for r in actual)
             else:
                 same = LIB.format_rows(expected) == LIB.format_rows(actual)
             if not same:

@@ -21,7 +21,8 @@ Owned SQL specs live in [`my-sqltests/`](my-sqltests) as `.sqltest` files for th
 ```bash
 make -C mysql/conformance check run   # syntax check, then the owned specs (must pass)
 make -C mysql/conformance run-one FILE=my-sqltests/basics.sqltest
-make -C mysql/conformance run-specs   # recorded corpus in specs/, JSON report for the scoreboard
+make -C mysql/conformance run-specs   # recorded corpus in specs/, one process per file, JSON report
+make -C mysql/conformance score       # compare that report with baseline.txt (the CI ratchet)
 ```
 
 The recorded corpus and its pipeline are described in [`SPECS.md`](SPECS.md).
@@ -30,7 +31,7 @@ The compatibility target is frozen in `target.toml`. Feature prerequisites and s
 
 ## Recorded MySQL specs
 
-`specs/` holds a large corpus of `.sqltest` specs whose expected results were recorded once from MySQL 8.4.10 (about 150,000 from sqllogictest so far). The pipeline (fetch pinned sources, import candidates, record against the pinned container, replay through `tursomysql`, score against `baseline.txt`) and the file formats are specified in [`SPECS.md`](SPECS.md).
+`specs/` holds a large corpus of `.sqltest` specs whose expected results were recorded once from MySQL 8.4.10: 302,599 from sqllogictest, Vitess and go-mysql-server, of which 183,657 pass in the first baseline (see the status in [`SPECS.md`](SPECS.md#status)). The pipeline (fetch pinned sources, import candidates, record against the pinned container, replay through `tursomysql`, score against `baseline.txt`) and the file formats are specified in [`SPECS.md`](SPECS.md).
 
 ## Spec candidate importers
 
