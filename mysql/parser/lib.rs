@@ -1,11 +1,13 @@
 use sqlparser::ast::Statement;
-use sqlparser::dialect::MySqlDialect;
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::TokenizerError;
 use thiserror::Error;
 use turso_parser::ast;
 
 mod ddl;
+mod dialect;
+mod expr;
+mod literal;
 mod names;
 mod query;
 mod split;
@@ -29,7 +31,7 @@ pub enum MysqlParserError {
 }
 
 pub fn parse(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {
-    Parser::parse_sql(&MySqlDialect {}, sql).map_err(MysqlParserError::from)
+    dialect::parse_statements(sql)
 }
 
 pub fn parse_one(sql: &str) -> Result<Statement, MysqlParserError> {
@@ -89,12 +91,10 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_from_clause() {
-        let error = parse_and_translate("SELECT greeting FROM messages")
-            .expect_err("FROM must not be silently discarded");
-        assert!(error
-            .to_string()
-            .contains("literal and anonymous-parameter SELECT projections"));
+    fn lowers_from_clause() {
+        let statement =
+            parse_and_translate("SELECT greeting FROM messages").expect("FROM must lower");
+        assert_eq!(statement.to_string(), "SELECT greeting FROM messages");
     }
 
     #[test]
