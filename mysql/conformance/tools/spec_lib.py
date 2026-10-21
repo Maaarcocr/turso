@@ -71,40 +71,50 @@ class BlockError(ValueError):
     pass
 
 
+_BLOCK_SPECIAL = re.compile(r"[\\{}]")
+
+
 def extract_block(source, start):
     """Model of lexer.rs `extract_block_content`.
 
     `start` is the index just after the opening `{`. Returns the unescaped
-    content and the index after the closing `}`.
+    content and the index after the closing `}`. The lexer drops one newline
+    right after `{` and one right before the closing `}`; `\\{`, `\\}` and
+    `\\\\` are escapes, and unescaped braces nest.
     """
     depth = 1
     content = []
     index = start
-    first = True
+    if source.startswith("\n", index):
+        index += 1
     length = len(source)
-    while index < length:
-        char = source[index]
-        if first:
-            first = False
-            if char == "\n":
-                index += 1
-                continue
-        if char == "\\" and index + 1 < length and source[index + 1] in "{}\\":
-            content.append(source[index + 1])
-            index += 2
+    while True:
+        match = _BLOCK_SPECIAL.search(source, index)
+        if match is None:
+            raise BlockError("unterminated block")
+        position = match.start()
+        content.append(source[index:position])
+        char = source[position]
+        if char == "\\":
+            following = source[position + 1] if position + 1 < length else ""
+            if following in ("{", "}", "\\"):
+                content.append(following)
+                index = position + 2
+            else:
+                content.append(char)
+                index = position + 1
             continue
         if char == "{":
             depth += 1
-        elif char == "}":
+        else:
             depth -= 1
             if depth == 0:
                 text = "".join(content)
                 if text.endswith("\n"):
                     text = text[:-1]
-                return text, index + 1
+                return text, position + 1
         content.append(char)
-        index += 1
-    raise BlockError("unterminated block")
+        index = position + 1
 
 
 def expand_macros_would_change(content):
@@ -191,14 +201,65 @@ def sql_block_text(statements, indent=""):
     return ("\n" + indent).join(out)
 
 
+_LEXEME = re.compile(r"['\"`#;]|--|/\*")
+
+
+def mysql_statements(text):
+    """Split MySQL text at top-level semicolons, like mysql/parser/split.rs.
+
+    Semicolons inside '...', "..." (backslash and doubled-quote escapes),
+    `...` identifiers and `#`, `-- ` and `/* */` comments do not split; every
+    other semicolon ends a statement, as with the mysql client's default
+    delimiter (compound-statement bodies are not supported). Returns the
+    trimmed non-empty pieces without their semicolons.
+    """
+    pieces = []
+    start = index = 0
+    length = len(text)
+    while True:
+        match = _LEXEME.search(text, index)
+        if match is None:
+            break
+        index = match.start()
+        token = match.group(0)
+        if token in ("'", '"', "`"):
+            index += 1
+            while index < length:
+                char = text[index]
+                if char == "\\" and token != "`":
+                    index += 2
+                    continue
+                if char == token:
+                    if index + 1 < length and text[index + 1] == token:
+                        index += 2
+                        continue
+                    break
+                index += 1
+            index += 1
+        elif token == "#" or (token == "--" and (index + 2 >= length or text[index + 2] in " \t\n\r\x0b\x0c")):
+            newline = text.find("\n", index)
+            index = length if newline == -1 else newline + 1
+        elif token == "--":
+            index += 2
+        elif token == "/*":
+            end = text.find("*/", index + 2)
+            index = length if end == -1 else end + 2
+        else:
+            pieces.append(text[start:index])
+            index += 1
+            start = index
+    pieces.append(text[start:])
+    return [rust_trim(piece) for piece in pieces if rust_trim(piece)]
+
+
 def statement_representable(statement):
     """Return None when a statement can be written to and split back from a block."""
     if statement != rust_trim(statement):
         return "statement has surrounding whitespace"
     if statement == "":
         return "empty statement"
-    if ";\n" in statement:
-        return "statement contains ';' at a line end"
+    if len(mysql_statements(statement)) != 1:
+        return "statement has a top-level ';' (the replay splits compound statements)"
     if "{{" in statement:
         return "statement contains '{{'"
     if "\r" in statement:
@@ -210,16 +271,7 @@ def statement_representable(statement):
 
 def split_block_statements(content):
     """Inverse of `sql_block_text` for recorder-emitted blocks."""
-    statements = []
-    for chunk in content.split(";\n"):
-        chunk = chunk.rstrip()
-        if chunk.endswith(";"):
-            chunk = chunk[:-1]
-        chunk = chunk.rstrip("\n")
-        if chunk.strip() == "":
-            continue
-        statements.append(rust_trim(chunk))
-    return statements
+    return mysql_statements(content)
 
 
 # ---------------------------------------------------------------------------
@@ -650,6 +702,37 @@ def references_tables(statement):
     words = _words(_strip_strings(statement))
     return any(marker in words for marker in (" FROM ", " TABLE ", " JOIN ", " INTO ")) \
         or first_keyword(statement) not in ("SELECT", "VALUES")
+
+
+_MUTATIONS = [
+    (re.compile(r"^\s*SET\b.*(\bGLOBAL\b|\bPERSIST(_ONLY)?\b|@@GLOBAL\.|@@PERSIST(_ONLY)?\.)", re.I | re.S),
+     "sets a global variable"),
+    (re.compile(r"^\s*SET\s+PASSWORD\b|^\s*(ALTER|RENAME)\s+USER\b", re.I), "changes a user account"),
+    (re.compile(r"^\s*(GRANT|REVOKE|DROP\s+USER|DROP\s+ROLE|SET\s+(DEFAULT\s+)?ROLE)\b.*\broot\b", re.I | re.S),
+     "changes the root account"),
+    (re.compile(r"^\s*(INSTALL|UNINSTALL)\b|\bSONAME\b", re.I), "installs server code"),
+    (re.compile(r"\bTABLESPACE\b|\bLOGFILE\s+GROUP\b|^\s*(CREATE|ALTER|DROP)\s+SERVER\b", re.I),
+     "manages server storage or servers"),
+    (re.compile(r"^\s*(RESET|PURGE|SHUTDOWN|RESTART|KILL|CLONE|XA)\b|^\s*(LOCK|UNLOCK|ALTER)\s+INSTANCE\b", re.I),
+     "administers the server"),
+    (re.compile(r"^\s*(CHANGE\s+(MASTER|REPLICATION)|START\s+(SLAVE|REPLICA|GROUP_REPLICATION)|"
+                r"STOP\s+(SLAVE|REPLICA|GROUP_REPLICATION))\b", re.I), "controls replication"),
+]
+
+
+def server_mutation(statement):
+    """Why a statement must never run on the shared recording server, or None.
+
+    These change server-global state that dropping the test databases and
+    users cannot undo (global variables, plugins, replication, the root
+    account), or leave state behind a session (XA transactions).
+    """
+    text = _strip_strings(statement)
+    text = re.sub(r"^(\s*(--[^\n]*\n|#[^\n]*\n|/\*.*?\*/))*", "", text, flags=re.S)
+    for pattern, reason in _MUTATIONS:
+        if pattern.search(text):
+            return reason
+    return None
 
 
 def is_read_only(statement):
