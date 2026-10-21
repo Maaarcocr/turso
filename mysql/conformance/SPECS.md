@@ -209,7 +209,10 @@ receives:
 The string `'NULL'` and SQL `NULL` render identically. In exact mode an empty
 result and a single empty value both render as an empty block. `expect
 unordered` compares rows as a set (the runner's comparator), so it does not
-distinguish duplicate rows.
+distinguish duplicate rows; its rows are written sorted so that re-recording is
+byte-identical. When a value starts or ends with whitespace, which `expect`
+blocks trim, an ordered or single-row result is written as an unindented
+`expect raw` block instead.
 
 A test whose statements fail in MySQL is recorded as `expect error {}` with
 the MySQL errno, SQLSTATE and message in a comment. The runner checks only
@@ -223,11 +226,12 @@ A test is not emitted, and is counted in `REPORT.md`, when:
   compared as sorted multisets, ordered results exactly. The two runs freeze
   the session clock at different instants (`SET timestamp`), so results that
   depend on the current time are caught here;
-- a value contains `|`, a line break or another control character, leading
-  whitespace in the first column or trailing whitespace in the last, an
-  unordered result has an empty single-value row, or the SQL or output cannot
-  otherwise round-trip through the `.sqltest` lexer and comparator
-  (`unrepresentable`);
+- a value contains `|`, a line break or another control character (tab
+  excepted), a multi-row unordered result has edge whitespace or an empty
+  single-value row, a statement contains a top-level `;` (the replay splits
+  compound `BEGIN ... END` bodies like the `mysql` client), NUL or a carriage
+  return, or the SQL or output cannot otherwise round-trip through the
+  `.sqltest` lexer and comparator (`unrepresentable`);
 - the result exceeds 100 rows or 16 KiB of expected output (`too-large`);
 - the setup fails in MySQL and the candidate does not allow dropping
   (`setup-failed`), so a missing-setup error is never recorded as expected
@@ -281,11 +285,15 @@ hours for each of them. Lists over MySQL's 61-table limit fail at once with
 error 1116 and are kept.
 
 Sampling is deterministic (stable hash of the id) and bounded by the replay
-cost: the Turso replay runs each test's full setup in a fresh database, so the
-default sample keeps about 150,000 candidates with at most 30M setup
-statements replayed in total, 250,000 per file and 1,000 tests per file, at
-least 100 per file, and all of `evidence/` and `select*` within those caps.
-`--all` emits every eligible candidate for local use.
+cost: the Turso replay runs each test's full setup in a fresh database (the
+debug runner needs about 4 ms per test plus 0.75 ms per setup statement). The
+default sample keeps about 150,000 candidates, skips table queries that need
+more than 2,100 setup statements (`excluded-long-setup`: most of
+`index/delete` and `index/view` at 1,000+ rows), and keeps at most 25,000
+replayed setup statements and 1,000 tests per file, at least 100 tests per file
+and all of `evidence/` and `select*` within those caps; the whole sample
+replays about 4M setup statements (guard: 6M). `--all` emits every eligible
+candidate for local use.
 
 ## Licensing
 

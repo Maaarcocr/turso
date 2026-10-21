@@ -668,8 +668,7 @@ def classify_group(plan, runs, max_expect_bytes):
         record = candidate.record
         key = str(index)
         path = plan.path(candidate.node)
-        problem = plan.node_problem[candidate.node] if candidate.node >= 0 else None
-        problem = problem or next(filter(None, (LIB.statement_representable(s) for s in record["sql"])), None)
+        problem = next(filter(None, (LIB.statement_representable(s) for s in record["sql"])), None)
         result_a = runs["a"]["results"].get(key)
         result_b = runs["b"]["results"].get(key)
         if result_a is None or result_b is None:
@@ -677,6 +676,12 @@ def classify_group(plan, runs, max_expect_bytes):
             continue
         failed_a = [n for n in path if n in errors_a]
         failed_b = [n for n in path if n in errors_b]
+        if candidate.node >= 0 and plan.node_problem[candidate.node] and not problem:
+            # Only statements that are emitted must be representable; a
+            # dropped setup statement is left out of the shard.
+            dropped = set(failed_a)
+            problem = next(filter(None, (LIB.statement_representable(plan.statement[n])
+                                         for n in path if n not in dropped)), None)
         if [errors_a[n] for n in failed_a] != [errors_b[n] for n in failed_b] or failed_a != failed_b:
             outcomes[index] = {"bucket": "nondeterministic", "detail": "setup errors differ"}
             continue
@@ -704,16 +709,24 @@ def classify_group(plan, runs, max_expect_bytes):
             continue
         if result_a[0] == "rows":
             rows = result_a[1]
+            raw = False
             reason = LIB.expectation_round_trips(rows, record["ordered"])
+            if reason and (record["ordered"] or len(rows) <= 1):
+                # `expect raw` keeps leading and trailing whitespace.
+                raw = LIB.expectation_round_trips(rows, record["ordered"], raw=True) is None
+                reason = None if raw else reason
             if reason:
                 outcomes[index] = {"bucket": "unrepresentable", "detail": reason}
                 continue
             lines = ["|".join(row) for row in rows]
+            if not record["ordered"]:
+                # MySQL's row order is not stable for unordered results.
+                lines.sort()
             if sum(len(line) + 5 for line in lines) > max_expect_bytes:
                 outcomes[index] = {"bucket": "too-large", "detail": "expect bytes"}
                 continue
             outcomes[index] = {"bucket": "recorded", "kind": "rows", "lines": lines,
-                               "dropped": failed_a}
+                               "dropped": failed_a, "raw": raw}
         else:
             errno, sqlstate, message = result_a[1], result_a[2], result_a[3]
             outcomes[index] = {"bucket": "recorded", "kind": "error",
@@ -838,12 +851,15 @@ def render_shard(plan, tests, outcomes, header):
         lines.append("}")
         if outcome["kind"] == "error":
             lines.append("expect error {")
+        elif outcome.get("raw"):
+            lines.append("expect raw {")
         elif record["ordered"]:
             lines.append("expect {")
         else:
             lines.append("expect unordered {")
         if outcome["kind"] == "rows" and outcome["lines"]:
-            lines.append(LIB.render_block_lines(outcome["lines"]).rstrip("\n"))
+            render = LIB.render_raw_block_lines if outcome.get("raw") else LIB.render_block_lines
+            lines.append(render(outcome["lines"])[:-1])
         lines.append("}")
         blocks.append("\n".join(lines))
 
