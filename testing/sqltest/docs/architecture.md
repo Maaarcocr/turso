@@ -103,14 +103,14 @@ pub fn compare_pattern(actual: &[Vec<String>], pattern: &str) -> ComparisonResul
 
 ### Unordered Match
 
-Set comparison (order-independent):
+Multiset comparison (order-independent):
 
 ```rust
 pub fn compare_unordered(actual: &[Vec<String>], expected: &[String]) -> ComparisonResult
 ```
 
 - Rows can be in any order
-- Each expected row must appear exactly once
+- Each row must appear as many times as it is expected
 
 ### Error Match
 
