@@ -106,7 +106,7 @@ This project includes MySQL specification cases derived from go-mysql-server eng
 * License: licenses/mysql/go-mysql-server-apache-license.md (Apache License v2.0)
 * Homepage: https://github.com/dolthub/go-mysql-server
 
-This project includes a Python port of the Vitess evalengine test case generator (go/vt/vtgate/evalengine/testcases, mysql/conformance/tools/import_vitess.py) and MySQL specification cases derived from it, distributed by The Vitess Authors:
+This project includes a Python port of the Vitess evalengine test case generator (go/vt/vtgate/evalengine/testcases, mysql/conformance/tools/import_vitess.py) and MySQL specification cases derived from it and from Vitess end-to-end MySQL comparison tests (go/test/endtoend/vtgate), distributed by The Vitess Authors:
 
 * Copyright: The Vitess Authors
 * License: licenses/mysql/vitess-apache-license.md (Apache License v2.0)
