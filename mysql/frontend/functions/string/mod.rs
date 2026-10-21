@@ -115,3 +115,53 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
     };
     Some(function)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_replaces_characters_like_mysql() {
+        let cases = [
+            ("Quadratic", 3, 4, "What", "QuWhattic"),
+            ("Quadratic", -1, 4, "What", "Quadratic"),
+            ("Quadratic", 3, 100, "What", "QuWhat"),
+            ("hello", 3, -1, "xyz", "hexyz"),
+            ("Grüße", 3, 1, "X", "GrXße"),
+            ("Grüße", 6, 1, "X", "GrüßeX"),
+            ("Grüße", 7, 1, "X", "Grüße"),
+            ("Grüß", 5, 1, "X", "GrüßX"),
+            ("abc", 4, 1, "X", "abc"),
+        ];
+        for (original, position, length, replacement, expected) in cases {
+            assert_eq!(
+                insert(original, position, length, text(replacement)).to_text(),
+                Some(expected),
+                "INSERT('{original}', {position}, {length}, '{replacement}')"
+            );
+        }
+    }
+
+    #[test]
+    fn insert_with_a_null_argument_is_null() {
+        assert!(matches!(insert("a", 1, 1, Value::Null), Value::Null));
+    }
+
+    fn insert(text: &str, position: i64, length: i64, replacement: Value) -> Value {
+        execute(
+            "INSERT",
+            &[
+                Value::build_text(text.to_string()),
+                Value::from_i64(position),
+                Value::from_i64(length),
+                replacement,
+            ],
+        )
+        .expect("INSERT is a MySQL function")
+        .expect("INSERT succeeds")
+    }
+
+    fn text(value: &str) -> Value {
+        Value::build_text(value.to_string())
+    }
+}
