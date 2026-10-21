@@ -16,29 +16,82 @@ highest level that is fully cleared plus the next failures to work on.
 ```text
 mysql/conformance/
 ├── my-sqltests/          owned specs; every one must pass (CI gate)
-├── specs/<source>/       recorded imported specs (ratcheted, see below)
-│   ├── *.sqltest         shards of at most 1,000 tests
-│   ├── manifest.jsonl    one record per test: id, file, level, provenance
-│   └── REPORT.md         extraction/recording bucket counts for the source
+├── specs/
+│   ├── sources.lock.toml pinned upstream repositories, revisions, licenses
+│   └── <source>/         recorded imported specs (ratcheted, see below)
+│       ├── REPORT.md     extraction/recording bucket counts for the source
+│       └── <dir>/
+│           ├── *.sqltest      shards of at most 1,000 tests
+│           └── manifest.jsonl one record per test in this directory
 ├── candidates/           importer output: unrecorded candidate JSONL (ignored)
+├── .sources/             fetch-sources.sh checkouts (ignored)
+├── .record-cache/        per-group oracle runs, makes recording resumable (ignored)
 ├── baseline.txt          ids of recorded specs that currently pass
 └── tools/                importers, recorder, scoreboard
 ```
 
+A manifest record looks like
+`{"id": "sqllogictest/select1:L1234", "test": "select1.sqltest::l1234",
+"level": 352, "source": {"path": "test/select1.test", "line": 1234,
+"license": "CC0-1.0"}}`; `test` is relative to `specs/<source>/` and the
+repository and revision are in `REPORT.md` and `sources.lock.toml`. Manifests
+are split per directory and leave out feature tags (counted in `REPORT.md`,
+kept in the candidates) to keep every file small.
+
 ## Pipeline
 
-1. **Import.** A source importer turns upstream tests into candidate JSONL
+1. **Fetch.** `./fetch-sources.sh [id...]` checks out every source in
+   `specs/sources.lock.toml` at its pinned revision into `.sources/`.
+2. **Import.** A source importer turns upstream tests into candidate JSONL
    (schema below). Importers never invent expected results.
-2. **Record.** `tools/record_mysql.py` runs every candidate against the pinned
+3. **Record.** `tools/record_mysql.py` runs every candidate against the pinned
    MySQL container, twice in independent databases, and writes `.sqltest`
-   shards plus `manifest.jsonl` and `REPORT.md`. Only the recorder talks to
-   MySQL. `--verify` re-runs checked-in specs against MySQL and reports drift.
-3. **Replay.** `make -C mysql/conformance run` replays specs through the
+   shards plus manifests and `REPORT.md`. Only the recorder talks to MySQL.
+   `--verify` re-runs checked-in specs against MySQL and reports drift.
+4. **Replay.** `make -C mysql/conformance run` replays specs through the
    `tursomysql` sqltest backend (embedded Turso with `MySqlDialect`).
-4. **Score.** `tools/score.py` compares a replay with `baseline.txt`. A spec in
+5. **Score.** `tools/score.py` compares a replay with `baseline.txt`. A spec in
    the baseline that fails is a regression and fails the gate. A newly passing
    spec must be added with `--update` (the baseline only grows). It also
    reports pass counts per source and the highest fully cleared level.
+
+Regenerating the sqllogictest corpus:
+
+```bash
+mysql/conformance/fetch-sources.sh sqllogictest
+python3 -I mysql/conformance/tools/import_sqllogictest.py \
+    --source mysql/conformance/.sources/sqllogictest \
+    --output mysql/conformance/candidates/sqllogictest.jsonl \
+    --report mysql/conformance/candidates/sqllogictest.report.json
+python3 -I mysql/conformance/tools/record_mysql.py \
+    mysql/conformance/candidates/sqllogictest.jsonl \
+    --import-report mysql/conformance/candidates/sqllogictest.report.json \
+    --sqltest-bin target/debug/sqltest
+python3 -I mysql/conformance/tools/record_mysql.py --verify --source sqllogictest
+```
+
+The recorder starts the pinned image itself (or reuses a server through
+`--dsn mysql://root@HOST:3306`) and refuses to record when the server's version,
+`sql_mode`, charset, collation, time zone or `lower_case_table_names` differ
+from `target.toml`. Every session is also checked for the target
+`collation_connection`, result charset, `autocommit=1`, `sql_mode` and time
+zone. Its container adds only durability options
+(`innodb_flush_log_at_trx_commit=2`, `sync_binlog=0`), which change no
+SQL-visible behavior. Re-recording the same candidates is byte-identical;
+interrupted runs resume from `.record-cache/`. Every emitted file is validated
+with `sqltest check`.
+
+Scoring a replay:
+
+```bash
+python3 mysql/conformance/tools/score.py results.json            # gate
+python3 mysql/conformance/tools/score.py results.json --update   # ratchet
+```
+
+`baseline.txt` holds one `<source>/<dir>/<shard>.sqltest::<test>` per line
+(paths relative to `specs/`). A baseline spec that fails, errors, is skipped
+or disappears from a replayed file is a regression. `--update` refuses to drop
+entries unless `--allow-shrink` is given.
 
 ## Candidate schema (JSONL, one object per line)
 
@@ -52,34 +105,84 @@ mysql/conformance/
   "sql": ["SELECT a FROM t1 ORDER BY a"],
   "ordered": true,
   "level": 120,
-  "features": ["select", "order-by"]
+  "features": ["select", "order-by"],
+  "setup_errors": "fail"
 }
 ```
 
 - `id` is stable and source-derived. Re-importing the same revision yields
-  the same ids.
-- `setup` statements run before `sql` in a fresh database. Candidates in one
-  `group` with an identical `setup` share one named setup block.
+  the same ids. The part after the group becomes the test name.
+- `group` is the shard unit: one group becomes one `.sqltest` file named after
+  it (split at 1,000 tests). Keep groups at or below ~1,000 candidates.
+- `setup` statements run before `sql` in a fresh database and session.
+  Candidates whose setups are prefixes of each other share chained setup
+  blocks.
+- `setup_base` (optional) is the id of an earlier candidate of the same group
+  in the same file. The effective setup is that candidate's effective setup
+  followed by `setup`. Importers with long shared setups (sqllogictest) use it
+  to keep candidate files small.
+- `setup_errors` (optional) is `"fail"` (default) or `"drop"`. With `"fail"`,
+  a setup statement that errors in MySQL puts the candidate in `setup-failed`.
+  With `"drop"`, the statement is left out of the emitted setup and counted in
+  `REPORT.md`; use it only when a failed statement provably has no effect
+  (MySQL statements are atomic), as for sqllogictest's mixed-dialect scripts.
+- `sql` statements run in order. The recorded result is the concatenation of
+  the rows of every statement; the first error ends the test as an error.
 - `ordered` is false when the source says the row order is unspecified (for
   example sqllogictest `rowsort`/`valuesort`, or no `ORDER BY`). Unordered
   specs use `expect unordered`.
 - `level` (0–1000) orders specs from simplest to hardest, as in liquid-spec.
-  Feature tags drive the level. Classification can improve later without
-  changing ids.
+  Feature tags drive the level (`tools/spec_lib.py` `classify`): the level of
+  a spec is the base level of its hardest feature, including features its
+  setup needs, plus a small complexity bonus. Classification can improve later
+  without changing ids.
 
 ## Recorded output format
 
 ```text
-# source: sqllogictest@<rev>:test/select1.test:1234 (public domain)
-@setup s3
-test sqllogictest-select1-l1234 {
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f056...
+#   test/select1.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1(a INTEGER, b INTEGER);
+    INSERT INTO t1 VALUES(1,2);
+}
+
+setup s2 {
+    DELETE FROM t1 WHERE a > 1;
+}
+
+@setup s1
+@setup s2
+test l1234 {
     SELECT a FROM t1 ORDER BY a;
 }
 expect {
     1
     NULL
 }
+
+# mysql-error: 1690 22003 BIGINT UNSIGNED value is out of range in '(cast(1 as unsigned) - 2)'
+test l1240 {
+    SELECT CAST(1 AS UNSIGNED) - 2;
+}
+expect error {
+}
 ```
+
+- Setup blocks are segments of one statement sequence, cut where tests attach
+  or the sequence branches. A test composes them with `@setup` decorators in
+  order; the runner applies multiple setups in declaration order
+  (`testing/sqltest/src/runner/mod.rs`).
+- SQL is written verbatim (only `{`, `}` and backslashes before them are
+  escaped for the block lexer); statements end with `;`, on a new line when
+  the statement ends in a line comment.
+- Test names come from the candidate id after its group (`:L1234` → `l1234`).
 
 Values use MySQL's text-protocol representation, which is what a MySQL client
 receives:
@@ -91,26 +194,83 @@ receives:
 | `DOUBLE`/`FLOAT` | MySQL's text exactly (`0.3333333333333333`, `1e21`) |
 | strings | UTF-8 text; binary values that are not UTF-8 are lossily decoded |
 
+The string `'NULL'` and SQL `NULL` render identically. In exact mode an empty
+result and a single empty value both render as an empty block. `expect
+unordered` compares rows as a set (the runner's comparator), so it does not
+distinguish duplicate rows.
+
 A test whose statements fail in MySQL is recorded as `expect error {}` with
 the MySQL errno, SQLSTATE and message in a comment. The runner checks only
-that an error occurs; error-code parity comes later.
+that an error occurs; error-code parity comes later. Database names in error
+messages are normalized to `test`.
 
 A test is not emitted, and is counted in `REPORT.md`, when:
 
-- MySQL returns different results in the two independent runs
-  (`nondeterministic`);
-- a value contains `|`, a newline, leading or trailing whitespace, or the
-  output cannot otherwise round-trip through the `.sqltest` expect syntax
+- MySQL returns different results in the two independent runs, or setup
+  statements fail differently (`nondeterministic`); unordered results are
+  compared as sorted multisets, ordered results exactly;
+- a value contains `|`, a line break or another control character, leading
+  whitespace in the first column or trailing whitespace in the last, an
+  unordered result has an empty single-value row, or the SQL or output cannot
+  otherwise round-trip through the `.sqltest` lexer and comparator
   (`unrepresentable`);
-- the result exceeds the row limit (`too-large`);
-- the setup fails in MySQL (`setup-failed`), so a missing-setup error is never
-  recorded as expected behavior;
-- the importer could not extract it statically (`dynamic`), or it is a
-  duplicate (`duplicate`).
+- the result exceeds 100 rows or 16 KiB of expected output (`too-large`);
+- the setup fails in MySQL and the candidate does not allow dropping
+  (`setup-failed`), so a missing-setup error is never recorded as expected
+  behavior;
+- the result is MySQL error 1064 (syntax), 1146 (no such table), 1049 (unknown
+  database), 1054 (unknown column) or 1051 (unknown table)
+  (`error-quarantined`): for imported cases these mostly mean the importer did
+  not reproduce the case's dialect or context;
+- a statement times out or loses the connection (`timeout`);
+- the importer could not extract it statically (`dynamic`), it is a duplicate
+  id or a duplicate of another candidate's setup, sql and ordering
+  (`duplicate`), or it violates the schema (`invalid`).
+
+## Execution model of the recorder
+
+Semantics are always "fresh database and session, run the setup, run the
+sql". Candidates are scheduled into lanes:
+
+- **chain**: read-only `sql` (`SELECT`, `WITH`, `SHOW`, ... without user
+  variables, `INTO`, locking or previous-statement functions such as
+  `LAST_INSERT_ID()`/`ROW_COUNT()`). One database walks the group's setup trie
+  and runs these candidates where they attach; a sibling branch replays its
+  prefix in a fresh database.
+- **isolated**: anything else gets its own database, session and setup.
+- **exclusive**: candidates touching server-global state (databases, users,
+  grants, `information_schema`, `mysql.*`) run serially after the parallel
+  phase; databases and users they create are dropped afterwards.
+
+Each run uses uniquely named databases, so a result that leaks the database
+name is classified `nondeterministic`.
+
+## Importers
+
+### sqllogictest (`tools/import_sqllogictest.py`)
+
+Reads the scripts exactly like `sqllogictest.c` for the `mysql` engine
+(`skipif`/`onlyif` conditions, comments, CRLF, `halt`) and never uses SQLite's
+expected results except the result size, to skip queries over 100 rows. Each
+runnable `query` and `statement error` record becomes a candidate whose setup is
+every runnable statement before it in the file (`setup_errors: drop`); a query
+that reads no table gets an empty setup. `rowsort`/`valuesort` and `nosort`
+without `ORDER BY` are unordered. Queries whose FROM list has 21 to 61 tables
+(`select5.test`) are skipped (`excluded-wide-join`): MySQL's default
+exhaustive join-order search (`optimizer_search_depth=62`) needs seconds to
+hours for each of them. Lists over MySQL's 61-table limit fail at once with
+error 1116 and are kept.
+
+Sampling is deterministic (stable hash of the id) and bounded by the replay
+cost: the Turso replay runs each test's full setup in a fresh database, so the
+default sample keeps about 150,000 candidates with at most 30M setup
+statements replayed in total, 250,000 per file and 1,000 tests per file, at
+least 100 per file, and all of `evidence/` and `select*` within those caps.
+`--all` emits every eligible candidate for local use.
 
 ## Licensing
 
 Only permissively licensed sources are checked in. Each source's license is
-recorded in every manifest record and in `NOTICE.md`. GPL sources (MySQL MTR,
-MariaDB) are recorded into `specs/local/`, which is ignored by git and never
-committed.
+recorded in every manifest record, in `specs/sources.lock.toml` and in
+`NOTICE.md`. GPL sources (MySQL MTR, MariaDB) are recorded into `specs/local/`,
+which is ignored by git and never committed.
