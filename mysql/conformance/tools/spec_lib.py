@@ -144,13 +144,20 @@ def render_block_lines(lines, indent="    "):
     return "".join(f"{indent}{escape_block(line)}\n" for line in lines)
 
 
-def expectation_round_trips(rows, ordered):
+def render_raw_block_lines(lines):
+    """Render expectation lines for an `expect raw` block (no indentation)."""
+    return "".join(f"{escape_block(line)}\n" for line in lines)
+
+
+def expectation_round_trips(rows, ordered, raw=False):
     """Return None when `rows` survive a write/parse/compare cycle, else a reason.
 
     `rows` are rendered text values (NULL already rendered as ``NULL``). The
     check renders the expect block exactly like the recorder, re-reads it with
     the sqltest lexer/parser model, and applies the runner's comparator to the
-    original MySQL rows.
+    original MySQL rows. `raw` checks an `expect raw` block, which keeps
+    whitespace but compares in order, so it suits ordered or single-row
+    results.
     """
     for row in rows:
         for value in row:
@@ -161,14 +168,20 @@ def expectation_round_trips(rows, ordered):
             if any(ord(c) < 0x20 and c != "\t" or ord(c) == 0x7F for c in value):
                 return "value contains a control character"
     lines = ["|".join(row) for row in rows]
-    rendered = render_block_lines(lines)
+    rendered = render_raw_block_lines(lines) if raw else render_block_lines(lines)
     try:
         content, _ = extract_block("\n" + rendered + "}", 0)
     except BlockError:
         return "expect block does not terminate"
     if expand_macros_would_change(content):
         return "expect block contains '{{'"
-    if ordered:
+    if raw:
+        if not (ordered or len(rows) <= 1):
+            return "raw blocks compare in order"
+        parsed = expected_rows(content.split("\n")) if rows else []
+        if format_rows(parsed) != format_rows(rows):
+            return "row text is altered by sqltest trimming"
+    elif ordered:
         parsed = expected_rows(parse_exact_lines(content))
         if format_rows(parsed) != format_rows(rows):
             return "row text is altered by sqltest trimming"
@@ -334,6 +347,8 @@ def read_sqltest(text):
                 lines = parse_exact_lines(body)
             elif kind == "unordered":
                 lines = parse_unordered_lines(body)
+            elif kind == "raw":
+                lines = body.split("\n")
             elif kind == "error":
                 lines = [rust_trim(body)] if rust_trim(body) else []
             else:
