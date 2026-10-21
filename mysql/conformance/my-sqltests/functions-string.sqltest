@@ -1,0 +1,616 @@
+# Owned specs for the MySQL string, numeric, conversion, hashing, network,
+# UUID and regular expression functions. Every expected value was recorded
+# from MySQL 8.4.10 (mysql/conformance/target.toml) through a utf8mb4 session
+# and rendered as the MySQL text protocol sends it; error tests note the MySQL
+# error in a comment.
+
+@database :memory:
+
+test truncate-double-to-decimals {
+    SELECT TRUNCATE(1.223e0, 1), TRUNCATE(-1.999e0, 2), TRUNCATE(1.1e0, 13);
+}
+expect {
+    1.2|-1.99|1.1
+}
+
+test truncate-double-to-tens-keeps-negative-zero {
+    SELECT TRUNCATE(-1.5e0, -1), TRUNCATE(123.456e0, -1);
+}
+expect {
+    -0|120
+}
+
+test truncate-integer-to-hundreds {
+    SELECT TRUNCATE(1299, -2), TRUNCATE(-1299, -2), TRUNCATE(1299, 3), TRUNCATE(1299, -25);
+}
+expect {
+    1200|-1200|1299|0
+}
+
+test truncate-string-parses-a-double {
+    SELECT TRUNCATE('1.239', 2), TRUNCATE('7 apples', 0), TRUNCATE('apples', 1);
+}
+expect {
+    1.23|7|0
+}
+
+test truncate-null {
+    SELECT TRUNCATE(5, NULL), TRUNCATE(NULL, 1);
+}
+expect {
+    NULL|NULL
+}
+
+test round-double-rounds-half-to-even {
+    SELECT ROUND(2.5e0), ROUND(3.5e0), ROUND(-2.5e0), ROUND('2.5');
+}
+expect {
+    2|4|-2|2
+}
+
+test round-integer-to-tens {
+    SELECT ROUND(1250, -2), ROUND(-1250, -2), ROUND(1249, -2), ROUND(15, -1);
+}
+expect {
+    1300|-1300|1200|20
+}
+
+test conv-between-bases {
+    SELECT CONV('a', 16, 2), CONV('6E', 18, 8), CONV(-17, 10, -18), CONV('zz', 36, 10);
+}
+expect {
+    1010|172|-H|1295
+}
+
+test conv-negative-to-unsigned-hex {
+    SELECT CONV(-1, 10, 16), CONV('-10', 10, 10);
+}
+expect {
+    FFFFFFFFFFFFFFFF|18446744073709551606
+}
+
+test conv-invalid-base-or-empty-is-null {
+    SELECT CONV(10, 1, 10), CONV(10, 10, 37), CONV('', 10, 2), CONV(10, NULL, 2);
+}
+expect {
+    NULL|NULL|NULL|NULL
+}
+
+test conv-stops-at-first-invalid-digit {
+    SELECT CONV('12x9', 10, 10), CONV(' 7', 10, 2), CONV(1.9e0, 10, 10);
+}
+expect {
+    12|111|1
+}
+
+test bin-and-oct {
+    SELECT BIN(12), OCT(12), BIN(-1), OCT('15abc');
+}
+expect {
+    1100|14|1111111111111111111111111111111111111111111111111111111111111111|17
+}
+
+test interval-finds-the-bound-index {
+    SELECT INTERVAL(23, 1, 15, 17, 30, 44, 200), INTERVAL(10, 1, 10, 100, 1000), INTERVAL(22, 23, 30, 44, 200);
+}
+expect {
+    3|2|0
+}
+
+test interval-null-target-is-minus-one {
+    SELECT INTERVAL(NULL, 1, 2);
+}
+expect {
+    -1
+}
+
+test interval-skips-null-bounds {
+    SELECT INTERVAL(5, 1, NULL, 2, 30, 4);
+}
+expect {
+    3
+}
+
+test interval-with-many-bounds-uses-binary-search {
+    SELECT INTERVAL(5, 1, 10, 2, 3, 4, 6), INTERVAL(5, 1, 10, 2, 3, 4, 6, 7, 8);
+}
+expect {
+    1|5
+}
+
+test interval-compares-strings-as-numbers {
+    SELECT INTERVAL('5', '1', '10'), INTERVAL(2.5e0, 1, 2, 3);
+}
+expect {
+    1|2
+}
+
+test field-compares-strings-without-case {
+    SELECT FIELD('Bb', 'Aa', 'bb', 'Cc'), FIELD('Gg', 'Aa', 'Bb'), FIELD('a', 'Å');
+}
+expect {
+    2|0|1
+}
+
+test field-compares-mixed-types-as-numbers {
+    SELECT FIELD(1, '1.0', 2), FIELD('2abc', 1, 2), FIELD(3, 1, 2);
+}
+expect {
+    1|2|0
+}
+
+test field-null-target-is-zero {
+    SELECT FIELD(NULL, NULL, 1), FIELD(1, NULL, 1);
+}
+expect {
+    0|2
+}
+
+test elt-picks-an-argument {
+    SELECT ELT(2, 'Aa', 'Bb', 'Cc'), ELT('3', 'a', 'b', 'c'), ELT(1, 42);
+}
+expect {
+    Bb|c|42
+}
+
+test elt-out-of-range-is-null {
+    SELECT ELT(0, 'a'), ELT(2, 'a'), ELT(-1, 'a'), ELT(NULL, 'a');
+}
+expect {
+    NULL|NULL|NULL|NULL
+}
+
+test strcmp-uses-the-default-collation {
+    SELECT STRCMP('text', 'TEXT'), STRCMP('a', 'b'), STRCMP('b', 'a'), STRCMP('Å', 'a'), STRCMP('a ', 'a');
+}
+expect {
+    0|-1|1|0|1
+}
+
+test strcmp-null {
+    SELECT STRCMP(NULL, 'a'), STRCMP(1234, '1234');
+}
+expect {
+    NULL|0
+}
+
+test locate-finds-without-case {
+    SELECT LOCATE('BAR', 'foobarbar'), LOCATE('xbar', 'foobar'), LOCATE('bar', 'foobarbar', 5);
+}
+expect {
+    4|0|7
+}
+
+test locate-empty-needle-and-positions {
+    SELECT LOCATE('', 'abc', 4), LOCATE('', 'abc', 5), LOCATE('b', 'abc', 0), LOCATE('b', 'abc', -1);
+}
+expect {
+    4|0|0|0
+}
+
+test locate-counts-characters {
+    SELECT LOCATE('c', 'ÅÅc'), INSTR('Québec', 'BEC'), LOCATE('ü', 'Grüße', 3);
+}
+expect {
+    3|4|3
+}
+
+test atan-with-two-arguments {
+    SELECT ATAN(-2, 2), ATAN2(PI(), 0), ATAN(1, 'x');
+}
+expect {
+    -0.7853981633974483|1.5707963267948966|1.5707963267948966
+}
+
+test cot {
+    SELECT COT(1), COT('1');
+}
+expect {
+    0.6420926159343306|0.6420926159343306
+}
+
+test greatest-and-least-of-numbers {
+    SELECT GREATEST(2, 0, 34.0e0), LEAST(2, 0, 34), GREATEST(-1, -2), LEAST(1.5e0, 2);
+}
+expect {
+    34|0|-1|1.5
+}
+
+test greatest-and-least-compare-strings-when-any-is-a-string {
+    SELECT GREATEST('10', 9), LEAST('B', 'a', 'C'), GREATEST('apple', 1), LEAST(-1, 1, 'foobar');
+}
+expect {
+    9|a|apple|-1
+}
+
+test greatest-and-least-null {
+    SELECT GREATEST(1, NULL), LEAST(NULL, 'a');
+}
+expect {
+    NULL|NULL
+}
+
+test sha2-lengths {
+    SELECT SHA2('abc', 224), SHA2('abc', 0), SHA2('abc', 1), SHA2(NULL, 256);
+}
+expect {
+    23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7|ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad|NULL|NULL
+}
+
+test sha2-384-and-512 {
+    SELECT SHA2('abc', 384), SHA2('abc', 512);
+}
+expect {
+    cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f
+}
+
+test md5-sha1-crc32 {
+    SELECT MD5('testing'), SHA1('abc'), SHA('abc'), CRC32('MySQL'), CRC32(NULL);
+}
+expect {
+    ae2b1fca515949e5d54fb22b8ed95575|a9993e364706816aba3e25717850c26c9cd0d89d|a9993e364706816aba3e25717850c26c9cd0d89d|3259397556|NULL
+}
+
+test hash-of-number-uses-its-text {
+    SELECT MD5(1), CRC32(1.5e0);
+}
+expect {
+    c4ca4238a0b923820dcc509a6f75849b|2270993338
+}
+
+test base64-round-trip {
+    SELECT TO_BASE64('abc'), FROM_BASE64('YWJj'), FROM_BASE64(TO_BASE64('Grüße')), TO_BASE64(12);
+}
+expect {
+    YWJj|abc|Grüße|MTI=
+}
+
+test from-base64-rejects-bad-input {
+    SELECT FROM_BASE64('YWJ'), FROM_BASE64('YW=j'), FROM_BASE64('Y!==') IS NULL, FROM_BASE64(NULL);
+}
+expect {
+    NULL|NULL|1|NULL
+}
+
+test from-base64-skips-spaces {
+    SELECT FROM_BASE64(' YW Jj '), FROM_BASE64('YQ==');
+}
+expect {
+    abc|a
+}
+
+test left-and-right {
+    SELECT LEFT('foobarbar', 5), RIGHT('foobarbar', 4), LEFT('Grüße', 3), RIGHT('Grüße', 2);
+}
+expect {
+    fooba|rbar|Grü|ße
+}
+
+test left-and-right-non-positive-length {
+    SELECT LEFT('abc', 0), RIGHT('abc', -1), LEFT('abc', NULL), LEFT('abc', '2x');
+}
+expect {
+    ||NULL|ab
+}
+
+test left-huge-string-length-wraps-negative {
+    SELECT LEFT('abcdef', '99999999999999999999'), LEFT('abcdef', 18446744073709551615);
+}
+expect {
+    |abcdef
+}
+
+test substring-positions {
+    SELECT SUBSTRING('Quadratically', 5), SUBSTRING('Quadratically', 5, 6), SUBSTRING('Sakila', -3), SUBSTR('Sakila', -5, 3), MID('Sakila', 2, 3);
+}
+expect {
+    ratically|ratica|ila|aki|aki
+}
+
+test substring-zero-or-out-of-range-is-empty {
+    SELECT SUBSTRING('abc', 0), SUBSTRING('abc', -4), SUBSTRING('abc', 2, -1), SUBSTRING('abc', 4), SUBSTRING('abc', 2, 0);
+}
+expect {
+    ||||
+}
+
+test substring-counts-characters {
+    SELECT SUBSTRING('Grüße', 3, 2), SUBSTRING('Grüße', -2);
+}
+expect {
+    üß|ße
+}
+
+test lpad-and-rpad {
+    SELECT LPAD('hi', 4, '??'), LPAD('hi', 1, '??'), RPAD('hi', 5, 'ab'), RPAD('Grü', 5, 'ß');
+}
+expect {
+    ??hi|h|hiaba|Grüßß
+}
+
+test lpad-negative-length-or-empty-pad {
+    SELECT LPAD('hi', -1, 'x'), RPAD('abc', 5, ''), LPAD('abc', 2, '');
+}
+expect {
+    NULL||ab
+}
+
+test pad-and-repeat-above-max-allowed-packet-are-null {
+    SELECT RPAD('x', 20000000, 'y'), REPEAT('abc', 1073741825), SPACE(1073741825);
+}
+expect {
+    NULL|NULL|NULL
+}
+
+test repeat-and-space {
+    SELECT REPEAT('ab', 3), REPEAT('a', 0), REPEAT('a', -1), CONCAT('[', SPACE(3), ']'), CONCAT('[', SPACE(-1), ']');
+}
+expect {
+    ababab|||[   ]|[]
+}
+
+test concat-null-is-null {
+    SELECT CONCAT('a', NULL), CONCAT('a', 1, 2.5e0), CONCAT(1e20), CONCAT(-0.5e0);
+}
+expect {
+    NULL|a12.5|1e20|-0.5
+}
+
+test concat-ws-skips-nulls {
+    SELECT CONCAT_WS(',', 'a', NULL, 'b'), CONCAT_WS(NULL, 'a', 'b'), CONCAT_WS('-', 1, 2.5e0);
+}
+expect {
+    a,b|NULL|1-2.5
+}
+
+test replace {
+    SELECT REPLACE('www.mysql.com', 'w', 'Ww'), REPLACE('aaa', 'aa', 'b'), REPLACE('abc', 'B', 'x');
+}
+expect {
+    WwWwWw.mysql.com|ba|abc
+}
+
+test replace-null-is-null {
+    SELECT REPLACE('abc', 'b', NULL), REPLACE('abc', '', NULL), REPLACE('abc', '', 'x');
+}
+expect {
+    NULL|NULL|abc
+}
+
+test char-builds-bytes {
+    SELECT CHAR(77, 121, 83, 81, 76), HEX(CHAR(1, 256)), HEX(CHAR(65536)), CHAR(77, NULL, 121);
+}
+expect {
+    MySQL|010100|010000|My
+}
+
+test lcase-and-ucase {
+    SELECT LCASE('QuAdRaTiCaLlY'), UCASE('Grüße'), LOWER(1.5e0);
+}
+expect {
+    quadratically|GRÜßE|1.5
+}
+
+test ascii-ord-and-lengths {
+    SELECT ASCII('dx'), ASCII(''), ORD('Å'), ORD('a'), BIT_LENGTH('text'), LENGTH('Å'), CHAR_LENGTH('Å'), OCTET_LENGTH('ab');
+}
+expect {
+    100|0|50053|97|32|2|1|2
+}
+
+test hex-of-numbers-and-strings {
+    SELECT HEX(255), HEX('abc'), HEX(-1), HEX(2.5e0), HEX(1e19);
+}
+expect {
+    FF|616263|FFFFFFFFFFFFFFFF|2|7FFFFFFFFFFFFFFF
+}
+
+test unhex {
+    SELECT UNHEX('4D7953514C'), HEX(UNHEX('123')), UNHEX('GG'), UNHEX(NULL);
+}
+expect {
+    MySQL|0123|NULL|NULL
+}
+
+test find-in-set {
+    SELECT FIND_IN_SET('b', 'a,b,c,d'), FIND_IN_SET('B', 'a,b'), FIND_IN_SET('x', 'a,b'), FIND_IN_SET('', 'a,'), FIND_IN_SET('a', '');
+}
+expect {
+    2|2|0|2|0
+}
+
+test substring-index {
+    SELECT SUBSTRING_INDEX('www.mysql.com', '.', 2), SUBSTRING_INDEX('www.mysql.com', '.', -2), SUBSTRING_INDEX('a.b', '.', 5), SUBSTRING_INDEX('a.b', '.', 0);
+}
+expect {
+    www.mysql|mysql.com|a.b|
+}
+
+test make-set-and-export-set {
+    SELECT MAKE_SET(1 | 4, 'hello', 'nice', 'world'), MAKE_SET(3, 'a', NULL, 'c'), EXPORT_SET(5, 'Y', 'N', ',', 4), EXPORT_SET(6, '1', '0', '', 10);
+}
+expect {
+    hello,world|a|Y,N,Y,N|0110000000
+}
+
+test bit-count {
+    SELECT BIT_COUNT(29), BIT_COUNT(-1), BIT_COUNT('7'), BIT_COUNT(NULL);
+}
+expect {
+    4|64|3|NULL
+}
+
+test inet-aton-and-ntoa {
+    SELECT INET_ATON('10.0.5.9'), INET_ATON('127.1'), INET_ATON('256.1.1.1'), INET_NTOA(167773449), INET_NTOA(4294967296);
+}
+expect {
+    167773449|2130706433|NULL|10.0.5.9|NULL
+}
+
+test inet6-aton-and-ntoa {
+    SELECT HEX(INET6_ATON('fdfe::5a55:caff:fefa:9089')), HEX(INET6_ATON('10.0.5.9')), INET6_NTOA(INET6_ATON('::ffff:10.0.5.9')), INET6_NTOA(INET6_ATON('fdfe::5a55:caff:fefa:9089')), INET6_ATON('foobar');
+}
+expect {
+    FDFE0000000000005A55CAFFFEFA9089|0A000509|::ffff:10.0.5.9|fdfe::5a55:caff:fefa:9089|NULL
+}
+
+test inet6-ntoa-compresses-the-longest-zero-run {
+    SELECT INET6_NTOA(INET6_ATON('1:0:0:2:0:0:0:3')), INET6_NTOA(INET6_ATON('::1')), INET6_NTOA(INET6_ATON('::10.0.5.9')), INET6_NTOA('10.0.5.9');
+}
+expect {
+    1:0:0:2::3|::1|::10.0.5.9|NULL
+}
+
+test is-ip-checks {
+    SELECT IS_IPV4('10.0.5.9'), IS_IPV4('10.0.5.256'), IS_IPV6('::1'), IS_IPV6('10.0.5.9'), IS_IPV4(NULL), IS_IPV4_MAPPED(INET6_ATON('::ffff:10.0.5.9')), IS_IPV4_COMPAT(INET6_ATON('::10.0.5.9'));
+}
+expect {
+    1|0|1|0|NULL|1|1
+}
+
+test uuid-conversions {
+    SELECT IS_UUID('6ccd780c-baba-1026-9564-5b8c656024db'), IS_UUID('{6ccd780c-baba-1026-9564-5b8c656024db}'), IS_UUID('6ccd780cbaba102695645b8c656024db'), IS_UUID('6ccd780c-baba-1026-9564'), IS_UUID(NULL);
+}
+expect {
+    1|1|1|0|NULL
+}
+
+test uuid-to-bin-and-back-with-swapped-time {
+    SELECT HEX(UUID_TO_BIN('6ccd780c-baba-1026-9564-5b8c656024db', 1)), BIN_TO_UUID(UUID_TO_BIN('6ccd780c-baba-1026-9564-5b8c656024db', 1), 1), BIN_TO_UUID(UUID_TO_BIN('6ccd780c-baba-1026-9564-5b8c656024db'));
+}
+expect {
+    1026BABA6CCD780C95645B8C656024DB|6ccd780c-baba-1026-9564-5b8c656024db|6ccd780c-baba-1026-9564-5b8c656024db
+}
+
+test regexp-like-is-case-insensitive-by-default {
+    SELECT REGEXP_LIKE('CamelCase', 'CAMELCASE'), REGEXP_LIKE('CamelCase', 'CAMELCASE', 'c'), REGEXP_LIKE('abc', 'B', 'ci'), 'Michael!' REGEXP '.*', 'abc' NOT REGEXP '^b';
+}
+expect {
+    1|0|1|1|1
+}
+
+test regexp-like-null {
+    SELECT REGEXP_LIKE(NULL, 'a'), REGEXP_LIKE('a', NULL), REGEXP_LIKE('a', 'a', NULL);
+}
+expect {
+    NULL|NULL|NULL
+}
+
+test regexp-instr {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog'), REGEXP_INSTR('dog cat dog', 'dog', 2), REGEXP_INSTR('aa aaa aaaa', 'a{4}'), REGEXP_INSTR('abc', 'c', 1, 1, 1), REGEXP_INSTR('Grüße', 'ß');
+}
+expect {
+    1|9|8|4|4
+}
+
+test regexp-substr {
+    SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3), REGEXP_SUBSTR('abc', 'x'), REGEXP_SUBSTR('abc', '^b', 2);
+}
+expect {
+    abc|ghi|NULL|NULL
+}
+
+test regexp-replace {
+    SELECT REGEXP_REPLACE('a b c', 'b', 'X'), REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3), REGEXP_REPLACE('abc', '(b)', '[$1]'), REGEXP_REPLACE('aaa', 'a*', 'X');
+}
+expect {
+    a X c|abc def X|a[b]c|XX
+}
+
+test numeric-functions-parse-string-prefixes {
+    SELECT ABS('-12abc'), MOD('10abc', 3), POW('2', 3), CEIL('1.5'), FLOOR('-1.5x'), SIGN('-3');
+}
+expect {
+    12|1|8|2|-2|-1
+}
+
+test numeric-functions-out-of-domain-are-null {
+    SELECT SQRT(-1), LOG(0), LN(-1), LOG(2, 8), LOG(1, 8), ASIN(2), MOD(10, 0);
+}
+expect {
+    NULL|NULL|NULL|3|NULL|NULL|NULL
+}
+
+test mod-of-integers-keeps-the-dividend-sign {
+    SELECT MOD(-7, 3), MOD(7, -3), 7 % 0, MOD(7.5e0, 2);
+}
+expect {
+    -1|1|NULL|1.5
+}
+
+# mysql-error: 1690 DOUBLE value is out of range in 'cot(0)'
+test cot-of-zero-is-out-of-range {
+    SELECT COT(0);
+}
+expect error {
+}
+
+# mysql-error: 1690 DOUBLE value is out of range in 'pow(10,400)'
+test pow-overflow-is-out-of-range {
+    SELECT POW(10, 400);
+}
+expect error {
+}
+
+# mysql-error: 1690 DOUBLE value is out of range in 'exp(1000)'
+test exp-overflow-is-out-of-range {
+    SELECT EXP(1000);
+}
+expect error {
+}
+
+# mysql-error: 3685 Illegal argument to a regular expression.
+test regexp-empty-pattern-is-an-error {
+    SELECT REGEXP_LIKE('a', '');
+}
+expect error {
+}
+
+# mysql-error: 3691 Mismatched parenthesis in regular expression.
+test regexp-invalid-pattern-is-an-error {
+    SELECT REGEXP_LIKE('a', '(');
+}
+expect error {
+}
+
+# mysql-error: 1210 Incorrect arguments to regexp_like
+test regexp-invalid-match-type-is-an-error {
+    SELECT REGEXP_LIKE('a', 'a', 'x');
+}
+expect error {
+}
+
+# mysql-error: 3686 Index out of bounds in regular expression search.
+test regexp-instr-position-out-of-range-is-an-error {
+    SELECT REGEXP_INSTR('abc', 'b', 4);
+}
+expect error {
+}
+
+# mysql-error: 3686 Index out of bounds in regular expression search.
+test regexp-replace-missing-group-is-an-error {
+    SELECT REGEXP_REPLACE('abc', 'b', '$5');
+}
+expect error {
+}
+
+# mysql-error: 1411 Incorrect string value: 'foobar' for function uuid_to_bin
+test uuid-to-bin-rejects-invalid-text {
+    SELECT UUID_TO_BIN('foobar');
+}
+expect error {
+}
+
+# mysql-error: 1411 Incorrect string value: 'abc' for function bin_to_uuid
+test bin-to-uuid-rejects-wrong-length {
+    SELECT BIN_TO_UUID('abc');
+}
+expect error {
+}
+
+# mysql-error: 1690 BIGINT value is out of range in 'abs(-(9223372036854775808))'
+test abs-of-minimum-bigint-is-out-of-range {
+    SELECT ABS(-9223372036854775808);
+}
+expect error {
+}
