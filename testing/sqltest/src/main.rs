@@ -66,7 +66,8 @@ enum Commands {
         #[arg(short, long, default_value = "pretty")]
         output: String,
 
-        /// Timeout per query in seconds (not used with --backend rust)
+        /// Timeout per query in seconds (not used with --backend rust). The
+        /// tursomysql backend applies it to each setup or test block.
         #[arg(long, default_value_t = 90)]
         timeout: u64,
 
@@ -472,7 +473,8 @@ async fn run_tests(
                 .await
         }
         "tursomysql" => {
-            let runner = TestRunner::new(TursomysqlBackend).with_config(config);
+            let backend = TursomysqlBackend::new().with_timeout(Duration::from_secs(timeout));
+            let runner = TestRunner::new(backend).with_config(config);
             runner
                 .run_loaded_tests(loaded, |result| {
                     output.write_test(result);
