@@ -1,186 +1,10 @@
+//! Embedded API behavior the `.sqltest` specs in
+//! `mysql/conformance/my-sqltests` cannot express: result metadata,
+//! parameter binding, persistence across reopen, and connection recovery.
+
 use std::sync::Arc;
-use turso_core::{Database, MemoryIO, Numeric, OpenOptions, Value, IO};
-use turso_mysql::{open_memory, MySqlDialect};
-
-#[derive(Debug, Clone, Copy)]
-enum ExpectedValue {
-    Null,
-    Integer(i64),
-    Text(&'static str),
-}
-
-struct ExecutionCase {
-    name: &'static str,
-    sql: &'static str,
-    expected: &'static [ExpectedValue],
-}
-
-fn assert_value(case: &ExecutionCase, column: usize, actual: &Value, expected: ExpectedValue) {
-    match (actual, expected) {
-        (Value::Null, ExpectedValue::Null) => {}
-        (Value::Numeric(Numeric::Integer(actual)), ExpectedValue::Integer(expected)) => {
-            assert_eq!(*actual, expected, "case={} column={column}", case.name);
-        }
-        (Value::Text(actual), ExpectedValue::Text(expected)) => {
-            assert_eq!(
-                actual.as_str(),
-                expected,
-                "case={} column={column}",
-                case.name
-            );
-        }
-        _ => panic!(
-            "case={} column={column}: expected {expected:?}, got {actual:?}",
-            case.name
-        ),
-    }
-}
-
-#[test]
-fn executes_owned_literal_conformance_cases() -> turso_core::Result<()> {
-    let cases = [
-        ExecutionCase {
-            name: "zero",
-            sql: "SELECT 0",
-            expected: &[ExpectedValue::Integer(0)],
-        },
-        ExecutionCase {
-            name: "positive integer",
-            sql: "SELECT 42",
-            expected: &[ExpectedValue::Integer(42)],
-        },
-        ExecutionCase {
-            name: "maximum signed integer",
-            sql: "SELECT 9223372036854775807",
-            expected: &[ExpectedValue::Integer(i64::MAX)],
-        },
-        ExecutionCase {
-            name: "leading zeroes",
-            sql: "SELECT 00042",
-            expected: &[ExpectedValue::Integer(42)],
-        },
-        ExecutionCase {
-            name: "true",
-            sql: "SELECT TRUE",
-            expected: &[ExpectedValue::Integer(1)],
-        },
-        ExecutionCase {
-            name: "false",
-            sql: "SELECT FALSE",
-            expected: &[ExpectedValue::Integer(0)],
-        },
-        ExecutionCase {
-            name: "lowercase boolean",
-            sql: "SELECT true, false",
-            expected: &[ExpectedValue::Integer(1), ExpectedValue::Integer(0)],
-        },
-        ExecutionCase {
-            name: "null",
-            sql: "SELECT NULL",
-            expected: &[ExpectedValue::Null],
-        },
-        ExecutionCase {
-            name: "empty string",
-            sql: "SELECT ''",
-            expected: &[ExpectedValue::Text("")],
-        },
-        ExecutionCase {
-            name: "ascii string",
-            sql: "SELECT 'hello world'",
-            expected: &[ExpectedValue::Text("hello world")],
-        },
-        ExecutionCase {
-            name: "doubled quote escape",
-            sql: "SELECT 'I''m fine'",
-            expected: &[ExpectedValue::Text("I'm fine")],
-        },
-        ExecutionCase {
-            name: "backslash quote escape",
-            sql: r"SELECT 'I\'m fine'",
-            expected: &[ExpectedValue::Text("I'm fine")],
-        },
-        ExecutionCase {
-            name: "double quoted string",
-            sql: r#"SELECT "double quoted""#,
-            expected: &[ExpectedValue::Text("double quoted")],
-        },
-        ExecutionCase {
-            name: "utf8mb4 text",
-            sql: "SELECT 'Grüße 世界 🦀'",
-            expected: &[ExpectedValue::Text("Grüße 世界 🦀")],
-        },
-        ExecutionCase {
-            name: "mixed projection",
-            sql: "SELECT 1 AS one, 'two' AS two, NULL AS three, TRUE AS four",
-            expected: &[
-                ExpectedValue::Integer(1),
-                ExpectedValue::Text("two"),
-                ExpectedValue::Null,
-                ExpectedValue::Integer(1),
-            ],
-        },
-        ExecutionCase {
-            name: "backtick alias",
-            sql: "SELECT 'value' AS `select`",
-            expected: &[ExpectedValue::Text("value")],
-        },
-        ExecutionCase {
-            name: "trailing semicolon",
-            sql: "SELECT 7;",
-            expected: &[ExpectedValue::Integer(7)],
-        },
-        ExecutionCase {
-            name: "comments",
-            sql: "/* mysql */ SELECT 8 /* tail */;",
-            expected: &[ExpectedValue::Integer(8)],
-        },
-    ];
-
-    let connection = open_memory()?;
-    for case in &cases {
-        let mut statement = connection.prepare(case.sql).unwrap_or_else(|error| {
-            panic!(
-                "case={} failed to prepare: {error}\nSQL: {}",
-                case.name, case.sql
-            )
-        });
-        let rows = statement.run_collect_rows().unwrap_or_else(|error| {
-            panic!(
-                "case={} failed to execute: {error}\nSQL: {}",
-                case.name, case.sql
-            )
-        });
-        assert_eq!(rows.len(), 1, "case={}", case.name);
-        assert_eq!(rows[0].len(), case.expected.len(), "case={}", case.name);
-        for (column, (actual, expected)) in rows[0].iter().zip(case.expected.iter()).enumerate() {
-            assert_value(case, column, actual, *expected);
-        }
-    }
-    connection.close()?;
-    Ok(())
-}
-
-#[test]
-fn executes_basic_create_table_and_if_not_exists() -> turso_core::Result<()> {
-    let connection = open_memory()?;
-    let mut statement = connection
-        .prepare("CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));")
-        .expect("basic CREATE TABLE must prepare");
-    assert_eq!(statement.num_columns(), 0);
-    assert!(statement
-        .run_collect_rows()
-        .expect("basic CREATE TABLE must execute")
-        .is_empty());
-
-    let duplicate = connection
-        .execute("CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100))")
-        .expect_err("duplicate CREATE TABLE without IF NOT EXISTS must fail");
-    assert!(duplicate.to_string().contains("already exists"));
-    connection
-        .execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name VARCHAR(100))")?;
-    connection.close()?;
-    Ok(())
-}
+use turso_core::{MemoryIO, Value, IO};
+use turso_mysql::{open_memory, open_with_io};
 
 #[test]
 fn persisted_create_table_reloads_through_mysql_dialect() -> turso_core::Result<()> {
@@ -188,19 +12,15 @@ fn persisted_create_table_reloads_through_mysql_dialect() -> turso_core::Result<
     let path = "mysql-create-table-persistence.db";
 
     {
-        let database = Database::open(io.clone(), path, OpenOptions::new(Arc::new(MySqlDialect)))?;
-        let connection = database.connect(turso_core::ConnectOpts::new())?;
+        let connection = open_with_io(io.clone(), path)?;
         connection.execute(
             "CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
         )?;
         connection.close()?;
-        drop(connection);
-        drop(database);
     }
 
     {
-        let database = Database::open(io, path, OpenOptions::new(Arc::new(MySqlDialect)))?;
-        let connection = database.connect(turso_core::ConnectOpts::new())?;
+        let connection = open_with_io(io, path)?;
         let duplicate = connection
             .execute(
                 "CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100))",
