@@ -39,6 +39,7 @@ Default: add coverage to the narrowest existing test harness that can express th
 - `tests/integration/` - primary fallback when the behavior cannot be expressed cleanly in `.sqltest`. Put API-level regressions, multi-connection orchestration, storage assertions, injected failures, timeout behavior, and other Rust-driven scenarios here.
 - `sqlite/conformance/upstream/` - imported upstream SQLite golden tests. Do not modify these for Turso behavior changes; use them as fixed compatibility coverage, and only touch them for intentional upstream sync or harness maintenance.
 - `postgres/conformance/pg-sqltests/` - `.sqltest` coverage for the PostgreSQL frontend.
+- `mysql/conformance/my-sqltests/` - `.sqltest` coverage for the MySQL frontend, run via `make -C mysql/conformance run`. Expected values are recorded from MySQL 8.4.10.
 - `testing/cli_tests/` - CLI-focused Python coverage for shell behavior and end-to-end command workflows.
 - `tests/fuzz/` - minimized fuzz regressions and targeted edge cases that are easier to keep as Rust tests.
 - `testing/simulator/` and `testing/concurrent-simulator/` - deterministic concurrency, scheduling, and failure-injection coverage for state-machine and I/O correctness.
@@ -390,6 +391,7 @@ It performs:
 - Python miner unit tests
 - Validation of the tracked mined corpus
 - Parser, frontend, and CLI Rust tests
+- Owned `.sqltest` specs via `make -C mysql/conformance check run`
 - Standalone MTR miner tests
 - Clippy over every MySQL target with warnings denied
 - A direct `tursomysql` smoke test
@@ -408,16 +410,21 @@ Without dev/test debug suppression, compiling `turso_core` for Clippy or tests
 may be killed by the OOM killer. Two existing `turso_core` unused-import
 warnings are unrelated to the MySQL work.
 
-The optional differential tier runs owned value cases against the pinned
-MySQL container:
+Owned SQL behavior is specified as `.sqltest` files in
+`mysql/conformance/my-sqltests/`, replayed in process through the shared
+sqltest runner's `tursomysql` backend. Record every expected value from the
+pinned MySQL 8.4.10 container; never guess it:
 
 ```bash
-CARGO=/path/to/cargo ./mysql/conformance/differential.py
+make -C mysql/conformance check run              # owned specs; must pass
+make -C mysql/conformance run-one FILE=my-sqltests/basics.sqltest
+make -C mysql/conformance run-specs              # recorded corpus, JSON report
 ```
 
-The current 13 differential cases pass against MySQL 8.4.10. They cover
-integers, booleans, `NULL`, strings and escaping, `utf8mb4`, mixed projections,
-aliases, and comments.
+The backend splits statements like the `mysql` client and renders values as
+MySQL's text protocol does (see `mysql/conformance/SPECS.md`). Keep Rust tests
+only for behavior the DSL cannot express, such as parameter binding, result
+metadata, and close/reopen persistence.
 
 ### Quantity-First Specification Mining
 

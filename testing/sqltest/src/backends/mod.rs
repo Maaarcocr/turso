@@ -3,6 +3,7 @@ pub mod js;
 pub mod pg_connection;
 pub mod postgres;
 pub mod rust;
+pub mod tursomysql;
 pub mod tursopg;
 
 use crate::parser::ast::{Backend, Capability, DatabaseConfig, DatabaseLocation};

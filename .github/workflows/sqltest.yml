@@ -36,6 +36,8 @@ jobs:
         run: make -C sqlite/conformance check
       - name: Check pg test syntax
         run: make -C postgres/conformance check
+      - name: Check mysql test syntax
+        run: make -C mysql/conformance check
 
   sqltest-cli:
     name: Run SQL tests (CLI backend)
@@ -139,6 +141,21 @@ jobs:
         run: make -C postgres/conformance build-runner
       - name: Run tests
         run: make -C postgres/conformance run
+
+  sqltest-tursomysql:
+    name: Run SQL tests (tursomysql backend)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: useblacksmith/rust-cache@v3
+        with:
+          prefix-key: "v1-rust"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build test runner
+        run: make -C mysql/conformance build
+      - name: Run tests
+        run: make -C mysql/conformance run
 
   sqltest-postgres:
     name: Run SQL tests (PostgreSQL)
