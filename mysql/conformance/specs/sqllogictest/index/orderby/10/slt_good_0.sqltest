@@ -1,0 +1,3247 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/index/orderby/10/slt_good_0.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    INSERT INTO tab0 VALUES(0,544,473.59,'lupfg',846,31.38,'crmer');
+    INSERT INTO tab0 VALUES(1,551,716.92,'sxtsd',562,145.36,'xxacr');
+    INSERT INTO tab0 VALUES(2,481,975.35,'uxrjj',652,750.52,'rdgic');
+    INSERT INTO tab0 VALUES(3,345,371.4,'nxyqi',51,199.34,'lekdd');
+    INSERT INTO tab0 VALUES(4,908,772.92,'owifa',256,154.36,'xophl');
+    INSERT INTO tab0 VALUES(5,309,912.32,'iganw',957,707.84,'tewpl');
+    INSERT INTO tab0 VALUES(6,691,521.59,'fstmf',656,504.37,'ptkph');
+    INSERT INTO tab0 VALUES(7,823,447.70,'rrwze',294,877.49,'fvoic');
+    INSERT INTO tab0 VALUES(8,725,784.91,'iaoqu',878,963.31,'razqy');
+    INSERT INTO tab0 VALUES(9,297,993.36,'eoujh',105,829.18,'kvyce');
+    CREATE TABLE tab1(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE INDEX idx_tab1_0 on tab1 (col0);
+    CREATE INDEX idx_tab1_1 on tab1 (col1);
+    CREATE INDEX idx_tab1_3 on tab1 (col3);
+    CREATE INDEX idx_tab1_4 on tab1 (col4);
+    INSERT INTO tab1 SELECT * FROM tab0;
+    CREATE TABLE tab2(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE INDEX idx_tab2_0 ON tab2 (col0 DESC,col4 DESC);
+    CREATE INDEX idx_tab2_1 ON tab2 (col3,col1);
+    CREATE UNIQUE INDEX idx_tab2_3 ON tab2 (col0,col1 DESC);
+    CREATE UNIQUE INDEX idx_tab2_5 ON tab2 (col4 DESC);
+    INSERT INTO tab2 SELECT * FROM tab0;
+    CREATE TABLE tab3(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE INDEX idx_tab3_0 ON tab3 (col4);
+    CREATE UNIQUE INDEX idx_tab3_2 ON tab3 (col0 DESC,col3);
+    CREATE INDEX idx_tab3_3 ON tab3 (col1 DESC);
+    INSERT INTO tab3 SELECT * FROM tab0;
+    CREATE TABLE tab4(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT);
+    CREATE INDEX idx_tab4_1 ON tab4 (col3);
+    CREATE UNIQUE INDEX idx_tab4_2 ON tab4 (col4);
+    CREATE UNIQUE INDEX idx_tab4_3 ON tab4 (col1,col0 DESC);
+    INSERT INTO tab4 SELECT * FROM tab0;
+}
+
+@setup s1
+test l667 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 221 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l927 {
+    SELECT pk, col0 FROM tab3 WHERE (col0 BETWEEN 302 AND 864 OR col0 > 504) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l932 {
+    SELECT pk, col0 FROM tab4 WHERE (col0 BETWEEN 302 AND 864 OR col0 > 504) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l1522 {
+    SELECT pk, col0 FROM tab4 WHERE col1 >= 833.46 ORDER BY 2 DESC;
+}
+expect unordered {
+    2|481
+    5|309
+    9|297
+}
+
+@setup s1
+test l2057 {
+    SELECT pk, col0 FROM tab0 WHERE (((((((col1 <= 255.45) AND (col3 IS NULL AND (((col4 > 528.51))) AND col4 >= 451.26) OR col0 < 668 AND col1 IS NULL AND col3 > 721)))) OR col1 > 737.27) OR col0 > 937 OR (col0 <= 930) AND col0 <= 142 AND col3 IN (598,118) OR col3 IS NULL AND (col4 < 967.93 OR ((col0 < 998 AND (col3 < 705 OR (col0 IN (641,394,240,665,177,755) AND col0 = 237))))) AND col3 < 482 AND (col3 IN (730,787,439,863,398,48)) AND col3 >= 877 AND col1 = 27.42 AND col1 IN (239.82,677.2,33.10,818.58) OR ((col3 IS NULL OR (col0 < 98 AND (col0 IN (548))) AND (col4 > 284.36)))) OR col4 < 490.60 OR ((col4 > 863.35)) OR col1 < 741.50 ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l2817 {
+    SELECT pk, col0 FROM tab3 WHERE col0 < 551 OR (col0 < 790) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    6|691
+    8|725
+    9|297
+}
+
+@setup s1
+test l3072 {
+    SELECT pk, col0 FROM tab0 WHERE ((((col1 >= 472.14 AND col4 < 567.49) AND col0 > 729) AND col0 > 745 AND col3 > 63 AND (col3 > 377) AND col3 <= 933 AND (col0 < 695) AND col0 > 880)) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l3128 {
+    SELECT pk, col0 FROM tab4 WHERE ((((col1 >= 472.14 AND col4 < 567.49) AND col0 > 729) AND col0 > 745 AND col3 > 63 AND (col3 > 377) AND col3 <= 933 AND (col0 < 695) AND col0 > 880)) ORDER BY 2 DESC,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l3780 {
+    SELECT pk, col0 FROM tab4 WHERE col0 >= 594 ORDER BY 1 DESC;
+}
+expect unordered {
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l3996 {
+    SELECT pk, col0 FROM tab2 WHERE col0 >= 594 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l4587 {
+    SELECT pk, col0 FROM tab2 WHERE col3 > 657 OR col3 < 639 OR col3 > 20 AND col0 <= 179 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    5|309
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l4622 {
+    SELECT pk, col0 FROM tab4 WHERE col3 > 657 OR col3 < 639 OR col3 > 20 AND col0 <= 179 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    5|309
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l4968 {
+    SELECT pk, col0 FROM tab1 WHERE col0 > 870 ORDER BY 2,1;
+}
+expect unordered {
+    4|908
+}
+
+@setup s1
+test l5647 {
+    SELECT pk, col0 FROM tab1 WHERE col0 > 45 AND (col3 < 356) OR col0 <= 733 OR col0 >= 557 OR col0 >= 614 AND (col3 < 251) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l5747 {
+    SELECT pk FROM tab0 WHERE (col1 >= 70.99) AND (col4 = 12.98 OR ((col0 IS NULL)) OR col4 BETWEEN 810.47 AND 594.74 OR (((col3 IS NULL)) OR col3 < 610 AND (((col3 >= 255) OR col3 > 30 OR col3 IN (SELECT col0 FROM tab0 WHERE (col0 BETWEEN 808 AND 390)))) AND col3 < 122) AND col1 < 494.82) OR ((col1 >= 232.99 AND (((col1 < 813.48)) AND col0 > 530))) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    3
+    4
+    6
+    7
+    8
+}
+
+@setup s1
+test l5758 {
+    SELECT pk FROM tab1 WHERE (col1 >= 70.99) AND (col4 = 12.98 OR ((col0 IS NULL)) OR col4 BETWEEN 810.47 AND 594.74 OR (((col3 IS NULL)) OR col3 < 610 AND (((col3 >= 255) OR col3 > 30 OR col3 IN (SELECT col0 FROM tab1 WHERE (col0 BETWEEN 808 AND 390)))) AND col3 < 122) AND col1 < 494.82) OR ((col1 >= 232.99 AND (((col1 < 813.48)) AND col0 > 530))) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    3
+    4
+    6
+    7
+    8
+}
+
+@setup s1
+test l5780 {
+    SELECT pk FROM tab3 WHERE (col1 >= 70.99) AND (col4 = 12.98 OR ((col0 IS NULL)) OR col4 BETWEEN 810.47 AND 594.74 OR (((col3 IS NULL)) OR col3 < 610 AND (((col3 >= 255) OR col3 > 30 OR col3 IN (SELECT col0 FROM tab3 WHERE (col0 BETWEEN 808 AND 390)))) AND col3 < 122) AND col1 < 494.82) OR ((col1 >= 232.99 AND (((col1 < 813.48)) AND col0 > 530))) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    3
+    4
+    6
+    7
+    8
+}
+
+@setup s1
+test l5947 {
+    SELECT pk, col0 FROM tab4 WHERE (col1 >= 70.99) AND (col4 = 12.98 OR ((col0 IS NULL)) OR col4 BETWEEN 810.47 AND 594.74 OR (((col3 IS NULL)) OR col3 < 610 AND (((col3 >= 255) OR col3 > 30 OR col3 IN (SELECT col0 FROM tab4 WHERE (col0 BETWEEN 808 AND 390)))) AND col3 < 122) AND col1 < 494.82) OR ((col1 >= 232.99 AND (((col1 < 813.48)) AND col0 > 530))) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l6027 {
+    SELECT pk, col0 FROM tab0 WHERE (col1 >= 70.99) AND (col4 = 12.98 OR ((col0 IS NULL)) OR col4 BETWEEN 810.47 AND 594.74 OR (((col3 IS NULL)) OR col3 < 610 AND (((col3 >= 255) OR col3 > 30 OR col3 IN (SELECT col0 FROM tab0 WHERE (col0 BETWEEN 808 AND 390)))) AND col3 < 122) AND col1 < 494.82) OR ((col1 >= 232.99 AND (((col1 < 813.48)) AND col0 > 530))) ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l6037 {
+    SELECT pk, col0 FROM tab2 WHERE (col1 >= 70.99) AND (col4 = 12.98 OR ((col0 IS NULL)) OR col4 BETWEEN 810.47 AND 594.74 OR (((col3 IS NULL)) OR col3 < 610 AND (((col3 >= 255) OR col3 > 30 OR col3 IN (SELECT col0 FROM tab2 WHERE (col0 BETWEEN 808 AND 390)))) AND col3 < 122) AND col1 < 494.82) OR ((col1 >= 232.99 AND (((col1 < 813.48)) AND col0 > 530))) ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l6115 {
+    SELECT pk FROM tab2 WHERE col3 > 567 ORDER BY 1;
+}
+expect unordered {
+    0
+    2
+    5
+    6
+    8
+}
+
+@setup s1
+test l6880 {
+    SELECT pk, col0 FROM tab4 WHERE (((col0 <= 646) AND (((col0 > 339)) OR col1 >= 287.0) AND col1 > 180.63 AND col0 IS NULL OR (col0 <= 124 AND col3 >= 12) AND ((((col3 IS NULL))) AND col3 = 150 OR (((((col4 IS NULL)))))) OR col3 > 117 AND col0 > 145)) AND (col1 > 733.66 OR ((((col4 <= 145.59 OR col3 BETWEEN 551 AND 894) AND col0 IN (564,938,713) AND col4 < 94.1 AND ((((col1 <= 285.96)))))))) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    2|481
+    4|908
+    5|309
+    8|725
+}
+
+@setup s1
+test l6928 {
+    SELECT pk, col0 FROM tab3 WHERE (((col0 <= 646) AND (((col0 > 339)) OR col1 >= 287.0) AND col1 > 180.63 AND col0 IS NULL OR (col0 <= 124 AND col3 >= 12) AND ((((col3 IS NULL))) AND col3 = 150 OR (((((col4 IS NULL)))))) OR col3 > 117 AND col0 > 145)) AND (col1 > 733.66 OR ((((col4 <= 145.59 OR col3 BETWEEN 551 AND 894) AND col0 IN (564,938,713) AND col4 < 94.1 AND ((((col1 <= 285.96)))))))) ORDER BY 2,1;
+}
+expect unordered {
+    2|481
+    4|908
+    5|309
+    8|725
+}
+
+@setup s1
+test l7317 {
+    SELECT pk, col0 FROM tab4 WHERE col0 IN (790,742) OR (col0 < 581) OR col1 > 270.97 AND col3 = 939 AND col3 <= 303 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    9|297
+}
+
+@setup s1
+test l7382 {
+    SELECT pk, col0 FROM tab2 WHERE col0 IN (790,742) OR (col0 < 581) OR col1 > 270.97 AND col3 = 939 AND col3 <= 303 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    9|297
+}
+
+@setup s1
+test l7652 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 808 OR col0 IS NULL ORDER BY 2;
+}
+expect unordered {
+    0|544
+    5|309
+    8|725
+}
+
+@setup s1
+test l8080 {
+    SELECT pk, col0 FROM tab2 WHERE (col3 < 204) AND col3 IN (SELECT col0 FROM tab2 WHERE col3 >= 218) AND col4 IN (SELECT col1 FROM tab2 WHERE (((((col3 IN (427) OR col3 <= 404)))) OR ((col0 IS NULL AND (col4 > 802.10 AND col0 = 651))) OR col3 BETWEEN 851 AND 573)) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l8116 {
+    SELECT pk, col0 FROM tab1 WHERE (col3 < 204) AND col3 IN (SELECT col0 FROM tab1 WHERE col3 >= 218) AND col4 IN (SELECT col1 FROM tab1 WHERE (((((col3 IN (427) OR col3 <= 404)))) OR ((col0 IS NULL AND (col4 > 802.10 AND col0 = 651))) OR col3 BETWEEN 851 AND 573)) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l8216 {
+    SELECT pk, col0 FROM tab1 WHERE (col3 < 204) AND col3 IN (SELECT col0 FROM tab1 WHERE col3 >= 218) AND col4 IN (SELECT col1 FROM tab1 WHERE (((((col3 IN (427) OR col3 <= 404)))) OR ((col0 IS NULL AND (col4 > 802.10 AND col0 = 651))) OR col3 BETWEEN 851 AND 573)) ORDER BY 1,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l8387 {
+    SELECT pk, col0 FROM tab1 WHERE col0 > 503 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l8672 {
+    SELECT pk, col0 FROM tab2 WHERE col0 > 716 ORDER BY 1 DESC;
+}
+expect unordered {
+    4|908
+    7|823
+    8|725
+}
+
+@setup s1
+test l9392 {
+    SELECT pk, col0 FROM tab1 WHERE col0 > 409 OR (col3 > 217) AND col3 = 831 AND ((col3 = 66)) OR (col3 >= 191) AND (col3 = 158) OR col3 = 621 OR (col3 >= 655 OR (col0 < 991)) AND (col3 >= 101 OR ((col1 IN (984.61)))) AND col4 = 528.34 AND col1 < 489.31 OR col3 >= 114 AND col3 < 756 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l10082 {
+    SELECT pk, col0 FROM tab1 WHERE col4 < 668.37 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+}
+
+@setup s1
+test l10382 {
+    SELECT pk, col0 FROM tab1 WHERE col1 >= 434.58 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l11113 {
+    SELECT pk FROM tab1 WHERE (col0 >= 291 AND (col4 IN (441.11,251.44,563.0,69.27,202.43,499.4)) OR col3 <= 693 AND col3 < 736 OR col0 IS NULL) ORDER BY 1 DESC;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    6
+    7
+    9
+}
+
+@setup s1
+test l11312 {
+    SELECT pk, col0 FROM tab0 WHERE (col0 >= 291 AND (col4 IN (441.11,251.44,563.0,69.27,202.43,499.4)) OR col3 <= 693 AND col3 < 736 OR col0 IS NULL) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    9|297
+}
+
+@setup s1
+test l11437 {
+    SELECT pk, col0 FROM tab0 WHERE (col0 >= 291 AND (col4 IN (441.11,251.44,563.0,69.27,202.43,499.4)) OR col3 <= 693 AND col3 < 736 OR col0 IS NULL) ORDER BY 1,2;
+}
+expect unordered {
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    9|297
+}
+
+@setup s1
+test l11727 {
+    SELECT pk, col0 FROM tab3 WHERE (((col0 <= 67)) AND (col3 > 889) AND (col1 >= 603.20) AND col0 >= 253 AND col3 > 344 AND (col0 <= 749 AND col0 >= 760) AND (col1 = 304.42 AND col0 > 668 OR col1 <= 733.39) OR col3 >= 779 AND col0 = 63 OR col0 < 933 AND ((col0 <= 497)) OR (col4 >= 707.42) AND col0 IS NULL) OR col0 > 228 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l11737 {
+    SELECT pk, col0 FROM tab0 WHERE (((col0 <= 67)) AND (col3 > 889) AND (col1 >= 603.20) AND col0 >= 253 AND col3 > 344 AND (col0 <= 749 AND col0 >= 760) AND (col1 = 304.42 AND col0 > 668 OR col1 <= 733.39) OR col3 >= 779 AND col0 = 63 OR col0 < 933 AND ((col0 <= 497)) OR (col4 >= 707.42) AND col0 IS NULL) OR col0 > 228 ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l11858 {
+    SELECT pk, col0 FROM tab4 WHERE col0 = 41 AND (col4 < 282.4) AND col4 > 940.67 ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l11870 {
+    SELECT pk, col0 FROM tab2 WHERE col0 = 41 AND (col4 < 282.4) AND col4 > 940.67 ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l12044 {
+    SELECT pk FROM tab1 WHERE ((col3 >= 681) OR col3 >= 183 OR col3 >= 596) AND ((col0 = 441)) OR (col0 >= 102 AND ((col0 < 93)) AND col0 >= 802 AND ((col0 >= 673)) OR col0 < 476) AND col0 > 79 ORDER BY 1;
+}
+expect unordered {
+    3
+    5
+    9
+}
+
+@setup s1
+test l12577 {
+    SELECT pk FROM tab1 WHERE (col0 >= 28) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l12642 {
+    SELECT pk, col0 FROM tab4 WHERE (col0 >= 28) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l12717 {
+    SELECT pk, col0 FROM tab4 WHERE (col0 >= 28) ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l12976 {
+    SELECT pk, col0 FROM tab1 WHERE (col3 < 771) AND col3 <= 247 AND col0 < 32 ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l13096 {
+    SELECT pk, col0 FROM tab1 WHERE (col3 < 771) AND col3 <= 247 AND col0 < 32 ORDER BY 1,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l13178 {
+    SELECT pk FROM tab1 WHERE ((((col3 < 707)))) ORDER BY 1;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    6
+    7
+    9
+}
+
+@setup s1
+test l13257 {
+    SELECT pk, col0 FROM tab2 WHERE ((((col3 < 707)))) ORDER BY 2 DESC;
+}
+expect unordered {
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    9|297
+}
+
+@setup s1
+test l14152 {
+    SELECT pk, col0 FROM tab2 WHERE col1 >= 357.59 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l14257 {
+    SELECT pk, col0 FROM tab3 WHERE col1 >= 357.59 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l14386 {
+    SELECT pk, col0 FROM tab1 WHERE (col3 = 738) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l14912 {
+    SELECT pk, col0 FROM tab1 WHERE ((((col4 > 759.50) OR ((col1 > 29.0 AND col3 = 286)) AND col0 IN (592,258,889,327,869,637)))) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l15204 {
+    SELECT pk, col0 FROM tab3 WHERE col0 = 33 ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l15368 {
+    SELECT pk, col0 FROM tab4 WHERE col0 = 33 ORDER BY 1 DESC,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l15372 {
+    SELECT pk, col0 FROM tab0 WHERE col0 = 33 ORDER BY 1,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l15392 {
+    SELECT pk FROM tab0 WHERE col3 <= 920 ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l15557 {
+    SELECT pk, col0 FROM tab3 WHERE col3 <= 920 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l16236 {
+    SELECT pk, col0 FROM tab1 WHERE (((col4 IS NULL OR col1 = 627.44) AND ((col3 >= 838) OR col3 >= 679 OR col1 <= 755.6 OR col0 <= 241 OR col4 = 674.0) OR (((col4 = 317.85)) AND col0 > 400))) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l16352 {
+    SELECT pk, col0 FROM tab0 WHERE (((col4 IS NULL OR col1 = 627.44) AND ((col3 >= 838) OR col3 >= 679 OR col1 <= 755.6 OR col0 <= 241 OR col4 = 674.0) OR (((col4 = 317.85)) AND col0 > 400))) ORDER BY 2,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l16432 {
+    SELECT pk FROM tab4 WHERE (col1 <= 998.28) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l16527 {
+    SELECT pk, col0 FROM tab3 WHERE (col1 <= 998.28) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l16627 {
+    SELECT pk, col0 FROM tab3 WHERE (col1 <= 998.28) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l17117 {
+    SELECT pk, col0 FROM tab3 WHERE col3 > 451 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l17157 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 451 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l17602 {
+    SELECT pk, col0 FROM tab0 WHERE col0 >= 489 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l17724 {
+    SELECT pk FROM tab4 WHERE col3 < 482 ORDER BY 1;
+}
+expect unordered {
+    3
+    4
+    7
+    9
+}
+
+@setup s1
+test l18212 {
+    SELECT pk, col0 FROM tab0 WHERE col3 < 482 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    3|345
+    4|908
+    7|823
+    9|297
+}
+
+@setup s1
+test l18417 {
+    SELECT pk, col0 FROM tab2 WHERE col1 > 517.24 OR (((col1 >= 338.25) OR ((col1 < 836.44 OR ((col4 < 371.89) AND (col4 IN (755.65,582.17,598.21,6.84,801.6,941.92)) OR (col3 IS NULL)) OR col4 = 683.78)))) ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l18432 {
+    SELECT pk, col0 FROM tab0 WHERE col1 > 517.24 OR (((col1 >= 338.25) OR ((col1 < 836.44 OR ((col4 < 371.89) AND (col4 IN (755.65,582.17,598.21,6.84,801.6,941.92)) OR (col3 IS NULL)) OR col4 = 683.78)))) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l18602 {
+    SELECT pk, col0 FROM tab4 WHERE col1 > 517.24 OR (((col1 >= 338.25) OR ((col1 < 836.44 OR ((col4 < 371.89) AND (col4 IN (755.65,582.17,598.21,6.84,801.6,941.92)) OR (col3 IS NULL)) OR col4 = 683.78)))) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l18782 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 237 OR col0 = 427 AND col0 BETWEEN 439 AND 284 ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l18802 {
+    SELECT pk, col0 FROM tab0 WHERE col3 > 237 OR col0 = 427 AND col0 BETWEEN 439 AND 284 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l18952 {
+    SELECT pk, col0 FROM tab0 WHERE col3 > 237 OR col0 = 427 AND col0 BETWEEN 439 AND 284 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l19342 {
+    SELECT pk, col0 FROM tab2 WHERE (col1 > 791.43) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    2|481
+    5|309
+    9|297
+}
+
+@setup s1
+test l19777 {
+    SELECT pk, col0 FROM tab1 WHERE col0 < 928 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l19872 {
+    SELECT pk FROM tab0 WHERE ((col1 = 370.53)) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l20048 {
+    SELECT pk, col0 FROM tab4 WHERE ((col1 = 370.53)) ORDER BY 2 DESC,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l20120 {
+    SELECT pk FROM tab2 WHERE (((col1 < 533.95) AND (col4 = 805.89 OR (col3 > 608 OR col0 IS NULL) AND col4 > 670.11) OR (col3 IN (23,623,889))) AND col4 > 49.90 AND col1 = 812.48) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l20184 {
+    SELECT pk, col0 FROM tab3 WHERE (((col1 < 533.95) AND (col4 = 805.89 OR (col3 > 608 OR col0 IS NULL) AND col4 > 670.11) OR (col3 IN (23,623,889))) AND col4 > 49.90 AND col1 = 812.48) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l20260 {
+    SELECT pk, col0 FROM tab2 WHERE (((col1 < 533.95) AND (col4 = 805.89 OR (col3 > 608 OR col0 IS NULL) AND col4 > 670.11) OR (col3 IN (23,623,889))) AND col4 > 49.90 AND col1 = 812.48) ORDER BY 1,2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l20296 {
+    SELECT pk, col0 FROM tab1 WHERE (((col1 < 533.95) AND (col4 = 805.89 OR (col3 > 608 OR col0 IS NULL) AND col4 > 670.11) OR (col3 IN (23,623,889))) AND col4 > 49.90 AND col1 = 812.48) ORDER BY 2,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l20512 {
+    SELECT pk, col0 FROM tab0 WHERE (col3 < 778 AND (col0 BETWEEN 482 AND 264)) AND col3 > 697 ORDER BY 2 DESC,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l20602 {
+    SELECT pk FROM tab1 WHERE (col3 >= 546) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    5
+    6
+    8
+}
+
+@setup s1
+test l21097 {
+    SELECT pk, col0 FROM tab1 WHERE col3 >= 493 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l21162 {
+    SELECT pk, col0 FROM tab4 WHERE col3 >= 493 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l21552 {
+    SELECT pk, col0 FROM tab0 WHERE (((col0 <= 288) OR col0 = 730 AND col3 >= 248 AND col4 <= 875.37 OR col3 < 497 OR (((((col0 = 321 OR ((col3 IS NULL) AND col3 = 98 OR col3 > 851 OR col1 > 871.4)))))) AND col0 <= 572 OR col0 <= 366) OR col1 IS NULL OR ((col4 > 312.18)) AND (col3 <= 629)) OR col4 > 844.49 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    2|481
+    3|345
+    4|908
+    5|309
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l22404 {
+    SELECT pk FROM tab1 WHERE (((col0 >= 536)) OR col3 > 139) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    2
+    4
+    5
+    6
+    7
+    8
+}
+
+@setup s1
+test l22467 {
+    SELECT pk, col0 FROM tab3 WHERE (((col0 >= 536)) OR col3 > 139) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l22517 {
+    SELECT pk, col0 FROM tab3 WHERE (((col0 >= 536)) OR col3 > 139) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l22547 {
+    SELECT pk, col0 FROM tab4 WHERE (((col0 >= 536)) OR col3 > 139) ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l22657 {
+    SELECT pk, col0 FROM tab1 WHERE (((col0 >= 536)) OR col3 > 139) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l22758 {
+    SELECT pk FROM tab2 WHERE col3 < 336 ORDER BY 1;
+}
+expect unordered {
+    3
+    4
+    7
+    9
+}
+
+@setup s1
+test l23887 {
+    SELECT pk, col0 FROM tab4 WHERE col0 > 401 ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l23917 {
+    SELECT pk, col0 FROM tab0 WHERE col0 > 401 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l24146 {
+    SELECT pk, col0 FROM tab4 WHERE (col3 < 60) ORDER BY 2 DESC;
+}
+expect unordered {
+    3|345
+}
+
+@setup s1
+test l24532 {
+    SELECT pk, col0 FROM tab3 WHERE (col1 > 601.76 OR col3 <= 921) ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l24784 {
+    SELECT pk, col0 FROM tab3 WHERE ((col1 BETWEEN 952.54 AND 119.69 AND col3 < 480)) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l24804 {
+    SELECT pk, col0 FROM tab3 WHERE ((col1 BETWEEN 952.54 AND 119.69 AND col3 < 480)) ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l25294 {
+    SELECT pk, col0 FROM tab2 WHERE ((col4 IS NULL) OR ((col0 > 870))) ORDER BY 1;
+}
+expect unordered {
+    4|908
+}
+
+@setup s1
+test l26642 {
+    SELECT pk, col0 FROM tab2 WHERE col1 > 722.42 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    2|481
+    4|908
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l26742 {
+    SELECT pk, col0 FROM tab2 WHERE col1 > 722.42 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    2|481
+    4|908
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l27066 {
+    SELECT pk, col0 FROM tab3 WHERE col0 > 808 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    4|908
+    7|823
+}
+
+@setup s1
+test l27090 {
+    SELECT pk, col0 FROM tab1 WHERE col0 > 808 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    4|908
+    7|823
+}
+
+@setup s1
+test l27194 {
+    SELECT pk, col0 FROM tab4 WHERE col0 > 808 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    4|908
+    7|823
+}
+
+@setup s1
+test l27412 {
+    SELECT pk, col0 FROM tab0 WHERE ((((col3 <= 905)) AND col4 >= 936.33)) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l27472 {
+    SELECT pk, col0 FROM tab0 WHERE ((((col3 <= 905)) AND col4 >= 936.33)) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l27490 {
+    SELECT pk, col0 FROM tab3 WHERE ((((col3 <= 905)) AND col4 >= 936.33)) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l27900 {
+    SELECT pk, col0 FROM tab2 WHERE ((col0 <= 19)) OR ((col0 = 583 AND col0 > 17 AND col4 > 749.46 AND col4 > 944.11) OR col1 IN (230.3)) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l27944 {
+    SELECT pk, col0 FROM tab3 WHERE ((col0 <= 19)) OR ((col0 = 583 AND col0 > 17 AND col4 > 749.46 AND col4 > 944.11) OR col1 IN (230.3)) ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l28127 {
+    SELECT pk FROM tab0 WHERE col1 < 814.96 ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    3
+    4
+    6
+    7
+    8
+}
+
+@setup s1
+test l28192 {
+    SELECT pk, col0 FROM tab2 WHERE col1 < 814.96 ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l28496 {
+    SELECT pk, col0 FROM tab1 WHERE ((col0 IN (288,905,855,876,875,166))) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l28584 {
+    SELECT pk, col0 FROM tab3 WHERE ((col0 IN (288,905,855,876,875,166))) ORDER BY 1,2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l28847 {
+    SELECT pk, col0 FROM tab0 WHERE ((col0 > 261) OR col0 = 882) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l28872 {
+    SELECT pk, col0 FROM tab0 WHERE ((col0 > 261) OR col0 = 882) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l28917 {
+    SELECT pk, col0 FROM tab4 WHERE ((col0 > 261) OR col0 = 882) ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l29370 {
+    SELECT pk, col0 FROM tab3 WHERE ((((col0 > 664 AND col3 > 763)))) ORDER BY 2 DESC;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l29412 {
+    SELECT pk, col0 FROM tab0 WHERE ((((col0 > 664 AND col3 > 763)))) ORDER BY 2;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l29418 {
+    SELECT pk, col0 FROM tab1 WHERE ((((col0 > 664 AND col3 > 763)))) ORDER BY 2;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l29508 {
+    SELECT pk, col0 FROM tab1 WHERE ((((col0 > 664 AND col3 > 763)))) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l29562 {
+    SELECT pk, col0 FROM tab0 WHERE ((((col0 > 664 AND col3 > 763)))) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l29598 {
+    SELECT pk, col0 FROM tab1 WHERE ((((col0 > 664 AND col3 > 763)))) ORDER BY 1,2;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l30592 {
+    SELECT pk, col0 FROM tab0 WHERE col3 < 152 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l30656 {
+    SELECT pk, col0 FROM tab3 WHERE col3 < 152 ORDER BY 1,2;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l30812 {
+    SELECT pk, col0 FROM tab1 WHERE col1 >= 936.43 AND col4 >= 706.86 OR (((col4 > 689.58) AND col3 <= 105 AND col3 >= 274 OR col3 >= 384)) ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+    9|297
+}
+
+@setup s1
+test l30917 {
+    SELECT pk, col0 FROM tab2 WHERE col1 >= 936.43 AND col4 >= 706.86 OR (((col4 > 689.58) AND col3 <= 105 AND col3 >= 274 OR col3 >= 384)) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+    9|297
+}
+
+@setup s1
+test l31048 {
+    SELECT pk FROM tab4 WHERE (col3 BETWEEN 891 AND 218 AND (col0 >= 536) AND (col1 <= 628.10 AND (col3 = 885)) AND ((col0 < 349 AND ((((col1 > 92.72)))))) OR col0 IS NULL) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l31168 {
+    SELECT pk, col0 FROM tab4 WHERE (col3 BETWEEN 891 AND 218 AND (col0 >= 536) AND (col1 <= 628.10 AND (col3 = 885)) AND ((col0 < 349 AND ((((col1 > 92.72)))))) OR col0 IS NULL) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l31204 {
+    SELECT pk, col0 FROM tab3 WHERE (col3 BETWEEN 891 AND 218 AND (col0 >= 536) AND (col1 <= 628.10 AND (col3 = 885)) AND ((col0 < 349 AND ((((col1 > 92.72)))))) OR col0 IS NULL) ORDER BY 2 DESC,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l31382 {
+    SELECT pk, col0 FROM tab2 WHERE ((col1 > 6.75)) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l32084 {
+    SELECT pk, col0 FROM tab1 WHERE col0 IS NULL OR (((col0 = 415) AND col1 < 991.3 OR col0 >= 553 AND col1 >= 507.82 AND ((((col1 > 593.21)))) OR col3 <= 238 AND col3 <= 413)) ORDER BY 2,1;
+}
+expect unordered {
+    3|345
+    4|908
+    8|725
+    9|297
+}
+
+@setup s1
+test l32312 {
+    SELECT pk, col0 FROM tab0 WHERE (col0 IN (SELECT col3 FROM tab0 WHERE ((col0 <= 833) AND (col0 >= 777) OR ((col3 < 968 OR col3 = 155)) OR ((col1 BETWEEN 167.85 AND 11.49) AND col1 > 739.32)) AND (((col0 >= 955))) OR col3 <= 363 AND col1 > 518.9)) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l32519 {
+    SELECT pk FROM tab3 WHERE col4 < 700.60 ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    3
+    4
+    6
+}
+
+@setup s1
+test l32777 {
+    SELECT pk, col0 FROM tab4 WHERE col4 < 700.60 ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+}
+
+@setup s1
+test l32822 {
+    SELECT pk, col0 FROM tab3 WHERE col4 < 700.60 ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    6|691
+}
+
+@setup s1
+test l33032 {
+    SELECT pk, col0 FROM tab0 WHERE col0 > 258 AND (col0 > 258) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l33181 {
+    SELECT pk FROM tab2 WHERE (((((col4 < 341.32))) AND col3 IN (SELECT col0 FROM tab2 WHERE ((col0 > 564) AND col0 >= 344 AND (col0 IN (574) AND col0 > 600 AND ((col1 >= 568.71) AND col3 = 114 AND (col3 < 869))))) OR col4 >= 811.8)) ORDER BY 1;
+}
+expect unordered {
+    7
+    8
+    9
+}
+
+@setup s1
+test l33372 {
+    SELECT pk, col0 FROM tab2 WHERE (((((col4 < 341.32))) AND col3 IN (SELECT col0 FROM tab2 WHERE ((col0 > 564) AND col0 >= 344 AND (col0 IN (574) AND col0 > 600 AND ((col1 >= 568.71) AND col3 = 114 AND (col3 < 869))))) OR col4 >= 811.8)) ORDER BY 2;
+}
+expect unordered {
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l33482 {
+    SELECT pk, col0 FROM tab3 WHERE (((((col4 < 341.32))) AND col3 IN (SELECT col0 FROM tab3 WHERE ((col0 > 564) AND col0 >= 344 AND (col0 IN (574) AND col0 > 600 AND ((col1 >= 568.71) AND col3 = 114 AND (col3 < 869))))) OR col4 >= 811.8)) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l33612 {
+    SELECT pk, col0 FROM tab1 WHERE (((((col4 < 341.32))) AND col3 IN (SELECT col0 FROM tab1 WHERE ((col0 > 564) AND col0 >= 344 AND (col0 IN (574) AND col0 > 600 AND ((col1 >= 568.71) AND col3 = 114 AND (col3 < 869))))) OR col4 >= 811.8)) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l33682 {
+    SELECT pk, col0 FROM tab3 WHERE (((((col4 < 341.32))) AND col3 IN (SELECT col0 FROM tab3 WHERE ((col0 > 564) AND col0 >= 344 AND (col0 IN (574) AND col0 > 600 AND ((col1 >= 568.71) AND col3 = 114 AND (col3 < 869))))) OR col4 >= 811.8)) ORDER BY 1,2;
+}
+expect unordered {
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l33726 {
+    SELECT pk FROM tab1 WHERE (col4 BETWEEN 250.10 AND 239.45) AND col3 > 706 OR col1 < 294.75 AND col0 >= 761 AND col0 >= 496 ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l33814 {
+    SELECT pk, col0 FROM tab3 WHERE (col4 BETWEEN 250.10 AND 239.45) AND col3 > 706 OR col1 < 294.75 AND col0 >= 761 AND col0 >= 496 ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l34162 {
+    SELECT pk, col0 FROM tab0 WHERE col3 > 249 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l34420 {
+    SELECT pk, col0 FROM tab1 WHERE col3 <= 235 ORDER BY 2 DESC;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l34540 {
+    SELECT pk, col0 FROM tab1 WHERE col3 <= 235 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l34917 {
+    SELECT pk, col0 FROM tab0 WHERE col0 < 794 ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    6|691
+    8|725
+    9|297
+}
+
+@setup s1
+test l35286 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 987 ORDER BY 1,2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l35552 {
+    SELECT pk, col0 FROM tab4 WHERE col3 > 559 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l35592 {
+    SELECT pk, col0 FROM tab2 WHERE col3 > 559 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l35622 {
+    SELECT pk, col0 FROM tab3 WHERE col3 > 559 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l36077 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 556 AND (col3 > 263) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l36087 {
+    SELECT pk, col0 FROM tab3 WHERE col3 > 556 AND (col3 > 263) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l36182 {
+    SELECT pk, col0 FROM tab2 WHERE col3 > 556 AND (col3 > 263) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l36197 {
+    SELECT pk, col0 FROM tab0 WHERE col3 > 556 AND (col3 > 263) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l36232 {
+    SELECT pk, col0 FROM tab2 WHERE col3 > 556 AND (col3 > 263) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l36437 {
+    SELECT pk, col0 FROM tab3 WHERE col0 >= 38 ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l36477 {
+    SELECT pk, col0 FROM tab1 WHERE col0 >= 38 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l36502 {
+    SELECT pk, col0 FROM tab1 WHERE col0 >= 38 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l36727 {
+    SELECT pk, col0 FROM tab1 WHERE (col0 <= 754) OR col4 >= 471.17 OR col4 <= 64.98 OR col4 = 447.54 OR (((col4 IS NULL))) AND col4 BETWEEN 770.34 AND 297.35 AND (((col0 < 240) AND col4 >= 816.43 AND col0 = 916)) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l37057 {
+    SELECT pk, col0 FROM tab3 WHERE col1 < 955.49 ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l37316 {
+    SELECT pk FROM tab2 WHERE col3 < 818 OR (col1 < 890.79 AND col1 BETWEEN 320.26 AND 80.70) AND (col1 > 665.2) AND col4 >= 975.95 OR col3 <= 667 OR col3 > 375 AND (col3 = 346 OR col3 <= 45) OR (col3 > 202) AND (col4 >= 941.53) ORDER BY 1 DESC;
+}
+expect unordered {
+    1
+    2
+    3
+    4
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l37572 {
+    SELECT pk, col0 FROM tab2 WHERE col3 < 818 OR (col1 < 890.79 AND col1 BETWEEN 320.26 AND 80.70) AND (col1 > 665.2) AND col4 >= 975.95 OR col3 <= 667 OR col3 > 375 AND (col3 = 346 OR col3 <= 45) OR (col3 > 202) AND (col4 >= 941.53) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l37724 {
+    SELECT pk, col0 FROM tab2 WHERE col3 IN (710,332,151,797,570) OR col0 >= 856 ORDER BY 1 DESC;
+}
+expect unordered {
+    4|908
+}
+
+@setup s1
+test l37940 {
+    SELECT pk, col0 FROM tab3 WHERE col3 IN (710,332,151,797,570) OR col0 >= 856 ORDER BY 2,1;
+}
+expect unordered {
+    4|908
+}
+
+@setup s1
+test l38382 {
+    SELECT pk, col0 FROM tab0 WHERE (col1 > 35.24) AND col3 >= 814 AND (col0 >= 256 OR col0 <= 947 OR col3 > 154 AND (((col0 < 415 AND col0 < 982 AND (col4 > 941.67) OR col3 = 664 AND (col4 >= 899.84) AND col4 > 962.91)))) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    5|309
+    8|725
+}
+
+@setup s1
+test l38737 {
+    SELECT pk, col0 FROM tab1 WHERE (((((col3 = 298 AND (col3 < 979) AND col0 >= 755 OR col3 < 861 OR (col1 = 779.31) OR col1 >= 80.65 AND (col4 > 395.98) OR col3 > 745 AND col3 >= 165 OR col0 < 414 AND col4 > 856.63 AND (col3 >= 224 OR ((col3 <= 669 AND col3 > 611 AND col1 < 454.51) OR ((col4 > 624.78 OR ((col3 >= 989) AND col4 IN (423.32,316.86)) OR (((col0 = 324 OR col1 > 985.0 OR col4 IS NULL AND col3 >= 741 AND col0 > 582 AND col1 > 108.36 AND col0 < 110 OR col0 = 922)) AND col1 = 203.38 OR col3 >= 882) OR col3 IS NULL AND col0 < 600 OR (col3 < 156) OR col1 < 992.68)))) AND col4 < 689.32 OR col0 >= 508 AND col1 >= 291.3 OR col3 = 394 OR (((col1 >= 592.17))) AND (col0 >= 913) AND col4 = 255.30 AND col4 IS NULL OR col0 >= 410))))) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l38802 {
+    SELECT pk, col0 FROM tab4 WHERE (((((col3 = 298 AND (col3 < 979) AND col0 >= 755 OR col3 < 861 OR (col1 = 779.31) OR col1 >= 80.65 AND (col4 > 395.98) OR col3 > 745 AND col3 >= 165 OR col0 < 414 AND col4 > 856.63 AND (col3 >= 224 OR ((col3 <= 669 AND col3 > 611 AND col1 < 454.51) OR ((col4 > 624.78 OR ((col3 >= 989) AND col4 IN (423.32,316.86)) OR (((col0 = 324 OR col1 > 985.0 OR col4 IS NULL AND col3 >= 741 AND col0 > 582 AND col1 > 108.36 AND col0 < 110 OR col0 = 922)) AND col1 = 203.38 OR col3 >= 882) OR col3 IS NULL AND col0 < 600 OR (col3 < 156) OR col1 < 992.68)))) AND col4 < 689.32 OR col0 >= 508 AND col1 >= 291.3 OR col3 = 394 OR (((col1 >= 592.17))) AND (col0 >= 913) AND col4 = 255.30 AND col4 IS NULL OR col0 >= 410))))) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l38837 {
+    SELECT pk, col0 FROM tab1 WHERE (((((col3 = 298 AND (col3 < 979) AND col0 >= 755 OR col3 < 861 OR (col1 = 779.31) OR col1 >= 80.65 AND (col4 > 395.98) OR col3 > 745 AND col3 >= 165 OR col0 < 414 AND col4 > 856.63 AND (col3 >= 224 OR ((col3 <= 669 AND col3 > 611 AND col1 < 454.51) OR ((col4 > 624.78 OR ((col3 >= 989) AND col4 IN (423.32,316.86)) OR (((col0 = 324 OR col1 > 985.0 OR col4 IS NULL AND col3 >= 741 AND col0 > 582 AND col1 > 108.36 AND col0 < 110 OR col0 = 922)) AND col1 = 203.38 OR col3 >= 882) OR col3 IS NULL AND col0 < 600 OR (col3 < 156) OR col1 < 992.68)))) AND col4 < 689.32 OR col0 >= 508 AND col1 >= 291.3 OR col3 = 394 OR (((col1 >= 592.17))) AND (col0 >= 913) AND col4 = 255.30 AND col4 IS NULL OR col0 >= 410))))) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l38857 {
+    SELECT pk, col0 FROM tab0 WHERE (((((col3 = 298 AND (col3 < 979) AND col0 >= 755 OR col3 < 861 OR (col1 = 779.31) OR col1 >= 80.65 AND (col4 > 395.98) OR col3 > 745 AND col3 >= 165 OR col0 < 414 AND col4 > 856.63 AND (col3 >= 224 OR ((col3 <= 669 AND col3 > 611 AND col1 < 454.51) OR ((col4 > 624.78 OR ((col3 >= 989) AND col4 IN (423.32,316.86)) OR (((col0 = 324 OR col1 > 985.0 OR col4 IS NULL AND col3 >= 741 AND col0 > 582 AND col1 > 108.36 AND col0 < 110 OR col0 = 922)) AND col1 = 203.38 OR col3 >= 882) OR col3 IS NULL AND col0 < 600 OR (col3 < 156) OR col1 < 992.68)))) AND col4 < 689.32 OR col0 >= 508 AND col1 >= 291.3 OR col3 = 394 OR (((col1 >= 592.17))) AND (col0 >= 913) AND col4 = 255.30 AND col4 IS NULL OR col0 >= 410))))) ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l39577 {
+    SELECT pk, col0 FROM tab0 WHERE col3 > 410 ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l39686 {
+    SELECT pk, col0 FROM tab1 WHERE ((col1 = 404.46)) AND (col0 <= 827) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l39890 {
+    SELECT pk FROM tab3 WHERE (col0 >= 852 OR (col1 <= 356.20 OR col3 < 662 AND (col3 < 853 OR col3 BETWEEN 889 AND 629 AND col0 < 446 OR (col4 = 224.92 AND col3 <= 573 AND col4 <= 818.98 OR col0 <= 755)) AND col0 >= 425) AND col4 > 768.85) ORDER BY 1;
+}
+expect unordered {
+    4
+    7
+}
+
+@setup s1
+test l40358 {
+    SELECT pk FROM tab2 WHERE col4 = 30.20 OR col0 >= 621 ORDER BY 1;
+}
+expect unordered {
+    4
+    6
+    7
+    8
+}
+
+@setup s1
+test l40646 {
+    SELECT pk, col0 FROM tab2 WHERE col4 = 30.20 OR col0 >= 621 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l40998 {
+    SELECT pk FROM tab4 WHERE (col0 = 716 AND (col1 <= 626.61 OR col0 <= 307 OR col4 < 901.71) AND col1 = 74.42) AND col0 <= 451 AND col0 > 469 AND col4 IS NULL AND (col1 > 362.34 OR col3 >= 415 OR col0 <= 90) AND (col3 <= 785) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l41387 {
+    SELECT pk, col0 FROM tab3 WHERE (col1 = 667.73) OR col1 <= 987.58 OR col3 > 867 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l41534 {
+    SELECT pk FROM tab1 WHERE col3 > 195 ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    4
+    5
+    6
+    7
+    8
+}
+
+@setup s1
+test l41652 {
+    SELECT pk, col0 FROM tab2 WHERE col3 > 195 ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l41772 {
+    SELECT pk, col0 FROM tab1 WHERE col3 > 195 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l41946 {
+    SELECT pk FROM tab1 WHERE (col4 <= 673.61) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    3
+    4
+    6
+}
+
+@setup s1
+test l42232 {
+    SELECT pk FROM tab0 WHERE col3 > 135 OR (((col3 > 667 AND ((col0 < 408) AND col3 < 937) OR col0 = 392 AND col3 >= 915 OR col3 IS NULL))) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    4
+    5
+    6
+    7
+    8
+}
+
+@setup s1
+test l42477 {
+    SELECT pk, col0 FROM tab0 WHERE col3 > 135 OR (((col3 > 667 AND ((col0 < 408) AND col3 < 937) OR col0 = 392 AND col3 >= 915 OR col3 IS NULL))) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l42497 {
+    SELECT pk, col0 FROM tab4 WHERE col3 > 135 OR (((col3 > 667 AND ((col0 < 408) AND col3 < 937) OR col0 = 392 AND col3 >= 915 OR col3 IS NULL))) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l42542 {
+    SELECT pk, col0 FROM tab3 WHERE col3 > 135 OR (((col3 > 667 AND ((col0 < 408) AND col3 < 937) OR col0 = 392 AND col3 >= 915 OR col3 IS NULL))) ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l42817 {
+    SELECT pk, col0 FROM tab1 WHERE col4 <= 751.38 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+}
+
+@setup s1
+test l42822 {
+    SELECT pk, col0 FROM tab2 WHERE col4 <= 751.38 ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+}
+
+@setup s1
+test l42842 {
+    SELECT pk, col0 FROM tab1 WHERE col4 <= 751.38 ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+}
+
+@setup s1
+test l43087 {
+    SELECT pk, col0 FROM tab0 WHERE col1 >= 684.1 ORDER BY 2 DESC;
+}
+expect unordered {
+    1|551
+    2|481
+    4|908
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l43400 {
+    SELECT pk, col0 FROM tab2 WHERE col0 <= 280 AND col3 >= 416 ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l43480 {
+    SELECT pk, col0 FROM tab2 WHERE col0 <= 280 AND col3 >= 416 ORDER BY 2 DESC,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l43697 {
+    SELECT pk, col0 FROM tab4 WHERE col0 < 851 ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l43762 {
+    SELECT pk, col0 FROM tab2 WHERE col0 < 851 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l43802 {
+    SELECT pk, col0 FROM tab0 WHERE col0 < 851 ORDER BY 1 DESC,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l43912 {
+    SELECT pk, col0 FROM tab0 WHERE col4 >= 873.82 ORDER BY 1 DESC;
+}
+expect unordered {
+    7|823
+    8|725
+}
+
+@setup s1
+test l43952 {
+    SELECT pk, col0 FROM tab0 WHERE col4 >= 873.82 ORDER BY 2 DESC;
+}
+expect unordered {
+    7|823
+    8|725
+}
+
+@setup s1
+test l44000 {
+    SELECT pk, col0 FROM tab1 WHERE col4 >= 873.82 ORDER BY 1;
+}
+expect unordered {
+    7|823
+    8|725
+}
+
+@setup s1
+test l44064 {
+    SELECT pk, col0 FROM tab4 WHERE col4 >= 873.82 ORDER BY 2;
+}
+expect unordered {
+    7|823
+    8|725
+}
+
+@setup s1
+test l45244 {
+    SELECT pk, col0 FROM tab3 WHERE ((((((col0 IS NULL)) OR ((col3 > 693 AND (col0 IS NULL)))) AND col4 <= 402.77 AND col3 > 789))) ORDER BY 1,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l45470 {
+    SELECT pk, col0 FROM tab3 WHERE (col3 >= 930) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    5|309
+}
+
+@setup s1
+test l45646 {
+    SELECT pk, col0 FROM tab1 WHERE col1 IN (SELECT col4 FROM tab1 WHERE (col0 < 818 AND col3 >= 481)) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l45862 {
+    SELECT pk FROM tab4 WHERE col0 > 88 OR (((((((col4 < 606.36 AND col4 > 720.43)))) AND (((col3 > 428) AND col0 >= 869)))) AND (col4 > 741.35 AND (col0 > 827) OR (col0 >= 421)) OR col3 > 728) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l46072 {
+    SELECT pk, col0 FROM tab1 WHERE col0 > 88 OR (((((((col4 < 606.36 AND col4 > 720.43)))) AND (((col3 > 428) AND col0 >= 869)))) AND (col4 > 741.35 AND (col0 > 827) OR (col0 >= 421)) OR col3 > 728) ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l46730 {
+    SELECT pk, col0 FROM tab3 WHERE ((((((col4 > 951.44)))))) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l46754 {
+    SELECT pk, col0 FROM tab2 WHERE ((((((col4 > 951.44)))))) ORDER BY 2,1;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l46802 {
+    SELECT pk, col0 FROM tab0 WHERE ((((((col4 > 951.44)))))) ORDER BY 1,2;
+}
+expect unordered {
+    8|725
+}
+
+@setup s1
+test l46872 {
+    SELECT pk FROM tab3 WHERE (col3 >= 79) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    2
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l46942 {
+    SELECT pk, col0 FROM tab2 WHERE (col3 >= 79) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l46947 {
+    SELECT pk, col0 FROM tab3 WHERE (col3 >= 79) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l47142 {
+    SELECT pk FROM tab1 WHERE (col3 > 382 AND ((col1 > 164.67))) OR (col3 IS NULL AND col3 >= 277) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    5
+    6
+    8
+}
+
+@setup s1
+test l47202 {
+    SELECT pk FROM tab2 WHERE (col3 > 382 AND ((col1 > 164.67))) OR (col3 IS NULL AND col3 >= 277) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    2
+    5
+    6
+    8
+}
+
+@setup s1
+test l48002 {
+    SELECT pk, col0 FROM tab0 WHERE col1 <= 167.55 ORDER BY 1,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l48006 {
+    SELECT pk, col0 FROM tab1 WHERE col1 <= 167.55 ORDER BY 1,2;
+}
+expect unordered {
+}
+
+@setup s1
+test l48092 {
+    SELECT pk, col0 FROM tab4 WHERE col3 BETWEEN 370 AND 392 OR (col1 > 235.92) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l48517 {
+    SELECT pk, col0 FROM tab4 WHERE col0 <= 587 ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    5|309
+    9|297
+}
+
+@setup s1
+test l48996 {
+    SELECT pk, col0 FROM tab1 WHERE (col3 >= 781 AND (col3 <= 465 OR (((((col4 IN (430.3,809.56,22.94,16.44,90.58,253.39)) OR col0 > 959)))))) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l49215 {
+    SELECT pk FROM tab2 WHERE (((col0 > 613 AND col0 > 448) OR col3 < 545 AND col1 > 545.59)) ORDER BY 1;
+}
+expect unordered {
+    4
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l49432 {
+    SELECT pk, col0 FROM tab3 WHERE (((col0 > 613 AND col0 > 448) OR col3 < 545 AND col1 > 545.59)) ORDER BY 2,1;
+}
+expect unordered {
+    4|908
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l50102 {
+    SELECT pk, col0 FROM tab0 WHERE col4 >= 665.4 AND (((col1 > 713.27)) OR col3 BETWEEN 786 AND 106) ORDER BY 2;
+}
+expect unordered {
+    2|481
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l50486 {
+    SELECT pk, col0 FROM tab2 WHERE col4 >= 665.4 AND (((col1 > 713.27)) OR col3 BETWEEN 786 AND 106) ORDER BY 1,2;
+}
+expect unordered {
+    2|481
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l50834 {
+    SELECT pk FROM tab3 WHERE col0 >= 766 AND ((((col0 > 114) AND ((col0 <= 106 AND (col0 > 454)) AND col3 >= 918 AND col4 >= 136.20 OR col3 <= 207)))) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l50858 {
+    SELECT pk FROM tab4 WHERE col0 >= 766 AND ((((col0 > 114) AND ((col0 <= 106 AND (col0 > 454)) AND col3 >= 918 AND col4 >= 136.20 OR col3 <= 207)))) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l51190 {
+    SELECT pk, col0 FROM tab4 WHERE (col0 < 514 OR col0 <= 235 AND col0 >= 130) ORDER BY 1 DESC;
+}
+expect unordered {
+    2|481
+    3|345
+    5|309
+    9|297
+}
+
+@setup s1
+test l51841 {
+    SELECT pk FROM tab4 WHERE col0 IN (694,442) OR col3 > 288 OR col3 > 888 ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    2
+    5
+    6
+    7
+    8
+}
+
+@setup s1
+test l52047 {
+    SELECT pk, col0 FROM tab4 WHERE col0 IN (694,442) OR col3 > 288 OR col3 > 888 ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l52122 {
+    SELECT pk FROM tab0 WHERE (col0 > 900) AND ((col3 > 674)) AND (col0 < 231) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l52170 {
+    SELECT pk, col0 FROM tab2 WHERE (col0 > 900) AND ((col3 > 674)) AND (col0 < 231) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l52704 {
+    SELECT pk FROM tab3 WHERE (col0 = 592) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l52744 {
+    SELECT pk, col0 FROM tab3 WHERE (col0 = 592) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l52800 {
+    SELECT pk, col0 FROM tab2 WHERE (col0 = 592) ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l52884 {
+    SELECT pk, col0 FROM tab3 WHERE (col0 = 592) ORDER BY 2,1;
+}
+expect unordered {
+}
+
+@setup s1
+test l53120 {
+    SELECT pk, col0 FROM tab4 WHERE col0 >= 592 ORDER BY 2 DESC;
+}
+expect unordered {
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l53192 {
+    SELECT pk, col0 FROM tab0 WHERE col0 >= 592 ORDER BY 2;
+}
+expect unordered {
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l53642 {
+    SELECT pk FROM tab0 WHERE col3 > 848 ORDER BY 1;
+}
+expect unordered {
+    5
+    8
+}
+
+@setup s1
+test l53696 {
+    SELECT pk, col0 FROM tab3 WHERE col3 > 848 ORDER BY 1 DESC;
+}
+expect unordered {
+    5|309
+    8|725
+}
+
+@setup s1
+test l54362 {
+    SELECT pk, col0 FROM tab3 WHERE (col3 > 510) ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l54407 {
+    SELECT pk, col0 FROM tab2 WHERE (col3 > 510) ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    5|309
+    6|691
+    8|725
+}
+
+@setup s1
+test l54492 {
+    SELECT pk, col0 FROM tab4 WHERE (((col0 < 919) OR col3 < 930)) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l54507 {
+    SELECT pk, col0 FROM tab2 WHERE (((col0 < 919) OR col3 < 930)) ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l54647 {
+    SELECT pk, col0 FROM tab0 WHERE (((col0 < 919) OR col3 < 930)) ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l54790 {
+    SELECT pk, col0 FROM tab2 WHERE (col3 < 937 AND col1 < 93.55) ORDER BY 2 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l54810 {
+    SELECT pk, col0 FROM tab2 WHERE (col3 < 937 AND col1 < 93.55) ORDER BY 1;
+}
+expect unordered {
+}
+
+@setup s1
+test l54834 {
+    SELECT pk, col0 FROM tab3 WHERE (col3 < 937 AND col1 < 93.55) ORDER BY 2;
+}
+expect unordered {
+}
+
+@setup s1
+test l55030 {
+    SELECT pk, col0 FROM tab1 WHERE (((((col3 <= 465) OR col0 = 854)) AND col0 < 554)) ORDER BY 1 DESC;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l55142 {
+    SELECT pk, col0 FROM tab0 WHERE (((((col3 <= 465) OR col0 = 854)) AND col0 < 554)) ORDER BY 2;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l55374 {
+    SELECT pk, col0 FROM tab4 WHERE (((((col3 <= 465) OR col0 = 854)) AND col0 < 554)) ORDER BY 1 DESC,2;
+}
+expect unordered {
+    3|345
+    9|297
+}
+
+@setup s1
+test l55577 {
+    SELECT pk, col0 FROM tab4 WHERE (((col3 < 729) OR col0 > 814)) ORDER BY 2 DESC;
+}
+expect unordered {
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    9|297
+}
+
+@setup s1
+test l55667 {
+    SELECT pk, col0 FROM tab2 WHERE (((col3 < 729) OR col0 > 814)) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    1|551
+    2|481
+    3|345
+    4|908
+    6|691
+    7|823
+    9|297
+}
+
+@setup s1
+test l55827 {
+    SELECT pk FROM tab4 WHERE (col1 > 173.19) ORDER BY 1;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l56062 {
+    SELECT pk, col0 FROM tab1 WHERE (col1 > 173.19) ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l56288 {
+    SELECT pk, col0 FROM tab1 WHERE (col0 < 88 OR ((((col3 < 42 OR col1 < 166.51 OR (col1 < 735.66 AND col1 > 317.34) AND col3 >= 786))))) ORDER BY 1,2 DESC;
+}
+expect unordered {
+    0|544
+}
+
+@setup s1
+test l56330 {
+    SELECT pk, col0 FROM tab3 WHERE (col0 < 88 OR ((((col3 < 42 OR col1 < 166.51 OR (col1 < 735.66 AND col1 > 317.34) AND col3 >= 786))))) ORDER BY 2 DESC,1;
+}
+expect unordered {
+    0|544
+}
+
+@setup s1
+test l56447 {
+    SELECT pk FROM tab3 WHERE ((((col1 < 896.95)) AND (col4 > 108.46 OR (col1 = 824.19 OR col1 >= 174.28 AND col1 >= 134.92 OR (((((col3 > 399 OR col1 < 593.38 OR (col4 = 499.28) AND ((col4 = 684.26)) OR col3 >= 246 OR col3 < 207 OR col0 > 919 OR col0 > 6 AND (col3 IS NULL) AND (col4 < 155.91) AND col4 >= 730.79) AND (col4 < 789.76)) AND col4 < 323.4)) AND col0 > 516 AND (col0 < 188) AND col0 > 771) AND col0 > 209)) OR col1 > 469.89)) ORDER BY 1 DESC;
+}
+expect unordered {
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+}
+
+@setup s1
+test l56507 {
+    SELECT pk, col0 FROM tab0 WHERE ((((col1 < 896.95)) AND (col4 > 108.46 OR (col1 = 824.19 OR col1 >= 174.28 AND col1 >= 134.92 OR (((((col3 > 399 OR col1 < 593.38 OR (col4 = 499.28) AND ((col4 = 684.26)) OR col3 >= 246 OR col3 < 207 OR col0 > 919 OR col0 > 6 AND (col3 IS NULL) AND (col4 < 155.91) AND col4 >= 730.79) AND (col4 < 789.76)) AND col4 < 323.4)) AND col0 > 516 AND (col0 < 188) AND col0 > 771) AND col0 > 209)) OR col1 > 469.89)) ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l56602 {
+    SELECT pk, col0 FROM tab4 WHERE ((((col1 < 896.95)) AND (col4 > 108.46 OR (col1 = 824.19 OR col1 >= 174.28 AND col1 >= 134.92 OR (((((col3 > 399 OR col1 < 593.38 OR (col4 = 499.28) AND ((col4 = 684.26)) OR col3 >= 246 OR col3 < 207 OR col0 > 919 OR col0 > 6 AND (col3 IS NULL) AND (col4 < 155.91) AND col4 >= 730.79) AND (col4 < 789.76)) AND col4 < 323.4)) AND col0 > 516 AND (col0 < 188) AND col0 > 771) AND col0 > 209)) OR col1 > 469.89)) ORDER BY 1 DESC,2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l56717 {
+    SELECT pk, col0 FROM tab2 WHERE ((((col1 < 896.95)) AND (col4 > 108.46 OR (col1 = 824.19 OR col1 >= 174.28 AND col1 >= 134.92 OR (((((col3 > 399 OR col1 < 593.38 OR (col4 = 499.28) AND ((col4 = 684.26)) OR col3 >= 246 OR col3 < 207 OR col0 > 919 OR col0 > 6 AND (col3 IS NULL) AND (col4 < 155.91) AND col4 >= 730.79) AND (col4 < 789.76)) AND col4 < 323.4)) AND col0 > 516 AND (col0 < 188) AND col0 > 771) AND col0 > 209)) OR col1 > 469.89)) ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+    9|297
+}
+
+@setup s1
+test l56982 {
+    SELECT pk, col0 FROM tab0 WHERE col1 > 594.17 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    1|551
+    2|481
+    4|908
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l57062 {
+    SELECT pk, col0 FROM tab1 WHERE col1 > 594.17 ORDER BY 1,2;
+}
+expect unordered {
+    1|551
+    2|481
+    4|908
+    5|309
+    8|725
+    9|297
+}
+
+@setup s1
+test l57277 {
+    SELECT pk, col0 FROM tab0 WHERE col1 < 953.89 ORDER BY 2;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l57382 {
+    SELECT pk, col0 FROM tab1 WHERE col1 < 953.89 ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    1|551
+    3|345
+    4|908
+    5|309
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l57598 {
+    SELECT pk, col0 FROM tab1 WHERE col3 IN (846,861,337,155) ORDER BY 2;
+}
+expect unordered {
+    0|544
+}
+
+@setup s1
+test l57814 {
+    SELECT pk FROM tab3 WHERE (col1 = 487.88) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l57858 {
+    SELECT pk, col0 FROM tab4 WHERE (col1 = 487.88) ORDER BY 1 DESC;
+}
+expect unordered {
+}
+
+@setup s1
+test l58366 {
+    SELECT pk, col0 FROM tab3 WHERE col4 < 359.87 AND col3 < 406 AND col4 < 377.1 ORDER BY 2 DESC,1;
+}
+expect unordered {
+    3|345
+    4|908
+}
+
+@setup s1
+test l58690 {
+    SELECT pk, col0 FROM tab4 WHERE col3 <= 478 ORDER BY 2 DESC;
+}
+expect unordered {
+    3|345
+    4|908
+    7|823
+    9|297
+}
+
+@setup s1
+test l59297 {
+    SELECT pk, col0 FROM tab1 WHERE (col0 > 420) ORDER BY 1 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l59332 {
+    SELECT pk, col0 FROM tab3 WHERE (col0 > 420) ORDER BY 2 DESC;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l59342 {
+    SELECT pk, col0 FROM tab0 WHERE (col0 > 420) ORDER BY 1;
+}
+expect unordered {
+    0|544
+    1|551
+    2|481
+    4|908
+    6|691
+    7|823
+    8|725
+}
+
+@setup s1
+test l59992 {
+    SELECT pk, col0 FROM tab3 WHERE col0 > 316 AND col0 = 988 AND ((col1 > 285.65 OR col3 IS NULL) OR col0 >= 473) OR col0 < 124 OR col3 >= 746 ORDER BY 2,1;
+}
+expect unordered {
+    0|544
+    5|309
+    8|725
+}
+
+@setup s1
+test l60102 {
+    SELECT pk, col0 FROM tab4 WHERE col0 > 316 AND col0 = 988 AND ((col1 > 285.65 OR col3 IS NULL) OR col0 >= 473) OR col0 < 124 OR col3 >= 746 ORDER BY 1,2;
+}
+expect unordered {
+    0|544
+    5|309
+    8|725
+}

@@ -1,0 +1,68 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/evidence/slt_lang_createview.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1( x INTEGER, y VARCHAR(8) );
+    INSERT INTO t1 VALUES(1,'true');
+    INSERT INTO t1 VALUES(0,'false');
+    INSERT INTO t1 VALUES(NULL,'NULL');
+    CREATE INDEX t1i1 ON t1(x);
+    CREATE VIEW view1 AS SELECT x FROM t1 WHERE x>0;
+}
+
+setup s2 {
+    DELETE FROM view1 WHERE x>0;
+}
+
+# mysql-error: 1050 42S01 Table 'view1' already exists
+@setup s1
+test l26 {
+    CREATE VIEW view1 AS SELECT x FROM t1 WHERE x>0;
+}
+expect error {
+}
+
+@setup s1
+test l29 {
+    SELECT x FROM t1 WHERE x>0;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l34 {
+    SELECT x FROM view1;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l69 {
+    DELETE FROM view1 WHERE x>0;
+}
+expect {
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+@setup s2
+test l76 {
+    INSERT INTO view1 VALUES(2,'unknown');
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l80 {
+    UPDATE view1 SET x=2;
+}
+expect {
+}

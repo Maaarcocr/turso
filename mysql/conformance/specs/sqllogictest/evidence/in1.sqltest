@@ -1,0 +1,1000 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/evidence/in1.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1(x INTEGER);
+}
+
+setup s2 {
+    CREATE TABLE t2(y INTEGER PRIMARY KEY);
+}
+
+setup s3 {
+    CREATE TABLE t3(z INTEGER UNIQUE);
+}
+
+setup s4 {
+    CREATE TABLE t4(a INTEGER UNIQUE);
+    CREATE TABLE t5(b INTEGER PRIMARY KEY);
+    CREATE TABLE t6(c INTEGER);
+    INSERT INTO t4 VALUES(2);
+    INSERT INTO t4 VALUES(3);
+    INSERT INTO t4 VALUES(4);
+    INSERT INTO t5 SELECT * FROM t4;
+    INSERT INTO t6 SELECT * FROM t4;
+    CREATE TABLE t4n(a INTEGER UNIQUE);
+    CREATE TABLE t6n(c INTEGER);
+    INSERT INTO t4n SELECT * FROM t4;
+    INSERT INTO t4n VALUES(null);
+    INSERT INTO t6n SELECT * FROM t4n;
+    CREATE TABLE t7(a TEXT, UNIQUE (a(1)));
+    CREATE TABLE t8(c TEXT);
+    INSERT INTO t7 VALUES('b');
+    INSERT INTO t7 VALUES('c');
+    INSERT INTO t7 VALUES('d');
+    INSERT INTO t8 SELECT * FROM t7;
+    CREATE TABLE t7n(a TEXT, UNIQUE (a(1)));
+    CREATE TABLE t8n(c TEXT);
+    INSERT INTO t7n SELECT * FROM t7;
+    INSERT INTO t7n VALUES(null);
+    INSERT INTO t8n SELECT * FROM t7n;
+}
+
+test l28 {
+    SELECT 1 IN (2);
+}
+expect unordered {
+    0
+}
+
+test l33 {
+    SELECT 1 IN (2,3,4,5,6,7,8,9);
+}
+expect unordered {
+    0
+}
+
+test l44 {
+    SELECT 1 NOT IN (2);
+}
+expect unordered {
+    1
+}
+
+test l49 {
+    SELECT 1 NOT IN (2,3,4,5,6,7,8,9);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l75 {
+    SELECT 1 IN (SELECT * FROM t1);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l86 {
+    SELECT 1 NOT IN (SELECT * FROM t1);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l97 {
+    SELECT null IN (SELECT * FROM t1);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l108 {
+    SELECT null NOT IN (SELECT * FROM t1);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l122 {
+    SELECT 1 IN (SELECT * FROM t2);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l133 {
+    SELECT 1 NOT IN (SELECT * FROM t2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+test l144 {
+    SELECT null IN (SELECT * FROM t2);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+test l155 {
+    SELECT null NOT IN (SELECT * FROM t2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l169 {
+    SELECT 1 IN (SELECT * FROM t3);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l180 {
+    SELECT 1 NOT IN (SELECT * FROM t3);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l191 {
+    SELECT null IN (SELECT * FROM t3);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l202 {
+    SELECT null NOT IN (SELECT * FROM t3);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l207 {
+    SELECT 1 IN (SELECT x+y FROM t1, t2);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l212 {
+    SELECT 1 NOT IN (SELECT x+y FROM t1,t2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l217 {
+    SELECT null IN (SELECT x+y FROM t1,t2);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l222 {
+    SELECT null NOT IN (SELECT x+y FROM t1,t2);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l245 {
+    SELECT 1.23 IN (SELECT * FROM t1);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l256 {
+    SELECT 1.23 NOT IN (SELECT * FROM t1);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l279 {
+    SELECT 'hello' IN (SELECT * FROM t1);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l290 {
+    SELECT 'hello' NOT IN (SELECT * FROM t1);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l313 {
+    SELECT x'303132' IN (SELECT * FROM t1);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l324 {
+    SELECT x'303132' NOT IN (SELECT * FROM t1);
+}
+expect unordered {
+    1
+}
+
+test l339 {
+    SELECT 1 IN (2,3,4);
+}
+expect unordered {
+    0
+}
+
+test l344 {
+    SELECT 1 NOT IN (2,3,4);
+}
+expect unordered {
+    1
+}
+
+test l349 {
+    SELECT 'a' IN ('b','c','d');
+}
+expect unordered {
+    0
+}
+
+test l354 {
+    SELECT 'a' NOT IN ('b','c','d');
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l447 {
+    SELECT 1 IN (SELECT * FROM t4);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l458 {
+    SELECT 1 NOT IN (SELECT * FROM t4);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l469 {
+    SELECT 1 IN (SELECT * FROM t5);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l480 {
+    SELECT 1 NOT IN (SELECT * FROM t5);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l491 {
+    SELECT 1 IN (SELECT * FROM t6);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l502 {
+    SELECT 1 NOT IN (SELECT * FROM t6);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l513 {
+    SELECT 'a' IN (SELECT * FROM t7);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l524 {
+    SELECT 'a' NOT IN (SELECT * FROM t7);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l535 {
+    SELECT 'a' IN (SELECT * FROM t8);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l546 {
+    SELECT 'a' NOT IN (SELECT * FROM t8);
+}
+expect unordered {
+    1
+}
+
+test l555 {
+    SELECT 2 IN (2,3,4,null);
+}
+expect unordered {
+    1
+}
+
+test l560 {
+    SELECT 3 NOT IN (2,3,4,null);
+}
+expect unordered {
+    0
+}
+
+test l565 {
+    SELECT 4 IN (2,3,4);
+}
+expect unordered {
+    1
+}
+
+test l570 {
+    SELECT 2 NOT IN (2,3,4);
+}
+expect unordered {
+    0
+}
+
+test l575 {
+    SELECT 'b' IN ('b','c','d');
+}
+expect unordered {
+    1
+}
+
+test l580 {
+    SELECT 'c' NOT IN ('b','c','d');
+}
+expect unordered {
+    0
+}
+
+test l585 {
+    SELECT 'd' IN ('b','c',null,'d');
+}
+expect unordered {
+    1
+}
+
+test l590 {
+    SELECT 'b' NOT IN (null,'b','c','d');
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l601 {
+    SELECT 2 IN (SELECT * FROM t4);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l612 {
+    SELECT 3 NOT IN (SELECT * FROM t4);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l623 {
+    SELECT 4 IN (SELECT * FROM t4n);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l634 {
+    SELECT 2 NOT IN (SELECT * FROM t4n);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l645 {
+    SELECT 2 IN (SELECT * FROM t5);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l656 {
+    SELECT 3 NOT IN (SELECT * FROM t5);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l667 {
+    SELECT 2 IN (SELECT * FROM t6);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l678 {
+    SELECT 3 NOT IN (SELECT * FROM t6);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l689 {
+    SELECT 4 IN (SELECT * FROM t6n);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l700 {
+    SELECT 2 NOT IN (SELECT * FROM t6n);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l711 {
+    SELECT 'b' IN (SELECT * FROM t7);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l722 {
+    SELECT 'c' NOT IN (SELECT * FROM t7);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l733 {
+    SELECT 'c' IN (SELECT * FROM t7n);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l744 {
+    SELECT 'd' NOT IN (SELECT * FROM t7n);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l755 {
+    SELECT 'b' IN (SELECT * FROM t8);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l766 {
+    SELECT 'c' NOT IN (SELECT * FROM t8);
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l777 {
+    SELECT 'c' IN (SELECT * FROM t8n);
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l788 {
+    SELECT 'd' NOT IN (SELECT * FROM t8n);
+}
+expect unordered {
+    0
+}
+
+test l795 {
+    SELECT 1 IN (2,3,4,null);
+}
+expect unordered {
+    NULL
+}
+
+test l800 {
+    SELECT 1 NOT IN (2,3,4,null);
+}
+expect unordered {
+    NULL
+}
+
+test l805 {
+    SELECT 'a' IN ('b','c',null,'d');
+}
+expect unordered {
+    NULL
+}
+
+test l810 {
+    SELECT 'a' NOT IN (null,'b','c','d');
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l821 {
+    SELECT 1 IN (SELECT * FROM t4n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l832 {
+    SELECT 5 NOT IN (SELECT * FROM t4n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l843 {
+    SELECT 6 IN (SELECT * FROM t6n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l854 {
+    SELECT 7 NOT IN (SELECT * FROM t6n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l865 {
+    SELECT 'a' IN (SELECT * FROM t7n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l876 {
+    SELECT 'e' NOT IN (SELECT * FROM t7n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l887 {
+    SELECT 'f' IN (SELECT * FROM t8n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l898 {
+    SELECT 'g' NOT IN (SELECT * FROM t8n);
+}
+expect unordered {
+    NULL
+}
+
+test l905 {
+    SELECT null IN (2,3,4,null);
+}
+expect unordered {
+    NULL
+}
+
+test l910 {
+    SELECT null NOT IN (2,3,4,null);
+}
+expect unordered {
+    NULL
+}
+
+test l915 {
+    SELECT null IN (2,3,4);
+}
+expect unordered {
+    NULL
+}
+
+test l920 {
+    SELECT null NOT IN (2,3,4);
+}
+expect unordered {
+    NULL
+}
+
+test l925 {
+    SELECT null IN ('b','c','d');
+}
+expect unordered {
+    NULL
+}
+
+test l930 {
+    SELECT null NOT IN ('b','c','d');
+}
+expect unordered {
+    NULL
+}
+
+test l935 {
+    SELECT null IN ('b','c',null,'d');
+}
+expect unordered {
+    NULL
+}
+
+test l940 {
+    SELECT null NOT IN (null,'b','c','d');
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l983 {
+    SELECT null IN (SELECT * FROM t4n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l994 {
+    SELECT null NOT IN (SELECT * FROM t4n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1031 {
+    SELECT null IN (SELECT * FROM t6);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1042 {
+    SELECT null NOT IN (SELECT * FROM t6);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1053 {
+    SELECT null IN (SELECT * FROM t6n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1064 {
+    SELECT null NOT IN (SELECT * FROM t6n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1075 {
+    SELECT null IN (SELECT * FROM t7);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1086 {
+    SELECT null NOT IN (SELECT * FROM t7);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1097 {
+    SELECT null IN (SELECT * FROM t7n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1108 {
+    SELECT null NOT IN (SELECT * FROM t7n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1119 {
+    SELECT null IN (SELECT * FROM t8);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1130 {
+    SELECT null NOT IN (SELECT * FROM t8);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1141 {
+    SELECT null IN (SELECT * FROM t8n);
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l1152 {
+    SELECT null NOT IN (SELECT * FROM t8n);
+}
+expect unordered {
+    NULL
+}

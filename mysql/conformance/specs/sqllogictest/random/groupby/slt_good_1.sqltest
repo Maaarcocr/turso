@@ -1,0 +1,2625 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/gregrahn/sqllogictest.git @ c93ac416f05635ff5cc490009add936d9753d01d
+#   test/random/groupby/slt_good_1.test
+# license: CC0-1.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE tab0(col0 INTEGER, col1 INTEGER, col2 INTEGER);
+    CREATE TABLE tab1(col0 INTEGER, col1 INTEGER, col2 INTEGER);
+    CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER);
+    INSERT INTO tab0 VALUES(83,0,38);
+    INSERT INTO tab0 VALUES(26,0,79);
+    INSERT INTO tab0 VALUES(43,81,24);
+    INSERT INTO tab1 VALUES(22,6,8);
+    INSERT INTO tab1 VALUES(28,57,45);
+    INSERT INTO tab1 VALUES(82,44,71);
+    INSERT INTO tab2 VALUES(15,61,87);
+    INSERT INTO tab2 VALUES(91,59,79);
+    INSERT INTO tab2 VALUES(92,41,58);
+}
+
+@setup s1
+test l375 {
+    SELECT 10 AS col0 FROM tab2, tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    10
+    10
+    10
+}
+
+@setup s1
+test l659 {
+    SELECT + cor0.col0 * - cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col0;
+}
+expect unordered {
+    -484
+    -6724
+    -784
+}
+
+@setup s1
+test l1448 {
+    SELECT - 53 col1 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -53
+    -53
+}
+
+@setup s1
+test l1607 {
+    SELECT DISTINCT + cor0.col0 FROM tab2 AS cor0 GROUP BY col2, cor0.col0;
+}
+expect unordered {
+    15
+    91
+    92
+}
+
+@setup s1
+test l1709 {
+    SELECT ALL cor0.col1 FROM tab1 AS cor0 GROUP BY cor0.col1 HAVING NOT ( cor0.col1 + cor0.col1 ) IS NULL;
+}
+expect unordered {
+    44
+    57
+    6
+}
+
+@setup s1
+test l1991 {
+    SELECT DISTINCT - col1 + + 3 AS col0 FROM tab0 cor0 GROUP BY cor0.col1, cor0.col1;
+}
+expect unordered {
+    -78
+    3
+}
+
+@setup s1
+test l2008 {
+    SELECT - 68 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -68
+    -68
+    -68
+}
+
+@setup s1
+test l2872 {
+    SELECT cor0.col0 FROM tab1, tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    26
+    43
+    83
+}
+
+@setup s1
+test l3242 {
+    SELECT DISTINCT - tab2.col2 FROM tab2 GROUP BY col2 HAVING NOT ( NULL ) >= NULL;
+}
+expect unordered {
+}
+
+@setup s1
+test l3681 {
+    SELECT ALL 33 * 30 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    990
+    990
+    990
+}
+
+# mysql-error: 1055 42000 Expression #1 of SELECT list is not in GROUP BY clause and contains nonaggregated column 'test.cor0.col1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup s1
+test l3904 {
+    SELECT COALESCE ( cor0.col2, + 58, cor0.col1 * cor0.col0 ) col1 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect error {
+}
+
+@setup s1
+test l4528 {
+    SELECT - cor0.col2 * 25 FROM tab2 AS cor0 GROUP BY col2;
+}
+expect unordered {
+    -1450
+    -1975
+    -2175
+}
+
+@setup s1
+test l5031 {
+    SELECT 95 FROM tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    95
+    95
+    95
+}
+
+@setup s1
+test l5108 {
+    SELECT ( + 96 ) * cor0.col0 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    2496
+    4128
+    7968
+}
+
+@setup s1
+test l5220 {
+    SELECT - 46 * cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -1012
+    -1288
+    -3772
+}
+
+@setup s1
+test l5285 {
+    SELECT + ( 39 ) FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col1;
+}
+expect unordered {
+    39
+    39
+    39
+}
+
+@setup s1
+test l5421 {
+    SELECT ALL + 53 AS col0 FROM tab0 cor0 GROUP BY cor0.col0, col2;
+}
+expect unordered {
+    53
+    53
+    53
+}
+
+@setup s1
+test l5581 {
+    SELECT - col0 col0 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -26
+    -43
+    -83
+}
+
+@setup s1
+test l5595 {
+    SELECT - + 73 * + 46 AS col1 FROM tab1, tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -3358
+    -3358
+    -3358
+}
+
+@setup s1
+test l5848 {
+    SELECT tab1.col2 - + 10 AS col2 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -2
+    35
+    61
+}
+
+@setup s1
+test l6072 {
+    SELECT - col0 AS col2 FROM tab0 cor0 GROUP BY cor0.col0 HAVING NULL IS NULL;
+}
+expect unordered {
+    -26
+    -43
+    -83
+}
+
+@setup s1
+test l6182 {
+    SELECT 15 AS col1 FROM tab1 AS cor0 GROUP BY col2;
+}
+expect unordered {
+    15
+    15
+    15
+}
+
+@setup s1
+test l6362 {
+    SELECT DISTINCT - - 6 col1 FROM tab1 GROUP BY col2;
+}
+expect unordered {
+    6
+}
+
+@setup s1
+test l6422 {
+    SELECT ALL - 36 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col2;
+}
+expect unordered {
+    -36
+    -36
+    -36
+}
+
+@setup s1
+test l6680 {
+    SELECT DISTINCT + 89 AS col1 FROM tab1, tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    89
+}
+
+@setup s1
+test l6961 {
+    SELECT NULLIF ( - cor0.col0, - 97 ) + 40 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -42
+    12
+    18
+}
+
+@setup s1
+test l7393 {
+    SELECT DISTINCT 26 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    26
+}
+
+@setup s1
+test l7481 {
+    SELECT 86 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    86
+    86
+    86
+}
+
+@setup s1
+test l8113 {
+    SELECT cor0.col2 * + cor0.col2 * - cor0.col2 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -195112
+    -493039
+    -658503
+}
+
+@setup s1
+test l8220 {
+    SELECT DISTINCT + 94 FROM tab2 AS cor0 GROUP BY col0;
+}
+expect unordered {
+    94
+}
+
+@setup s1
+test l8393 {
+    SELECT ALL - 36 col0 FROM tab0, tab0 AS cor0 GROUP BY tab0.col2;
+}
+expect unordered {
+    -36
+    -36
+    -36
+}
+
+@setup s1
+test l8547 {
+    SELECT ALL cor0.col2 DIV col2 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    1
+    1
+    1
+}
+
+@setup s1
+test l8600 {
+    SELECT DISTINCT - 94 + - tab0.col2 FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    -118
+    -132
+    -173
+}
+
+@setup s1
+test l8667 {
+    SELECT 43 AS col0 FROM tab0, tab2 AS cor0 GROUP BY tab0.col1;
+}
+expect unordered {
+    43
+    43
+}
+
+@setup s1
+test l8792 {
+    SELECT ALL 11 AS col2 FROM tab2 cor0 GROUP BY col0;
+}
+expect unordered {
+    11
+    11
+    11
+}
+
+@setup s1
+test l9182 {
+    SELECT - 18 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -18
+    -18
+    -18
+}
+
+@setup s1
+test l9231 {
+    SELECT + 63 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    63
+    63
+    63
+}
+
+@setup s1
+test l9766 {
+    SELECT - 35 * 49 - + cor0.col1 DIV - ( col1 + cor0.col1 ) FROM tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -1715
+    -1715
+    -1715
+}
+
+@setup s1
+test l10020 {
+    SELECT DISTINCT - cor0.col1 * cor0.col1 col2 FROM tab0 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    -6561
+    0
+}
+
+@setup s1
+test l10112 {
+    SELECT DISTINCT cor0.col2 * cor0.col2 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col2;
+}
+expect unordered {
+    1444
+    576
+    6241
+}
+
+@setup s1
+test l10702 {
+    SELECT 40 + - cor0.col2 FROM tab1 AS cor0 GROUP BY col2;
+}
+expect unordered {
+    -31
+    -5
+    32
+}
+
+@setup s1
+test l10843 {
+    SELECT - 50 * cor0.col2 + + 56 * - 24 + - col0 col2 FROM tab0 AS cor0 GROUP BY col0, cor0.col1, cor0.col0, cor0.col2;
+}
+expect unordered {
+    -2587
+    -3327
+    -5320
+}
+
+@setup s1
+test l10850 {
+    SELECT ALL - 57 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    -57
+    -57
+    -57
+}
+
+@setup s1
+test l10971 {
+    SELECT ALL 1 FROM tab1 cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    1
+    1
+    1
+}
+
+@setup s1
+test l11090 {
+    SELECT cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0, col1;
+}
+expect unordered {
+    15
+    91
+    92
+}
+
+@setup s1
+test l11326 {
+    SELECT DISTINCT + cor0.col2 AS col1 FROM tab1, tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    58
+    79
+    87
+}
+
+@setup s1
+test l11645 {
+    SELECT + cor0.col1 + cor0.col1 FROM tab2 AS cor0 GROUP BY col2, cor0.col1, cor0.col1;
+}
+expect unordered {
+    118
+    122
+    82
+}
+
+@setup s1
+test l11848 {
+    SELECT - 63 FROM tab1, tab2 AS cor0, tab1 AS cor1 GROUP BY cor1.col0;
+}
+expect unordered {
+    -63
+    -63
+    -63
+}
+
+@setup s1
+test l12053 {
+    SELECT - cor0.col1 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col1, col0, cor0.col1;
+}
+expect unordered {
+    -41
+    -59
+    -61
+}
+
+@setup s1
+test l12240 {
+    SELECT + 80 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    80
+    80
+    80
+}
+
+@setup s1
+test l12247 {
+    SELECT - 41 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -41
+    -41
+    -41
+}
+
+@setup s1
+test l12432 {
+    SELECT 49 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    49
+    49
+}
+
+@setup s1
+test l12532 {
+    SELECT 38 * + cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    3458
+    3496
+    570
+}
+
+@setup s1
+test l12875 {
+    SELECT ( - cor0.col1 ) + + 59 * + cor0.col1 + 1 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    2553
+    3307
+    349
+}
+
+@setup s1
+test l12945 {
+    SELECT + 14 * cor0.col1 FROM tab2 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    574
+    826
+    854
+}
+
+@setup s1
+test l12967 {
+    SELECT ALL 90 AS col0 FROM tab1 cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    90
+    90
+    90
+}
+
+@setup s1
+test l13000 {
+    SELECT ALL + 25 * + cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    2050
+    550
+    700
+}
+
+@setup s1
+test l13378 {
+    SELECT DISTINCT 78 FROM tab2, tab2 AS cor0, tab0 AS cor1 GROUP BY cor1.col1;
+}
+expect unordered {
+    78
+}
+
+@setup s1
+test l13411 {
+    SELECT DISTINCT 29 * cor0.col0 + cor0.col0 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    2460
+    660
+    840
+}
+
+@setup s1
+test l13554 {
+    SELECT + 10 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2, col2;
+}
+expect unordered {
+    10
+    10
+    10
+}
+
+@setup s1
+test l14314 {
+    SELECT DISTINCT 37 FROM tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    37
+}
+
+@setup s1
+test l14415 {
+    SELECT ALL + cor0.col2 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col2;
+}
+expect unordered {
+    58
+    79
+    87
+}
+
+@setup s1
+test l14427 {
+    SELECT DISTINCT cor0.col0 + cor0.col0 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    182
+    184
+    30
+}
+
+@setup s1
+test l15432 {
+    SELECT ALL cor0.col1 * + cor0.col2 + cor0.col2 AS col2 FROM tab0 cor0 GROUP BY cor0.col2, cor0.col1;
+}
+expect unordered {
+    1968
+    38
+    79
+}
+
+@setup s1
+test l15689 {
+    SELECT DISTINCT cor0.col1 DIV - cor0.col1 FROM tab2 cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -1
+}
+
+@setup s1
+test l15957 {
+    SELECT ALL col0 AS col2 FROM tab0 GROUP BY tab0.col0;
+}
+expect unordered {
+    26
+    43
+    83
+}
+
+@setup s1
+test l16345 {
+    SELECT ALL + - 29 AS col0 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -29
+    -29
+    -29
+}
+
+@setup s1
+test l16379 {
+    SELECT DISTINCT + 62 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    62
+}
+
+@setup s1
+test l16759 {
+    SELECT ALL - - tab1.col0 + tab1.col0 col2 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    164
+    44
+    56
+}
+
+@setup s1
+test l16779 {
+    SELECT 2 AS col1 FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    2
+    2
+    2
+}
+
+@setup s1
+test l16877 {
+    SELECT - CAST( tab0.col0 AS SIGNED ) FROM tab0 GROUP BY tab0.col0;
+}
+expect unordered {
+    -26
+    -43
+    -83
+}
+
+@setup s1
+test l16985 {
+    SELECT + + 94 AS col0 FROM tab1 GROUP BY col2;
+}
+expect unordered {
+    94
+    94
+    94
+}
+
+@setup s1
+test l17219 {
+    SELECT ALL - cor0.col0 DIV cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -1
+    -1
+    -1
+}
+
+@setup s1
+test l17658 {
+    SELECT DISTINCT - cor0.col2 * - 60 FROM tab1 AS cor0 GROUP BY col0, cor0.col1, cor0.col2;
+}
+expect unordered {
+    2700
+    4260
+    480
+}
+
+@setup s1
+test l17940 {
+    SELECT ALL 18 FROM tab2 AS cor0 CROSS JOIN tab1 AS cor1 GROUP BY cor0.col2, cor0.col2;
+}
+expect unordered {
+    18
+    18
+    18
+}
+
+@setup s1
+test l18507 {
+    SELECT ALL - 20 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -20
+    -20
+    -20
+}
+
+@setup s1
+test l18853 {
+    SELECT + NULLIF ( 55, cor0.col1 * cor0.col1 ) AS col2 FROM tab1 AS cor0 GROUP BY col0, cor0.col1, cor0.col0;
+}
+expect unordered {
+    55
+    55
+    55
+}
+
+@setup s1
+test l18949 {
+    SELECT CAST( NULL AS DECIMAL ) + 30 * 31 AS col0 FROM tab1 AS cor0 GROUP BY col2;
+}
+expect unordered {
+    NULL
+    NULL
+    NULL
+}
+
+@setup s1
+test l20493 {
+    SELECT + tab2.col0 col1 FROM tab2 GROUP BY tab2.col0;
+}
+expect unordered {
+    15
+    91
+    92
+}
+
+@setup s1
+test l20538 {
+    SELECT DISTINCT - cor0.col0 + - cor0.col2 AS col0 FROM tab2 AS cor0 GROUP BY col2, cor0.col0, cor0.col1;
+}
+expect unordered {
+    -102
+    -150
+    -170
+}
+
+@setup s1
+test l20557 {
+    SELECT DISTINCT - 61 FROM tab2 GROUP BY tab2.col0;
+}
+expect unordered {
+    -61
+}
+
+@setup s1
+test l20568 {
+    SELECT DISTINCT 98 col1 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    98
+}
+
+@setup s1
+test l20722 {
+    SELECT ALL - tab2.col0 AS col2 FROM tab2 GROUP BY tab2.col0;
+}
+expect unordered {
+    -15
+    -91
+    -92
+}
+
+@setup s1
+test l20843 {
+    SELECT DISTINCT + + 44 AS col1 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    44
+}
+
+@setup s1
+test l21246 {
+    SELECT - ( 85 ) FROM tab2, tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -85
+    -85
+    -85
+}
+
+@setup s1
+test l21884 {
+    SELECT DISTINCT 89 AS col0 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    89
+}
+
+@setup s1
+test l22043 {
+    SELECT + col0 FROM tab2 GROUP BY col0;
+}
+expect unordered {
+    15
+    91
+    92
+}
+
+@setup s1
+test l22418 {
+    SELECT DISTINCT cor0.col0 FROM tab2 AS cor0 CROSS JOIN tab2 AS cor1 GROUP BY cor1.col2, cor0.col0;
+}
+expect unordered {
+    15
+    91
+    92
+}
+
+@setup s1
+test l22692 {
+    SELECT - 22 FROM tab2 GROUP BY col1;
+}
+expect unordered {
+    -22
+    -22
+    -22
+}
+
+@setup s1
+test l23226 {
+    SELECT ALL + - 68 DIV + 32 AS col1 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -2
+    -2
+    -2
+}
+
+@setup s1
+test l23734 {
+    SELECT col0 * NULLIF ( cor0.col0, + cor0.col2 + + col0 * cor0.col2 ) FROM tab0 AS cor0 GROUP BY cor0.col0, cor0.col2;
+}
+expect unordered {
+    1849
+    676
+    6889
+}
+
+@setup s1
+test l24065 {
+    SELECT - + col0 FROM tab1 GROUP BY col0;
+}
+expect unordered {
+    -22
+    -28
+    -82
+}
+
+@setup s1
+test l24158 {
+    SELECT ALL tab1.col0 col0 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    22
+    28
+    82
+}
+
+@setup s1
+test l24303 {
+    SELECT 30 FROM tab1 AS cor0 CROSS JOIN tab1 cor1 GROUP BY cor1.col2;
+}
+expect unordered {
+    30
+    30
+    30
+}
+
+@setup s1
+test l25026 {
+    SELECT cor0.col1 + cor0.col1 AS col1 FROM tab0, tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    114
+    12
+    88
+}
+
+@setup s1
+test l25391 {
+    SELECT 54 col0 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    54
+    54
+    54
+}
+
+@setup s1
+test l25502 {
+    SELECT cor0.col1 FROM tab2 AS cor0 CROSS JOIN tab2 AS cor1 GROUP BY cor0.col1;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l25755 {
+    SELECT ALL 82 AS col0 FROM tab2 AS cor0 CROSS JOIN tab0 AS cor1 GROUP BY cor0.col0;
+}
+expect unordered {
+    82
+    82
+    82
+}
+
+@setup s1
+test l25791 {
+    SELECT ALL - 96 AS col1 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -96
+    -96
+    -96
+}
+
+@setup s1
+test l26114 {
+    SELECT + + tab2.col1 col2 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l26489 {
+    SELECT 66 FROM tab0 AS cor0 CROSS JOIN tab2 AS cor1 GROUP BY cor0.col0;
+}
+expect unordered {
+    66
+    66
+    66
+}
+
+@setup s1
+test l26895 {
+    SELECT ALL col2 DIV + 92 + 90 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    90
+    90
+    90
+}
+
+@setup s1
+test l27103 {
+    SELECT ALL + ( tab0.col2 ) FROM tab0 GROUP BY col2;
+}
+expect unordered {
+    24
+    38
+    79
+}
+
+@setup s1
+test l27403 {
+    SELECT cor1.col1 AS col2 FROM tab2 AS cor0 CROSS JOIN tab2 AS cor1 GROUP BY cor1.col0, cor1.col1, cor1.col0;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l27469 {
+    SELECT + 93 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    93
+    93
+    93
+}
+
+@setup s1
+test l27614 {
+    SELECT ALL 84 DIV col2 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    0
+    1
+    1
+}
+
+@setup s1
+test l28375 {
+    SELECT DISTINCT - - tab1.col1 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    44
+    57
+    6
+}
+
+@setup s1
+test l28789 {
+    SELECT + CAST( NULL AS SIGNED ) FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    NULL
+    NULL
+    NULL
+}
+
+@setup s1
+test l28933 {
+    SELECT 38 + + 95 * cor0.col0 FROM tab0 AS cor0 GROUP BY col0;
+}
+expect unordered {
+    2508
+    4123
+    7923
+}
+
+@setup s1
+test l29113 {
+    SELECT - col1 FROM tab1 GROUP BY col1;
+}
+expect unordered {
+    -44
+    -57
+    -6
+}
+
+@setup s1
+test l29372 {
+    SELECT DISTINCT - 12 * - 15 FROM tab2, tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    180
+}
+
+@setup s1
+test l29554 {
+    SELECT - NULLIF ( 95, + tab0.col2 ) FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    -95
+    -95
+    -95
+}
+
+@setup s1
+test l29854 {
+    SELECT col1 AS col2 FROM tab1 GROUP BY col1;
+}
+expect unordered {
+    44
+    57
+    6
+}
+
+@setup s1
+test l30414 {
+    SELECT DISTINCT + - 30 AS col2 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    -30
+}
+
+@setup s1
+test l30817 {
+    SELECT DISTINCT + tab0.col0 AS col0 FROM tab0 GROUP BY tab0.col0;
+}
+expect unordered {
+    26
+    43
+    83
+}
+
+@setup s1
+test l31021 {
+    SELECT 13 DIV 74 AS col2 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    0
+    0
+    0
+}
+
+@setup s1
+test l31470 {
+    SELECT DISTINCT + - 93 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    -93
+}
+
+@setup s1
+test l31538 {
+    SELECT DISTINCT - cor0.col0 * ( cor0.col0 * + cor0.col0 ) AS col1 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col0;
+}
+expect unordered {
+    -3375
+    -753571
+    -778688
+}
+
+@setup s1
+test l31545 {
+    SELECT cor1.col1 FROM tab1 AS cor0 CROSS JOIN tab0 AS cor1 GROUP BY cor1.col1;
+}
+expect unordered {
+    0
+    81
+}
+
+@setup s1
+test l31608 {
+    SELECT ALL + cor0.col0 col1 FROM tab2 cor0 CROSS JOIN tab1 AS cor1 GROUP BY cor0.col0;
+}
+expect unordered {
+    15
+    91
+    92
+}
+
+@setup s1
+test l32271 {
+    SELECT DISTINCT - 95 FROM tab0 GROUP BY tab0.col1;
+}
+expect unordered {
+    -95
+}
+
+@setup s1
+test l32392 {
+    SELECT + - 90 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    -90
+    -90
+    -90
+}
+
+@setup s1
+test l32512 {
+    SELECT - 58 DIV + 88 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    0
+    0
+    0
+}
+
+@setup s1
+test l32597 {
+    SELECT - ( - tab0.col2 ) AS col2 FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    24
+    38
+    79
+}
+
+@setup s1
+test l32824 {
+    SELECT ALL + + ( 42 ) DIV + tab1.col1 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    0
+    0
+    7
+}
+
+@setup s1
+test l32969 {
+    SELECT ALL + cor0.col0 * + 28 FROM tab0 AS cor0 GROUP BY col2, cor0.col0;
+}
+expect unordered {
+    1204
+    2324
+    728
+}
+
+@setup s1
+test l33375 {
+    SELECT 92 FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    92
+    92
+    92
+}
+
+@setup s1
+test l33415 {
+    SELECT ALL + + 19 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    19
+    19
+    19
+}
+
+@setup s1
+test l33875 {
+    SELECT + 80 FROM tab1 AS cor0 GROUP BY cor0.col2, col0;
+}
+expect unordered {
+    80
+    80
+    80
+}
+
+@setup s1
+test l34363 {
+    SELECT DISTINCT ( 82 ) col1 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    82
+}
+
+@setup s1
+test l34606 {
+    SELECT + NULLIF ( - col0, cor0.col0 ) col1 FROM tab0 cor0 GROUP BY cor0.col0, cor0.col0;
+}
+expect unordered {
+    -26
+    -43
+    -83
+}
+
+@setup s1
+test l34842 {
+    SELECT 69 AS col0 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    69
+    69
+    69
+}
+
+@setup s1
+test l36040 {
+    SELECT DISTINCT + 65 FROM tab0 AS cor0 GROUP BY col1, cor0.col0, cor0.col1;
+}
+expect unordered {
+    65
+}
+
+@setup s1
+test l36107 {
+    SELECT DISTINCT 1 FROM tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l36597 {
+    SELECT DISTINCT tab1.col1 AS col2 FROM tab1 GROUP BY tab1.col1 HAVING NULL NOT IN ( col2 );
+}
+expect unordered {
+}
+
+@setup s1
+test l37320 {
+    SELECT ALL - - 81 FROM tab1, tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    81
+    81
+}
+
+@setup s1
+test l37375 {
+    SELECT + 31 AS col1 FROM tab0 AS cor0 GROUP BY col0;
+}
+expect unordered {
+    31
+    31
+    31
+}
+
+@setup s1
+test l37647 {
+    SELECT ALL + 34 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    34
+    34
+    34
+}
+
+@setup s1
+test l38210 {
+    SELECT DISTINCT + 1 + + cor0.col2 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    25
+    39
+    80
+}
+
+@setup s1
+test l39281 {
+    SELECT - 1 col0 FROM tab0 GROUP BY tab0.col0;
+}
+expect unordered {
+    -1
+    -1
+    -1
+}
+
+@setup s1
+test l39363 {
+    SELECT + ( 86 ) FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    86
+    86
+    86
+}
+
+@setup s1
+test l39576 {
+    SELECT - 98 AS col0 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    -98
+    -98
+    -98
+}
+
+@setup s1
+test l39748 {
+    SELECT ALL - 4 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -4
+    -4
+    -4
+}
+
+@setup s1
+test l40128 {
+    SELECT + NULLIF ( cor0.col0, + cor0.col0 ) AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col0;
+}
+expect unordered {
+    NULL
+    NULL
+    NULL
+}
+
+@setup s1
+test l40272 {
+    SELECT 34 + - 3 * + cor0.col2 col1 FROM tab1 AS cor0 GROUP BY col1, col2;
+}
+expect unordered {
+    -101
+    -179
+    10
+}
+
+@setup s1
+test l40382 {
+    SELECT ALL + - tab0.col1 AS col2 FROM tab0 GROUP BY tab0.col1;
+}
+expect unordered {
+    -81
+    0
+}
+
+@setup s1
+test l40638 {
+    SELECT - tab1.col2 FROM tab1 GROUP BY tab1.col2 HAVING NOT NULL IS NOT NULL;
+}
+expect unordered {
+    -45
+    -71
+    -8
+}
+
+@setup s1
+test l40652 {
+    SELECT tab2.col1 * + col1 FROM tab2 GROUP BY col1;
+}
+expect unordered {
+    1681
+    3481
+    3721
+}
+
+@setup s1
+test l40660 {
+    SELECT cor0.col0 * - cor0.col2 col0 FROM tab2 AS cor0 GROUP BY cor0.col0, col2;
+}
+expect unordered {
+    -1305
+    -5336
+    -7189
+}
+
+@setup s1
+test l40691 {
+    SELECT + CAST( - cor0.col0 AS SIGNED ) FROM tab2 AS cor0 GROUP BY col0, cor0.col1;
+}
+expect unordered {
+    -15
+    -91
+    -92
+}
+
+@setup s1
+test l41238 {
+    SELECT 92 FROM tab2 cor0 GROUP BY col2, cor0.col0;
+}
+expect unordered {
+    92
+    92
+    92
+}
+
+@setup s1
+test l41550 {
+    SELECT ALL - 21 FROM tab1 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -21
+    -21
+    -21
+}
+
+@setup s1
+test l41625 {
+    SELECT col0 - tab2.col0 FROM tab2 GROUP BY col0;
+}
+expect unordered {
+    0
+    0
+    0
+}
+
+@setup s1
+test l41842 {
+    SELECT DISTINCT + col1 AS col2 FROM tab2 GROUP BY col1;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l42091 {
+    SELECT - 84 + 14 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -70
+    -70
+    -70
+}
+
+@setup s1
+test l42905 {
+    SELECT DISTINCT - col2 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col0, col2;
+}
+expect unordered {
+    -58
+    -79
+    -87
+}
+
+@setup s1
+test l42959 {
+    SELECT 95 AS col2 FROM tab0 cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    95
+    95
+}
+
+@setup s1
+test l43184 {
+    SELECT DISTINCT 19 col2 FROM tab1 AS cor0 GROUP BY col0;
+}
+expect unordered {
+    19
+}
+
+@setup s1
+test l44057 {
+    SELECT - 76 * - cor0.col0 col2 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    1672
+    2128
+    6232
+}
+
+@setup s1
+test l44189 {
+    SELECT + 82 * - col0 AS col2 FROM tab1 cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -1804
+    -2296
+    -6724
+}
+
+@setup s1
+test l44611 {
+    SELECT ALL col2 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    45
+    71
+    8
+}
+
+@setup s1
+test l44810 {
+    SELECT ALL cor0.col0 col0 FROM tab0 cor0 CROSS JOIN tab0 AS cor1 GROUP BY cor0.col0;
+}
+expect unordered {
+    26
+    43
+    83
+}
+
+@setup s1
+test l44950 {
+    SELECT col2 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col2;
+}
+expect unordered {
+    24
+    38
+    79
+}
+
+@setup s1
+test l45040 {
+    SELECT - cor0.col0 AS col0 FROM tab1 cor0 GROUP BY cor0.col2, cor0.col0;
+}
+expect unordered {
+    -22
+    -28
+    -82
+}
+
+@setup s1
+test l45188 {
+    SELECT DISTINCT + 96 AS col1 FROM tab1 cor0 GROUP BY col2, cor0.col2;
+}
+expect unordered {
+    96
+}
+
+@setup s1
+test l45222 {
+    SELECT 99 AS col1 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    99
+    99
+    99
+}
+
+@setup s1
+test l45300 {
+    SELECT ALL + cor0.col1 * cor0.col1 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col0, cor0.col0;
+}
+expect unordered {
+    1936
+    3249
+    36
+}
+
+@setup s1
+test l45975 {
+    SELECT 60 FROM tab0 AS cor0 GROUP BY col2;
+}
+expect unordered {
+    60
+    60
+    60
+}
+
+@setup s1
+test l46348 {
+    SELECT DISTINCT col0 DIV + tab1.col0 AS col2 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+test l46520 {
+    SELECT cor0.col1 - cor0.col1 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    0
+    0
+}
+
+@setup s1
+test l46819 {
+    SELECT DISTINCT - cor0.col2 * + 88 FROM tab1 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -3960
+    -6248
+    -704
+}
+
+@setup s1
+test l47344 {
+    SELECT DISTINCT - + 20 AS col0 FROM tab0 GROUP BY tab0.col1;
+}
+expect unordered {
+    -20
+}
+
+@setup s1
+test l47597 {
+    SELECT ALL + 27 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    27
+    27
+    27
+}
+
+@setup s1
+test l47618 {
+    SELECT - cor0.col0 + + cor0.col0 AS col0 FROM tab0 cor0 GROUP BY cor0.col0, col0;
+}
+expect unordered {
+    0
+    0
+    0
+}
+
+@setup s1
+test l48333 {
+    SELECT + 82 - + 16 AS col1 FROM tab1, tab2 AS cor0 GROUP BY tab1.col0;
+}
+expect unordered {
+    66
+    66
+    66
+}
+
+@setup s1
+test l48505 {
+    SELECT DISTINCT tab1.col2 col0 FROM tab1 GROUP BY col2;
+}
+expect unordered {
+    45
+    71
+    8
+}
+
+@setup s1
+test l48857 {
+    SELECT ALL + 62 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col2;
+}
+expect unordered {
+    62
+    62
+    62
+}
+
+@setup s1
+test l49040 {
+    SELECT ALL - + 42 col2 FROM tab0 GROUP BY tab0.col1;
+}
+expect unordered {
+    -42
+    -42
+}
+
+@setup s1
+test l49245 {
+    SELECT col1 AS col1 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l49557 {
+    SELECT - cor0.col1 * + ( - 9 ) col2 FROM tab1 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    396
+    513
+    54
+}
+
+@setup s1
+test l49744 {
+    SELECT DISTINCT cor0.col1 + - cor0.col1 * 53 col1 FROM tab1 AS cor0 GROUP BY col0, cor0.col1;
+}
+expect unordered {
+    -2288
+    -2964
+    -312
+}
+
+@setup s1
+test l50108 {
+    SELECT DISTINCT ( 55 ) FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col1;
+}
+expect unordered {
+    55
+}
+
+@setup s1
+test l50270 {
+    SELECT ALL + cor0.col1 * 72 FROM tab1 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    3168
+    4104
+    432
+}
+
+@setup s1
+test l51016 {
+    SELECT DISTINCT + 24 FROM tab2 cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    24
+}
+
+@setup s1
+test l52100 {
+    SELECT ALL col1 col2 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    0
+    81
+}
+
+@setup s1
+test l52150 {
+    SELECT ALL - + 51 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -51
+    -51
+    -51
+}
+
+@setup s1
+test l52175 {
+    SELECT + ( - 57 ) FROM tab2 cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -57
+    -57
+    -57
+}
+
+@setup s1
+test l52569 {
+    SELECT 8 FROM tab1 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    8
+    8
+    8
+}
+
+@setup s1
+test l53051 {
+    SELECT 15 * - cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -1215
+    0
+}
+
+@setup s1
+test l53226 {
+    SELECT DISTINCT - cor0.col1 + + cor0.col1 AS col0 FROM tab0 cor0 GROUP BY col1;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l53231 {
+    SELECT col1 AS col0 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l53251 {
+    SELECT DISTINCT cor0.col1 * cor0.col1 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    1681
+    3481
+    3721
+}
+
+@setup s1
+test l54007 {
+    SELECT + 95 + 62 AS col1 FROM tab0 GROUP BY tab0.col0;
+}
+expect unordered {
+    157
+    157
+    157
+}
+
+@setup s1
+test l54665 {
+    SELECT - 60 * - 84 AS col1 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    5040
+    5040
+    5040
+}
+
+@setup s1
+test l54816 {
+    SELECT ALL 94 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    94
+    94
+    94
+}
+
+@setup s1
+test l55250 {
+    SELECT + cor0.col0 * cor0.col0 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    1849
+    676
+    6889
+}
+
+@setup s1
+test l55257 {
+    SELECT DISTINCT col1 + 14 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    14
+    95
+}
+
+@setup s1
+test l55384 {
+    SELECT DISTINCT + 66 FROM tab0 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    66
+}
+
+@setup s1
+test l55990 {
+    SELECT cor0.col1 DIV 57 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    0
+    1
+}
+
+@setup s1
+test l56156 {
+    SELECT tab1.col2 - + tab1.col2 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    0
+    0
+    0
+}
+
+@setup s1
+test l56708 {
+    SELECT CAST( 20 AS SIGNED ) - tab2.col2 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    -38
+    -59
+    -67
+}
+
+@setup s1
+test l57046 {
+    SELECT ALL - 59 AS col1 FROM tab0 GROUP BY col2;
+}
+expect unordered {
+    -59
+    -59
+    -59
+}
+
+@setup s1
+test l57098 {
+    SELECT cor0.col0 DIV cor0.col0 FROM tab1 cor0 GROUP BY col2, cor0.col0;
+}
+expect unordered {
+    1
+    1
+    1
+}
+
+@setup s1
+test l57287 {
+    SELECT ALL - 30 col1 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -30
+    -30
+    -30
+}
+
+@setup s1
+test l57912 {
+    SELECT ALL col1 FROM tab2 GROUP BY col1;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l57949 {
+    SELECT ALL - col0 * + 49 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col0;
+}
+expect unordered {
+    -4459
+    -4508
+    -735
+}
+
+@setup s1
+test l58171 {
+    SELECT ALL 14 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col2;
+}
+expect unordered {
+    14
+    14
+    14
+}
+
+@setup s1
+test l58469 {
+    SELECT 70 * cor0.col0 col1 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    1820
+    3010
+    5810
+}
+
+@setup s1
+test l58552 {
+    SELECT ALL + cor0.col0 + - 42 * cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -3731
+    -3772
+    -615
+}
+
+@setup s1
+test l58936 {
+    SELECT ALL + col1 FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col1, cor0.col0;
+}
+expect unordered {
+    0
+    0
+    81
+}
+
+@setup s1
+test l59529 {
+    SELECT col0 * 66 - 98 FROM tab1 GROUP BY col0;
+}
+expect unordered {
+    1354
+    1750
+    5314
+}
+
+@setup s1
+test l59674 {
+    SELECT 17 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    17
+    17
+    17
+}
+
+@setup s1
+test l60025 {
+    SELECT ALL - 81 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -81
+    -81
+    -81
+}
+
+@setup s1
+test l60153 {
+    SELECT - - cor0.col0 - 64 FROM tab1, tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -36
+    -42
+    18
+}
+
+@setup s1
+test l60679 {
+    SELECT - + col2 AS col2 FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    -24
+    -38
+    -79
+}
+
+@setup s1
+test l60875 {
+    SELECT 93 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col1, col1;
+}
+expect unordered {
+    93
+    93
+    93
+}
+
+@setup s1
+test l60882 {
+    SELECT 25 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    25
+    25
+    25
+}
+
+@setup s1
+test l61541 {
+    SELECT + 49 AS col0 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    49
+    49
+    49
+}
+
+@setup s1
+test l61638 {
+    SELECT - tab2.col1 col0 FROM tab2 GROUP BY tab2.col1 HAVING NOT + tab2.col1 IS NULL;
+}
+expect unordered {
+    -41
+    -59
+    -61
+}
+
+@setup s1
+test l61793 {
+    SELECT DISTINCT - + 73 FROM tab1, tab0 cor0 GROUP BY tab1.col2;
+}
+expect unordered {
+    -73
+}
+
+@setup s1
+test l62120 {
+    SELECT - cor0.col2 FROM tab2, tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -58
+    -79
+    -87
+}
+
+@setup s1
+test l62507 {
+    SELECT tab2.col0 + col0 col0 FROM tab2 GROUP BY col0;
+}
+expect unordered {
+    182
+    184
+    30
+}
+
+@setup s1
+test l62797 {
+    SELECT + - 9 FROM tab2 GROUP BY tab2.col0;
+}
+expect unordered {
+    -9
+    -9
+    -9
+}
+
+@setup s1
+test l62879 {
+    SELECT col0 AS col2 FROM tab1 GROUP BY tab1.col0;
+}
+expect unordered {
+    22
+    28
+    82
+}
+
+@setup s1
+test l63315 {
+    SELECT 93 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col0, cor0.col1;
+}
+expect unordered {
+    93
+    93
+    93
+}
+
+@setup s1
+test l63351 {
+    SELECT DISTINCT 72 FROM tab2 AS cor0 GROUP BY col1;
+}
+expect unordered {
+    72
+}
+
+@setup s1
+test l63631 {
+    SELECT - 83 + 5 * cor0.col2 AS col0 FROM tab1 cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -43
+    142
+    272
+}
+
+@setup s1
+test l64108 {
+    SELECT DISTINCT 17 DIV + cor0.col2 + col2 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    58
+    79
+    87
+}
+
+@setup s1
+test l64230 {
+    SELECT DISTINCT - cor0.col2 * - cor0.col2 + cor0.col2 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    1482
+    600
+    6320
+}
+
+@setup s1
+test l64480 {
+    SELECT ( + 94 ) AS col2 FROM tab2 AS cor0 GROUP BY col0;
+}
+expect unordered {
+    94
+    94
+    94
+}
+
+@setup s1
+test l65124 {
+    SELECT + 5 + + cor0.col2 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    13
+    50
+    76
+}
+
+@setup s1
+test l65208 {
+    SELECT ALL + 17 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    17
+    17
+    17
+}
+
+@setup s1
+test l65390 {
+    SELECT ALL NULLIF ( - 67, + cor0.col1 ) FROM tab0 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -67
+    -67
+}
+
+@setup s1
+test l65440 {
+    SELECT DISTINCT - 32 - + 16 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -48
+}
+
+@setup s1
+test l65938 {
+    SELECT DISTINCT - cor0.col0 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col0, cor0.col1;
+}
+expect unordered {
+    -22
+    -28
+    -82
+}
+
+@setup s1
+test l66431 {
+    SELECT DISTINCT + + 16 AS col1 FROM tab0 GROUP BY tab0.col2;
+}
+expect unordered {
+    16
+}
+
+@setup s1
+test l66632 {
+    SELECT - col2 DIV - 24 AS col0 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    2
+    3
+    3
+}
+
+@setup s1
+test l67176 {
+    SELECT col2 - tab1.col2 FROM tab1 GROUP BY col2;
+}
+expect unordered {
+    0
+    0
+    0
+}
+
+@setup s1
+test l67220 {
+    SELECT DISTINCT - - CAST( NULL AS DECIMAL ) * 34 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    NULL
+}
+
+@setup s1
+test l67504 {
+    SELECT ALL - 65 AS col0 FROM tab1 GROUP BY tab1.col2;
+}
+expect unordered {
+    -65
+    -65
+    -65
+}
+
+@setup s1
+test l67534 {
+    SELECT DISTINCT - cor0.col0 + + cor0.col1 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col1;
+}
+expect unordered {
+    -32
+    -51
+    46
+}
+
+@setup s1
+test l68081 {
+    SELECT DISTINCT + cor0.col0 * + cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col1, cor0.col2;
+}
+expect unordered {
+    225
+    8281
+    8464
+}
+
+@setup s1
+test l68114 {
+    SELECT DISTINCT - 71 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2;
+}
+expect unordered {
+    -71
+}
+
+@setup s1
+test l68735 {
+    SELECT + 58 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    58
+    58
+    58
+}
+
+@setup s1
+test l68795 {
+    SELECT - 35 FROM tab0 GROUP BY col0;
+}
+expect unordered {
+    -35
+    -35
+    -35
+}
+
+@setup s1
+test l68827 {
+    SELECT ALL cor0.col0 + - 66 FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    -38
+    -44
+    16
+}
+
+@setup s1
+test l68841 {
+    SELECT + cor0.col0 * + 61 FROM tab0 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    1586
+    2623
+    5063
+}
+
+@setup s1
+test l68953 {
+    SELECT - - 59 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    59
+    59
+    59
+}
+
+@setup s1
+test l69157 {
+    SELECT DISTINCT + cor0.col1 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col1;
+}
+expect unordered {
+    0
+    81
+}
+
+@setup s1
+test l69319 {
+    SELECT DISTINCT - cor0.col0 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col1;
+}
+expect unordered {
+    -15
+    -91
+    -92
+}
+
+@setup s1
+test l69692 {
+    SELECT + 59 FROM tab2 AS cor0 CROSS JOIN tab2 AS cor1 GROUP BY cor0.col1;
+}
+expect unordered {
+    59
+    59
+    59
+}
+
+@setup s1
+test l69992 {
+    SELECT DISTINCT + cor0.col2 * 57 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2, col1;
+}
+expect unordered {
+    3306
+    4503
+    4959
+}
+
+@setup s1
+test l70152 {
+    SELECT + 95 FROM tab0 GROUP BY col0;
+}
+expect unordered {
+    95
+    95
+    95
+}
+
+@setup s1
+test l70363 {
+    SELECT DISTINCT + cor0.col1 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col1;
+}
+expect unordered {
+    0
+    81
+}
+
+@setup s1
+test l70376 {
+    SELECT - 20 FROM tab0 AS cor0 GROUP BY col0;
+}
+expect unordered {
+    -20
+    -20
+    -20
+}
+
+@setup s1
+test l70389 {
+    SELECT DISTINCT + col1 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col0;
+}
+expect unordered {
+    41
+    59
+    61
+}
+
+@setup s1
+test l70410 {
+    SELECT ( cor0.col0 ) FROM tab1 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    22
+    28
+    82
+}
+
+@setup s1
+test l70417 {
+    SELECT ALL 75 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    75
+    75
+    75
+}
+
+@setup s1
+test l70738 {
+    SELECT - 48 col2 FROM tab2 AS cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -48
+    -48
+    -48
+}
+
+@setup s1
+test l70793 {
+    SELECT 86 FROM tab2 cor0 GROUP BY col1;
+}
+expect unordered {
+    86
+    86
+    86
+}
+
+@setup s1
+test l70977 {
+    SELECT ALL - col1 FROM tab0 cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    -81
+    0
+}
+
+@setup s1
+test l71056 {
+    SELECT 32 AS col0 FROM tab2 cor0 GROUP BY cor0.col1;
+}
+expect unordered {
+    32
+    32
+    32
+}
+
+@setup s1
+test l71199 {
+    SELECT 37 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col0;
+}
+expect unordered {
+    37
+    37
+    37
+}
+
+@setup s1
+test l71239 {
+    SELECT DISTINCT - 93 FROM tab2 AS cor0 GROUP BY cor0.col2, cor0.col2;
+}
+expect unordered {
+    -93
+}
+
+@setup s1
+test l71368 {
+    SELECT DISTINCT + + 81 AS col1 FROM tab0 GROUP BY tab0.col0;
+}
+expect unordered {
+    81
+}
+
+@setup s1
+test l71453 {
+    SELECT + - 80 FROM tab1 GROUP BY tab1.col1;
+}
+expect unordered {
+    -80
+    -80
+    -80
+}
+
+@setup s1
+test l71467 {
+    SELECT DISTINCT + - tab2.col2 * 45 FROM tab2 GROUP BY tab2.col2;
+}
+expect unordered {
+    -2610
+    -3555
+    -3915
+}
+
+@setup s1
+test l71555 {
+    SELECT ALL + col0 AS col0 FROM tab1 GROUP BY col0;
+}
+expect unordered {
+    22
+    28
+    82
+}
+
+@setup s1
+test l71793 {
+    SELECT - CASE cor0.col0 WHEN col1 + + cor0.col1 * cor0.col1 THEN NULL WHEN + cor0.col1 THEN cor0.col0 ELSE NULL END FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col0, cor0.col1;
+}
+expect unordered {
+    NULL
+    NULL
+    NULL
+}
+
+@setup s1
+test l72828 {
+    SELECT ALL + 51 FROM tab2 GROUP BY tab2.col1;
+}
+expect unordered {
+    51
+    51
+    51
+}
