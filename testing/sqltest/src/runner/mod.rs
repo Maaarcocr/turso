@@ -473,6 +473,7 @@ async fn run_single<B: SqlBackend, R: Runnable>(
                 Some(SkipCondition::Mvcc) => options.mvcc,
                 Some(SkipCondition::Sqlite) => options.backend_is_sqlite,
                 Some(SkipCondition::Postgres) => options.backend_type == Backend::Postgres,
+                Some(SkipCondition::Tursomysql) => options.backend_type == Backend::Tursomysql,
             };
             if should_skip {
                 return TestResult {

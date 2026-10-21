@@ -1,0 +1,190 @@
+# Owned specs for the MySQL frontend bootstrap: literal projections, statement
+# splitting, value rendering and basic CREATE TABLE. Every expected value was
+# recorded from MySQL 8.4.10 (mysql/conformance/target.toml) with
+# `mysql --batch --raw`; error tests note the MySQL error in a comment.
+
+@database :memory:
+
+setup users {
+    CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));
+}
+
+test select-zero {
+    SELECT 0;
+}
+expect {
+    0
+}
+
+test select-integer {
+    SELECT 42;
+}
+expect {
+    42
+}
+
+test select-maximum-signed-integer {
+    SELECT 9223372036854775807;
+}
+expect {
+    9223372036854775807
+}
+
+test select-leading-zeroes {
+    SELECT 00042;
+}
+expect {
+    42
+}
+
+test select-booleans-and-null {
+    SELECT TRUE, FALSE, NULL;
+}
+expect {
+    1|0|NULL
+}
+
+test select-lowercase-booleans {
+    SELECT true, false;
+}
+expect {
+    1|0
+}
+
+test select-empty-string {
+    SELECT '';
+}
+expect {
+}
+
+test select-text {
+    SELECT 'hello world';
+}
+expect {
+    hello world
+}
+
+test select-doubled-quote-escape {
+    SELECT 'I''m fine';
+}
+expect {
+    I'm fine
+}
+
+test select-backslash-quote-escape {
+    SELECT 'I\'m fine';
+}
+expect {
+    I'm fine
+}
+
+test select-double-quoted-text {
+    SELECT "double quoted";
+}
+expect {
+    double quoted
+}
+
+test select-utf8mb4-text {
+    SELECT 'Grüße 世界 🦀';
+}
+expect {
+    Grüße 世界 🦀
+}
+
+test select-mixed-projection {
+    SELECT 1, 'two', NULL, TRUE;
+}
+expect {
+    1|two|NULL|1
+}
+
+test select-mixed-projection-with-aliases {
+    SELECT 1 AS one, 'two' AS two, NULL AS three, TRUE AS four;
+}
+expect {
+    1|two|NULL|1
+}
+
+test select-alias {
+    SELECT 'Ada' AS name;
+}
+expect {
+    Ada
+}
+
+test select-backtick-alias {
+    SELECT 'value' AS `select`;
+}
+expect {
+    value
+}
+
+test select-comments-without-semicolon {
+    /* mysql */ SELECT 8 /* tail */
+}
+expect {
+    8
+}
+
+test select-comments-with-semicolon {
+    /* mysql */ SELECT 8 /* tail */;
+}
+expect {
+    8
+}
+
+test multiple-statements-split-like-the-mysql-client {
+    SELECT 1; SELECT 'a;b', "c;d"; -- e;
+    SELECT 'it\'s;' # f;
+    ;; /* g; */ SELECT 3
+}
+expect {
+    1
+    a;b|c;d
+    it's;
+    3
+}
+
+test select-doubles {
+    SELECT 1e0/3, 1e15, 1e-7, 2.5e0, 100e0;
+}
+expect {
+    0.3333333333333333|1e15|0.0000001|2.5|100
+}
+
+test create-table {
+    CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));
+}
+expect {
+}
+
+@setup users
+test create-table-if-not-exists-on-existing-table {
+    CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name VARCHAR(100));
+}
+expect {
+}
+
+# MySQL: ERROR 1050 (42S01): Table 'users' already exists
+@setup users
+test create-table-duplicate-fails {
+    CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));
+}
+expect error {
+}
+
+test create-table-backtick-identifiers {
+    CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100));
+    CREATE TABLE IF NOT EXISTS `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100));
+}
+expect {
+}
+
+# MySQL: ERROR 1050 (42S01): Table 'select' already exists
+test create-table-backtick-identifiers-duplicate-fails {
+    CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100));
+    CREATE TABLE `select` (`id` INTEGER PRIMARY KEY, `display``name` VARCHAR(100));
+}
+expect error {
+}

@@ -5,9 +5,14 @@ use sqlparser::ast::{
 };
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::TokenizerError;
 use std::num::NonZeroU32;
 use thiserror::Error;
 use turso_parser::ast;
+
+mod split;
+
+pub use split::{first_statement, split_statements, StatementSpan};
 
 const MAX_BOOTSTRAP_VARCHAR_LENGTH: u64 = 16_383;
 
@@ -36,6 +41,10 @@ impl TranslationContext {
 pub enum MysqlParserError {
     #[error("{0}")]
     Parse(#[from] ParserError),
+    #[error("{0}")]
+    Tokenize(#[from] TokenizerError),
+    #[error("cannot locate MySQL statement boundaries: {0}")]
+    Split(String),
     #[error("the SQL input contains no statements")]
     Empty,
     #[error("expected one MySQL statement, found {0}")]

@@ -12,10 +12,13 @@ export CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}
 
 "$CARGO_BIN" fmt --all -- --check
 "$CARGO_BIN" fmt --manifest-path mysql/conformance/tools/mtr-miner/Cargo.toml --all -- --check
-python3 -m unittest mysql/conformance/tools/test_mining.py
-python3 -m unittest mysql/conformance/tools/test_specs.py
+python3 -m unittest mysql/conformance/tools/test_mining.py mysql/conformance/tools/test_import_common.py \
+    mysql/conformance/tools/test_import_vitess.py mysql/conformance/tools/test_import_replay.py \
+    mysql/conformance/tools/test_import_gms.py mysql/conformance/tools/test_import_vitess_endtoend.py \
+    mysql/conformance/tools/test_specs.py
 python3 mysql/conformance/tools/validate_corpus.py mysql/conformance/corpus/go-mysql-server
 "$CARGO_BIN" test -p turso_mysql_parser -p turso_mysql -p tursomysql
+make -C mysql/conformance CARGO="$CARGO_BIN" check run
 "$CARGO_BIN" test --manifest-path mysql/conformance/tools/mtr-miner/Cargo.toml
 "$CARGO_BIN" clippy -p turso_mysql_parser -p turso_mysql -p tursomysql --all-targets --no-deps -- --deny warnings
 "$CARGO_BIN" clippy --manifest-path mysql/conformance/tools/mtr-miner/Cargo.toml --all-targets -- --deny warnings
