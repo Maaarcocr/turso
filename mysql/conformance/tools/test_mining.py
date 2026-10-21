@@ -66,6 +66,24 @@ var Test = QueryTest{
         self.assertEqual(strings, ["SELECT '{not a Go brace}'"])
         self.assertEqual(len(pairs), 1)
 
+    def test_go_byte_escapes_decode_as_utf8(self):
+        source = r'''
+package queries
+var Tests = []QueryTest{
+    {Query: "SELECT CHAR_LENGTH(_utf8mb4'\xef\xbf\xbd')"},
+    {Query: "SELECT '\xff'"},
+    {Query: "SELECT '}'"},
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path = root / "enginetest/queries/escapes.go"
+            path.parent.mkdir(parents=True)
+            path.write_text(source)
+            cases, stats = MINER.extract_file(path, root, "revision")
+        self.assertEqual([case["sql"] for case in cases], ["SELECT CHAR_LENGTH(_utf8mb4'\ufffd')", "SELECT '}'"])
+        self.assertEqual(stats["non_utf8_query"], 1)
+
     def test_classifier_handles_multiline_clauses(self):
         level, features = MINER.classify("SELECT *\nFROM a\nJOIN b ON a.id = b.id")
         self.assertEqual(level, "07-joins")
