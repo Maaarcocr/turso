@@ -564,8 +564,8 @@ class ScoreTests(unittest.TestCase):
 
 
 # Stands in for `sqltest run FILE ... --output json [--filter NAME]`: every
-# test passes, except that a test named `abort` aborts the process and one
-# named `fail` fails.
+# test passes, except that a test named `abort` aborts the process, one named
+# `fail` fails and one named `noisy` prints to stdout before the report.
 FAKE_SQLTEST = """#!/usr/bin/env python3
 import json, os, re, sys
 args = sys.argv[1:]
@@ -579,6 +579,8 @@ for name in names:
         sys.stderr.write("memory allocation of 4294967296 bytes failed\\n")
         sys.stderr.flush()
         os.abort()
+    if name == "noisy":
+        print("3")
     outcome = "failed" if name == "fail" else "passed"
     results.append({"name": name, "outcome": outcome, "duration_ms": 1})
 print(json.dumps({"files": [{"path": path, "results": results}], "summary": {}}))
@@ -627,6 +629,24 @@ class ReplayTests(unittest.TestCase):
                 self.assertEqual(REPLAY.main(argv + ["--include-local"]), 0)
             files = [pathlib.Path(f["path"]).name for f in json.loads(output.read_text())["files"]]
             self.assertEqual(sorted(files), ["a.sqltest", "b.sqltest", "c.sqltest"])
+
+    def test_stdout_that_is_not_a_report_is_replayed_one_test_per_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            fake = root / "sqltest"
+            fake.write_text(FAKE_SQLTEST)
+            fake.chmod(0o755)
+            (root / "specs").mkdir()
+            test = "test {} {{\n    SELECT 1;\n}}\nexpect {{\n    1\n}}\n\n"
+            (root / "specs" / "d.sqltest").write_text(test.format("l1") + test.format("noisy"))
+            output = root / "report.json"
+            argv = [str(root / "specs"), "--sqltest", str(fake), "--output", str(output), "--memory-mb", "0"]
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(REPLAY.main(argv), 0)
+            outcomes = {r["name"]: r for f in json.loads(output.read_text())["files"] for r in f["results"]}
+            self.assertEqual(outcomes["l1"]["outcome"], "passed")
+            self.assertEqual(outcomes["noisy"]["outcome"], "error")
+            self.assertIn("not a JSON report", outcomes["noisy"]["reason"])
 
 
 if __name__ == "__main__":
