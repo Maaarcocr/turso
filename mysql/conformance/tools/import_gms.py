@@ -307,6 +307,9 @@ class Extractor:
             if value is None:
                 report.filter("assertion with a dynamic query")
                 continue
+            if not value.strip().rstrip(";").strip():
+                report.filter("empty query")
+                continue
             if is_true(item.field("Skip")):
                 report.filter("assertion skipped by source (Skip: true)")
                 continue
@@ -341,6 +344,9 @@ class Extractor:
         query = element.field("Query")
         if decode(query) is None:
             report.filter("test with a dynamic query")
+            return None
+        if not decode(query).strip().rstrip(";").strip():
+            report.filter("empty query")
             return None
         return Test(array, relative, "fixture", fixture, [(decode(query), query.line, "assertion")])
 

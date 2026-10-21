@@ -329,8 +329,8 @@ FEATURE_LEVELS = {
     "recursive-cte": 690,
     "window": 700,
     "function:info": 700,
-    "statement:set": 720,
-    "variable:system": 720,
+    "statement:set": 400,
+    "variable:system": 450,
     "statement:describe": 740,
     "statement:show": 750,
     "statement:do": 760,
@@ -616,6 +616,8 @@ def make_candidate(
 ):
     setup = [statement.strip() for statement in setup]
     sql = [statement.strip() for statement in sql]
+    if not sql or not all(sql) or not all(setup):
+        raise ValueError(f"{candidate_id}: empty SQL statement")
     level, features = classify(sql, setup)
     candidate = {
         "id": candidate_id,
