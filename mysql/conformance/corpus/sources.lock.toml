@@ -3,7 +3,11 @@
 # mysql/conformance/.sources/<id>. `spec_sources` lists the candidate id
 # prefixes (specs/<source>/) an entry produces; the recorder commits a source's
 # specs only when its entry has redistribute_generated_cases = true and writes
-# all others to the ignored specs/local/.
+# all others to the ignored specs/local/. For those, `record_mysql.py
+# --results-only` commits MySQL's results (no SQL) under results/<source>/ and
+# `tools/materialize.py` rebuilds the specs by re-running `importers.<source>`
+# (argv relative to mysql/conformance; {checkout} and {candidates} are filled
+# in) on a checkout of `revision`.
 schema_version = 1
 
 [[source]]
@@ -44,7 +48,8 @@ paths = ["tests/integrationtest/t"]
 license = "Apache-2.0"
 redistribute_generated_cases = false
 spec_sources = ["tidb"]
-notes = "tools/import_tidb.py; TiDB result files are not used. Recorded specs stay local (specs/local/) until the user decides: some tests look ported from GPL MySQL MTR."
+importers = { tidb = ["tools/import_tidb.py", "--source", "{checkout}", "--output", "{candidates}"] }
+notes = "tools/import_tidb.py; TiDB result files are not used. Some tests look ported from GPL MySQL MTR, so only MySQL's results are committed (results/tidb/); specs are materialized locally."
 
 [[source]]
 id = "matrixone-distributed-cases"
@@ -54,7 +59,8 @@ paths = ["test/distributed/cases"]
 license = "Apache-2.0"
 redistribute_generated_cases = false
 spec_sources = ["matrixone"]
-notes = "tools/import_matrixone.py; MatrixOne result files are not used. Recorded specs stay local (specs/local/) until the user decides: some tests look ported from GPL MySQL MTR."
+importers = { matrixone = ["tools/import_matrixone.py", "--source", "{checkout}", "--output", "{candidates}"] }
+notes = "tools/import_matrixone.py; MatrixOne result files are not used. Some tests look ported from GPL MySQL MTR, so only MySQL's results are committed (results/matrixone/); specs are materialized locally."
 
 [[source]]
 id = "sqllogictest"

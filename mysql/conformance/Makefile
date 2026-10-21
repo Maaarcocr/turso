@@ -22,10 +22,18 @@ BACKEND := --backend tursomysql
 # Test corpora (relative to this directory)
 OWNED_TESTS := my-sqltests
 SPECS := specs
-# Replay report of the recorded specs, read by the scoreboard
-SPECS_REPORT ?= $(or $(CARGO_TARGET_DIR),$(ROOT_DIR)/target)/mysql-specs-report.json
+# Specs materialized from committed results/ (never committed, see SPECS.md)
+LOCAL_SPECS := $(SPECS)/local
+# Committed spec directories: everything under specs/ except specs/local/
+SPEC_DIRS = $(filter-out $(LOCAL_SPECS),$(wildcard $(SPECS)/*))
+# Sources whose specs are rebuilt from results/<source>/ by materialize-local
+LOCAL_SOURCES ?= $(notdir $(patsubst %/,%,$(dir $(wildcard results/*/meta.json))))
+# Replay reports of the recorded specs, read by the scoreboard
+REPORT_DIR := $(or $(CARGO_TARGET_DIR),$(ROOT_DIR)/target)
+SPECS_REPORT ?= $(REPORT_DIR)/mysql-specs-report.json
+LOCAL_SPECS_REPORT ?= $(REPORT_DIR)/mysql-local-specs-report.json
 
-.PHONY: all build check run test run-specs run-one clean
+.PHONY: all build check run test run-specs run-one materialize-local run-local-specs clean
 
 # Build everything
 all: build
@@ -34,9 +42,9 @@ all: build
 build:
 	$(CARGO) build --manifest-path $(RUNNER_DIR)/Cargo.toml $(CARGO_PROFILE)
 
-# Check syntax of the owned and recorded specs
+# Check syntax of the owned and committed recorded specs
 check: build
-	$(SQLTEST) check $(OWNED_TESTS) $(wildcard $(SPECS))
+	$(SQLTEST) check $(OWNED_TESTS) $(SPEC_DIRS)
 
 # Run the owned specs; every one must pass
 run: build
@@ -50,12 +58,29 @@ test: run
 # the target; the scoreboard compares the report with baseline.txt. Syntax
 # errors are checked first because they also make the runner exit nonzero.
 run-specs: build
-	@if [ -d $(SPECS) ]; then \
-		$(SQLTEST) check $(SPECS) && \
-		{ $(SQLTEST) run $(SPECS) $(BACKEND) --output json > $(SPECS_REPORT) || true; } && \
+	@if [ -n "$(SPEC_DIRS)" ]; then \
+		$(SQLTEST) check $(SPEC_DIRS) && \
+		{ $(SQLTEST) run $(SPEC_DIRS) $(BACKEND) --output json > $(SPECS_REPORT) || true; } && \
 		echo "wrote $(SPECS_REPORT)"; \
 	else \
 		echo "no recorded specs in $(SPECS)/"; \
+	fi
+
+# Rebuild specs/local/<source>/ for sources that commit only MySQL's results
+# (GPL or license-unclear test suites): fetch the pinned source, re-run its
+# importer and join the committed results/<source>/ by id and SHA-256.
+materialize-local:
+	python3 -I tools/materialize.py $(LOCAL_SOURCES)
+
+# Replay the materialized local specs; score with
+# `python3 tools/score.py --local` (baseline-local.txt).
+run-local-specs: build
+	@if [ -d $(LOCAL_SPECS) ]; then \
+		$(SQLTEST) check $(LOCAL_SPECS) && \
+		{ $(SQLTEST) run $(LOCAL_SPECS) $(BACKEND) --output json > $(LOCAL_SPECS_REPORT) || true; } && \
+		echo "wrote $(LOCAL_SPECS_REPORT)"; \
+	else \
+		echo "no local specs in $(LOCAL_SPECS)/; run make materialize-local"; \
 	fi
 
 # Run a single test file: make run-one FILE=my-sqltests/basics.sqltest

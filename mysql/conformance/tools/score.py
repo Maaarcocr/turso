@@ -13,6 +13,11 @@ relative to specs/).
 * The report shows pass counts per source, the highest fully cleared level
   (every spec at or below it passes), and the first failures at the lowest
   failing level with their source provenance: the next specs to work on.
+
+Specs under specs/local/ (materialized from results/, see SPECS.md) are scored
+separately: `--local` reads specs/local/, `baseline-local.txt` and the
+`make run-local-specs` report; without it they are ignored, so the committed
+baseline never depends on locally materialized specs.
 """
 
 import argparse
@@ -36,21 +41,29 @@ def spec_relpath(path, specs_root):
         except ValueError:
             continue
     text = candidate.as_posix()
-    marker = "specs/"
+    marker = "specs/local/" if specs_root.name == "local" else "specs/"
     if marker in text:
         return text[text.rindex(marker) + len(marker):]
     return None
 
 
+def is_local(relpath):
+    return relpath.split("/", 1)[0] == "local"
+
+
 def load_results(paths, specs_root):
-    """Return ({test id: (outcome, reason)}, {replayed file})."""
+    """Return ({test id: (outcome, reason)}, {replayed file}).
+
+    Files under specs_root/local/ are skipped; score them with specs_root set
+    to specs/local.
+    """
     outcomes = {}
     files = set()
     for path in paths:
         data = json.loads(pathlib.Path(path).read_text())
         for file_result in data.get("files", []):
             relpath = spec_relpath(file_result["path"], specs_root)
-            if relpath is None:
+            if relpath is None or is_local(relpath):
                 continue
             files.add(relpath)
             for result in file_result.get("results", []):
@@ -63,10 +76,7 @@ def load_results(paths, specs_root):
 
 
 def source_dir_of(manifest, specs_root):
-    parts = manifest.relative_to(specs_root).parts
-    if parts[0] == "local" and len(parts) > 2:
-        return "/".join(parts[:2])
-    return parts[0]
+    return manifest.relative_to(specs_root).parts[0]
 
 
 def load_manifests(specs_root):
@@ -77,6 +87,8 @@ def load_manifests(specs_root):
     """
     specs = {}
     for manifest in sorted(specs_root.rglob("manifest.jsonl")):
+        if is_local(manifest.relative_to(specs_root).as_posix()):
+            continue
         source = source_dir_of(manifest, specs_root)
         with open(manifest, encoding="utf-8") as handle:
             for line in handle:
@@ -123,18 +135,27 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("results", nargs="*", type=pathlib.Path,
                         help="sqltest --output json files (default: the make run-specs report)")
-    parser.add_argument("--specs", type=pathlib.Path, default=CONFORMANCE / "specs")
-    parser.add_argument("--baseline", type=pathlib.Path, default=CONFORMANCE / "baseline.txt")
+    parser.add_argument("--local", action="store_true",
+                        help="score specs/local/ against baseline-local.txt (make run-local-specs report)")
+    parser.add_argument("--specs", type=pathlib.Path, help="spec root (default specs/, or specs/local/)")
+    parser.add_argument("--baseline", type=pathlib.Path,
+                        help="baseline file (default baseline.txt, or baseline-local.txt)")
     parser.add_argument("--update", action="store_true", help="add newly passing specs to the baseline")
     parser.add_argument("--allow-shrink", action="store_true",
                         help="with --update, also drop baseline entries that no longer pass")
     parser.add_argument("--next", type=int, default=20, help="failures to list at the lowest failing level")
     args = parser.parse_args(argv)
+    if args.specs is None:
+        args.specs = CONFORMANCE / ("specs/local" if args.local else "specs")
+    if args.baseline is None:
+        args.baseline = CONFORMANCE / ("baseline-local.txt" if args.local else "baseline.txt")
     if not args.results:
         target = pathlib.Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
-        args.results = [target / "mysql-specs-report.json"]
+        name, make_target = (("mysql-local-specs-report.json", "run-local-specs") if args.local
+                             else ("mysql-specs-report.json", "run-specs"))
+        args.results = [target / name]
         if not args.results[0].exists():
-            parser.error(f"{args.results[0]} does not exist; run make -C mysql/conformance run-specs")
+            parser.error(f"{args.results[0]} does not exist; run make -C mysql/conformance {make_target}")
 
     specs = load_manifests(args.specs)
     outcomes, replayed_files = load_results(args.results, args.specs)
