@@ -48,7 +48,6 @@ TARGET = tomllib.loads((CONFORMANCE / "target.toml").read_text())
 DEFAULT_MAX_ROWS = 100
 DEFAULT_MAX_EXPECT_BYTES = 16 * 1024
 MAX_TESTS_PER_SHARD = 1000
-MAX_RECORDS_PER_MANIFEST = 20_000
 LOCK = CONFORMANCE / "corpus/sources.lock.toml"
 
 # The two determinism runs freeze the session clock at different instants
@@ -759,7 +758,10 @@ def group_relpath(group):
 def natural_key(candidate):
     source = candidate.record["source"]
     line = source.get("line")
-    return (str(source.get("path", "")), line if isinstance(line, int) else 0, candidate.id)
+    # Numbers inside ids sort numerically (`:9` before `:10`).
+    id_key = [(0, int(part), "") if part.isdigit() else (1, 0, part)
+              for part in re.split(r"(\d+)", candidate.id) if part]
+    return (str(source.get("path", "")), line if isinstance(line, int) else 0, id_key)
 
 
 def build_shards(plan, outcomes):
@@ -1208,6 +1210,7 @@ def record(args):
     }
     manifests = collections.defaultdict(list)
     written = []
+    source_meta = None
     for plan in plan_list:
         for candidate in plan.candidates:
             for key in ("repo", "revision", "license"):
@@ -1238,6 +1241,17 @@ def record(args):
             written.append(target)
             stats["shards"] += 1
             directory = str(pathlib.PurePosixPath(shard_path).parent)
+            paths = sorted({c.record["source"]["path"] for c, _ in named})
+            entry = {
+                "shard": shard_path,
+                "group": plan.name,
+                "repo": header["repo"],
+                "revision": header["revision"],
+                "license": header["license"],
+                "paths": paths,
+                "tests": [],
+            }
+            manifests[directory].append(entry)
             for candidate, name in named:
                 outcome = outcomes[candidate.index]
                 record = candidate.record
@@ -1248,22 +1262,14 @@ def record(args):
                 stats["levels"][record["level"] // 100 * 100] += 1
                 stats["features"].update(record["features"])
                 stats["directories"][directory] += 1
-                manifests[directory].append({
-                    "id": record["id"],
-                    "test": f"{shard_path}::{name}",
-                    "level": record["level"],
-                    "source": {"path": record["source"]["path"], "line": record["source"]["line"],
-                               "license": record["source"]["license"]},
-                })
-    # One manifest per shard directory keeps every file small; "test" is
-    # relative to specs/<source>/ and repo/revision are in REPORT.md.
-    for directory, items in sorted(manifests.items()):
-        for start in range(0, len(items), MAX_RECORDS_PER_MANIFEST):
-            number = start // MAX_RECORDS_PER_MANIFEST + 1
-            name = "manifest.jsonl" if number == 1 else f"manifest-{number}.jsonl"
-            with open(out_dir / directory / name, "w", encoding="utf-8") as handle:
-                for item in items[start:start + MAX_RECORDS_PER_MANIFEST]:
-                    handle.write(LIB.dumps_jsonl(item) + "\n")
+                entry["tests"].append([name, record["id"], record["level"],
+                                       paths.index(record["source"]["path"]), record["source"]["line"]])
+    # One manifest per shard directory with one record per shard keeps the
+    # files small: per test only [name, id, level, path index, line].
+    for directory, entries in sorted(manifests.items()):
+        with open(out_dir / directory / "manifest.jsonl", "w", encoding="utf-8") as handle:
+            for entry in entries:
+                handle.write(LIB.dumps_jsonl(entry) + "\n")
     importer_report = None
     if args.import_report:
         text = args.import_report.read_text()

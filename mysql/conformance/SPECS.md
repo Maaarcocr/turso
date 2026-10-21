@@ -23,7 +23,7 @@ mysql/conformance/
 │   │   ├── REPORT.md     extraction/recording bucket counts for the source
 │   │   └── <dir>/
 │   │       ├── *.sqltest      shards of at most 1,000 tests
-│   │       └── manifest.jsonl one record per test in this directory
+│   │       └── manifest.jsonl one record per shard in this directory
 │   └── local/<source>/   recordings that must not be committed (ignored)
 ├── candidates/           importer output: unrecorded candidate JSONL (ignored)
 ├── .sources/             fetch-sources.sh checkouts (ignored)
@@ -32,14 +32,20 @@ mysql/conformance/
 └── tools/                importers, recorder, scoreboard
 ```
 
-A manifest record looks like
-`{"id": "sqllogictest/select1:L1234", "test": "select1.sqltest::l1234",
-"level": 352, "source": {"path": "test/select1.test", "line": 1234,
-"license": "CC0-1.0"}}`; `test` is relative to `specs/<source>/` and the
-repository and revision are in `REPORT.md` and `corpus/sources.lock.toml`.
-Manifests are split per directory (and continue in `manifest-2.jsonl`, ...
-after 20,000 records) and leave out feature tags (counted in `REPORT.md`, kept
-in the candidates) to keep every file small.
+Each `manifest.jsonl` line describes one shard of its directory:
+
+```json
+{"shard": "random/select/slt_good_0.sqltest", "group": "sqllogictest/random/select/slt_good_0",
+ "repo": "https://github.com/gregrahn/sqllogictest.git", "revision": "c93ac416...",
+ "license": "CC0-1.0", "paths": ["test/random/select/slt_good_0.test"],
+ "tests": [["l1234", "sqllogictest/random/select/slt_good_0:L1234", 352, 0, 1234], ...]}
+```
+
+`shard` is relative to `specs/<source>/`, and each test is
+`[name, candidate id, level, index into paths, source line]`. Grouping the
+tests per shard keeps the manifests at about a third of the size of one JSON
+object per test; feature tags are counted in `REPORT.md` and kept in the
+candidates.
 
 ## Pipeline
 
