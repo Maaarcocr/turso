@@ -105,3 +105,21 @@ This project includes MySQL specification cases derived from go-mysql-server eng
 * Copyright: DoltHub, Inc. and contributors
 * License: licenses/mysql/go-mysql-server-apache-license.md (Apache License v2.0)
 * Homepage: https://github.com/dolthub/go-mysql-server
+
+This project includes a Python port of the Vitess evalengine test case generator (go/vt/vtgate/evalengine/testcases, mysql/conformance/tools/import_vitess.py) and MySQL specification cases derived from it, distributed by The Vitess Authors:
+
+* Copyright: The Vitess Authors
+* License: licenses/mysql/vitess-apache-license.md (Apache License v2.0)
+* Homepage: https://github.com/vitessio/vitess
+
+This project includes MySQL specification cases derived from TiDB integration tests (tests/integrationtest), distributed by PingCAP, Inc.:
+
+* Copyright: PingCAP, Inc.
+* License: licenses/mysql/tidb-apache-license.md (Apache License v2.0)
+* Homepage: https://github.com/pingcap/tidb
+
+This project includes MySQL specification cases derived from MatrixOne distributed test cases (test/distributed/cases), distributed by Matrix Origin:
+
+* Copyright: Matrix Origin
+* License: licenses/mysql/matrixone-apache-license.md (Apache License v2.0)
+* Homepage: https://github.com/matrixorigin/matrixone
