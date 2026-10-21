@@ -568,12 +568,12 @@ fn lowers_anonymous_parameters_in_projection_order() {
 }
 
 #[test]
-fn rejects_non_anonymous_and_expression_parameters() {
+fn rejects_non_anonymous_parameters() {
     let numbered = parse_one("SELECT ?1").expect("sqlparser accepts numbered placeholders");
     let error = translate(&numbered).expect_err("numbered placeholders must not lower");
     assert!(matches!(error, MysqlParserError::Unsupported(_)));
 
-    for sql in ["SELECT :named", "SELECT @named", "SELECT $named"] {
+    for sql in ["SELECT :named", "SELECT @named"] {
         match parse_one(sql) {
             Ok(statement) => {
                 let error = translate(&statement).expect_err("named placeholders must not lower");
@@ -588,94 +588,276 @@ fn rejects_non_anonymous_and_expression_parameters() {
             ),
         }
     }
+}
 
-    let error = parse_and_translate("SELECT ? + 1")
-        .expect_err("expressions containing parameters must not lower");
-    assert!(matches!(error, MysqlParserError::Unsupported(_)));
+#[test]
+fn dollar_sign_starts_an_identifier_not_a_parameter() {
+    let statement =
+        parse_and_translate("SELECT $named").expect("MySQL identifiers may start with $");
+    let ast::Stmt::Select(select) = statement else {
+        panic!("statement must lower to SELECT");
+    };
+    let ast::OneSelect::Select { columns, .. } = select.body.select else {
+        panic!("query body must lower to SELECT");
+    };
+    assert!(matches!(
+        columns.as_slice(),
+        [ast::ResultColumn::Expr(expr, _)] if matches!(expr.as_ref(), ast::Expr::Id(name) if name.as_str() == "$named")
+    ));
+}
+
+#[test]
+fn numbers_parameters_in_text_order() {
+    let statement = parse_and_translate(
+        "SELECT ? + 1 FROM t JOIN u ON t.id = ? WHERE a = ? GROUP BY b HAVING COUNT(*) > ? ORDER BY ? LIMIT ?, ?",
+    )
+    .expect("parameters inside expressions must lower");
+    assert_eq!(
+        statement.to_string(),
+        "SELECT ?1 + 1 FROM t JOIN u ON t.id = ?2 WHERE a = ?3 GROUP BY b HAVING COUNT (*) > ?4 ORDER BY ?5 LIMIT ?7 OFFSET ?6"
+    );
+}
+
+#[test]
+fn lowers_select_statements_to_shared_ast() {
+    let cases = [
+        ("SELECT greeting", "SELECT greeting"),
+        ("SELECT 1 + 2, -1, NOT TRUE", "SELECT 1 + 2, - 1, NOT TRUE"),
+        ("SELECT VERSION()", "SELECT VERSION ()"),
+        ("SELECT CAST(1 AS SIGNED)", "SELECT CAST (1 AS SIGNED)"),
+        (
+            "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
+            "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
+        ),
+        ("SELECT *", "SELECT *"),
+        ("SELECT users.* FROM users", "SELECT users.* FROM users"),
+        ("SELECT 1 FROM dual", "SELECT 1"),
+        ("SELECT 1 WHERE TRUE", "SELECT 1 WHERE TRUE"),
+        ("SELECT DISTINCT 1", "SELECT DISTINCT 1"),
+        ("SELECT 1 GROUP BY 1", "SELECT 1 GROUP BY 1"),
+        ("SELECT 1 HAVING TRUE", "SELECT 1 HAVING TRUE"),
+        ("SELECT 1 ORDER BY 1", "SELECT 1 ORDER BY 1"),
+        ("SELECT 1 LIMIT 1", "SELECT 1 LIMIT 1"),
+        ("SELECT 1 LIMIT 2, 3", "SELECT 1 LIMIT 3 OFFSET 2"),
+        ("SELECT (SELECT 1)", "SELECT (SELECT 1)"),
+        ("SELECT 1 UNION SELECT 2", "SELECT 1 UNION SELECT 2"),
+        (
+            "WITH cte AS (SELECT 1) SELECT 1",
+            "WITH cte AS (SELECT 1) SELECT 1",
+        ),
+        ("VALUES ROW(1), ROW(2)", "VALUES (1), (2)"),
+        (
+            "SELECT a FROM t1 LEFT JOIN t2 USING (a) NATURAL JOIN t3, t4",
+            "SELECT a FROM t1 LEFT JOIN t2 USING (a) NATURAL JOIN t3, t4",
+        ),
+        ("SELECT 7 DIV 2", "SELECT CAST (7 / 2 AS INTEGER)"),
+        ("SELECT 7 MOD 2", "SELECT 7 % 2"),
+        ("SELECT a <=> b", "SELECT a IS b"),
+        ("SELECT a && b || c", "SELECT a AND b OR c"),
+        ("SELECT \"text\"", "SELECT 'text'"),
+        ("SELECT 'a\\fb'", "SELECT 'afb'"),
+        ("SELECT 0x41, b'1000010'", "SELECT x'41', x'42'"),
+        (
+            "SELECT _utf8mb4'abc', _binary'abc'",
+            "SELECT 'abc', x'616263'",
+        ),
+        ("SELECT DATE '2018-5-1'", "SELECT '2018-05-01'"),
+        (
+            "SELECT DATE_ADD(d, INTERVAL 1 DAY), d - INTERVAL '1:1' MINUTE_SECOND",
+            "SELECT DATE_ADD (d, 1, 'DAY'), DATE_SUB (d, '1:1', 'MINUTE_SECOND')",
+        ),
+        (
+            "SELECT EXTRACT(YEAR_MONTH FROM d), TIMESTAMPDIFF(DAY, a, b)",
+            "SELECT EXTRACT ('YEAR_MONTH', d), TIMESTAMPDIFF ('DAY', a, b)",
+        ),
+        (
+            "SELECT j->'$.a', j->>'$.a'",
+            "SELECT JSON_EXTRACT (j, '$.a'), JSON_UNQUOTE (JSON_EXTRACT (j, '$.a'))",
+        ),
+        (
+            "SELECT GROUP_CONCAT(a, b SEPARATOR ';') FROM t",
+            "SELECT GROUP_CONCAT (a || b, ';') FROM t",
+        ),
+        ("SELECT INTERVAL(5, 1, 10)", "SELECT INTERVAL (5, 1, 10)"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
 }
 
 #[test]
 fn lowering_rejects_each_unsupported_query_shape() {
     let cases = [
         SqlCase {
-            name: "identifier expression",
-            sql: "SELECT greeting",
-        },
-        SqlCase {
-            name: "binary expression",
-            sql: "SELECT 1 + 2",
-        },
-        SqlCase {
-            name: "unary expression",
-            sql: "SELECT -1",
-        },
-        SqlCase {
-            name: "function",
-            sql: "SELECT VERSION()",
-        },
-        SqlCase {
-            name: "cast",
-            sql: "SELECT CAST(1 AS SIGNED)",
-        },
-        SqlCase {
-            name: "case",
-            sql: "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
-        },
-        SqlCase {
-            name: "wildcard",
-            sql: "SELECT *",
-        },
-        SqlCase {
-            name: "qualified wildcard",
-            sql: "SELECT users.* FROM users",
-        },
-        SqlCase {
-            name: "from",
-            sql: "SELECT 1 FROM dual",
-        },
-        SqlCase {
-            name: "where",
-            sql: "SELECT 1 WHERE TRUE",
-        },
-        SqlCase {
-            name: "distinct",
-            sql: "SELECT DISTINCT 1",
-        },
-        SqlCase {
-            name: "mysql select modifier",
+            name: "select modifier",
             sql: "SELECT SQL_NO_CACHE 1",
         },
         SqlCase {
-            name: "group by",
-            sql: "SELECT 1 GROUP BY 1",
+            name: "straight join modifier",
+            sql: "SELECT STRAIGHT_JOIN 1 FROM t",
         },
         SqlCase {
-            name: "having",
-            sql: "SELECT 1 HAVING TRUE",
+            name: "straight join",
+            sql: "SELECT a FROM t1 STRAIGHT_JOIN t2",
         },
         SqlCase {
-            name: "order by",
-            sql: "SELECT 1 ORDER BY 1",
+            name: "index hint",
+            sql: "SELECT a FROM t USE INDEX (i)",
         },
         SqlCase {
-            name: "limit",
-            sql: "SELECT 1 LIMIT 1",
+            name: "partition selection",
+            sql: "SELECT a FROM t PARTITION (p0)",
         },
         SqlCase {
-            name: "subquery",
-            sql: "SELECT (SELECT 1)",
+            name: "into",
+            sql: "SELECT 1 INTO @x",
         },
         SqlCase {
-            name: "union",
-            sql: "SELECT 1 UNION SELECT 2",
+            name: "locking read",
+            sql: "SELECT a FROM t FOR UPDATE",
         },
         SqlCase {
-            name: "cte",
-            sql: "WITH cte AS (SELECT 1) SELECT 1",
+            name: "user variable",
+            sql: "SELECT @a",
         },
         SqlCase {
-            name: "values",
+            name: "system variable",
+            sql: "SELECT @@version",
+        },
+        SqlCase {
+            name: "setting hint",
+            sql: "SELECT /*+ SET_VAR(sql_mode='') */ 1",
+        },
+        SqlCase {
+            name: "collation",
+            sql: "SELECT a COLLATE utf8mb4_bin FROM t",
+        },
+        SqlCase {
+            name: "cast to json",
+            sql: "SELECT CAST(a AS JSON) FROM t",
+        },
+        SqlCase {
+            name: "cast to date",
+            sql: "SELECT CAST(a AS DATE) FROM t",
+        },
+        SqlCase {
+            name: "cast to sized char",
+            sql: "SELECT CAST(a AS CHAR(3)) FROM t",
+        },
+        SqlCase {
+            name: "latin1 text",
+            sql: "SELECT _latin1'\u{e9}'",
+        },
+        SqlCase {
+            name: "odd hex digits",
+            sql: "SELECT X'abc'",
+        },
+        SqlCase {
+            name: "invalid date",
+            sql: "SELECT DATE '2018-02-30'",
+        },
+        SqlCase {
+            name: "datetime literal",
+            sql: "SELECT DATETIME '2020-01-01 00:00:00'",
+        },
+        SqlCase {
+            name: "unsigned arithmetic",
+            sql: "SELECT 0x41 + 1",
+        },
+        SqlCase {
+            name: "temporal arithmetic",
+            sql: "SELECT DATE '2020-01-01' + 0",
+        },
+        SqlCase {
+            name: "div beyond bigint",
+            sql: "SELECT 1 DIV 1e19",
+        },
+        SqlCase {
+            name: "values without row",
             sql: "VALUES (1)",
+        },
+        SqlCase {
+            name: "derived column list",
+            sql: "SELECT * FROM (SELECT 1) AS x(a)",
+        },
+        SqlCase {
+            name: "full join",
+            sql: "SELECT a FROM t1 FULL OUTER JOIN t2 ON 1",
+        },
+        SqlCase {
+            name: "except all",
+            sql: "SELECT 1 EXCEPT ALL SELECT 1",
+        },
+        SqlCase {
+            name: "caret over a function",
+            sql: "SELECT a ^ RAND() FROM t",
+        },
+        SqlCase {
+            name: "multi-character trim",
+            sql: "SELECT TRIM(LEADING 'ab' FROM 'abab')",
+        },
+        SqlCase {
+            name: "full-text search",
+            sql: "SELECT MATCH (a) AGAINST ('x') FROM t",
+        },
+        SqlCase {
+            name: "nulls first",
+            sql: "SELECT a FROM t ORDER BY a NULLS FIRST",
+        },
+        SqlCase {
+            name: "binary cast",
+            sql: "SELECT BINARY s FROM t",
+        },
+        SqlCase {
+            name: "recursive cte",
+            sql: "WITH RECURSIVE c(n) AS (SELECT 1) SELECT n FROM c",
+        },
+        SqlCase {
+            name: "empty regular expression",
+            sql: "SELECT 'a' REGEXP ''",
+        },
+        SqlCase {
+            name: "regular expression over bytes",
+            sql: "SELECT 'a' REGEXP _binary 'a'",
+        },
+        SqlCase {
+            name: "negative rounding",
+            sql: "SELECT ROUND(1234, -2)",
+        },
+        SqlCase {
+            name: "nested row value",
+            sql: "SELECT ((1, 2), 3) = ((1, 2), 3)",
+        },
+        SqlCase {
+            name: "uneven values rows",
+            sql: "VALUES ROW(1), ROW(1, 2)",
+        },
+        SqlCase {
+            name: "bytes that are not utf-8",
+            sql: "SELECT CONCAT(0xAACC)",
+        },
+        SqlCase {
+            name: "binary string in a number context",
+            sql: "SELECT POW(2, _binary '3')",
+        },
+        SqlCase {
+            name: "bit operation on a fraction",
+            sql: "SELECT 5 & 1.5",
+        },
+        SqlCase {
+            name: "invalid decimal type",
+            sql: "SELECT CAST(1 AS DECIMAL(2, 4))",
+        },
+        SqlCase {
+            name: "temporal compared with a number",
+            sql: "SELECT DATE '2020-01-01' = 1",
+        },
+        SqlCase {
+            name: "temporal compared with an invalid string",
+            sql: "SELECT DATE '2020-01-01' = 'x'",
         },
     ];
 
@@ -742,7 +924,7 @@ fn lowering_rejects_unsupported_statement_families() {
 }
 
 #[test]
-fn lowering_rejects_numbers_without_exact_mysql_semantics() {
+fn lowers_numbers_with_the_same_text_as_the_sqlite_parser() {
     let cases = [
         "SELECT 1.5",
         "SELECT 1e3",
@@ -751,12 +933,7 @@ fn lowering_rejects_numbers_without_exact_mysql_semantics() {
     ];
 
     for sql in cases {
-        let error = parse_and_translate(sql).expect_err("inexact numeric literal must be rejected");
-        assert!(
-            error
-                .to_string()
-                .contains("exact MySQL decimal or unsigned semantics"),
-            "SQL: {sql}\nerror: {error}"
-        );
+        let statement = parse_and_translate(sql).expect("numeric literal must lower");
+        assert_eq!(statement.to_string(), sql);
     }
 }

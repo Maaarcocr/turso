@@ -159,7 +159,7 @@ mod tests {
         // It is not lowered yet, and SQLite would read it as several
         // statements, so the fallback must refuse it rather than run the
         // statements SQLite sees after the first.
-        let sql = "SELECT x FROM t WHERE y = 'a\\'; DROP TABLE t; -- '";
+        let sql = "SELECT SQL_NO_CACHE x FROM t WHERE y = 'a\\'; DROP TABLE t; -- '";
         let error = MySqlDialect.parse(sql).expect_err("lexers disagree");
         assert!(error.to_string().contains("disagree"), "{error}");
     }
