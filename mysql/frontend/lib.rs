@@ -1,7 +1,11 @@
 use std::sync::Arc;
 use turso_core::schema::{BTreeTable, Schema};
-use turso_core::{Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, IO};
+use turso_core::{
+    Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, Value, IO,
+};
 use turso_parser::ast;
+
+mod functions;
 
 #[derive(Debug)]
 pub struct MySqlDialect;
@@ -70,7 +74,20 @@ impl Dialect for MySqlDialect {
     }
 
     fn resolve_function(&self, name: &str, arg_count: usize) -> Result<Option<Func>> {
+        if let Some(function) = functions::resolve(name, arg_count) {
+            return Ok(Some(function));
+        }
         SqliteDialect.resolve_function(name, arg_count)
+    }
+
+    fn exec_scalar_function(
+        &self,
+        _conn: &Connection,
+        name: &str,
+        args: &[Value],
+    ) -> Result<Value> {
+        functions::execute(name, args)
+            .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
     }
 }
 
@@ -99,7 +116,6 @@ pub fn open_memory() -> Result<Arc<Connection>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use turso_core::Value;
 
     fn consumed(sql: &str) -> (bool, usize) {
         let (cmd, consumed) = MySqlDialect.parse(sql).expect("SQL must parse");
