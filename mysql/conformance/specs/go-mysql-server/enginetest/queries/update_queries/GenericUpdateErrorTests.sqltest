@@ -1,0 +1,90 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/update_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    CREATE TABLE `floattable` (   `i` bigint NOT NULL,   `f32` float NOT NULL,   `f64` double NOT NULL,   PRIMARY KEY (`i`) );
+    insert into floattable values
+    (1, 1.0, 1.0),
+    (2, 1.5, 1.5),
+    (3, 2.0, 2.0),
+    (4, 2.5, 2.5),
+    (-1, -1.0, -1.0),
+    (-2, -1.5, -1.5);
+    create index floattable_f on floattable (f64);
+}
+
+setup s3 {
+    CREATE TABLE `typestable` (   `id` bigint NOT NULL,   `i8` tinyint,   `i16` smallint,   `i32` int,   `i64` bigint,   `u8` tinyint unsigned,   `u16` smallint unsigned,   `u32` int unsigned,   `u64` bigint unsigned,   `f32` float,   `f64` double,   `ti` timestamp,   `da` date,   `te` varchar(20),   `bo` tinyint,   `js` json,   `bl` blob,   `e1` enum('', 'v1', 'v2'),   `s1` set('', 'v1', 'v2'),   PRIMARY KEY (`id`) );
+}
+
+# mysql-error: 1241 21000 Operand should contain 1 column(s)
+@setup s1
+test l782 {
+    UPDATE mytable SET i = ("one", "two");
+}
+expect error {
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'one' for column 'i' at row 1
+@setup s1
+test l786 {
+    UPDATE mytable SET i = "one";
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'f64' at row 1
+@setup s2
+test l790 {
+    UPDATE floattable SET f64 = "one";
+}
+expect error {
+}
+
+@setup s3
+test l794 {
+    UPDATE typestable SET f64 = "one";
+}
+expect unordered {
+}
+
+# mysql-error: 1048 23000 Column 's' cannot be null
+@setup s1
+test l822 {
+    UPDATE mytable SET s = NULL;
+}
+expect error {
+}
+
+# mysql-error: 1052 23000 Column 's' in field list is ambiguous
+@setup s1
+test l826 {
+    UPDATE mytable one, mytable two SET s = NULL;
+}
+expect error {
+}
+
+# mysql-error: 1288 HY000 The target table mytable of the UPDATE is not updatable
+@setup s1
+test l830 {
+    UPDATE (SELECT * FROM mytable) mytable SET s = NULL;
+}
+expect error {
+}

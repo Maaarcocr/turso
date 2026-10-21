@@ -1,0 +1,84 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/row_limit_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t (id smallint primary key, a VARCHAR(5000), b VARCHAR(5000), c VARCHAR(5000));
+}
+
+test l33 {
+    create table two_col (pk smallint primary key, c1 VARCHAR(32700) NOT NULL, c2 VARCHAR(32700) NOT NULL) CHARACTER SET latin1;
+}
+expect unordered {
+}
+
+test l39 {
+    create table one_col (id int primary key, c1 VARCHAR(65486) NOT NULL) CHARACTER SET latin1;
+}
+expect unordered {
+}
+
+test l45 {
+    CREATE TABLE one_ref (
+    id smallint primary key,
+    a VARCHAR(10000),
+    b VARCHAR(10000),
+    c VARCHAR(10000),
+    d VARCHAR(10000),
+    e VARCHAR(10000),
+    f VARCHAR(10000),
+    i TEXT
+) character set latin1;
+}
+expect unordered {
+}
+
+# mysql-error: 1118 42000 Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+@setup s1
+test l69 {
+    alter table t add column d VARCHAR(5000);
+}
+expect error {
+}
+
+# mysql-error: 1118 42000 Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+@setup s1
+test l73 {
+    alter table t modify column c VARCHAR(7000);
+}
+expect error {
+}
+
+# mysql-error: 1074 42000 Column length too big for column 'c1' (max = 16383); use BLOB or TEXT instead
+test l81 {
+    create table t1 (c1 VARCHAR(16883) NOT NULL);
+}
+expect error {
+}
+
+# mysql-error: 1074 42000 Column length too big for column 'c1' (max = 65535); use BLOB or TEXT instead
+test l85 {
+    create table t1 (c1 VARCHAR(65536) NOT NULL) CHARACTER SET latin1;
+}
+expect error {
+}
+
+# mysql-error: 1118 42000 Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+test l89 {
+    CREATE TABLE one_ref (
+    id int primary key,
+    a VARCHAR(10000),
+    b VARCHAR(10000),
+    c VARCHAR(10000),
+    d VARCHAR(10000),
+    e VARCHAR(10000),
+    f VARCHAR(10000),
+    i VARCHAR(6000)
+) character set latin1;
+}
+expect error {
+}

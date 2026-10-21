@@ -1,0 +1,50 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/delete_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table point_table (i bigint primary key, p point NOT NULL);
+    insert into point_table values (5, ST_GeomFromText('Point(1 2)'));
+}
+
+setup s2 {
+    create table line_table (i bigint primary key, l linestring NOT NULL);
+    insert into line_table values
+    (0, ST_GeomFromText('Linestring(1 2,3 4)')),
+    (1, ST_GeomFromText('Linestring(1 2,3 4,5 6)'));
+}
+
+setup s3 {
+    create table polygon_table (i bigint primary key, p polygon NOT NULL);
+    insert into polygon_table values
+    (0, ST_GeomFromText('Polygon((0 0,0 1,1 1,0 0))')),
+    (1, ST_GeomFromText('Polygon((0 0,0 1,1 1,0 0),(0 0,0 1,1 1,0 0))'));
+}
+
+@setup s1
+test l269 {
+    DELETE FROM point_table;
+    SELECT * FROM point_table;
+}
+expect unordered {
+}
+
+@setup s2
+test l275 {
+    DELETE FROM line_table;
+    SELECT * FROM line_table;
+}
+expect unordered {
+}
+
+@setup s3
+test l281 {
+    DELETE FROM polygon_table;
+    SELECT * FROM polygon_table;
+}
+expect unordered {
+}

@@ -1,0 +1,45 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/foreign_key_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE parent(a INTEGER PRIMARY KEY, b INTEGER);
+    ALTER TABLE parent ADD INDEX pb (b);
+    CREATE TABLE child2(e INTEGER PRIMARY KEY, f INTEGER);
+}
+
+# mysql-error: 3940 HY000 Constraint 'fk2' does not exist.
+@setup s1
+test l3185 {
+    ALTER TABLE child2 DROP CONSTRAINT fk2;
+}
+expect error {
+}
+
+# mysql-error: 3940 HY000 Constraint 'fk3' does not exist.
+@setup s1
+test l3199 {
+    ALTER TABLE child2 DROP CONSTRAINT fk3;
+}
+expect error {
+}
+
+# mysql-error: 3940 HY000 Constraint 'fk3' does not exist.
+@setup s1
+test l3215 {
+    ALTER TABLE child2 DROP CONSTRAINT fk3;
+}
+expect error {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'fk3'; check that column/key exists
+@setup s1
+test l3219 {
+    ALTER TABLE child2 DROP FOREIGN KEY fk3;
+}
+expect error {
+}

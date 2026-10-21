@@ -1,0 +1,103 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t0 (i bigint, s varchar(20));
+}
+
+setup s2 {
+    ALTER TABLE t0 DROP COLUMN s;
+}
+
+setup s3 {
+    CREATE TABLE t1 (a int, b varchar(10), c bigint);
+    insert into t1 values (1, 'abc', 2), (4, 'def', 5);
+}
+
+setup s4 {
+    ALTER TABLE t1 DROP COLUMN a;
+}
+
+setup s5 {
+    CREATE TABLE t2 (a int, b varchar(10), c bigint);
+    insert into t2 values (1, 'abc', 2), (4, 'def', 5);
+}
+
+setup s6 {
+    ALTER TABLE t2 DROP COLUMN b;
+}
+
+@setup s1
+test l2534 {
+    ALTER TABLE t0 DROP COLUMN s;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l2538 {
+    SHOW FULL COLUMNS FROM t0;
+}
+expect {
+    i|bigint|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s3
+test l2551 {
+    ALTER TABLE t1 DROP COLUMN a;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l2555 {
+    SHOW FULL COLUMNS FROM t1;
+}
+expect {
+    b|varchar(10)|utf8mb4_0900_ai_ci|YES||NULL||select,insert,update,references|
+    c|bigint|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s3
+@setup s4
+test l2562 {
+    SELECT * FROM t1 ORDER BY b;
+}
+expect {
+    abc|2
+    def|5
+}
+
+@setup s5
+test l2578 {
+    ALTER TABLE t2 DROP COLUMN b;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l2582 {
+    SHOW FULL COLUMNS FROM t2;
+}
+expect {
+    a|int|NULL|YES||NULL||select,insert,update,references|
+    c|bigint|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s5
+@setup s6
+test l2589 {
+    SELECT * FROM t2 ORDER BY c;
+}
+expect {
+    1|2
+    4|5
+}

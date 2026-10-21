@@ -1,0 +1,338 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/ansi_quotes_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    SET @@sql_mode='ANSI_QUOTES,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+setup s2 {
+    create table auctions (ai int auto_increment, id varchar(32), data varchar(100), primary key (ai));
+    insert into auctions (id, data) values (42, 'forty-two');
+}
+
+setup s3 {
+    PREPARE prep1 FROM 'select "data" from auctions order by "ai" desc;';
+}
+
+setup s4 {
+    PREPARE prep2 FROM 'INSERT INTO auctions (id, "data") VALUES (?, ?);';
+}
+
+setup s5 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+setup s6 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+setup s7 {
+    SET @@sql_mode='ANSI';
+}
+
+setup s8 {
+    CREATE TABLE public_keys (item INTEGER, type CHAR(4), hash INTEGER, "count" INTEGER, "public" VARCHAR(8000));
+}
+
+setup s9 {
+    insert into public_keys("item", "type", "hash", "count", "public") values (42, 'type', 1010, 1, 'public');
+}
+
+setup s10 {
+    create view view1 as select public_keys."public", public_keys."count" from public_keys;
+}
+
+setup s11 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+setup s12 {
+    create table t (pk int primary key, name varchar(32), data varchar(100));
+    insert into t values (1, 'John', 'FooBar');
+}
+
+setup s13 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+setup s14 {
+    insert into t values (2, 'George', 'SomethingElse');
+}
+
+setup s15 {
+    create table t ("pk" int primary key, "name" varchar(20), data varchar(100) DEFAULT(CONCAT("name", '!')));
+    insert into t (pk, name) values (1, 'John');
+}
+
+setup s16 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+setup s17 {
+    insert into t (pk, name) values (2, 'Jill');
+}
+
+setup s18 {
+    create table t (pk int primary key, data varchar(100), CONSTRAINT "ansi_check" CHECK ("data" != 'forbidden'));
+}
+
+setup s19 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+
+@setup s1
+@setup s2
+test l34 {
+    select "data" from auctions order by "ai" desc;
+}
+expect {
+    forty-two
+}
+
+@setup s1
+@setup s2
+test l40 {
+    select `data` from auctions order by `ai` desc;
+}
+expect {
+    forty-two
+}
+
+@setup s1
+@setup s2
+test l44 {
+    PREPARE prep1 FROM 'select "data" from auctions order by "ai" desc;';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l48 {
+    PREPARE prep2 FROM 'INSERT INTO auctions (id, "data") VALUES (?, ?);';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l52 {
+    select "data", '"' from auctions order by "ai";
+}
+expect {
+    forty-two|"
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l56 {
+    select "data", '\"' from auctions order by "ai";
+}
+expect {
+    forty-two|"
+}
+
+@setup s1
+test l60 {
+    select '''foo''';
+}
+expect unordered {
+    'foo'
+}
+
+@setup s1
+test l73 {
+    SET @@sql_mode='NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+test l77 {
+    select "data" from auctions order by "ai" desc;
+}
+expect {
+    data
+}
+
+@setup s6
+test l81 {
+    show tables;
+}
+expect {
+}
+
+@setup s7
+test l96 {
+    create table "t" ("pk" int primary key, "data" varchar(100));
+}
+expect unordered {
+}
+
+@setup s1
+test l117 {
+    CREATE TABLE public_keys (item INTEGER, type CHAR(4), hash INTEGER, "count" INTEGER, "public" VARCHAR(8000));
+}
+expect unordered {
+}
+
+@setup s1
+@setup s8
+test l121 {
+    insert into public_keys("item", "type", "hash", "count", "public") values (42, 'type', 1010, 1, 'public');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s8
+@setup s9
+test l125 {
+    create view view1 as select public_keys."public", public_keys."count" from public_keys;
+}
+expect unordered {
+}
+
+@setup s1
+test l129 {
+    show tables;
+}
+expect {
+}
+
+@setup s1
+@setup s8
+@setup s9
+@setup s10
+test l133 {
+    show create table view1;
+}
+expect {
+    view1|CREATE ALGORITHM=UNDEFINED DEFINER="root"@"%" SQL SECURITY DEFINER VIEW "view1" AS select "public_keys"."public" AS "public","public_keys"."count" AS "count" from "public_keys"|utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s1
+@setup s8
+@setup s9
+@setup s10
+test l146 {
+    select "public", "count" from view1;
+}
+expect unordered {
+    public|1
+}
+
+@setup s1
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+test l160 {
+    show create table view1;
+}
+expect {
+    view1|CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `view1` AS select `public_keys`.`public` AS `public`,`public_keys`.`count` AS `count` from `public_keys`|utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s1
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+test l168 {
+    select public, `count` from view1;
+}
+expect unordered {
+    public|1
+}
+
+@setup s1
+@setup s12
+test l189 {
+    select "name", "data" from t order by "pk";
+}
+expect {
+    John|FooBar
+}
+
+@setup s1
+@setup s12
+@setup s13
+test l203 {
+    insert into t values (2, 'George', 'SomethingElse');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s12
+@setup s13
+@setup s14
+test l208 {
+    select name, data from t where pk=2;
+}
+expect unordered {
+    George|SomethingElse
+}
+
+@setup s1
+@setup s15
+test l266 {
+    select "name", "data" from t where "pk"=1;
+}
+expect unordered {
+    John|John!
+}
+
+@setup s1
+@setup s15
+@setup s16
+test l276 {
+    insert into t (pk, name) values (2, 'Jill');
+}
+expect unordered {
+}
+
+@setup s1
+@setup s15
+@setup s16
+@setup s17
+test l281 {
+    select name, data from t where pk=2;
+}
+expect unordered {
+    Jill|Jill!
+}
+
+# mysql-error: 3819 HY000 Check constraint 'ansi_check' is violated.
+@setup s1
+@setup s18
+test l295 {
+    insert into t values (1, 'forbidden');
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'ansi_check' is violated.
+@setup s1
+@setup s18
+@setup s19
+test l305 {
+    insert into t values (1, 'forbidden');
+}
+expect error {
+}

@@ -1,0 +1,603 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/view_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create view v as select 1;
+}
+
+setup s2 {
+    create table t (i int);
+    insert into t values (1);
+}
+
+setup s3 {
+    CREATE TABLE tab1 (
+  pk int NOT NULL,
+  col0 int,
+  col1 float,
+  col2 text,
+  col3 int,
+  col4 float,
+  col5 text,
+  PRIMARY KEY (pk),
+  KEY idx_tab1_0 (col0),
+  KEY idx_tab1_1 (col1),
+  KEY idx_tab1_3 (col3),
+  KEY idx_tab1_4 (col4)
+);
+    insert into tab1 values (6, 0, 52.14, 'jxmel', 22, 2.27, 'pzxbn');
+}
+
+setup s4 {
+    CREATE VIEW view_2_tab1_157 AS SELECT pk, col0 FROM tab1 WHERE NOT ((col0 IN (SELECT col3 FROM tab1 WHERE ((col0 IS NULL) OR col3 > 5 OR col3 <= 50 OR col1 < 83.11))) OR col0 > 75);
+}
+
+setup s5 {
+    create view v as select 2+2;
+}
+
+setup s6 {
+    CREATE TABLE xy (x int primary key, y int);
+    CREATE VIEW xyv (u,v) AS SELECT * from xy;
+}
+
+setup s7 {
+    CREATE TABLE t (id int primary key, name varchar(10));
+    INSERT INTO t VALUES (1, 'alice'), (2, 'bob');
+    CREATE VIEW v (id, name, tag) AS SELECT id, name, 'abc' FROM t;
+    CREATE VIEW v_renamed (id, name, status) AS SELECT id, name, 'active' FROM t;
+}
+
+setup s8 {
+    CREATE VIEW v (str_col, int_col, decimal_col, float_col, null_col, bool_col, hex_col, bit_col, func_col, expr_col) AS SELECT 'abc', 1, 1.5, 1.5e0, NULL, TRUE, 0x41, b'1010', abs(-5), 1 + 1;
+}
+
+setup s9 {
+    CREATE VIEW v AS SELECT 'abc', 1, 123, 1 AS `2b`, 1.5, 1.5e0, NULL, TRUE, 0x41, b'1010', abs(1), 1 + 1;
+}
+
+setup s10 {
+    CREATE TABLE strs ( id int NOT NULL AUTO_INCREMENT,
+                                 str  varchar(15) NOT NULL,
+                                 PRIMARY KEY (id));
+}
+
+setup s11 {
+    CREATE VIEW caseSensitive AS SELECT id as AbCdEfG FROM strs;
+}
+
+setup s12 {
+    CREATE VIEW quotes AS SELECT * FROM strs WHERE str IN ('joe''s',
+                                                                    "jan's",
+                                                                    'mia\\\''s',
+                                                                    'bob\'s'
+                                                                   );
+    INSERT INTO strs VALUES (0,"joe's");
+    INSERT INTO strs VALUES (0,"mia\\\'s");
+    INSERT INTO strs VALUES (0,"bob's");
+    INSERT INTO strs VALUES (0,"joe's");
+    INSERT INTO strs VALUES (0,"notInView");
+    INSERT INTO strs VALUES (0,"jan's");
+}
+
+setup s13 {
+    create table t (i int primary key, j int default 100);
+    insert into t(i) values (1);
+    create table tt (ii int primary key, jj int default (pow(11, 2)));
+    insert into tt values (1, default), (3, 4);
+    create view v as select * from t;
+    create view v1 as select i, j + 10 as jj from t;
+    create view vv as select i, ii, j, jj, i + ii + j + jj from t join tt where i = ii;
+}
+
+setup s14 {
+    CREATE TABLE t (pk int PRIMARY KEY, c1 varchar(20));
+    CREATE VIEW v AS SELECT * FROM t;
+}
+
+setup s15 {
+    CREATE TABLE t_chain (pk int PRIMARY KEY, c1 int);
+    CREATE VIEW v1 AS SELECT * FROM t_chain;
+    CREATE VIEW v2 AS SELECT pk FROM v1;
+    DROP VIEW v1;
+}
+
+setup s16 {
+    CREATE TABLE t1 (pk int PRIMARY KEY, c1 int);
+    CREATE TABLE t2 (pk int PRIMARY KEY, c1 int);
+    CREATE VIEW v_union AS SELECT pk, c1 FROM t1 UNION SELECT pk, c1 FROM t2;
+}
+
+@setup s1
+test l40 {
+    select * from v;
+}
+expect unordered {
+    1
+}
+
+@setup s2
+test l50 {
+    select * from t;
+}
+expect unordered {
+    1
+}
+
+@setup s3
+test l97 {
+    CREATE VIEW view_2_tab1_157 AS SELECT pk, col0 FROM tab1 WHERE NOT ((col0 IN (SELECT col3 FROM tab1 WHERE ((col0 IS NULL) OR col3 > 5 OR col3 <= 50 OR col1 < 83.11))) OR col0 > 75);
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l101 {
+    select pk, col0 from view_2_tab1_157;
+}
+expect unordered {
+    6|0
+}
+
+@setup s5
+test l113 {
+    SELECT * from v;
+}
+expect unordered {
+    4
+}
+
+@setup s6
+test l133 {
+    SELECT * from xyv;
+}
+expect unordered {
+}
+
+# mysql-error: 1353 HY000 In definition of view, derived table or common table expression, SELECT list and column names list have different column counts
+@setup s6
+test l156 {
+    CREATE VIEW xyv (u) AS SELECT * from xy;
+}
+expect error {
+}
+
+@setup s7
+test l172 {
+    SELECT * FROM v;
+}
+expect unordered {
+    1|alice|abc
+    2|bob|abc
+}
+
+@setup s7
+test l179 {
+    SELECT v.tag FROM v WHERE v.tag = 'abc';
+}
+expect unordered {
+    abc
+    abc
+}
+
+@setup s7
+test l186 {
+    SELECT tag FROM v WHERE tag = 'abc';
+}
+expect unordered {
+    abc
+    abc
+}
+
+@setup s7
+test l193 {
+    SELECT * FROM v WHERE v.tag = 'xyz';
+}
+expect unordered {
+}
+
+@setup s7
+test l202 {
+    SELECT v_renamed.status FROM v_renamed WHERE v_renamed.status = 'active';
+}
+expect unordered {
+    active
+    active
+}
+
+@setup s8
+test l234 {
+    SELECT v.str_col FROM v WHERE v.str_col = 'abc';
+}
+expect unordered {
+    abc
+}
+
+@setup s8
+test l238 {
+    SELECT str_col FROM v WHERE str_col = 'abc';
+}
+expect unordered {
+    abc
+}
+
+@setup s8
+test l242 {
+    SELECT int_col FROM v WHERE int_col = 1;
+}
+expect unordered {
+    1
+}
+
+@setup s8
+test l246 {
+    SELECT decimal_col FROM v WHERE decimal_col = 1.5;
+}
+expect unordered {
+    1.5
+}
+
+@setup s8
+test l250 {
+    SELECT float_col FROM v WHERE float_col = 1.5e0;
+}
+expect unordered {
+    1.5
+}
+
+@setup s8
+test l254 {
+    SELECT null_col FROM v WHERE null_col IS NULL;
+}
+expect unordered {
+    NULL
+}
+
+@setup s8
+test l258 {
+    SELECT bool_col FROM v WHERE bool_col = TRUE;
+}
+expect unordered {
+    1
+}
+
+@setup s8
+test l262 {
+    SELECT hex_col FROM v;
+}
+expect unordered {
+    A
+}
+
+@setup s8
+test l270 {
+    SELECT func_col FROM v WHERE func_col = 5;
+}
+expect unordered {
+    5
+}
+
+@setup s8
+test l274 {
+    SELECT expr_col FROM v WHERE expr_col = 2;
+}
+expect unordered {
+    2
+}
+
+@setup s9
+test l301 {
+    SELECT v.abc FROM v;
+}
+expect unordered {
+    abc
+}
+
+@setup s9
+test l305 {
+    SELECT v.`abc` FROM v;
+}
+expect unordered {
+    abc
+}
+
+@setup s9
+test l309 {
+    SELECT v.1 FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l313 {
+    SELECT v.`1` FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l317 {
+    SELECT v.123 FROM v;
+}
+expect unordered {
+    123
+}
+
+@setup s9
+test l321 {
+    SELECT v.`123` FROM v;
+}
+expect unordered {
+    123
+}
+
+@setup s9
+test l325 {
+    SELECT v.2b FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l329 {
+    SELECT v.`2b` FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l333 {
+    SELECT v.`1.5` FROM v;
+}
+expect unordered {
+    1.5
+}
+
+@setup s9
+test l337 {
+    SELECT v.`1.5e0` FROM v;
+}
+expect unordered {
+    1.5
+}
+
+@setup s9
+test l341 {
+    SELECT v.NULL FROM v;
+}
+expect unordered {
+    NULL
+}
+
+@setup s9
+test l345 {
+    SELECT v.`NULL` FROM v;
+}
+expect unordered {
+    NULL
+}
+
+@setup s9
+test l349 {
+    SELECT v.true FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l353 {
+    SELECT v.`true` FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l357 {
+    SELECT v.0x41 FROM v;
+}
+expect unordered {
+    A
+}
+
+@setup s9
+test l361 {
+    SELECT v.`0x41` FROM v;
+}
+expect unordered {
+    A
+}
+
+# mysql-error: 1305 42000 FUNCTION v.abs does not exist
+@setup s9
+test l369 {
+    SELECT v.abs(1) FROM v;
+}
+expect error {
+}
+
+@setup s9
+test l373 {
+    SELECT v.`abs(1)` FROM v;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l377 {
+    SELECT v.`1 + 1` FROM v;
+}
+expect unordered {
+    2
+}
+
+@setup s10
+@setup s11
+test l416 {
+    SELECT * from caseSensitive;
+}
+expect unordered {
+}
+
+@setup s10
+@setup s12
+test l447 {
+    SELECT * from quotes order by id;
+}
+expect {
+    1|joe's
+    2|mia\'s
+    3|bob's
+    4|joe's
+    6|jan's
+}
+
+@setup s13
+test l491 {
+    show full columns from v;
+}
+expect {
+    i|int|NULL|NO||NULL||select,insert,update,references|
+    j|int|NULL|YES||100||select,insert,update,references|
+}
+
+@setup s13
+test l498 {
+    show columns from v;
+}
+expect {
+    i|int|NO||NULL|
+    j|int|YES||100|
+}
+
+@setup s13
+test l505 {
+    describe v;
+}
+expect {
+    i|int|NO||NULL|
+    j|int|YES||100|
+}
+
+@setup s13
+test l512 {
+    select * from v;
+}
+expect unordered {
+    1|100
+}
+
+@setup s13
+test l518 {
+    show full columns from v1;
+}
+expect {
+    i|int|NULL|NO||NULL||select,insert,update,references|
+    jj|bigint|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s13
+test l525 {
+    show columns from v1;
+}
+expect {
+    i|int|NO||NULL|
+    jj|bigint|YES||NULL|
+}
+
+@setup s13
+test l532 {
+    describe v1;
+}
+expect {
+    i|int|NO||NULL|
+    jj|bigint|YES||NULL|
+}
+
+@setup s13
+test l539 {
+    select * from v1;
+}
+expect unordered {
+    1|110
+}
+
+@setup s13
+test l545 {
+    show full columns from vv;
+}
+expect {
+    i|int|NULL|NO||NULL||select,insert,update,references|
+    ii|int|NULL|NO||NULL||select,insert,update,references|
+    j|int|NULL|YES||100||select,insert,update,references|
+    jj|int|NULL|YES||pow(11,2)|DEFAULT_GENERATED|select,insert,update,references|
+    i + ii + j + jj|bigint|NULL|YES||NULL||select,insert,update,references|
+}
+
+@setup s13
+test l555 {
+    show columns from vv;
+}
+expect {
+    i|int|NO||NULL|
+    ii|int|NO||NULL|
+    j|int|YES||100|
+    jj|int|YES||pow(11,2)|DEFAULT_GENERATED
+    i + ii + j + jj|bigint|YES||NULL|
+}
+
+@setup s13
+test l565 {
+    describe vv;
+}
+expect {
+    i|int|NO||NULL|
+    ii|int|NO||NULL|
+    j|int|YES||100|
+    jj|int|YES||pow(11,2)|DEFAULT_GENERATED
+    i + ii + j + jj|bigint|YES||NULL|
+}
+
+@setup s13
+test l575 {
+    select * from vv;
+}
+expect unordered {
+    1|1|100|121|223
+}
+
+@setup s14
+test l601 {
+    SHOW CREATE VIEW v;
+}
+expect {
+    v|CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v` AS select `t`.`pk` AS `pk`,`t`.`c1` AS `c1` from `t`|utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s15
+test l610 {
+    SHOW CREATE VIEW v2;
+}
+expect {
+    v2|CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v2` AS select `v1`.`pk` AS `pk` from `v1`|utf8mb4|utf8mb4_0900_ai_ci
+}
+
+@setup s16
+test l619 {
+    SHOW CREATE VIEW v_union;
+}
+expect {
+    v_union|CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v_union` AS select `t1`.`pk` AS `pk`,`t1`.`c1` AS `c1` from `t1` union select `t2`.`pk` AS `pk`,`t2`.`c1` AS `c1` from `t2`|utf8mb4|utf8mb4_0900_ai_ci
+}

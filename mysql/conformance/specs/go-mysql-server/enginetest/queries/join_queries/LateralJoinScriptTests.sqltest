@@ -1,0 +1,315 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/join_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t (i int primary key);
+}
+
+setup s2 {
+    create table t1 (j int primary key);
+    insert into t values (1), (2), (3);
+    insert into t1 values (1), (4), (5);
+}
+
+setup s3 {
+    insert into t values (1), (2), (3);
+}
+
+setup s4 {
+    create table students (id int primary key, name varchar(50), major int);
+    create table classes (id int primary key, name varchar(50), department int);
+    create table grades (grade float, student int, class int, primary key(class, student));
+    create table majors (id int, name varchar(50), department int, primary key(name, department));
+    create table departments (id int primary key, name varchar(50));
+    insert into students values
+					(1, 'Elle', 4), 
+					(2, 'Latham', 2);
+    insert into classes values
+					(1, 'Corporate Finance', 1),
+					(2, 'ESG Studies', 1),
+					(3, 'Late Bronze Age Collapse', 2),
+					(4, 'Greek Mythology', 2);
+    insert into majors values
+					(1, 'Roman Studies', 2),
+					(2, 'Bronze Age Studies', 2),
+					(3, 'Accounting', 1),
+					(4, 'Finance', 1);
+    insert into departments values
+					(1, 'Business'),
+					(2, 'History');
+    insert into grades values 
+					(94, 1, 1),
+					(97, 1, 2),
+					(85, 2, 3),
+					(92, 2, 4);
+}
+
+setup s5 {
+    create table xy (x int primary key, y int);
+    create table uv (u int primary key, v int);
+    insert into xy values (1, 0), (2, 1), (3, 2), (4, 3);
+    insert into uv values (0, 0), (1, 1), (2, 2), (3, 3);
+}
+
+setup s6 {
+    create table t0(c0 boolean);
+    create table t1(c0 int);
+    insert into t0 values (true);
+    insert into t1 values(0);
+}
+
+setup s7 {
+    CREATE table ab (a int primary key, b int);
+    insert into ab values (0,3), (1,2), (2,1), (3,0);
+    create table three_pk (pk1 tinyint, pk2 tinyint, pk3 tinyint, col tinyint, primary key (pk1, pk2));
+    insert into three_pk values (0,0,0,100), (0,1,1,101), (1,0,1,110), (1,1,0,111);
+}
+
+setup s8 {
+    create table three_pk (pk1 tinyint, pk2 tinyint, pk3 tinyint, col tinyint, primary key (pk1, pk2));
+    insert into three_pk values (0,0,0,100), (0,1,1,101), (1,0,1,110), (1,1,0,111);
+}
+
+@setup s1
+@setup s2
+test l1448 {
+    select * from t, lateral (select * from t1 where t.i = t1.j) as tt order by t.i, tt.j;
+}
+expect {
+    1|1
+}
+
+@setup s1
+@setup s2
+test l1454 {
+    select * from t, lateral (select * from t1 where t.i != t1.j) as tt order by tt.j, t.i;
+}
+expect {
+    2|1
+    3|1
+    1|4
+    2|4
+    3|4
+    1|5
+    2|5
+    3|5
+}
+
+@setup s1
+@setup s2
+test l1467 {
+    select * from t, t1, lateral (select * from t1 where t.i != t1.j) as tt where t.i > t1.j and t1.j = tt.j order by t.i, t1.j, tt.j;
+}
+expect {
+    2|1|1
+    3|1|1
+}
+
+@setup s1
+@setup s2
+test l1474 {
+    select * from t, lateral (select * from t1 where t.i = t1.j) tt, lateral (select * from t1 where t.i != t1.j) as ttt order by t.i, tt.j, ttt.j;
+}
+expect {
+    1|1|4
+    1|1|5
+}
+
+@setup s1
+@setup s3
+test l1481 {
+    WITH RECURSIVE cte(x) AS (SELECT 1 union all SELECT x + 1 from cte where x < 5) SELECT * FROM cte, lateral (select * from t where t.i = cte.x) tt;
+}
+expect unordered {
+    1|1
+    2|2
+    3|3
+}
+
+@setup s1
+@setup s2
+test l1489 {
+    select * from (select * from t, lateral (select * from t1 where t.i = t1.j) as tt order by t.i, tt.j) ttt;
+}
+expect unordered {
+    1|1
+}
+
+@setup s1
+@setup s2
+test l1497 {
+    select * from t inner join lateral (select * from t1 where t.i != t1.j) as tt on t.i > tt.j;
+}
+expect unordered {
+    2|1
+    3|1
+}
+
+@setup s1
+@setup s2
+test l1504 {
+    select * from t inner join lateral (select * from t1 where t.i = t1.j) as tt on t.i = tt.j;
+}
+expect unordered {
+    1|1
+}
+
+@setup s1
+@setup s2
+test l1510 {
+    select * from t inner join lateral (select * from t1 where t.i = t1.j) as tt on t.i != tt.j;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l1516 {
+    select * from t left join lateral (select * from t1 where t.i = t1.j) as tt on t.i = tt.j order by t.i, tt.j;
+}
+expect {
+    1|1
+    2|NULL
+    3|NULL
+}
+
+@setup s1
+@setup s2
+test l1524 {
+    select * from t left join lateral (select * from t1 where t.i != t1.j) as tt on t.i + 1 = tt.j or t.i + 2 = tt.j order by t.i, tt.j;
+}
+expect {
+    1|NULL
+    2|4
+    3|4
+    3|5
+}
+
+@setup s1
+@setup s2
+test l1539 {
+    select * from t right join lateral (select * from t1) as tt on t.i > tt.j order by t.i, tt.j;
+}
+expect {
+    NULL|4
+    NULL|5
+    2|1
+    3|1
+}
+
+@setup s4
+test l1581 {
+    select name, class.class_name, grade.max_grade
+from students,
+LATERAL (
+	select departments.id as did
+	from majors
+	join departments
+	on majors.department = departments.id
+	where majors.id = students.major
+) dept,
+LATERAL (
+	select
+		grade as max_grade,
+		classes.id as cid
+	from grades
+	join classes
+    on grades.class = classes.id
+	where grades.student = students.id and classes.department = dept.did
+	order by grade desc limit 1
+) grade,
+LATERAL (
+	select name as class_name from classes where grade.cid = classes.id
+) class;
+}
+expect unordered {
+    Elle|ESG Studies|97
+    Latham|Greek Mythology|92
+}
+
+@setup s5
+test l1622 {
+    select x, u from xy, lateral (select * from uv where y = u) uv;
+}
+expect unordered {
+    1|0
+    2|1
+    3|2
+    4|3
+}
+
+@setup s6
+test l1643 {
+    select v.c0, t1.c0 from t0 cross join lateral (select 1 as c0) as v join t1 on v.c0 > t1.c0;
+}
+expect unordered {
+    1|0
+}
+
+@setup s7
+test l1676 {
+    select * from ab ab1 join lateral (select * from ab ab2 join lateral (select * from three_pk where pk1 = ab1.a and pk2 = ab2.a) inner1) inner2;
+}
+expect unordered {
+    0|3|0|3|0|0|0|100
+    0|3|1|2|0|1|1|101
+    1|2|0|3|1|0|1|110
+    1|2|1|2|1|1|0|111
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'a'
+@setup s7
+test l1685 {
+    select * from ab ab1 join lateral (select * from ab ab2 join lateral (select * from ab ab3 join lateral (select * from three_pk where pk1 = ab1.a and pk2 = ab2.a and pk3 = ab3.a) inner1) inner2) inner3;
+}
+expect error {
+}
+
+@setup s7
+test l1694 {
+    select * from ab ab1 join lateral (select * from ab ab2 join lateral (select col < ab1.b from ab ab3 join three_pk where pk1 = ab1.a and pk2 = ab2.a and pk3 = ab3.a) inner2) inner3;
+}
+expect unordered {
+    0|3|0|3|0
+    0|3|1|2|0
+    1|2|0|3|0
+    1|2|1|2|0
+}
+
+@setup s7
+test l1703 {
+    select * from ab ab1 where exists (select * from ab ab2 where exists (select * from three_pk where pk1 = ab1.a and pk2 = ab2.a));
+}
+expect unordered {
+    0|3
+    1|2
+}
+
+@setup s7
+test l1710 {
+    select * from ab ab1 where exists (select * from ab ab2 where exists (select * from ab ab3 where exists (select * from three_pk where pk1 = ab1.a and pk2 = ab2.a and pk3 = ab3.a)));
+}
+expect unordered {
+    0|3
+    1|2
+}
+
+# mysql-error: 1060 42S21 Duplicate column name 'pk1'
+@setup s8
+test l1728 {
+    select *
+from three_pk outer_table join lateral (
+    select /*+ JOIN_ORDER(inner1, inner2, inner3) */ *
+    from three_pk inner1 join (three_pk inner2 join three_pk inner3
+        on outer_table.pk2 = inner2.pk1 and outer_table.pk2 = inner2.pk2
+       and outer_table.pk3 = inner3.pk1 and outer_table.pk3 = inner3.pk2)
+        on outer_table.pk1 = inner1.pk1 and outer_table.pk1 = inner1.pk2
+) inner_join;
+}
+expect error {
+}

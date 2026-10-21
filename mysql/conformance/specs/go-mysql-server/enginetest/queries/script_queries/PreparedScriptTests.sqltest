@@ -1,0 +1,545 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/script_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table a (a int primary key);
+    insert into a values (0), (1), (2);
+}
+
+setup s2 {
+    prepare cnt from 'select count(*) from a';
+}
+
+setup s3 {
+    insert into a values (3), (4);
+}
+
+setup s4 {
+    prepare s from 'select 1';
+}
+
+setup s5 {
+    prepare s from 'select ?';
+}
+
+setup s6 {
+    set @a = 1;
+}
+
+setup s7 {
+    set @b = 100;
+    set @c = 'abc';
+    prepare s from 'select ?';
+}
+
+setup s8 {
+    prepare s from 'select ?';
+}
+
+setup s9 {
+    set @b = 100;
+    prepare s from 'select ?';
+}
+
+setup s10 {
+    set @c = 'abc';
+    prepare s from 'select ?';
+}
+
+setup s11 {
+    set @d = date('2001-02-03');
+    prepare s from 'select ?';
+}
+
+setup s12 {
+    prepare s from 'select ?';
+}
+
+setup s13 {
+    set @ts = timestamp('2001-02-03 12:34:56');
+    prepare s from 'select ?';
+}
+
+setup s14 {
+    create table t (d date, dt datetime, t time, ts timestamp);
+}
+
+setup s15 {
+    set @d = date('2001-02-03');
+    prepare sd from 'insert into t(d) values(?)';
+    prepare sdt from 'insert into t(dt) values(?)';
+    prepare st from 'insert into t(t) values(?)';
+    prepare sts from 'insert into t(ts) values(?)';
+}
+
+setup s16 {
+    prepare sd from 'insert into t(d) values(?)';
+    prepare sdt from 'insert into t(dt) values(?)';
+    prepare st from 'insert into t(t) values(?)';
+    prepare sts from 'insert into t(ts) values(?)';
+}
+
+setup s17 {
+    set @ts = timestamp('2001-02-03 12:34:56');
+    prepare sd from 'insert into t(d) values(?)';
+    prepare sdt from 'insert into t(dt) values(?)';
+    prepare st from 'insert into t(t) values(?)';
+    prepare sts from 'insert into t(ts) values(?)';
+}
+
+setup s18 {
+    prepare sd from 'insert into t(d) values(?)';
+    prepare sdt from 'insert into t(dt) values(?)';
+    prepare st from 'insert into t(t) values(?)';
+    prepare sts from 'insert into t(ts) values(?)';
+}
+
+setup s19 {
+    create table t (i int, j varchar(100));
+}
+
+setup s20 {
+    set @a = 123;
+}
+
+setup s21 {
+    create table t (i int, j varchar(100));
+    prepare s from 'insert into t values (?,?)';
+}
+
+setup s22 {
+    set @b = 'abc';
+    create table t (i int, j varchar(100));
+    prepare s from 'insert into t values (?,?)';
+}
+
+setup s23 {
+    prepare s from 'insert into t values (?,?)';
+}
+
+setup s24 {
+    set @a = 'select * from t order by i';
+}
+
+setup s25 {
+    set @b = concat('select 1',' + 1');
+}
+
+setup s26 {
+    prepare stmt from @b;
+}
+
+setup s27 {
+    set @c = 'select 1 from dual limit ?';
+}
+
+setup s28 {
+    set @num = 123;
+    set @c = 'select 1 from dual limit ?';
+    prepare stmt from @c;
+}
+
+setup s29 {
+    set @d = 'select @num';
+}
+
+setup s30 {
+    prepare stmt from @d;
+}
+
+setup s31 {
+    CREATE TABLE `users` (`id` int NOT NULL AUTO_INCREMENT, `username` varchar(255) NOT NULL, PRIMARY KEY (`id`));
+    CREATE TABLE `tweet` ( `id` int NOT NULL AUTO_INCREMENT, `user_id` int NOT NULL, `content` text NOT NULL, `timestamp` bigint NOT NULL, PRIMARY KEY (`id`), KEY `tweet_user_id` (`user_id`), CONSTRAINT `0qpfesgd` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));
+    INSERT INTO `users` (`id`,`username`) VALUES (1,'huey'), (2,'zaizee'), (3,'mickey');
+    INSERT INTO `tweet` (`id`,`user_id`,`content`,`timestamp`) VALUES (1,1,'meow',1647463727), (2,1,'purr',1647463727), (3,2,'hiss',1647463727), (4,3,'woof',1647463727);
+}
+
+setup s32 {
+    set @u2 = 'u2';
+    set @u3 = 'u3';
+    set @u4 = 'u4';
+    prepare s from 'SELECT `t1`.`username`, COUNT(`t1`.`id`) AS `ct` FROM ((SELECT `t2`.`id`, `t2`.`content`, `t3`.`username` FROM `tweet` AS `t2` INNER JOIN `users` AS `t3` ON (`t2`.`user_id` = `t3`.`id`) WHERE (`t3`.`username` = ?)) UNION (SELECT `t4`.`id`, `t4`.`content`, `t5`.`username` FROM `tweet` AS `t4` INNER JOIN `users` AS `t5` ON (`t4`.`user_id` = `t5`.`id`) WHERE (`t5`.`username` IN (?, ?)))) AS `t1` GROUP BY `t1`.`username` ORDER BY COUNT(`t1`.`id`) DESC';
+}
+
+setup s33 {
+    create table mytable (pk int primary key);
+    ALTER TABLE mytable ADD COLUMN col2 text NOT NULL;
+}
+
+setup s34 {
+    ALTER TABLE mytable ADD CONSTRAINT constraint_check CHECK (col2 LIKE '%myregex%');
+}
+
+setup s35 {
+    ALTER TABLE mytable ADD COLUMN col3 text NOT NULL;
+}
+
+setup s36 {
+    ALTER TABLE mytable ADD CONSTRAINT constraint_check CHECK (col3 LIKE col2);
+}
+
+setup s37 {
+    ALTER TABLE mytable ADD CONSTRAINT constraint_check CHECK (col2 LIKE col3);
+}
+
+setup s38 {
+    ALTER TABLE mytable ADD CONSTRAINT ok_check CHECK (col2 LIKE '%myregex%');
+    ALTER TABLE mytable ADD CONSTRAINT bad_check CHECK (col2 LIKE col3);
+}
+
+@setup s1
+test l16115 {
+    prepare cnt from 'select count(*) from a';
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l16119 {
+    execute cnt;
+}
+expect unordered {
+    3
+}
+
+@setup s1
+@setup s2
+test l16123 {
+    insert into a values (3), (4);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l16129 {
+    execute cnt;
+}
+expect unordered {
+    5
+}
+
+# mysql-error: 1243 HY000 Unknown prepared statement handler (idontexist) given to DEALLOCATE PREPARE
+test l16147 {
+    deallocate prepare idontexist;
+}
+expect error {
+}
+
+# mysql-error: 1243 HY000 Unknown prepared statement handler (s) given to EXECUTE
+test l16157 {
+    execute s;
+}
+expect error {
+}
+
+test l16161 {
+    prepare s from 'select 1';
+}
+expect unordered {
+}
+
+@setup s4
+test l16167 {
+    execute s;
+}
+expect unordered {
+    1
+}
+
+@setup s4
+test l16173 {
+    deallocate prepare s;
+}
+expect unordered {
+}
+
+test l16193 {
+    prepare s from 'select ?';
+}
+expect unordered {
+}
+
+# mysql-error: 1210 HY000 Incorrect arguments to EXECUTE
+@setup s5
+test l16199 {
+    execute s;
+}
+expect error {
+}
+
+@setup s5
+test l16203 {
+    execute s using @abc;
+}
+expect unordered {
+    NULL
+}
+
+# mysql-error: 1210 HY000 Incorrect arguments to EXECUTE
+@setup s6
+@setup s7
+test l16209 {
+    execute s using @a, @b, @c, @abc;
+}
+expect error {
+}
+
+@setup s6
+@setup s8
+test l16213 {
+    execute s using @a;
+}
+expect unordered {
+    1
+}
+
+@setup s9
+test l16219 {
+    execute s using @b;
+}
+expect unordered {
+    100
+}
+
+@setup s10
+test l16225 {
+    execute s using @c;
+}
+expect unordered {
+    abc
+}
+
+@setup s5
+test l16231 {
+    deallocate prepare s;
+}
+expect unordered {
+}
+
+# mysql-error: 1243 HY000 Unknown prepared statement handler (s) given to EXECUTE
+@setup s6
+test l16237 {
+    execute s using @a;
+}
+expect error {
+}
+
+@setup s11
+test l16258 {
+    execute s using @d;
+}
+expect unordered {
+    2001-02-03
+}
+
+@setup s12
+test l16264 {
+    execute s using @dt;
+}
+expect unordered {
+    NULL
+}
+
+@setup s13
+test l16278 {
+    execute s using @ts;
+}
+expect unordered {
+    2001-02-03 12:34:56
+}
+
+@setup s14
+@setup s15
+test l16285 {
+    execute sd using @d;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s16
+test l16292 {
+    execute sdt using @dt;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s17
+test l16308 {
+    execute sts using @ts;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s18
+test l16315 {
+    select d, dt, ts from t;
+}
+expect unordered {
+}
+
+@setup s19
+test l16366 {
+    prepare s from 'insert into t values (?,?)';
+}
+expect unordered {
+}
+
+# mysql-error: 1210 HY000 Incorrect arguments to EXECUTE
+@setup s20
+@setup s21
+test l16372 {
+    execute s using @a;
+}
+expect error {
+}
+
+@setup s20
+@setup s22
+test l16377 {
+    execute s using @a, @b;
+}
+expect unordered {
+}
+
+@setup s19
+@setup s23
+test l16383 {
+    select * from t order by i;
+}
+expect {
+}
+
+@setup s19
+@setup s23
+test l16389 {
+    deallocate prepare s;
+}
+expect unordered {
+}
+
+# mysql-error: 1243 HY000 Unknown prepared statement handler (s) given to EXECUTE
+@setup s20
+test l16395 {
+    execute s using @a;
+}
+expect error {
+}
+
+# mysql-error: 1243 HY000 Unknown prepared statement handler (stmt) given to EXECUTE
+@setup s24
+test l16433 {
+    execute stmt;
+}
+expect error {
+}
+
+@setup s25
+test l16441 {
+    prepare stmt from @b;
+}
+expect unordered {
+}
+
+@setup s25
+@setup s26
+test l16447 {
+    execute stmt;
+}
+expect unordered {
+    2
+}
+
+@setup s27
+test l16453 {
+    prepare stmt from @c;
+}
+expect unordered {
+}
+
+@setup s28
+test l16459 {
+    execute stmt using @num;
+}
+expect unordered {
+    1
+}
+
+@setup s29
+test l16465 {
+    prepare stmt from @d;
+}
+expect unordered {
+}
+
+@setup s29
+@setup s30
+test l16471 {
+    execute stmt;
+}
+expect unordered {
+    NULL
+}
+
+@setup s31
+test l16491 {
+    prepare s from 'SELECT `t1`.`username`, COUNT(`t1`.`id`) AS `ct` FROM ((SELECT `t2`.`id`, `t2`.`content`, `t3`.`username` FROM `tweet` AS `t2` INNER JOIN `users` AS `t3` ON (`t2`.`user_id` = `t3`.`id`) WHERE (`t3`.`username` = ?)) UNION (SELECT `t4`.`id`, `t4`.`content`, `t5`.`username` FROM `tweet` AS `t4` INNER JOIN `users` AS `t5` ON (`t4`.`user_id` = `t5`.`id`) WHERE (`t5`.`username` IN (?, ?)))) AS `t1` GROUP BY `t1`.`username` ORDER BY COUNT(`t1`.`id`) DESC';
+}
+expect unordered {
+}
+
+@setup s31
+@setup s32
+test l16497 {
+    execute s using @u3, @u2, @u4;
+}
+expect unordered {
+}
+
+@setup s33
+@setup s34
+test l16511 {
+    ALTER TABLE mytable DROP COLUMN col2;
+}
+expect unordered {
+}
+
+# mysql-error: 3959 HY000 Check constraint 'constraint_check' uses column 'col2', hence column cannot be dropped or renamed.
+@setup s33
+@setup s35
+@setup s36
+test l16526 {
+    ALTER TABLE mytable DROP COLUMN col2;
+}
+expect error {
+}
+
+# mysql-error: 3959 HY000 Check constraint 'constraint_check' uses column 'col2', hence column cannot be dropped or renamed.
+@setup s33
+@setup s35
+@setup s37
+test l16541 {
+    ALTER TABLE mytable DROP COLUMN col2;
+}
+expect error {
+}
+
+# mysql-error: 3959 HY000 Check constraint 'bad_check' uses column 'col2', hence column cannot be dropped or renamed.
+@setup s33
+@setup s35
+@setup s38
+test l16557 {
+    ALTER TABLE mytable DROP COLUMN col2;
+}
+expect error {
+}

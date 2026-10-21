@@ -1,0 +1,200 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/delete_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    create table tabletest (
+    i int primary key,
+    s text not null
+);
+    insert into tabletest values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+@setup s1
+test l26 {
+    DELETE FROM mytable;
+    SELECT * FROM mytable;
+}
+expect unordered {
+}
+
+@setup s1
+test l32 {
+    DELETE FROM mytable WHERE i = 2;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    3|third row
+}
+
+@setup s1
+test l38 {
+    DELETE FROM mytable WHERE I = 2;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    3|third row
+}
+
+@setup s1
+test l44 {
+    DELETE FROM mytable WHERE i < 3;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    3|third row
+}
+
+@setup s1
+test l50 {
+    DELETE FROM mytable WHERE i > 1;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+}
+
+@setup s1
+test l56 {
+    DELETE FROM mytable WHERE i <= 2;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    3|third row
+}
+
+@setup s1
+test l62 {
+    DELETE FROM mytable WHERE i >= 2;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+}
+
+@setup s1
+test l68 {
+    DELETE FROM mytable WHERE s = 'first row';
+    SELECT * FROM mytable;
+}
+expect unordered {
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l74 {
+    DELETE FROM mytable WHERE s <> 'dne';
+    SELECT * FROM mytable;
+}
+expect unordered {
+}
+
+@setup s1
+test l80 {
+    DELETE FROM mytable WHERE i in (2,3);
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+}
+
+@setup s1
+test l86 {
+    DELETE FROM mytable WHERE s LIKE '%row';
+    SELECT * FROM mytable;
+}
+expect unordered {
+}
+
+@setup s1
+test l92 {
+    DELETE FROM mytable WHERE s = 'dne';
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l98 {
+    DELETE FROM mytable ORDER BY i ASC LIMIT 2;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    3|third row
+}
+
+@setup s1
+test l104 {
+    DELETE FROM mytable ORDER BY i DESC LIMIT 1;
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+}
+
+@setup s1
+test l116 {
+    DELETE FROM mytable WHERE (i,s) = (1, 'first row');
+    SELECT * FROM mytable;
+}
+expect unordered {
+    2|second row
+    3|third row
+}
+
+@setup s1
+@setup s2
+test l122 {
+    DELETE FROM tabletest where 's' = 'something';
+    SELECT * FROM mytable;
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l128 {
+    with t (n) as (select (1) from dual) delete from mytable where i in (select n from t);
+    select * from mytable order by i;
+}
+expect {
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l137 {
+    with recursive t (n) as (select (1) from dual union all select n + 1 from t where n < 2) delete from mytable where i in (select n from t);
+    select * from mytable order by i;
+}
+expect {
+    3|third row
+}

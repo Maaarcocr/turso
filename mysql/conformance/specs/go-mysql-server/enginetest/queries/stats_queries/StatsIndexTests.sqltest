@@ -1,0 +1,19 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/stats_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table xy (x int, y int, z varchar(36) default(uuid()), w varchar(10), key (z), key (y,w), key(x,y));
+    insert into xy (x,y,w) values (1, 1, 'a'), (2,1,'a'), (3,1,'b'),(4,2,'b'),(5,2,'c');
+}
+
+@setup s1
+test l239 {
+    select * from xy where x > 4 and y = 1 and w = 'a';
+}
+expect unordered {
+}

@@ -1,0 +1,1436 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/join_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE table xy (x int primary key, y int, unique index y_idx(y));
+}
+
+setup s2 {
+    CREATE table uv (u int primary key, v int);
+}
+
+setup s3 {
+    CREATE table ab (a int primary key, b int);
+}
+
+setup s4 {
+    CREATE table pq (p int primary key, q int);
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+    insert into pq values
+  (0,0),
+  (1,1),
+  (2,2),
+  (3,3);
+}
+
+setup s5 {
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s6 {
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+}
+
+setup s7 {
+    CREATE table ab (a int primary key, b int);
+}
+
+setup s8 {
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s9 {
+    CREATE table uv (u int primary key, v int);
+    CREATE table ab (a int primary key, b int);
+}
+
+setup s10 {
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s11 {
+    CREATE table pq (p int primary key, q int);
+    insert into uv values
+  (0,1),
+  (1,1),
+  (2,2),
+  (3,2);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+    insert into pq values
+  (0,0),
+  (1,1),
+  (2,2),
+  (3,3);
+}
+
+setup s12 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s13 {
+    create table othertable (s2 varchar(20) not null, i2 bigint primary key);
+    insert into othertable values
+    ('first', 3),
+    ('second', 2),
+    ('third', 1);
+    create index othertable_s2 on othertable (s2);
+    create index othertable_s2_i2 on othertable (s2,i2);
+}
+
+setup s14 {
+    create table one_pk_three_idx (
+    pk bigint primary key,
+    v1 bigint,
+    v2 bigint,
+    v3 bigint
+);
+    insert into one_pk_three_idx values
+    (0,0,0,0),
+    (1,0,0,1),
+    (2,0,1,0),
+    (3,0,2,2),
+    (4,1,0,0),
+    (5,2,0,3),
+    (6,3,3,0),
+    (7,4,4,4);
+    create index one_pk_three_idx_idx on one_pk_three_idx (v1, v2, v3);
+}
+
+setup s15 {
+    create table one_pk_two_idx (
+    pk bigint primary key,
+    v1 bigint,
+    v2 bigint
+);
+    insert into one_pk_two_idx values
+    (0,0,0),
+    (1,1,1),
+    (2,2,2),
+    (3,3,3),
+    (4,4,4),
+    (5,5,5),
+    (6,6,6),
+    (7,7,7);
+    create table one_pk_three_idx (
+    pk bigint primary key,
+    v1 bigint,
+    v2 bigint,
+    v3 bigint
+);
+    insert into one_pk_three_idx values
+    (0,0,0,0),
+    (1,0,0,1),
+    (2,0,1,0),
+    (3,0,2,2),
+    (4,1,0,0),
+    (5,2,0,3),
+    (6,3,3,0),
+    (7,4,4,4);
+    create index one_pk_two_idx_1 on one_pk_two_idx (v1);
+    create index one_pk_two_idx_2 on one_pk_two_idx (v1, v2);
+    create index one_pk_three_idx_idx on one_pk_three_idx (v1, v2, v3);
+}
+
+setup s16 {
+    create table one_pk (pk smallint primary key, c1 smallint, c2 smallint, c3 smallint, c4 smallint, c5 smallint);
+    insert into one_pk values
+    (0,0,1,2,3,4),
+    (1,10,11,12,13,14),
+    (2,20,21,22,23,24),
+    (3,30,31,32,33,34);
+}
+
+setup s17 {
+    create table one_pk_two_idx (
+    pk bigint primary key,
+    v1 bigint,
+    v2 bigint
+);
+    insert into one_pk_two_idx values
+    (0,0,0),
+    (1,1,1),
+    (2,2,2),
+    (3,3,3),
+    (4,4,4),
+    (5,5,5),
+    (6,6,6),
+    (7,7,7);
+    create table one_pk_three_idx (
+    pk bigint primary key,
+    v1 bigint,
+    v2 bigint,
+    v3 bigint
+);
+    insert into one_pk_three_idx values
+    (0,0,0,0),
+    (1,0,0,1),
+    (2,0,1,0),
+    (3,0,2,2),
+    (4,1,0,0),
+    (5,2,0,3),
+    (6,3,3,0),
+    (7,4,4,4);
+    create index one_pk_two_idx_1 on one_pk_two_idx (v1);
+    create index one_pk_two_idx_2 on one_pk_two_idx (v1, v2);
+    create index one_pk_three_idx_idx on one_pk_three_idx (v1, v2, v3);
+}
+
+setup s18 {
+    CREATE TABLE `niltable` (   `i` bigint NOT NULL,   `i2` bigint,   `b` tinyint,   `f` double,   PRIMARY KEY (`i`) );
+    insert into niltable values
+    (1,null,null,null),
+    (2,2,1,null),
+    (3,null,0,null),
+    (4,4,null,4.0),
+    (5,null,1,5.0),
+    (6,6,0,6.0);
+    create index niltable_i2 on niltable (i2);
+}
+
+setup s19 {
+    CREATE TABLE `niltable` (   `i` bigint NOT NULL,   `i2` bigint,   `b` tinyint,   `f` double,   PRIMARY KEY (`i`) );
+    insert into niltable values
+    (1,null,null,null),
+    (2,2,1,null),
+    (3,null,0,null),
+    (4,4,null,4.0),
+    (5,null,1,5.0),
+    (6,6,0,6.0);
+    create index niltable_i2 on niltable (i2);
+}
+
+setup s20 {
+    CREATE table ab (a int primary key, b int);
+}
+
+setup s21 {
+    CREATE table pq (p int primary key, q int);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+    insert into pq values
+  (0,0),
+  (1,1),
+  (2,2),
+  (3,3);
+}
+
+setup s22 {
+    CREATE table pq (p int primary key, q int);
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+    insert into pq values
+  (0,0),
+  (1,1),
+  (2,2),
+  (3,3);
+}
+
+setup s23 {
+    CREATE table xy_hasnull (x int primary key, y int);
+    CREATE table ab_hasnull (a int primary key, b int);
+    insert into xy_hasnull values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,NULL);
+    insert into ab_hasnull values
+  (0,2),
+  (1,2),
+  (2,NULL),
+  (3,1);
+}
+
+setup s24 {
+    CREATE table xy_hasnull (x int primary key, y int);
+    insert into xy_hasnull values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,NULL);
+    insert into ab values
+  (0,2),
+  (1,2),
+  (2,2),
+  (3,1);
+}
+
+setup s25 {
+    CREATE table ab_hasnull (a int primary key, b int);
+    insert into ab_hasnull values
+  (0,2),
+  (1,2),
+  (2,NULL),
+  (3,1);
+    insert into xy values
+  (1,0),
+  (2,1),
+  (0,2),
+  (3,3);
+}
+
+setup s26 {
+    CREATE TABLE comp_index_t0 (pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT);
+    create INDEX v_idx on comp_index_t0 (v1, v2);
+    INSERT INTO comp_index_t0 VALUES (0,0,48),(1,0,52),(2,2,4),(3,2,10),(4,3,35),(5,5,36),(6,5,60),(7,6,1),(8,6,51),
+(9,6,60),(10,6,73),(11,9,44),(12,9,97),(13,13,44),(14,14,53),(15,14,57),(16,14,98),(17,16,19),(18,16,53),(19,16,95),
+(20,18,31),(21,19,48),(22,19,75),(23,19,97),(24,24,60),(25,25,14),(26,25,31),(27,27,9),(28,27,24),(29,28,24),(30,28,83),
+(31,31,14),(32,33,39),(33,34,22),(34,34,91),(35,35,89),(36,38,20),(37,38,66),(38,39,55),(39,39,86),(40,40,97),(41,42,0),
+(42,42,82),(43,43,63),(44,44,48),(45,44,67),(46,45,22),(47,45,31),(48,45,63),(49,45,86),(50,46,46),(51,47,5),(52,48,22),
+(53,49,0),(54,50,0),(55,50,14),(56,51,35),(57,54,38),(58,56,0),(59,56,60),(60,57,29),(61,57,49),(62,58,12),(63,58,32),
+(64,59,29),(65,59,45),(66,59,54),(67,60,66),(68,61,3),(69,61,34),(70,63,19),(71,63,69),(72,65,80),(73,65,97),(74,67,95),
+(75,68,11),(76,69,34),(77,72,52),(78,74,81),(79,76,39),(80,78,0),(81,78,90),(82,79,36),(83,80,61),(84,80,88),(85,81,4),
+(86,82,16),(87,83,30),(88,83,74),(89,84,9),(90,84,45),(91,86,56),(92,86,88),(93,87,51),(94,89,3),(95,93,19),(96,93,21),
+(97,93,96),(98,98,0),(99,98,51),(100,98,61);
+}
+
+setup s27 {
+    create table emptytable (i mediumint primary key, s varchar(20));
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l23 {
+    select ab.* from ab join pq on a = p where b = (select y from xy where y in (select v from uv where v = b)) order by a;
+}
+expect {
+    0|2
+    1|2
+    2|2
+    3|1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s5
+test l32 {
+    select * from ab where b in (select y from xy where y in (select v from uv where v = b));
+}
+expect unordered {
+    0|2
+    1|2
+    2|2
+    3|1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s5
+test l41 {
+    select * from ab where a in (select y from xy where y in (select v from uv where v = a));
+}
+expect unordered {
+    1|2
+    2|2
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s5
+test l48 {
+    select * from ab where a in (select x from xy where x in (select u from uv where u = a));
+}
+expect unordered {
+    0|2
+    1|2
+    2|2
+    3|1
+}
+
+@setup s1
+@setup s2
+@setup s6
+test l59 {
+    select y, (select 1 from uv where y = 1 and u = x) is_one from xy join uv on x = v order by y;
+}
+expect {
+    0|NULL
+    0|NULL
+    1|1
+    1|1
+}
+
+@setup s1
+@setup s2
+@setup s6
+test l68 {
+    select y, (select 1 where y = 1) is_one from xy join uv on x = v order by y;
+}
+expect {
+    0|NULL
+    0|NULL
+    1|1
+    1|1
+}
+
+@setup s1
+@setup s2
+@setup s6
+test l77 {
+    select * from (select y, (select 1 where y = 1) is_one from xy join uv on x = v) sq order by y;
+}
+expect {
+    0|NULL
+    0|NULL
+    1|1
+    1|1
+}
+
+@setup s1
+@setup s2
+@setup s6
+test l91 {
+    SELECT (SELECT 1 FROM (SELECT x FROM xy INNER JOIN uv ON (x = u OR y = v) LIMIT 1) r) AS s FROM xy;
+}
+expect unordered {
+    1
+    1
+    1
+    1
+}
+
+@setup s1
+@setup s7
+@setup s8
+test l95 {
+    select a from ab where exists (select 1 from xy where a =x);
+}
+expect unordered {
+    0
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s7
+@setup s8
+test l99 {
+    select a from ab where exists (select 1 from xy where a = x and b = 2 and y = 2);
+}
+expect unordered {
+    0
+}
+
+@setup s9
+@setup s10
+test l103 {
+    select * from uv where exists (select 1, count(a) from ab where u = a group by a);
+}
+expect unordered {
+    0|1
+    1|1
+    2|2
+    3|2
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l107 {
+    select * from
+(
+  select * from ab
+  left join uv on a = u
+  where exists (select * from pq where u = p)
+) alias2
+inner join xy on a = x;
+}
+expect unordered {
+    0|2|0|1|0|2
+    1|2|1|1|1|0
+    2|2|2|2|2|1
+    3|1|3|2|3|3
+}
+
+@setup s9
+@setup s11
+test l123 {
+    select * from ab
+where exists
+(
+  select * from uv
+  left join pq on u = p
+  where a = u
+);
+}
+expect unordered {
+    0|2
+    1|2
+    2|2
+    3|1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s5
+test l139 {
+    select * from
+(
+  select * from ab
+  where not exists (select * from uv where a = v)
+) alias1
+where exists (select * from xy where a = x);
+}
+expect unordered {
+    0|2
+    3|1
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l151 {
+    select * from
+(
+  select * from ab
+  inner join xy on true
+) alias1
+inner join uv on true
+inner join pq on true order by 1,2,3,4,5,6,7,8 limit 5;
+}
+expect {
+    0|2|0|2|0|1|0|0
+    0|2|0|2|0|1|1|1
+    0|2|0|2|0|1|2|2
+    0|2|0|2|0|1|3|3
+    0|2|0|2|1|1|0|0
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l168 {
+    select * from
+	(
+	 select * from ab
+	 where not exists (select * from xy where a = y+1)
+	) alias1
+	left join pq on alias1.a = p
+	where exists (select * from uv where a = u);
+}
+expect unordered {
+    0|2|0|0
+}
+
+@setup s12
+@setup s13
+test l181 {
+    SELECT mytable.i FROM mytable INNER JOIN othertable ON (mytable.i = othertable.i2) LEFT JOIN othertable T4 ON (mytable.i = T4.i2) ORDER BY othertable.i2, T4.s2;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s14
+test l190 {
+    select 1, 2, 3, (select 1 + count(*) from one_pk_three_idx a cross join one_pk_three_idx b);
+}
+expect unordered {
+    1|2|3|65
+}
+
+@setup s14
+test l195 {
+    select pk, v1, v2 from one_pk_three_idx where v1 in (select max(a.v1) from one_pk_three_idx a cross join (select 'foo' from dual) b);
+}
+expect unordered {
+    7|4|4
+}
+
+@setup s14
+test l200 {
+    select * from (select a.v1, b.v2 from one_pk_three_idx a cross join one_pk_three_idx b) dt order by 1 desc, 2 desc limit 5;
+}
+expect {
+    4|4
+    4|3
+    4|2
+    4|1
+    4|0
+}
+
+@setup s14
+test l210 {
+    select a.pk, c.v2 from one_pk_three_idx a cross join one_pk_three_idx b left join one_pk_three_idx c on b.pk = c.v2 where b.pk = 0 and a.v2 = 1;
+}
+expect unordered {
+    2|0
+    2|0
+    2|0
+    2|0
+}
+
+@setup s14
+test l219 {
+    select a.pk, c.v2 from one_pk_three_idx a cross join one_pk_three_idx b right join one_pk_three_idx c on b.pk = c.v3 where b.pk = 0 and c.v2 = 0 order by a.pk;
+}
+expect {
+    0|0
+    0|0
+    1|0
+    1|0
+    2|0
+    2|0
+    3|0
+    3|0
+    4|0
+    4|0
+    5|0
+    5|0
+    6|0
+    6|0
+    7|0
+    7|0
+}
+
+@setup s14
+test l240 {
+    select a.pk, c.v2 from one_pk_three_idx a cross join one_pk_three_idx b inner join (select * from one_pk_three_idx where v2 = 0) c on b.pk = c.v3 where b.pk = 0 and c.v2 = 0 order by a.pk;
+}
+expect {
+    0|0
+    0|0
+    1|0
+    1|0
+    2|0
+    2|0
+    3|0
+    3|0
+    4|0
+    4|0
+    5|0
+    5|0
+    6|0
+    6|0
+    7|0
+    7|0
+}
+
+@setup s14
+test l261 {
+    select a.pk, c.v2 from one_pk_three_idx a cross join one_pk_three_idx b left join one_pk_three_idx c on b.pk = c.v1+1 where b.pk = 0 order by a.pk;
+}
+expect {
+    0|NULL
+    1|NULL
+    2|NULL
+    3|NULL
+    4|NULL
+    5|NULL
+    6|NULL
+    7|NULL
+}
+
+@setup s14
+test l274 {
+    select a.pk, c.v2 from one_pk_three_idx a cross join one_pk_three_idx b right join one_pk_three_idx c on b.pk = c.v1 where b.pk = 0 and c.v2 = 0 order by a.pk;
+}
+expect {
+    0|0
+    0|0
+    1|0
+    1|0
+    2|0
+    2|0
+    3|0
+    3|0
+    4|0
+    4|0
+    5|0
+    5|0
+    6|0
+    6|0
+    7|0
+    7|0
+}
+
+@setup s12
+test l295 {
+    select * from mytable a CROSS JOIN mytable b RIGHT JOIN mytable c ON b.i = c.i + 1 order by 1,2,3,4,5,6;
+}
+expect {
+    NULL|NULL|NULL|NULL|3|third row
+    1|first row|2|second row|1|first row
+    1|first row|3|third row|2|second row
+    2|second row|2|second row|1|first row
+    2|second row|3|third row|2|second row
+    3|third row|2|second row|1|first row
+    3|third row|3|third row|2|second row
+}
+
+@setup s12
+test l307 {
+    select * from mytable a CROSS JOIN mytable b LEFT JOIN mytable c ON b.i = c.i + 1 order by 1,2,3,4,5,6;
+}
+expect {
+    1|first row|1|first row|NULL|NULL
+    1|first row|2|second row|1|first row
+    1|first row|3|third row|2|second row
+    2|second row|1|first row|NULL|NULL
+    2|second row|2|second row|1|first row
+    2|second row|3|third row|2|second row
+    3|third row|1|first row|NULL|NULL
+    3|third row|2|second row|1|first row
+    3|third row|3|third row|2|second row
+}
+
+@setup s12
+test l321 {
+    select a.i, b.i, c.i from mytable a CROSS JOIN mytable b LEFT JOIN mytable c ON b.i+1 = c.i order by 1,2,3;
+}
+expect {
+    1|1|2
+    1|2|3
+    1|3|NULL
+    2|1|2
+    2|2|3
+    2|3|NULL
+    3|1|2
+    3|2|3
+    3|3|NULL
+}
+
+@setup s12
+test l334 {
+    select * from mytable a LEFT JOIN mytable b on a.i = b.i LEFT JOIN mytable c ON b.i = c.i + 1 order by 1,2,3,4,5,6;
+}
+expect {
+    1|first row|1|first row|NULL|NULL
+    2|second row|2|second row|1|first row
+    3|third row|3|third row|2|second row
+}
+
+@setup s12
+test l342 {
+    select * from mytable a LEFT JOIN  mytable b on a.i = b.i RIGHT JOIN mytable c ON b.i = c.i + 1 order by 1,2,3,4,5,6;
+}
+expect {
+    NULL|NULL|NULL|NULL|3|third row
+    2|second row|2|second row|1|first row
+    3|third row|3|third row|2|second row
+}
+
+@setup s12
+test l350 {
+    select * from mytable a RIGHT JOIN mytable b on a.i = b.i RIGHT JOIN mytable c ON b.i = c.i + 1 order by 1,2,3,4,5,6;
+}
+expect {
+    NULL|NULL|NULL|NULL|3|third row
+    2|second row|2|second row|1|first row
+    3|third row|3|third row|2|second row
+}
+
+@setup s12
+test l358 {
+    select * from mytable a RIGHT JOIN mytable b on a.i = b.i LEFT JOIN mytable c ON b.i = c.i + 1;
+}
+expect unordered {
+    1|first row|1|first row|NULL|NULL
+    2|second row|2|second row|1|first row
+    3|third row|3|third row|2|second row
+}
+
+@setup s12
+test l366 {
+    select * from mytable a LEFT JOIN mytable b on a.i = b.i LEFT JOIN mytable c ON b.i+1 = c.i;
+}
+expect unordered {
+    1|first row|1|first row|2|second row
+    2|second row|2|second row|3|third row
+    3|third row|3|third row|NULL|NULL
+}
+
+@setup s12
+test l373 {
+    select * from mytable a LEFT JOIN  mytable b on a.i = b.i RIGHT JOIN mytable c ON b.i+1 = c.i order by 1,2,3,4,5,6;
+}
+expect {
+    NULL|NULL|NULL|NULL|1|first row
+    1|first row|1|first row|2|second row
+    2|second row|2|second row|3|third row
+}
+
+@setup s12
+test l380 {
+    select * from mytable a RIGHT JOIN mytable b on a.i = b.i RIGHT JOIN mytable c ON b.i+1= c.i order by 1,2,3,4,5,6;
+}
+expect {
+    NULL|NULL|NULL|NULL|1|first row
+    1|first row|1|first row|2|second row
+    2|second row|2|second row|3|third row
+}
+
+@setup s12
+test l387 {
+    select * from mytable a RIGHT JOIN mytable b on a.i = b.i LEFT JOIN mytable c ON b.i+1 = c.i order by 1,2,3,4,5,6;
+}
+expect {
+    1|first row|1|first row|2|second row
+    2|second row|2|second row|3|third row
+    3|third row|3|third row|NULL|NULL
+}
+
+@setup s12
+test l395 {
+    select * from mytable a CROSS JOIN mytable b RIGHT JOIN mytable c ON b.i+1 = c.i order by 1,2,3,4,5,6;
+}
+expect {
+    NULL|NULL|NULL|NULL|1|first row
+    1|first row|1|first row|2|second row
+    1|first row|2|second row|3|third row
+    2|second row|1|first row|2|second row
+    2|second row|2|second row|3|third row
+    3|third row|1|first row|2|second row
+    3|third row|2|second row|3|third row
+}
+
+@setup s12
+test l407 {
+    with a as (select a.i, a.s from mytable a CROSS JOIN mytable b) select * from a RIGHT JOIN mytable c on a.i+1 = c.i-1;
+}
+expect unordered {
+    1|first row|3|third row
+    1|first row|3|third row
+    1|first row|3|third row
+    NULL|NULL|1|first row
+    NULL|NULL|2|second row
+}
+
+@setup s12
+test l417 {
+    select a.* from mytable a RIGHT JOIN mytable b on a.i = b.i+1 LEFT JOIN mytable c on a.i = c.i-1 RIGHT JOIN mytable d on b.i = d.i;
+}
+expect unordered {
+    2|second row
+    3|third row
+    NULL|NULL
+}
+
+@setup s12
+@setup s13
+test l425 {
+    select a.*,b.* from mytable a RIGHT JOIN othertable b on a.i = b.i2+1 LEFT JOIN mytable c on a.i = c.i-1 LEFT JOIN othertable d on b.i2 = d.i2;
+}
+expect unordered {
+    2|second row|third|1
+    3|third row|second|2
+    NULL|NULL|first|3
+}
+
+@setup s12
+@setup s13
+test l433 {
+    select a.*,b.* from mytable a RIGHT JOIN othertable b on a.i = b.i2+1 RIGHT JOIN mytable c on a.i = c.i-1 LEFT JOIN othertable d on b.i2 = d.i2;
+}
+expect unordered {
+    2|second row|third|1
+    NULL|NULL|NULL|NULL
+    NULL|NULL|NULL|NULL
+}
+
+@setup s15
+test l441 {
+    select i.pk, j.v3 from one_pk_two_idx i JOIN one_pk_three_idx j on i.v1 = j.pk;
+}
+expect unordered {
+    0|0
+    1|1
+    2|0
+    3|2
+    4|0
+    5|3
+    6|0
+    7|4
+}
+
+@setup s16
+@setup s17
+test l445 {
+    select i.pk, j.v3, k.c1 from one_pk_two_idx i JOIN one_pk_three_idx j on i.v1 = j.pk JOIN one_pk k on j.v3 = k.pk;
+}
+expect unordered {
+    0|0|0
+    1|1|10
+    2|0|0
+    3|2|20
+    4|0|0
+    5|3|30
+    6|0|0
+}
+
+@setup s15
+test l449 {
+    select i.pk, j.v3 from (one_pk_two_idx i JOIN one_pk_three_idx j on((i.v1 = j.pk)));
+}
+expect unordered {
+    0|0
+    1|1
+    2|0
+    3|2
+    4|0
+    5|3
+    6|0
+    7|4
+}
+
+@setup s16
+@setup s17
+test l453 {
+    select i.pk, j.v3, k.c1 from ((one_pk_two_idx i JOIN one_pk_three_idx j on ((i.v1 = j.pk))) JOIN one_pk k on((j.v3 = k.pk)));
+}
+expect unordered {
+    0|0|0
+    1|1|10
+    2|0|0
+    3|2|20
+    4|0|0
+    5|3|30
+    6|0|0
+}
+
+@setup s16
+@setup s17
+test l457 {
+    select i.pk, j.v3, k.c1 from (one_pk_two_idx i JOIN one_pk_three_idx j on ((i.v1 = j.pk)) JOIN one_pk k on((j.v3 = k.pk)));
+}
+expect unordered {
+    0|0|0
+    1|1|10
+    2|0|0
+    3|2|20
+    4|0|0
+    5|3|30
+    6|0|0
+}
+
+@setup s15
+test l461 {
+    select a.* from one_pk_two_idx a RIGHT JOIN (one_pk_two_idx i JOIN one_pk_three_idx j on i.v1 = j.pk) on a.pk = i.v1 LEFT JOIN (one_pk_two_idx k JOIN one_pk_three_idx l on k.v1 = l.pk) on a.pk = l.v2;
+}
+expect unordered {
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    1|1|1
+    2|2|2
+    3|3|3
+    4|4|4
+    5|5|5
+    6|6|6
+    7|7|7
+}
+
+@setup s15
+test l475 {
+    select a.* from one_pk_two_idx a LEFT JOIN (one_pk_two_idx i JOIN one_pk_three_idx j on i.pk = j.v3) on a.pk = i.pk RIGHT JOIN (one_pk_two_idx k JOIN one_pk_three_idx l on k.v2 = l.v3) on a.v1 = l.v2;
+}
+expect unordered {
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    1|1|1
+    2|2|2
+    3|3|3
+    4|4|4
+}
+
+@setup s12
+test l499 {
+    select a.* from mytable a join mytable b on a.i = b.i and a.i > 2;
+}
+expect unordered {
+    3|third row
+}
+
+@setup s12
+@setup s18
+test l512 {
+    select * from mytable a join niltable  b on a.i = b.i and b <=> NULL;
+}
+expect unordered {
+    1|first row|1|NULL|NULL|NULL
+}
+
+@setup s12
+@setup s18
+test l518 {
+    select * from mytable a join niltable  b on a.i = b.i and s IS NOT NULL;
+}
+expect unordered {
+    1|first row|1|NULL|NULL|NULL
+    2|second row|2|2|1|NULL
+    3|third row|3|NULL|0|NULL
+}
+
+@setup s12
+@setup s18
+test l526 {
+    select * from mytable a join niltable  b on a.i = b.i and b IS NOT NULL;
+}
+expect unordered {
+    2|second row|2|2|1|NULL
+    3|third row|3|NULL|0|NULL
+}
+
+@setup s12
+@setup s18
+test l533 {
+    select * from mytable a join niltable  b on a.i = b.i and b != 0;
+}
+expect unordered {
+    2|second row|2|2|1|NULL
+}
+
+@setup s12
+@setup s18
+test l539 {
+    select * from mytable a join niltable  b on a.i <> b.i and b != 0;
+}
+expect unordered {
+    1|first row|2|2|1|NULL
+    1|first row|5|NULL|1|5
+    2|second row|5|NULL|1|5
+    3|third row|2|2|1|NULL
+    3|third row|5|NULL|1|5
+}
+
+@setup s12
+@setup s18
+test l549 {
+    select * from mytable a join niltable  b on a.i <> b.i;
+}
+expect unordered {
+    1|first row|2|2|1|NULL
+    1|first row|3|NULL|0|NULL
+    1|first row|4|4|NULL|4
+    1|first row|5|NULL|1|5
+    1|first row|6|6|0|6
+    2|second row|1|NULL|NULL|NULL
+    2|second row|3|NULL|0|NULL
+    2|second row|4|4|NULL|4
+    2|second row|5|NULL|1|5
+    2|second row|6|6|0|6
+    3|third row|1|NULL|NULL|NULL
+    3|third row|2|2|1|NULL
+    3|third row|4|4|NULL|4
+    3|third row|5|NULL|1|5
+    3|third row|6|6|0|6
+}
+
+@setup s16
+@setup s19
+test l569 {
+    SELECT pk as pk, nt.i  as i, nt2.i as i FROM one_pk
+						RIGHT JOIN niltable nt ON pk=nt.i
+						RIGHT JOIN niltable nt2 ON pk=nt2.i - 1
+						ORDER BY 3;
+}
+expect {
+    NULL|NULL|1
+    1|1|2
+    2|2|3
+    3|3|4
+    NULL|NULL|5
+    NULL|NULL|6
+}
+
+@setup s20
+@setup s21
+test l583 {
+    select * from ab full join pq on a = p order by 1,2,3,4;
+}
+expect {
+    0|2|0|0
+    1|2|1|1
+    2|2|2|2
+    3|1|3|3
+}
+
+@setup s1
+@setup s7
+@setup s22
+test l604 {
+    select * from ab
+	full join pq on a = p
+	left join xy on a = x order by 1,2,3,4,5,6;
+}
+expect {
+    0|2|0|0|0|2
+    1|2|1|1|1|0
+    2|2|2|2|2|1
+    3|1|3|3|3|3
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s4
+test l616 {
+    select * from (select a,v from ab join uv on a=u) av join (select x,q from xy join pq on x = p) xq on av.v = xq.x;
+}
+expect unordered {
+    0|1|1|1
+    1|1|1|1
+    2|2|2|2
+    3|2|2|2
+}
+
+@setup s1
+@setup s2
+@setup s3
+@setup s5
+test l625 {
+    select x from xy join uv on y = v join ab on y = b and u = -1;
+}
+expect unordered {
+}
+
+@setup s15
+test l629 {
+    select a.* from one_pk_two_idx a LEFT JOIN (one_pk_two_idx i JOIN one_pk_three_idx j on i.pk = j.v3) on a.pk = i.pk LEFT JOIN (one_pk_two_idx k JOIN one_pk_three_idx l on k.v2 = l.v3) on a.v1 = l.v2;
+}
+expect unordered {
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    0|0|0
+    1|1|1
+    2|2|2
+    3|3|3
+    4|4|4
+    5|5|5
+    6|6|6
+    7|7|7
+}
+
+@setup s12
+test l635 {
+    with recursive a(x,y) as (select i,i from mytable where i < 4 union select a.x, mytable.i from a join mytable on a.x+1 = mytable.i limit 2) select * from a;
+}
+expect unordered {
+    1|1
+    2|2
+}
+
+@setup s9
+@setup s11
+test l639 {
+    select * from (
+    (ab JOIN pq ON (1 = p))
+	LEFT OUTER JOIN uv on (2 = u)
+);
+}
+expect unordered {
+    0|2|1|1|2|2
+    1|2|1|1|2|2
+    2|2|1|1|2|2
+    3|1|1|1|2|2
+}
+
+@setup s20
+@setup s21
+test l652 {
+    select * from (ab JOIN pq ON (a = 1)) where a in (1,2,3);
+}
+expect unordered {
+    1|2|0|0
+    1|2|1|1
+    1|2|2|2
+    1|2|3|3
+}
+
+@setup s20
+@setup s21
+test l660 {
+    select * from (ab JOIN pq ON (a = p)) where a in (select a from ab);
+}
+expect unordered {
+    0|2|0|0
+    1|2|1|1
+    2|2|2|2
+    3|1|3|3
+}
+
+@setup s20
+@setup s21
+test l668 {
+    select * from (ab JOIN pq ON (a = 1)) where a in (select a from ab);
+}
+expect unordered {
+    1|2|0|0
+    1|2|1|1
+    1|2|2|2
+    1|2|3|3
+}
+
+@setup s20
+@setup s21
+test l676 {
+    select * from (ab JOIN pq) where a in (select a from ab);
+}
+expect unordered {
+    0|2|0|0
+    0|2|1|1
+    0|2|2|2
+    0|2|3|3
+    1|2|0|0
+    1|2|1|1
+    1|2|2|2
+    1|2|3|3
+    2|2|0|0
+    2|2|1|1
+    2|2|2|2
+    2|2|3|3
+    3|1|0|0
+    3|1|1|1
+    3|1|2|2
+    3|1|3|3
+}
+
+test l714 {
+    SELECT count(*)
+FROM
+JSON_TABLE(
+	'[\{"a":1.5, "b":2.25\},\{"a":3.125, "b":4.0625\}]',
+	'$[*]' COLUMNS(x float path '$.a', y float path '$.b')
+) as t1
+join
+JSON_TABLE(
+	'[\{"c":2, "d":3\},\{"c":4, "d":5\}]',
+	'$[*]' COLUMNS(z float path '$.c', w float path '$.d')
+) as t2
+on w = 0;
+}
+expect unordered {
+    0
+}
+
+@setup s23
+test l729 {
+    SELECT * from xy_hasnull where y not in (SELECT b from ab_hasnull);
+}
+expect unordered {
+}
+
+@setup s20
+@setup s24
+test l733 {
+    SELECT * from xy_hasnull where y not in (SELECT b from ab);
+}
+expect unordered {
+    1|0
+}
+
+@setup s1
+@setup s25
+test l737 {
+    SELECT * from xy where y not in (SELECT b from ab_hasnull);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s7
+@setup s8
+test l741 {
+    SELECT * from xy where null not in (SELECT b from ab);
+}
+expect unordered {
+}
+
+@setup s26
+test l799 {
+    select * from comp_index_t0 c join comp_index_t0 b join comp_index_t0 a on a.v2 = b.pk and b.v2 = c.pk and c.v2 = 1;
+}
+expect unordered {
+}
+
+@setup s26
+test l805 {
+    select * from comp_index_t0 a join comp_index_t0 b join comp_index_t0 c on a.v2 = b.pk and b.v2 = c.pk and c.v2 = 5;
+}
+expect unordered {
+}
+
+@setup s12
+@setup s13
+test l809 {
+    select * from mytable join othertable on 3 >= 2 where mytable.i = 1 order by othertable.i2;
+}
+expect {
+    1|first row|third|1
+    1|first row|second|2
+    1|first row|first|3
+}
+
+@setup s12
+@setup s13
+test l817 {
+    select * from mytable join othertable on 3 < 2;
+}
+expect unordered {
+}
+
+@setup s12
+@setup s27
+test l821 {
+    select * from mytable left join emptytable on 3 >= 2;
+}
+expect unordered {
+    1|first row|NULL|NULL
+    2|second row|NULL|NULL
+    3|third row|NULL|NULL
+}
+
+@setup s12
+@setup s13
+test l829 {
+    select * from mytable left join othertable on 3 < 2;
+}
+expect unordered {
+    1|first row|NULL|NULL
+    2|second row|NULL|NULL
+    3|third row|NULL|NULL
+}
+
+@setup s12
+@setup s27
+test l837 {
+    select * from emptytable right join mytable on 3 >= 2;
+}
+expect unordered {
+    NULL|NULL|1|first row
+    NULL|NULL|2|second row
+    NULL|NULL|3|third row
+}
+
+@setup s12
+@setup s13
+test l845 {
+    select * from othertable right join mytable on 3 < 2;
+}
+expect unordered {
+    NULL|NULL|1|first row
+    NULL|NULL|2|second row
+    NULL|NULL|3|third row
+}

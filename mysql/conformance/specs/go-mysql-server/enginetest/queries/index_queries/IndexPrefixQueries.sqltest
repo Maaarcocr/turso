@@ -1,0 +1,1710 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/index_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t (i int);
+}
+
+setup s2 {
+    create table t (f float);
+}
+
+setup s3 {
+    create table v_tbl (v varchar(10));
+}
+
+setup s4 {
+    create table c_tbl (c char(10));
+}
+
+setup s5 {
+    create table t (v varchar(100));
+}
+
+setup s6 {
+    create table t (i int primary key, v varchar(10));
+    insert into t values (-1, 'zzz');
+}
+
+setup s7 {
+    alter table t add unique index (v(1));
+}
+
+setup s8 {
+    insert into t values (0, 'aa'), (1, 'bb'), (2, 'cc');
+}
+
+setup s9 {
+    create table t (v varchar(10));
+}
+
+setup s10 {
+    alter table t add unique index (v(1));
+}
+
+setup s11 {
+    create table t (c char(100));
+}
+
+setup s12 {
+    create table t (i int primary key, c char(10));
+}
+
+setup s13 {
+    alter table t add unique index (c(1));
+}
+
+setup s14 {
+    create table t (c char(10));
+}
+
+setup s15 {
+    alter table t add unique index (c(1));
+}
+
+setup s16 {
+    create table t (v varbinary(100));
+}
+
+setup s17 {
+    create table t (i int primary key, v varbinary(10));
+}
+
+setup s18 {
+    alter table t add unique index (v(1));
+}
+
+setup s19 {
+    create table t (v varbinary(10));
+}
+
+setup s20 {
+    alter table t add unique index (v(1));
+}
+
+setup s21 {
+    create table t (b binary(100));
+}
+
+setup s22 {
+    create table t (i int primary key, b binary(10));
+}
+
+setup s23 {
+    alter table t add unique index (b(1));
+}
+
+setup s24 {
+    create table t (b binary(10));
+}
+
+setup s25 {
+    alter table t add unique index (b(1));
+}
+
+setup s26 {
+    create table t (b blob);
+}
+
+setup s27 {
+    create table t (i int primary key, b blob);
+    insert into t values (999, 'abcdefg');
+}
+
+setup s28 {
+    alter table t add index (b(1));
+}
+
+setup s29 {
+    insert into t values (998, X'4242');
+}
+
+setup s30 {
+    alter table t drop index `b`;
+}
+
+setup s31 {
+    alter table t add unique index (b(1));
+}
+
+setup s32 {
+    alter table t add unique index (b(1));
+}
+
+setup s33 {
+    create table t (t text);
+}
+
+setup s34 {
+    alter table t add primary key (t(10));
+}
+
+setup s35 {
+    create table t (i int primary key, t text);
+    insert into t values (999, 'xxx');
+}
+
+setup s36 {
+    alter table t add index (t(1));
+}
+
+setup s37 {
+    insert into t values (998, 'yy');
+}
+
+setup s38 {
+    alter table t drop index `t`;
+}
+
+setup s39 {
+    alter table t add unique index (t(1));
+}
+
+setup s40 {
+    alter table t add unique index (t(1));
+}
+
+setup s41 {
+    create table t (i int primary key, v1 varchar(10), v2 varchar(10), unique index (v1(3),v2(5)));
+}
+
+setup s42 {
+    insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde');
+}
+
+setup s43 {
+    update t set v1 = concat(v1, 'z') where v1 >= 'a';
+}
+
+setup s44 {
+    delete from t where v1 >= 'a';
+}
+
+setup s45 {
+    create table t (v1 varchar(10), v2 varchar(10), unique index (v1(3),v2(5)));
+}
+
+setup s46 {
+    insert into t values ('a', 'a'), ('ab','ab'), ('abc', 'abc'), ('abcde', 'abcde');
+}
+
+setup s47 {
+    update t set v1 = concat(v1, 'z') where v1 >= 'a';
+}
+
+setup s48 {
+    delete from t where v1 >= 'a';
+}
+
+setup s49 {
+    create table t (i int primary key, v1 varchar(10), v2 varchar(10), unique index (v1(3),v2(5))) collate utf8mb4_0900_ai_ci;
+}
+
+setup s50 {
+    insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde');
+}
+
+setup s51 {
+    create table t (i int primary key, v1 text, v2 text, unique index (v1(3),v2(5)));
+}
+
+setup s52 {
+    insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde');
+}
+
+setup s53 {
+    update t set v1 = concat(v1, 'z') where v1 >= 'a';
+}
+
+setup s54 {
+    delete from t where v1 >= 'a';
+}
+
+setup s55 {
+    create table t (pk int primary key, col1 text);
+}
+
+setup s56 {
+    insert into t values (4, ''), (5, ' '), (8, NULL), (-1, '  ');
+}
+
+setup s57 {
+    insert into t values (1, 'oneasdfasdf');
+}
+
+setup s58 {
+    create table j2 (pk int primary key, col1 varchar(100));
+    insert into j2 values (1, '100'), (2, '  '), (3, '300');
+    insert into t values (4, ''), (5, ' '), (8, NULL), (-1, '  ');
+    insert into t values (1, 'oneasdfasdf');
+    insert into t values (2, 'oneasdfasdf');
+}
+
+setup s59 {
+    insert into t values (2, 'oneasdfasdf');
+}
+
+setup s60 {
+    create table t2 (pk int primary key, col1 TEXT collate utf8mb3_general_ci);
+}
+
+setup s61 {
+    create table test(pk int primary key, shared1 int, shared2 int, a3 int, a4 int, b3 int, b4 int, unique key a_idx(shared1, shared2, a3, a4), unique key b_idx(shared1, shared2, b3, b4));
+}
+
+setup s62 {
+    create table test(pk int primary key, shared1 int not null, shared2 int not null, a3 int not null, a4 int not null, b3 int not null, b4 int not null, key a_idx(shared1, shared2, a3, a4), key b_idx(shared1, shared2, b3, b4));
+}
+
+setup s63 {
+    create table test(pk int primary key, shared1 int, shared2 int, a3 int, a4 int, b3 int, b4 int, key a_idx(shared1, shared2, a3, a4), key b_idx(shared1, shared2, b3, b4));
+}
+
+setup s64 {
+    create table test(pk int primary key, shared1 int, shared2 int, a3 int, a4 int, b3 int, b4 int, unique key a_idx(shared1, shared2, a3, a4), key b_idx(shared1, shared2, b3, b4));
+}
+
+setup s65 {
+    create table test(pk int primary key, shared1 int, shared2 int, a3 int, a4 int, b3 int, b4 int, unique key a_idx(shared1, a3, a4, shared2), key b_idx(shared1, shared2, b3, b4));
+}
+
+setup s66 {
+    CREATE TABLE t_latin1 (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  group_key varchar(16) COLLATE latin1_bin NOT NULL,
+  code varchar(32) CHARACTER SET latin1 DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_group_code (group_key, code(12))
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin;
+}
+
+setup s67 {
+    alter table t_latin1 add index (code(32));
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s1
+test l2853 {
+    alter table t add primary key (i(10));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s1
+test l2857 {
+    alter table t add index (i(10));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2861 {
+    create table c_tbl (i int, primary key (i(10)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2865 {
+    create table c_tbl (i int primary key, j int, index (j(10)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s2
+test l2877 {
+    alter table t add primary key (f(10));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s2
+test l2881 {
+    alter table t add index (f(10));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2885 {
+    create table c_tbl (f float, primary key (f(10)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2889 {
+    create table c_tbl (i int primary key, f float, index (f(10)));
+}
+expect error {
+}
+
+# mysql-error: 1391 HY000 Key part 'v' length cannot be 0
+@setup s3
+test l2902 {
+    alter table v_tbl add primary key (v(0));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s3
+test l2906 {
+    alter table v_tbl add primary key (v(11));
+}
+expect error {
+}
+
+# mysql-error: 1391 HY000 Key part 'v' length cannot be 0
+@setup s3
+test l2910 {
+    alter table v_tbl add index (v(0));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s3
+test l2914 {
+    alter table v_tbl add index (v(11));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s4
+test l2918 {
+    alter table c_tbl add primary key (c(11));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s4
+test l2922 {
+    alter table c_tbl add index (c(11));
+}
+expect error {
+}
+
+# mysql-error: 1391 HY000 Key part 'v' length cannot be 0
+test l2926 {
+    create table t (v varchar(10), primary key(v(0)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2930 {
+    create table t (v varchar(10), primary key(v(11)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2934 {
+    create table t (v varchar(10), index(v(11)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2938 {
+    create table t (c char(10), primary key(c(11)));
+}
+expect error {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l2942 {
+    create table t (c char(10), index(c(11)));
+}
+expect error {
+}
+
+@setup s5
+test l2954 {
+    alter table t add primary key (v(10));
+}
+expect unordered {
+}
+
+test l2958 {
+    create table v_tbl (v varchar(100), primary key (v(10)));
+}
+expect unordered {
+}
+
+@setup s6
+test l2973 {
+    alter table t add unique index (v(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.v'
+@setup s6
+@setup s7
+test l2981 {
+    insert into t values (0, 'aa'), (1, 'ab');
+}
+expect error {
+}
+
+@setup s6
+@setup s7
+test l2985 {
+    insert into t values (0, 'aa'), (1, 'bb'), (2, 'cc');
+}
+expect unordered {
+}
+
+@setup s6
+@setup s7
+@setup s8
+test l2989 {
+    select * from t where v = 'a';
+}
+expect unordered {
+}
+
+@setup s6
+@setup s7
+@setup s8
+test l2993 {
+    select * from t where v = 'aa';
+}
+expect unordered {
+    0|aa
+}
+
+test l2999 {
+    create table v_tbl (i int primary key, v varchar(100), index (v(10)));
+}
+expect unordered {
+}
+
+@setup s9
+test l3015 {
+    alter table t add unique index (v(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.v'
+@setup s9
+@setup s10
+test l3023 {
+    insert into t values ('aa'), ('ab');
+}
+expect error {
+}
+
+test l3027 {
+    create table v_tbl (v varchar(100), index (v(10)));
+}
+expect unordered {
+}
+
+@setup s11
+test l3043 {
+    alter table t add primary key (c(10));
+}
+expect unordered {
+}
+
+test l3047 {
+    create table c_tbl (c char(100), primary key (c(10)));
+}
+expect unordered {
+}
+
+@setup s12
+test l3059 {
+    alter table t add unique index (c(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.c'
+@setup s12
+@setup s13
+test l3067 {
+    insert into t values (0, 'aa'), (1, 'ab');
+}
+expect error {
+}
+
+test l3071 {
+    create table c_tbl (i int primary key, c varchar(100), index (c(10)));
+}
+expect unordered {
+}
+
+@setup s14
+test l3087 {
+    alter table t add unique index (c(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.c'
+@setup s14
+@setup s15
+test l3095 {
+    insert into t values ('aa'), ('ab');
+}
+expect error {
+}
+
+test l3099 {
+    create table c_tbl (c char(100), index (c(10)));
+}
+expect unordered {
+}
+
+@setup s16
+test l3115 {
+    alter table t add primary key (v(10));
+}
+expect unordered {
+}
+
+test l3119 {
+    create table v_tbl (v varbinary(100), primary key (v(10)));
+}
+expect unordered {
+}
+
+@setup s17
+test l3131 {
+    alter table t add unique index (v(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.v'
+@setup s17
+@setup s18
+test l3139 {
+    insert into t values (0, 'aa'), (1, 'ab');
+}
+expect error {
+}
+
+test l3143 {
+    create table v_tbl (i int primary key, v varbinary(100), index (v(10)));
+}
+expect unordered {
+}
+
+@setup s19
+test l3159 {
+    alter table t add unique index (v(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.v'
+@setup s19
+@setup s20
+test l3167 {
+    insert into t values ('aa'), ('ab');
+}
+expect error {
+}
+
+test l3171 {
+    create table v_tbl (v varbinary(100), index (v(10)));
+}
+expect unordered {
+}
+
+@setup s21
+test l3187 {
+    alter table t add primary key (b(10));
+}
+expect unordered {
+}
+
+test l3191 {
+    create table b_tbl (b binary(100), primary key (b(10)));
+}
+expect unordered {
+}
+
+@setup s22
+test l3203 {
+    alter table t add unique index (b(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.b'
+@setup s22
+@setup s23
+test l3211 {
+    insert into t values (0, 'aa'), (1, 'ab');
+}
+expect error {
+}
+
+test l3215 {
+    create table b_tbl (i int primary key, b binary(100), index (b(10)));
+}
+expect unordered {
+}
+
+@setup s24
+test l3231 {
+    alter table t add unique index (b(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.b'
+@setup s24
+@setup s25
+test l3239 {
+    insert into t values ('aa'), ('ab');
+}
+expect error {
+}
+
+test l3243 {
+    create table b_tbl (b binary(100), index (b(10)));
+}
+expect unordered {
+}
+
+@setup s26
+test l3259 {
+    alter table t add primary key (b(10));
+}
+expect unordered {
+}
+
+test l3263 {
+    create table b_tbl (b blob, primary key (b(10)));
+}
+expect unordered {
+}
+
+@setup s27
+test l3278 {
+    select i from t where b like 'abcd%';
+}
+expect unordered {
+    999
+}
+
+@setup s27
+test l3282 {
+    alter table t add index (b(1));
+}
+expect unordered {
+}
+
+@setup s27
+@setup s28
+test l3290 {
+    insert into t values (998, X'4242');
+}
+expect unordered {
+}
+
+@setup s27
+@setup s28
+@setup s29
+test l3294 {
+    alter table t drop index `b`;
+}
+expect unordered {
+}
+
+@setup s27
+@setup s28
+@setup s29
+@setup s30
+test l3298 {
+    alter table t add unique index (b(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.b'
+@setup s27
+@setup s28
+@setup s29
+@setup s30
+@setup s31
+test l3306 {
+    insert into t values (0, 'aa'), (1, 'ab');
+}
+expect error {
+}
+
+test l3310 {
+    create table b_tbl (i int primary key, b blob, index (b(10)));
+}
+expect unordered {
+}
+
+@setup s26
+test l3326 {
+    alter table t add unique index (b(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.b'
+@setup s26
+@setup s32
+test l3334 {
+    insert into t values ('aa'), ('ab');
+}
+expect error {
+}
+
+test l3338 {
+    create table b_tbl (b blob, index (b(10)));
+}
+expect unordered {
+}
+
+@setup s33
+test l3354 {
+    alter table t add primary key (t(10));
+}
+expect unordered {
+}
+
+@setup s33
+@setup s34
+test l3358 {
+    create table b_tbl (t text, primary key (t(10)));
+}
+expect unordered {
+}
+
+@setup s35
+test l3373 {
+    select i from t where t like 'x%';
+}
+expect unordered {
+    999
+}
+
+@setup s35
+test l3377 {
+    alter table t add index (t(1));
+}
+expect unordered {
+}
+
+@setup s35
+@setup s36
+test l3385 {
+    select i from t where t like 'x%';
+}
+expect unordered {
+    999
+}
+
+@setup s35
+@setup s36
+test l3389 {
+    insert into t values (998, 'yy');
+}
+expect unordered {
+}
+
+@setup s35
+@setup s36
+@setup s37
+test l3393 {
+    alter table t drop index `t`;
+}
+expect unordered {
+}
+
+@setup s35
+@setup s36
+@setup s37
+@setup s38
+test l3397 {
+    alter table t add unique index (t(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.t'
+@setup s35
+@setup s36
+@setup s37
+@setup s38
+@setup s39
+test l3405 {
+    insert into t values (0, 'aa'), (1, 'ab');
+}
+expect error {
+}
+
+@setup s35
+@setup s36
+@setup s37
+@setup s38
+@setup s39
+test l3409 {
+    create table t_tbl (i int primary key, t text, index (t(10)));
+}
+expect unordered {
+}
+
+@setup s33
+test l3425 {
+    alter table t add unique index (t(1));
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a' for key 't.t'
+@setup s33
+@setup s40
+test l3433 {
+    insert into t values ('aa'), ('ab');
+}
+expect error {
+}
+
+@setup s33
+@setup s40
+test l3437 {
+    create table t_tbl (t text, index (t(10)));
+}
+expect unordered {
+}
+
+@setup s41
+test l3457 {
+    insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde');
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'abc-abcde' for key 't.v1'
+@setup s41
+@setup s42
+test l3461 {
+    insert into t values (99, 'abc', 'abcde');
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'abc-abcde' for key 't.v1'
+@setup s41
+@setup s42
+test l3465 {
+    insert into t values (99, 'abc123', 'abcde123');
+}
+expect error {
+}
+
+@setup s41
+@setup s42
+test l3469 {
+    select * from t where v1 = 'a';
+}
+expect unordered {
+    0|a|a
+}
+
+@setup s41
+@setup s42
+test l3475 {
+    select * from t where v1 = 'abc';
+}
+expect unordered {
+    2|abc|abc
+}
+
+@setup s41
+@setup s42
+test l3481 {
+    select * from t where v1 = 'abcd';
+}
+expect unordered {
+}
+
+@setup s41
+@setup s42
+test l3485 {
+    select * from t where v1 > 'a' and v1 < 'abcde';
+}
+expect unordered {
+    1|ab|ab
+    2|abc|abc
+}
+
+@setup s41
+@setup s42
+test l3492 {
+    select * from t where v1 > 'a' and v2 < 'abcde';
+}
+expect unordered {
+    1|ab|ab
+    2|abc|abc
+}
+
+@setup s41
+@setup s42
+test l3499 {
+    update t set v1 = concat(v1, 'z') where v1 >= 'a';
+}
+expect unordered {
+}
+
+@setup s41
+@setup s42
+@setup s43
+test l3505 {
+    select * from t;
+}
+expect unordered {
+    0|az|a
+    1|abz|ab
+    2|abcz|abc
+    3|abcdez|abcde
+}
+
+@setup s41
+@setup s42
+@setup s43
+test l3514 {
+    delete from t where v1 >= 'a';
+}
+expect unordered {
+}
+
+@setup s41
+@setup s42
+@setup s43
+@setup s44
+test l3520 {
+    select * from t;
+}
+expect unordered {
+}
+
+@setup s45
+test l3536 {
+    insert into t values ('a', 'a'), ('ab','ab'), ('abc', 'abc'), ('abcde', 'abcde');
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'abc-abcde' for key 't.v1'
+@setup s45
+@setup s46
+test l3540 {
+    insert into t values ('abc', 'abcde');
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'abc-abcde' for key 't.v1'
+@setup s45
+@setup s46
+test l3544 {
+    insert into t values ('abc123', 'abcde123');
+}
+expect error {
+}
+
+@setup s45
+@setup s46
+test l3548 {
+    select * from t where v1 = 'a';
+}
+expect unordered {
+    a|a
+}
+
+@setup s45
+@setup s46
+test l3554 {
+    select * from t where v1 = 'abc';
+}
+expect unordered {
+    abc|abc
+}
+
+@setup s45
+@setup s46
+test l3560 {
+    select * from t where v1 = 'abcd';
+}
+expect unordered {
+}
+
+@setup s45
+@setup s46
+test l3564 {
+    select * from t where v1 > 'a' and v1 < 'abcde';
+}
+expect unordered {
+    abc|abc
+    ab|ab
+}
+
+@setup s45
+@setup s46
+test l3571 {
+    select * from t where v1 > 'a' and v2 < 'abcde';
+}
+expect unordered {
+    abc|abc
+    ab|ab
+}
+
+@setup s45
+@setup s46
+test l3578 {
+    update t set v1 = concat(v1, 'z') where v1 >= 'a';
+}
+expect unordered {
+}
+
+@setup s45
+@setup s46
+@setup s47
+test l3584 {
+    select * from t;
+}
+expect unordered {
+    abcdez|abcde
+    abcz|abc
+    abz|ab
+    az|a
+}
+
+@setup s45
+@setup s46
+@setup s47
+test l3593 {
+    delete from t where v1 >= 'a';
+}
+expect unordered {
+}
+
+@setup s45
+@setup s46
+@setup s47
+@setup s48
+test l3599 {
+    select * from t;
+}
+expect unordered {
+}
+
+@setup s49
+test l3616 {
+    insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde');
+}
+expect unordered {
+}
+
+@setup s49
+@setup s50
+test l3644 {
+    select * from t where v1 = 'ABCD';
+}
+expect unordered {
+}
+
+@setup s49
+@setup s50
+test l3655 {
+    select * from t where v1 > 'A' and v2 < 'ABCDE';
+}
+expect unordered {
+    1|ab|ab
+    2|abc|abc
+}
+
+@setup s51
+test l3703 {
+    insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde');
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'abc-abcde' for key 't.v1'
+@setup s51
+@setup s52
+test l3707 {
+    insert into t values (99, 'abc', 'abcde');
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'abc-abcde' for key 't.v1'
+@setup s51
+@setup s52
+test l3711 {
+    insert into t values (99, 'abc123', 'abcde123');
+}
+expect error {
+}
+
+@setup s51
+@setup s52
+test l3715 {
+    select * from t where v1 = 'a';
+}
+expect unordered {
+    0|a|a
+}
+
+@setup s51
+@setup s52
+test l3721 {
+    select * from t where v1 = 'abc';
+}
+expect unordered {
+    2|abc|abc
+}
+
+@setup s51
+@setup s52
+test l3727 {
+    select * from t where v1 = 'abcd';
+}
+expect unordered {
+}
+
+@setup s51
+@setup s52
+test l3731 {
+    select * from t where v1 > 'a' and v1 < 'abcde';
+}
+expect unordered {
+    1|ab|ab
+    2|abc|abc
+}
+
+@setup s51
+@setup s52
+test l3738 {
+    select * from t where v1 > 'a' and v2 < 'abcde';
+}
+expect unordered {
+    1|ab|ab
+    2|abc|abc
+}
+
+@setup s51
+@setup s52
+test l3745 {
+    update t set v1 = concat(v1, 'z') where v1 >= 'a';
+}
+expect unordered {
+}
+
+@setup s51
+@setup s52
+@setup s53
+test l3751 {
+    select * from t;
+}
+expect unordered {
+    0|az|a
+    1|abz|ab
+    2|abcz|abc
+    3|abcdez|abcde
+}
+
+@setup s51
+@setup s52
+@setup s53
+test l3760 {
+    delete from t where v1 >= 'a';
+}
+expect unordered {
+}
+
+@setup s51
+@setup s52
+@setup s53
+@setup s54
+test l3766 {
+    select * from t;
+}
+expect unordered {
+}
+
+# mysql-error: 1193 HY000 Unknown system variable 'strict_mysql_compatibility'
+test l3781 {
+    select @@strict_mysql_compatibility;
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'col1' used in key specification without a key length
+@setup s55
+test l3785 {
+    alter table t add unique key k1(col1);
+}
+expect error {
+}
+
+@setup s55
+test l3789 {
+    insert into t values (4, ''), (5, ' '), (8, NULL), (-1, '  ');
+}
+expect unordered {
+}
+
+@setup s55
+@setup s56
+test l3793 {
+    insert into t values (1, 'oneasdfasdf');
+}
+expect unordered {
+}
+
+@setup s55
+@setup s56
+@setup s57
+test l3797 {
+    insert into t values (2, 'oneasdfasdf');
+}
+expect unordered {
+}
+
+@setup s55
+@setup s58
+test l3804 {
+    select pk from t where col1='oneasdfasdf' and exists (select pk from j2 where j2.col1 <= t.col1);
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3817 {
+    select col1 from t where col1='oneasdfasdf';
+}
+expect unordered {
+    oneasdfasdf
+    oneasdfasdf
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3824 {
+    select * from t where col1 >= 'one';
+}
+expect unordered {
+    1|oneasdfasdf
+    2|oneasdfasdf
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3830 {
+    select * from t where col1 >= ' ' order by pk;
+}
+expect raw {
+-1|  
+1|oneasdfasdf
+2|oneasdfasdf
+5| 
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'col1' used in key specification without a key length
+test l3836 {
+    create table t2 (pk int primary key, col1 BLOB, unique key k1(col1));
+}
+expect error {
+}
+
+@setup s55
+@setup s58
+test l3841 {
+    select distinct j2.pk from j2 join t on t.col1 >= 'one';
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s55
+@setup s58
+test l3849 {
+    select /*+ LOOKUP_JOIN(t,j2) */ distinct j2.pk from j2 join t on t.col1 = ' ';
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s55
+@setup s58
+test l3858 {
+    select /*+ LOOKUP_JOIN(t,j2) */ distinct j2.pk from j2 join t on t.col1 = j2.col1;
+}
+expect unordered {
+    2
+}
+
+@setup s55
+@setup s58
+test l3865 {
+    select /*+ LOOKUP_JOIN(t,j2) */ distinct j2.pk from j2 join t on t.col1 >= j2.col1;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s55
+@setup s58
+test l3872 {
+    select /*+ MERGE_JOIN(t,j2) */ distinct j2.pk from j2 join t on t.col1 = j2.col1;
+}
+expect unordered {
+    2
+}
+
+@setup s55
+@setup s58
+test l3879 {
+    select /*+ MERGE_JOIN(t,j2) */ distinct j2.pk from j2 join t on t.col1 >= j2.col1;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3886 {
+    select t.col1 from t order by t.col1;
+}
+expect raw {
+NULL
+
+ 
+  
+oneasdfasdf
+oneasdfasdf
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3892 {
+    select col1 from t where concat(t.col1, ' ') = '  ';
+}
+expect raw {
+ 
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3898 {
+    select col1 from t where t.col1 = POINT(42, 42);
+}
+expect unordered {
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3916 {
+    select col1 from t where t.col1 <=> 'oneasdfasdf';
+}
+expect unordered {
+    oneasdfasdf
+    oneasdfasdf
+}
+
+@setup s55
+@setup s56
+@setup s57
+@setup s59
+test l3922 {
+    select col1 from t where t.col1 is NULL;
+}
+expect unordered {
+    NULL
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'col1' used in key specification without a key length
+test l3992 {
+    create table t1 (pk int primary key, col1 TEXT collate utf8mb3_general_ci, unique key k1(col1));
+}
+expect error {
+}
+
+test l3997 {
+    create table t2 (pk int primary key, col1 TEXT collate utf8mb3_general_ci);
+}
+expect unordered {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'col1' used in key specification without a key length
+@setup s60
+test l4002 {
+    alter table t2 add unique key k1(col1);
+}
+expect error {
+}
+
+# mysql-error: 1193 HY000 Unknown system variable 'strict_mysql_compatibility'
+test l4015 {
+    set @@strict_mysql_compatibility = true;
+}
+expect error {
+}
+
+# mysql-error: 1193 HY000 Unknown system variable 'strict_mysql_compatibility'
+test l4019 {
+    select @@strict_mysql_compatibility;
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'col1' used in key specification without a key length
+@setup s55
+test l4023 {
+    alter table t add unique key k1(col1);
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'col1' used in key specification without a key length
+test l4027 {
+    create table t2 (pk int primary key, col1 BLOB, unique key k1(col1));
+}
+expect error {
+}
+
+test l4037 {
+    create table varchar_limit(c varchar(10000), index (c(768)));
+}
+expect unordered {
+}
+
+test l4041 {
+    create table text_limit(c text, index (c(768)));
+}
+expect unordered {
+}
+
+test l4045 {
+    create table varbinary_limit(c varbinary(10000), index (c(3072)));
+}
+expect unordered {
+}
+
+test l4049 {
+    create table blob_limit(c blob, index (c(3072)));
+}
+expect unordered {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l4053 {
+    create table bad(c varchar(10000), index (c(769)));
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l4057 {
+    create table bad(c text, index (c(769)));
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l4061 {
+    create table bad(c varbinary(10000), index (c(3073)));
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l4065 {
+    create table bad(c blob, index (c(3073)));
+}
+expect error {
+}
+
+@setup s61
+test l4077 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 = 3;
+}
+expect unordered {
+}
+
+@setup s61
+test l4082 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 = 3;
+}
+expect unordered {
+}
+
+@setup s62
+test l4095 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 = 3;
+}
+expect unordered {
+}
+
+@setup s62
+test l4100 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 > 3 and a3 < 5;
+}
+expect unordered {
+}
+
+@setup s62
+test l4105 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 = 3;
+}
+expect unordered {
+}
+
+@setup s62
+test l4110 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 > 3 and b3 < 5;
+}
+expect unordered {
+}
+
+@setup s63
+test l4123 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 = 3;
+}
+expect unordered {
+}
+
+@setup s63
+test l4128 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 > 3 and a3 < 5;
+}
+expect unordered {
+}
+
+@setup s63
+test l4133 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 = 3;
+}
+expect unordered {
+}
+
+@setup s63
+test l4138 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 > 3 and b3 < 5;
+}
+expect unordered {
+}
+
+@setup s64
+test l4151 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 = 3;
+}
+expect unordered {
+}
+
+@setup s64
+test l4156 {
+    select * from test where shared1 = 1 and shared2 = 2 and a3 > 3 and a3 < 5;
+}
+expect unordered {
+}
+
+@setup s64
+test l4161 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 = 3;
+}
+expect unordered {
+}
+
+@setup s64
+test l4166 {
+    select * from test where shared1 = 1 and shared2 = 2 and b3 > 3 and b3 < 5;
+}
+expect unordered {
+}
+
+@setup s65
+test l4179 {
+    select * from test where shared1 = 1 and shared2 = 2 and a4 = 3;
+}
+expect unordered {
+}
+
+@setup s66
+test l4199 {
+    alter table t_latin1 add index (code(32));
+}
+expect unordered {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+@setup s66
+@setup s67
+test l4203 {
+    alter table t_latin1 add index (code(33));
+}
+expect error {
+}
+
+test l4207 {
+    create table t_latin1_text (c text CHARACTER SET latin1, index (c(100)));
+}
+expect unordered {
+}
+
+test l4211 {
+    create table t_utf8mb3 (c varchar(32) CHARACTER SET utf8mb3, index (c(12)));
+}
+expect unordered {
+}
+
+# mysql-error: 1089 HY000 Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys
+test l4215 {
+    create table t_bad (c varchar(32) CHARACTER SET utf8mb3, index (c(33)));
+}
+expect error {
+}

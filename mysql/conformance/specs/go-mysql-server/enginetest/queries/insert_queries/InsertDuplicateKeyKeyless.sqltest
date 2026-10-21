@@ -1,0 +1,386 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/insert_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t (i int unique, j varchar(128));
+}
+
+setup s2 {
+    insert into t values (0, "first");
+}
+
+setup s3 {
+    insert into t values (0, "second") on duplicate key update j = "third";
+}
+
+setup s4 {
+    create table t (c1 int, c2 int, c3 int, unique key(c1,c2));
+}
+
+setup s5 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 0;
+}
+
+setup s6 {
+    insert into t(c1, c2, c3) values (0, 0, 1) on duplicate key update c3 = 0;
+}
+
+setup s7 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 1;
+}
+
+setup s8 {
+    create table t (c1 int, c2 int, c3 int, unique key(c1, c2));
+}
+
+setup s9 {
+    insert into t(c1, c2, c3) values (0, null, 0) on duplicate key update c3 = 0;
+}
+
+setup s10 {
+    insert into t(c1, c2, c3) values (0, null, 1) on duplicate key update c3 = 0;
+}
+
+setup s11 {
+    insert into t(c1, c2, c3) values (0, null, 0) on duplicate key update c3 = 1;
+}
+
+setup s12 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = null;
+}
+
+setup s13 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = null;
+}
+
+setup s14 {
+    create table t (c1 int, c2 int, c3 int, unique key(c2, c1));
+}
+
+setup s15 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 0;
+}
+
+setup s16 {
+    insert into t(c1, c2, c3) values (0, 0, 1) on duplicate key update c3 = 0;
+}
+
+setup s17 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 1;
+}
+
+setup s18 {
+    insert into t(c1, c2, c3) values (0, 0, 0), (0, 0, 0), (0, 0, 1), (0, 0, 1) on duplicate key update c3 = 1;
+}
+
+setup s19 {
+    insert into t(c1, c2, c3) values (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 4) on duplicate key update c3 = 100;
+}
+
+setup s20 {
+    insert into t(c1, c2, c3) values (0, 0, 1), (0, 1, 1), (0, 2, 2), (0, 3, 3) on duplicate key update c3 = 200;
+}
+
+@setup s1
+test l2382 {
+    insert into t values (0, "first");
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l2388 {
+    insert into t values (0, "second") on duplicate key update j = "third";
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l2394 {
+    select i, j from t order by i;
+}
+expect {
+    0|third
+}
+
+@setup s4
+test l2408 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 0;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s5
+test l2414 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|0|0
+}
+
+@setup s4
+@setup s5
+test l2420 {
+    insert into t(c1, c2, c3) values (0, 0, 1) on duplicate key update c3 = 0;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s5
+@setup s6
+test l2426 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|0|0
+}
+
+@setup s4
+@setup s5
+@setup s6
+test l2432 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 1;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+test l2438 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|0|1
+}
+
+@setup s8
+test l2452 {
+    insert into t(c1, c2, c3) values (0, null, 0) on duplicate key update c3 = 0;
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+test l2458 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|NULL|0
+}
+
+@setup s8
+@setup s9
+test l2464 {
+    insert into t(c1, c2, c3) values (0, null, 1) on duplicate key update c3 = 0;
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+test l2470 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|NULL|0
+    0|NULL|1
+}
+
+@setup s8
+@setup s9
+@setup s10
+test l2477 {
+    insert into t(c1, c2, c3) values (0, null, 0) on duplicate key update c3 = 1;
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+test l2483 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|NULL|0
+    0|NULL|0
+    0|NULL|1
+}
+
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+test l2491 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = null;
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+@setup s12
+test l2497 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|NULL|0
+    0|NULL|0
+    0|NULL|1
+    0|0|0
+}
+
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+@setup s12
+test l2506 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = null;
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+test l2512 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|NULL|0
+    0|NULL|0
+    0|NULL|1
+    0|0|NULL
+}
+
+@setup s14
+test l2529 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 0;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s15
+test l2535 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|0|0
+}
+
+@setup s14
+@setup s15
+test l2541 {
+    insert into t(c1, c2, c3) values (0, 0, 1) on duplicate key update c3 = 0;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s15
+@setup s16
+test l2547 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|0|0
+}
+
+@setup s14
+@setup s15
+@setup s16
+test l2553 {
+    insert into t(c1, c2, c3) values (0, 0, 0) on duplicate key update c3 = 1;
+}
+expect unordered {
+}
+
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l2559 {
+    select c1, c2, c3 from t order by c1;
+}
+expect {
+    0|0|1
+}
+
+@setup s4
+test l2573 {
+    insert into t(c1, c2, c3) values (0, 0, 0), (0, 0, 0), (0, 0, 1), (0, 0, 1) on duplicate key update c3 = 1;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s18
+test l2579 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|0|1
+}
+
+@setup s4
+@setup s18
+test l2585 {
+    insert into t(c1, c2, c3) values (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 4) on duplicate key update c3 = 100;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s18
+@setup s19
+test l2591 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|0|100
+}
+
+@setup s4
+@setup s18
+@setup s19
+test l2597 {
+    insert into t(c1, c2, c3) values (0, 0, 1), (0, 1, 1), (0, 2, 2), (0, 3, 3) on duplicate key update c3 = 200;
+}
+expect unordered {
+}
+
+@setup s4
+@setup s18
+@setup s19
+@setup s20
+test l2603 {
+    select c1, c2, c3 from t order by c1, c2, c3;
+}
+expect {
+    0|0|200
+    0|1|1
+    0|2|2
+    0|3|3
+}

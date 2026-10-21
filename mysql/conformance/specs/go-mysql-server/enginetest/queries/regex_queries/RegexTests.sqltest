@@ -1,0 +1,2975 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/regex_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE tests(pk int primary key, str text, pattern text, flags text);
+    INSERT INTO tests VALUES (1, 'testing', 'TESTING', 'ci');
+}
+
+setup s2 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+    CREATE TABLE `fk_tbl` (   `pk` bigint NOT NULL,   `a` bigint,   `b` varchar(20),   PRIMARY KEY (`pk`) );
+}
+
+test l40 {
+    SELECT REGEXP_LIKE('testing', 'TESTING');
+}
+expect unordered {
+    1
+}
+
+test l44 {
+    SELECT REGEXP_LIKE('testing', 'TESTING', 'c');
+}
+expect unordered {
+    0
+}
+
+test l48 {
+    SELECT REGEXP_LIKE('testing', 'TESTING', 'i');
+}
+expect unordered {
+    1
+}
+
+test l52 {
+    SELECT REGEXP_LIKE('testing', 'TESTING', 'ci');
+}
+expect unordered {
+    1
+}
+
+test l56 {
+    SELECT REGEXP_LIKE('testing', 'TESTING', 'ic');
+}
+expect unordered {
+    0
+}
+
+@setup s1
+test l60 {
+    SELECT REGEXP_LIKE(str, pattern, flags) from tests;
+}
+expect unordered {
+    1
+}
+
+test l64 {
+    SELECT REGEXP_LIKE('testing', 'TESTING' COLLATE utf8mb4_0900_ai_ci);
+}
+expect unordered {
+    1
+}
+
+test l68 {
+    SELECT REGEXP_LIKE('testing', 'TESTING' COLLATE utf8mb4_0900_as_cs);
+}
+expect unordered {
+    0
+}
+
+@setup s2
+test l72 {
+    SELECT REGEXP_LIKE('testing' COLLATE utf8mb4_0900_ai_ci, 'TESTING') FROM mytable;
+}
+expect unordered {
+    1
+    1
+    1
+}
+
+@setup s2
+test l80 {
+    SELECT i, s, REGEXP_LIKE(s, '[a-z]+d row') FROM mytable;
+}
+expect unordered {
+    1|first row|0
+    2|second row|1
+    3|third row|1
+}
+
+test l88 {
+    SELECT REGEXP_REPLACE("0123456789", "[0-4]", "X");
+}
+expect unordered {
+    XXXXX56789
+}
+
+test l92 {
+    SELECT REGEXP_REPLACE("0123456789", "[0-4]", "X", 2);
+}
+expect unordered {
+    0XXXX56789
+}
+
+test l96 {
+    SELECT REGEXP_REPLACE("0123456789", "[0-4]", "X", 2, 2);
+}
+expect unordered {
+    01X3456789
+}
+
+test l100 {
+    SELECT REGEXP_REPLACE("TEST test TEST", "[a-z]", "X", 1, 0, "i");
+}
+expect unordered {
+    XXXX XXXX XXXX
+}
+
+test l104 {
+    SELECT REGEXP_REPLACE("TEST test TEST", "[a-z]", "X", 1, 0, "c");
+}
+expect unordered {
+    TEST XXXX TEST
+}
+
+test l108 {
+    SELECT REGEXP_REPLACE(CONCAT("abc123"), "[0-4]", "X");
+}
+expect unordered {
+    abcXXX
+}
+
+@setup s2
+test l112 {
+    SELECT * FROM mytable WHERE s LIKE REGEXP_REPLACE("123456%r1o2w", "[0-9]", "");
+}
+expect unordered {
+    1|first row
+    2|second row
+    3|third row
+}
+
+@setup s2
+test l120 {
+    SELECT REGEXP_REPLACE(s, "[a-z]", "X") from mytable;
+}
+expect unordered {
+    XXXXX XXX
+    XXXXX XXX
+    XXXXXX XXX
+}
+
+test l128 {
+    SELECT 20 REGEXP '^[-]?2[0-9]+$';
+}
+expect unordered {
+    1
+}
+
+test l132 {
+    SELECT 30 REGEXP '^[-]?2[0-9]+$';
+}
+expect unordered {
+    0
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l136 {
+    SELECT REGEXP_LIKE("", "(?P<foo_123");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l140 {
+    SELECT REGEXP_LIKE("", "(?P<1>a)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l144 {
+    SELECT REGEXP_LIKE("", "(?P<!>a)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l148 {
+    SELECT REGEXP_LIKE("", "(?P<foo!>a)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l152 {
+    SELECT REGEXP_LIKE("aa", "(?P<foo_123>a)(?P=foo_123");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l156 {
+    SELECT REGEXP_LIKE("aa", "(?P<foo_123>a)(?P=1)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l160 {
+    SELECT REGEXP_LIKE("aa", "(?P<foo_123>a)(?P=!)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l164 {
+    SELECT REGEXP_LIKE("aa", "(?P<foo_123>a)(?P=foo_124");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l168 {
+    SELECT REGEXP_LIKE("a", "(?P<foo_123>a)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l172 {
+    SELECT REGEXP_LIKE("aa", "(?P<foo_123>a)(?P=foo_123)");
+}
+expect error {
+}
+
+# mysql-error: 3694 HY000 Invalid back-reference in regular expression.
+test l176 {
+    SELECT REGEXP_LIKE("a", "\\\1");
+}
+expect error {
+}
+
+test l180 {
+    SELECT REGEXP_LIKE("\1", "[\\\1]");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3694 HY000 Invalid back-reference in regular expression.
+test l184 {
+    SELECT REGEXP_LIKE("a", "\\\141");
+}
+expect error {
+}
+
+test l188 {
+    SELECT REGEXP_LIKE("\000", "\000");
+}
+expect unordered {
+    1
+}
+
+test l192 {
+    SELECT REGEXP_LIKE("\000", "[\000a]");
+}
+expect unordered {
+    1
+}
+
+test l196 {
+    SELECT REGEXP_LIKE("\000", "[a\000]");
+}
+expect unordered {
+    1
+}
+
+test l200 {
+    SELECT REGEXP_LIKE("\000", "[^a\000]");
+}
+expect unordered {
+    0
+}
+
+test l204 {
+    SELECT REGEXP_LIKE("\a\b\f\n\r\t\v", "\a[\b]\f\n\r\t\v");
+}
+expect unordered {
+    1
+}
+
+test l208 {
+    SELECT REGEXP_LIKE("\a\b\f\n\r\t\v", "[\a][\b][\f][\n][\r][\t][\v]");
+}
+expect unordered {
+    1
+}
+
+test l212 {
+    SELECT REGEXP_LIKE("", "\u");
+}
+expect unordered {
+    0
+}
+
+test l216 {
+    SELECT REGEXP_LIKE("\377", "\xff");
+}
+expect unordered {
+    0
+}
+
+test l220 {
+    SELECT REGEXP_LIKE("\377", "\x00ffffffffffffff");
+}
+expect unordered {
+    0
+}
+
+test l224 {
+    SELECT REGEXP_LIKE("\017", "\x00f");
+}
+expect unordered {
+    0
+}
+
+test l228 {
+    SELECT REGEXP_LIKE("\376", "\x00fe");
+}
+expect unordered {
+    0
+}
+
+test l232 {
+    SELECT REGEXP_LIKE("SRC=eval.c g.c blah blah blah \\\\\\\\\n\tapes.c", "^\w+=(\\\[\000-\277]|[^\n\\\\\\\])*");
+}
+expect unordered {
+    0
+}
+
+test l236 {
+    SELECT REGEXP_LIKE("acb", "a.b");
+}
+expect unordered {
+    1
+}
+
+test l240 {
+    SELECT REGEXP_LIKE("a\nb", "a.b");
+}
+expect unordered {
+    0
+}
+
+test l244 {
+    SELECT REGEXP_LIKE("acc\nccb", "a.*b");
+}
+expect unordered {
+    0
+}
+
+test l248 {
+    SELECT REGEXP_LIKE("acc\nccb", "a.\{4,5\}b");
+}
+expect unordered {
+    0
+}
+
+test l252 {
+    SELECT REGEXP_LIKE("a\rb", "a.b");
+}
+expect unordered {
+    0
+}
+
+test l256 {
+    SELECT REGEXP_LIKE("a\nb", "(?s)a.b");
+}
+expect unordered {
+    1
+}
+
+test l260 {
+    SELECT REGEXP_LIKE("acc\nccb", "(?s)a.*b");
+}
+expect unordered {
+    1
+}
+
+test l264 {
+    SELECT REGEXP_LIKE("acc\nccb", "(?s)a.\{4,5\}b");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l272 {
+    SELECT REGEXP_LIKE("", ")");
+}
+expect error {
+}
+
+# mysql-error: 3685 HY000 Illegal argument to a regular expression.
+test l276 {
+    SELECT REGEXP_LIKE("", "");
+}
+expect error {
+}
+
+test l280 {
+    SELECT REGEXP_LIKE("abc", "abc");
+}
+expect unordered {
+    1
+}
+
+test l284 {
+    SELECT REGEXP_LIKE("xbc", "abc");
+}
+expect unordered {
+    0
+}
+
+test l288 {
+    SELECT REGEXP_LIKE("axc", "abc");
+}
+expect unordered {
+    0
+}
+
+test l292 {
+    SELECT REGEXP_LIKE("abx", "abc");
+}
+expect unordered {
+    0
+}
+
+test l296 {
+    SELECT REGEXP_LIKE("xabcy", "abc");
+}
+expect unordered {
+    1
+}
+
+test l300 {
+    SELECT REGEXP_LIKE("ababc", "abc");
+}
+expect unordered {
+    1
+}
+
+test l304 {
+    SELECT REGEXP_LIKE("abc", "ab*c");
+}
+expect unordered {
+    1
+}
+
+test l308 {
+    SELECT REGEXP_LIKE("abc", "ab*bc");
+}
+expect unordered {
+    1
+}
+
+test l312 {
+    SELECT REGEXP_LIKE("abbc", "ab*bc");
+}
+expect unordered {
+    1
+}
+
+test l316 {
+    SELECT REGEXP_LIKE("abbbbc", "ab*bc");
+}
+expect unordered {
+    1
+}
+
+test l320 {
+    SELECT REGEXP_LIKE("abbc", "ab+bc");
+}
+expect unordered {
+    1
+}
+
+test l324 {
+    SELECT REGEXP_LIKE("abc", "ab+bc");
+}
+expect unordered {
+    0
+}
+
+test l328 {
+    SELECT REGEXP_LIKE("abq", "ab+bc");
+}
+expect unordered {
+    0
+}
+
+test l332 {
+    SELECT REGEXP_LIKE("abbbbc", "ab+bc");
+}
+expect unordered {
+    1
+}
+
+test l336 {
+    SELECT REGEXP_LIKE("abbc", "ab?bc");
+}
+expect unordered {
+    1
+}
+
+test l340 {
+    SELECT REGEXP_LIKE("abc", "ab?bc");
+}
+expect unordered {
+    1
+}
+
+test l344 {
+    SELECT REGEXP_LIKE("abbbbc", "ab?bc");
+}
+expect unordered {
+    0
+}
+
+test l348 {
+    SELECT REGEXP_LIKE("abc", "ab?c");
+}
+expect unordered {
+    1
+}
+
+test l352 {
+    SELECT REGEXP_LIKE("abc", "^abc$");
+}
+expect unordered {
+    1
+}
+
+test l356 {
+    SELECT REGEXP_LIKE("abcc", "^abc$");
+}
+expect unordered {
+    0
+}
+
+test l360 {
+    SELECT REGEXP_LIKE("abcc", "^abc");
+}
+expect unordered {
+    1
+}
+
+test l364 {
+    SELECT REGEXP_LIKE("aabc", "^abc$");
+}
+expect unordered {
+    0
+}
+
+test l368 {
+    SELECT REGEXP_LIKE("aabc", "abc$");
+}
+expect unordered {
+    1
+}
+
+test l372 {
+    SELECT REGEXP_LIKE("abc", "^");
+}
+expect unordered {
+    1
+}
+
+test l376 {
+    SELECT REGEXP_LIKE("abc", "$");
+}
+expect unordered {
+    1
+}
+
+test l380 {
+    SELECT REGEXP_LIKE("abc", "a.c");
+}
+expect unordered {
+    1
+}
+
+test l384 {
+    SELECT REGEXP_LIKE("axc", "a.c");
+}
+expect unordered {
+    1
+}
+
+test l388 {
+    SELECT REGEXP_LIKE("axyzc", "a.*c");
+}
+expect unordered {
+    1
+}
+
+test l392 {
+    SELECT REGEXP_LIKE("axyzd", "a.*c");
+}
+expect unordered {
+    0
+}
+
+test l396 {
+    SELECT REGEXP_LIKE("abc", "a[bc]d");
+}
+expect unordered {
+    0
+}
+
+test l400 {
+    SELECT REGEXP_LIKE("abd", "a[bc]d");
+}
+expect unordered {
+    1
+}
+
+test l404 {
+    SELECT REGEXP_LIKE("abd", "a[b-d]e");
+}
+expect unordered {
+    0
+}
+
+test l408 {
+    SELECT REGEXP_LIKE("ace", "a[b-d]e");
+}
+expect unordered {
+    1
+}
+
+test l412 {
+    SELECT REGEXP_LIKE("aac", "a[b-d]");
+}
+expect unordered {
+    1
+}
+
+test l416 {
+    SELECT REGEXP_LIKE("a-", "a[-b]");
+}
+expect unordered {
+    1
+}
+
+test l420 {
+    SELECT REGEXP_LIKE("a-", "a[\\\-b]");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test l424 {
+    SELECT REGEXP_LIKE("-", "a[]b");
+}
+expect error {
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test l428 {
+    SELECT REGEXP_LIKE("-", "a[");
+}
+expect error {
+}
+
+# mysql-error: 3689 HY000 Unrecognized escape sequence in regular expression.
+test l432 {
+    SELECT REGEXP_LIKE("-", "a\\\");
+}
+expect error {
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l436 {
+    SELECT REGEXP_LIKE("-", "abc)");
+}
+expect error {
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l440 {
+    SELECT REGEXP_LIKE("-", "(abc");
+}
+expect error {
+}
+
+test l444 {
+    SELECT REGEXP_LIKE("a]", "a]");
+}
+expect unordered {
+    1
+}
+
+test l448 {
+    SELECT REGEXP_LIKE("a]b", "a[]]b");
+}
+expect unordered {
+    1
+}
+
+test l452 {
+    SELECT REGEXP_LIKE("a]b", "a[\\\]]b");
+}
+expect unordered {
+    1
+}
+
+test l456 {
+    SELECT REGEXP_LIKE("aed", "a[^bc]d");
+}
+expect unordered {
+    1
+}
+
+test l460 {
+    SELECT REGEXP_LIKE("abd", "a[^bc]d");
+}
+expect unordered {
+    0
+}
+
+test l464 {
+    SELECT REGEXP_LIKE("adc", "a[^-b]c");
+}
+expect unordered {
+    1
+}
+
+test l468 {
+    SELECT REGEXP_LIKE("a-c", "a[^-b]c");
+}
+expect unordered {
+    0
+}
+
+test l472 {
+    SELECT REGEXP_LIKE("a]c", "a[^]b]c");
+}
+expect unordered {
+    0
+}
+
+test l476 {
+    SELECT REGEXP_LIKE("adc", "a[^]b]c");
+}
+expect unordered {
+    1
+}
+
+test l480 {
+    SELECT REGEXP_LIKE("a-", "\\\ba\\\b");
+}
+expect unordered {
+    1
+}
+
+test l484 {
+    SELECT REGEXP_LIKE("-a", "\\\ba\\\b");
+}
+expect unordered {
+    1
+}
+
+test l488 {
+    SELECT REGEXP_LIKE("-a-", "\\\ba\\\b");
+}
+expect unordered {
+    1
+}
+
+test l492 {
+    SELECT REGEXP_LIKE("xy", "\\\by\\\b");
+}
+expect unordered {
+    0
+}
+
+test l496 {
+    SELECT REGEXP_LIKE("yz", "\\\by\\\b");
+}
+expect unordered {
+    0
+}
+
+test l500 {
+    SELECT REGEXP_LIKE("xyz", "\\\by\\\b");
+}
+expect unordered {
+    0
+}
+
+test l504 {
+    SELECT REGEXP_LIKE("xyz", "x\\\b");
+}
+expect unordered {
+    0
+}
+
+test l508 {
+    SELECT REGEXP_LIKE("xyz", "x\\\B");
+}
+expect unordered {
+    1
+}
+
+test l512 {
+    SELECT REGEXP_LIKE("xyz", "\\\Bz");
+}
+expect unordered {
+    1
+}
+
+test l516 {
+    SELECT REGEXP_LIKE("xyz", "z\\\B");
+}
+expect unordered {
+    0
+}
+
+test l520 {
+    SELECT REGEXP_LIKE("xyz", "\\\Bx");
+}
+expect unordered {
+    0
+}
+
+test l524 {
+    SELECT REGEXP_LIKE("a-", "\\\Ba\\\B");
+}
+expect unordered {
+    0
+}
+
+test l528 {
+    SELECT REGEXP_LIKE("-a", "\\\Ba\\\B");
+}
+expect unordered {
+    0
+}
+
+test l532 {
+    SELECT REGEXP_LIKE("-a-", "\\\Ba\\\B");
+}
+expect unordered {
+    0
+}
+
+test l536 {
+    SELECT REGEXP_LIKE("xy", "\\\By\\\B");
+}
+expect unordered {
+    0
+}
+
+test l540 {
+    SELECT REGEXP_LIKE("yz", "\\\By\\\B");
+}
+expect unordered {
+    0
+}
+
+test l544 {
+    SELECT REGEXP_LIKE("xy", "\\\By\\\b");
+}
+expect unordered {
+    1
+}
+
+test l548 {
+    SELECT REGEXP_LIKE("yz", "\\\by\\\B");
+}
+expect unordered {
+    1
+}
+
+test l552 {
+    SELECT REGEXP_LIKE("xyz", "\\\By\\\B");
+}
+expect unordered {
+    1
+}
+
+test l556 {
+    SELECT REGEXP_LIKE("abc", "ab|cd");
+}
+expect unordered {
+    1
+}
+
+test l560 {
+    SELECT REGEXP_LIKE("abcd", "ab|cd");
+}
+expect unordered {
+    1
+}
+
+test l564 {
+    SELECT REGEXP_LIKE("def", "()ef");
+}
+expect unordered {
+    1
+}
+
+test l568 {
+    SELECT REGEXP_LIKE("b", "$b");
+}
+expect unordered {
+    0
+}
+
+test l572 {
+    SELECT REGEXP_LIKE("a(b", "a\\\(b");
+}
+expect unordered {
+    1
+}
+
+test l576 {
+    SELECT REGEXP_LIKE("ab", "a\\\(*b");
+}
+expect unordered {
+    1
+}
+
+test l580 {
+    SELECT REGEXP_LIKE("a((b", "a\\\(*b");
+}
+expect unordered {
+    1
+}
+
+test l584 {
+    SELECT REGEXP_LIKE("a\\\b", "a\\\\\\\b");
+}
+expect unordered {
+    1
+}
+
+test l588 {
+    SELECT REGEXP_LIKE("abc", "((a))");
+}
+expect unordered {
+    1
+}
+
+test l592 {
+    SELECT REGEXP_LIKE("abc", "(a)b(c)");
+}
+expect unordered {
+    1
+}
+
+test l596 {
+    SELECT REGEXP_LIKE("aabbabc", "a+b+c");
+}
+expect unordered {
+    1
+}
+
+test l600 {
+    SELECT REGEXP_LIKE("ab", "(a+|b)*");
+}
+expect unordered {
+    1
+}
+
+test l604 {
+    SELECT REGEXP_LIKE("ab", "(a+|b)+");
+}
+expect unordered {
+    1
+}
+
+test l608 {
+    SELECT REGEXP_LIKE("ab", "(a+|b)?");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l612 {
+    SELECT REGEXP_LIKE("-", ")(");
+}
+expect error {
+}
+
+test l616 {
+    SELECT REGEXP_LIKE("cde", "[^ab]*");
+}
+expect unordered {
+    1
+}
+
+test l620 {
+    SELECT REGEXP_LIKE("", "abc");
+}
+expect unordered {
+    0
+}
+
+test l624 {
+    SELECT REGEXP_LIKE("", "a*");
+}
+expect unordered {
+    1
+}
+
+test l628 {
+    SELECT REGEXP_LIKE("e", "a|b|c|d|e");
+}
+expect unordered {
+    1
+}
+
+test l632 {
+    SELECT REGEXP_LIKE("ef", "(a|b|c|d|e)f");
+}
+expect unordered {
+    1
+}
+
+test l636 {
+    SELECT REGEXP_LIKE("abcdefg", "abcd*efg");
+}
+expect unordered {
+    1
+}
+
+test l640 {
+    SELECT REGEXP_LIKE("xabyabbbz", "ab*");
+}
+expect unordered {
+    1
+}
+
+test l644 {
+    SELECT REGEXP_LIKE("xayabbbz", "ab*");
+}
+expect unordered {
+    1
+}
+
+test l648 {
+    SELECT REGEXP_LIKE("abcde", "(ab|cd)e");
+}
+expect unordered {
+    1
+}
+
+test l652 {
+    SELECT REGEXP_LIKE("hij", "[abhgefdc]ij");
+}
+expect unordered {
+    1
+}
+
+test l656 {
+    SELECT REGEXP_LIKE("abcde", "^(ab|cd)e");
+}
+expect unordered {
+    0
+}
+
+test l660 {
+    SELECT REGEXP_LIKE("abcdef", "(abc|)ef");
+}
+expect unordered {
+    1
+}
+
+test l664 {
+    SELECT REGEXP_LIKE("abcd", "(a|b)c*d");
+}
+expect unordered {
+    1
+}
+
+test l668 {
+    SELECT REGEXP_LIKE("abc", "(ab|ab*)bc");
+}
+expect unordered {
+    1
+}
+
+test l672 {
+    SELECT REGEXP_LIKE("abc", "a([bc]*)c*");
+}
+expect unordered {
+    1
+}
+
+test l676 {
+    SELECT REGEXP_LIKE("abcd", "a([bc]*)(c*d)");
+}
+expect unordered {
+    1
+}
+
+test l680 {
+    SELECT REGEXP_LIKE("abcd", "a([bc]+)(c*d)");
+}
+expect unordered {
+    1
+}
+
+test l684 {
+    SELECT REGEXP_LIKE("abcd", "a([bc]*)(c+d)");
+}
+expect unordered {
+    1
+}
+
+test l688 {
+    SELECT REGEXP_LIKE("adcdcde", "a[bcd]*dcdcde");
+}
+expect unordered {
+    1
+}
+
+test l692 {
+    SELECT REGEXP_LIKE("adcdcde", "a[bcd]+dcdcde");
+}
+expect unordered {
+    0
+}
+
+test l696 {
+    SELECT REGEXP_LIKE("abc", "(ab|a)b*c");
+}
+expect unordered {
+    1
+}
+
+test l700 {
+    SELECT REGEXP_LIKE("abcd", "((a)(b)c)(d)");
+}
+expect unordered {
+    1
+}
+
+test l704 {
+    SELECT REGEXP_LIKE("alpha", "[a-zA-Z_][a-zA-Z0-9_]*");
+}
+expect unordered {
+    1
+}
+
+test l708 {
+    SELECT REGEXP_LIKE("abh", "^a(bc+|b[eh])g|.h$");
+}
+expect unordered {
+    1
+}
+
+test l712 {
+    SELECT REGEXP_LIKE("effgz", "(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    1
+}
+
+test l716 {
+    SELECT REGEXP_LIKE("ij", "(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    1
+}
+
+test l720 {
+    SELECT REGEXP_LIKE("effg", "(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    0
+}
+
+test l724 {
+    SELECT REGEXP_LIKE("bcdd", "(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    0
+}
+
+test l728 {
+    SELECT REGEXP_LIKE("reffgz", "(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    1
+}
+
+test l732 {
+    SELECT REGEXP_LIKE("a", "(((((((((a)))))))))");
+}
+expect unordered {
+    1
+}
+
+test l736 {
+    SELECT REGEXP_LIKE("uh-uh", "multiple words of text");
+}
+expect unordered {
+    0
+}
+
+test l740 {
+    SELECT REGEXP_LIKE("multiple words, yeah", "multiple words");
+}
+expect unordered {
+    1
+}
+
+test l744 {
+    SELECT REGEXP_LIKE("abcde", "(.*)c(.*)");
+}
+expect unordered {
+    1
+}
+
+test l748 {
+    SELECT REGEXP_LIKE("(a, b)", "\\\((.*), (.*)\\\)");
+}
+expect unordered {
+    1
+}
+
+test l752 {
+    SELECT REGEXP_LIKE("ab", "[k]");
+}
+expect unordered {
+    0
+}
+
+test l756 {
+    SELECT REGEXP_LIKE("ac", "a[-]?c");
+}
+expect unordered {
+    1
+}
+
+test l760 {
+    SELECT REGEXP_LIKE("abcabc", "(abc)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l764 {
+    SELECT REGEXP_LIKE("abcabc", "([a-c]*)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l768 {
+    SELECT REGEXP_LIKE("AB", "^(.+)?B");
+}
+expect unordered {
+    1
+}
+
+test l772 {
+    SELECT REGEXP_LIKE("aaaaa", "(a+).\\\1$");
+}
+expect unordered {
+    1
+}
+
+test l776 {
+    SELECT REGEXP_LIKE("aaaa", "^(a+).\\\1$");
+}
+expect unordered {
+    0
+}
+
+test l784 {
+    SELECT REGEXP_LIKE("abcabc", "([a-c]+)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l788 {
+    SELECT REGEXP_LIKE("aa", "(a)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l792 {
+    SELECT REGEXP_LIKE("aa", "(a+)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l796 {
+    SELECT REGEXP_LIKE("aa", "(a+)+\\\1");
+}
+expect unordered {
+    1
+}
+
+test l800 {
+    SELECT REGEXP_LIKE("aba", "(a).+\\\1");
+}
+expect unordered {
+    1
+}
+
+test l804 {
+    SELECT REGEXP_LIKE("aba", "(a)ba*\\\1");
+}
+expect unordered {
+    1
+}
+
+test l808 {
+    SELECT REGEXP_LIKE("aaa", "(aa|a)a\\\1$");
+}
+expect unordered {
+    1
+}
+
+test l812 {
+    SELECT REGEXP_LIKE("aaa", "(a|aa)a\\\1$");
+}
+expect unordered {
+    1
+}
+
+test l816 {
+    SELECT REGEXP_LIKE("aaa", "(a+)a\\\1$");
+}
+expect unordered {
+    1
+}
+
+test l820 {
+    SELECT REGEXP_LIKE("abcabc", "([abc]*)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l824 {
+    SELECT REGEXP_LIKE("ab", "(a)(b)c|ab");
+}
+expect unordered {
+    1
+}
+
+test l828 {
+    SELECT REGEXP_LIKE("aaax", "(a)+x");
+}
+expect unordered {
+    1
+}
+
+test l832 {
+    SELECT REGEXP_LIKE("aacx", "([ac])+x");
+}
+expect unordered {
+    1
+}
+
+test l836 {
+    SELECT REGEXP_LIKE("d:msgs/tdir/sub1/trial/away.cpp", "([^/]*/)*sub1/");
+}
+expect unordered {
+    1
+}
+
+test l840 {
+    SELECT REGEXP_LIKE("track1.title:TBlah blah blah", "([^.]*)\\\.([^:]*):[T ]+(.*)");
+}
+expect unordered {
+    1
+}
+
+test l844 {
+    SELECT REGEXP_LIKE("abNNxyzN", "([^N]*N)+");
+}
+expect unordered {
+    1
+}
+
+test l848 {
+    SELECT REGEXP_LIKE("abNNxyz", "([^N]*N)+");
+}
+expect unordered {
+    1
+}
+
+test l852 {
+    SELECT REGEXP_LIKE("abcx", "([abc]*)x");
+}
+expect unordered {
+    1
+}
+
+test l856 {
+    SELECT REGEXP_LIKE("abc", "([abc]*)x");
+}
+expect unordered {
+    0
+}
+
+test l860 {
+    SELECT REGEXP_LIKE("abcx", "([xyz]*)x");
+}
+expect unordered {
+    1
+}
+
+test l864 {
+    SELECT REGEXP_LIKE("aac", "(a)+b|aac");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l868 {
+    SELECT REGEXP_LIKE("aaaa", "(?P<i d>aaa)a");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l872 {
+    SELECT REGEXP_LIKE("aaaa", "(?P<id>aaa)a");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l876 {
+    SELECT REGEXP_LIKE("aaaa", "(?P<id>aa)(?P=id)");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l880 {
+    SELECT REGEXP_LIKE("aaaa", "(?P<id>aa)(?P=xd)");
+}
+expect error {
+}
+
+# mysql-error: 3694 HY000 Invalid back-reference in regular expression.
+test l888 {
+    SELECT REGEXP_LIKE("abcdefghijklk9", "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)\\\\\119");
+}
+expect error {
+}
+
+test l932 {
+    SELECT REGEXP_LIKE("abbbbc", "ab\{0,\}bc");
+}
+expect unordered {
+    1
+}
+
+test l948 {
+    SELECT REGEXP_LIKE("abq", "ab\{1,\}bc");
+}
+expect unordered {
+    0
+}
+
+test l956 {
+    SELECT REGEXP_LIKE("abbbbc", "ab\{1,\}bc");
+}
+expect unordered {
+    1
+}
+
+test l960 {
+    SELECT REGEXP_LIKE("abbbbc", "ab\{1,3\}bc");
+}
+expect unordered {
+    1
+}
+
+test l964 {
+    SELECT REGEXP_LIKE("abbbbc", "ab\{3,4\}bc");
+}
+expect unordered {
+    1
+}
+
+test l968 {
+    SELECT REGEXP_LIKE("abbbbc", "ab\{4,5\}bc");
+}
+expect unordered {
+    0
+}
+
+test l980 {
+    SELECT REGEXP_LIKE("abc", "ab\{0,1\}bc");
+}
+expect unordered {
+    1
+}
+
+test l992 {
+    SELECT REGEXP_LIKE("abc", "ab\{0,1\}c");
+}
+expect unordered {
+    1
+}
+
+test l1064 {
+    SELECT REGEXP_LIKE("a-", "a[b-]");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3697 HY000 The regular expression contains an [x-y] character range where x comes after y.
+test l1068 {
+    SELECT REGEXP_LIKE("-", "a[b-a]");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 1.
+test l1124 {
+    SELECT REGEXP_LIKE("-", "*a");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 2.
+test l1128 {
+    SELECT REGEXP_LIKE("-", "(*)b");
+}
+expect error {
+}
+
+test l1176 {
+    SELECT REGEXP_LIKE("aabbabc", "a\{1,\}b\{1,\}c");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 3.
+test l1180 {
+    SELECT REGEXP_LIKE("-", "a**");
+}
+expect error {
+}
+
+test l1184 {
+    SELECT REGEXP_LIKE("abcabc", "a.+?c");
+}
+expect unordered {
+    1
+}
+
+test l1192 {
+    SELECT REGEXP_LIKE("ab", "(a+|b)\{0,\}");
+}
+expect unordered {
+    1
+}
+
+test l1200 {
+    SELECT REGEXP_LIKE("ab", "(a+|b)\{1,\}");
+}
+expect unordered {
+    1
+}
+
+test l1208 {
+    SELECT REGEXP_LIKE("ab", "(a+|b)\{0,1\}");
+}
+expect unordered {
+    1
+}
+
+test l1228 {
+    SELECT REGEXP_LIKE("abbbcd", "([abc])*d");
+}
+expect unordered {
+    1
+}
+
+test l1232 {
+    SELECT REGEXP_LIKE("abcd", "([abc])*bcd");
+}
+expect unordered {
+    1
+}
+
+test l1340 {
+    SELECT REGEXP_LIKE("a", "((((((((((a))))))))))");
+}
+expect unordered {
+    1
+}
+
+test l1344 {
+    SELECT REGEXP_LIKE("aa", "((((((((((a))))))))))\\\10");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3694 HY000 Invalid back-reference in regular expression.
+test l1348 {
+    SELECT REGEXP_LIKE("", "((((((((((a))))))))))\\\41");
+}
+expect error {
+}
+
+# mysql-error: 3694 HY000 Invalid back-reference in regular expression.
+test l1352 {
+    SELECT REGEXP_LIKE("", "(?i)((((((((((a))))))))))\\\41");
+}
+expect error {
+}
+
+test l1392 {
+    SELECT REGEXP_LIKE("ABC", "(?i)abc");
+}
+expect unordered {
+    1
+}
+
+test l1396 {
+    SELECT REGEXP_LIKE("XBC", "(?i)abc");
+}
+expect unordered {
+    0
+}
+
+test l1400 {
+    SELECT REGEXP_LIKE("AXC", "(?i)abc");
+}
+expect unordered {
+    0
+}
+
+test l1404 {
+    SELECT REGEXP_LIKE("ABX", "(?i)abc");
+}
+expect unordered {
+    0
+}
+
+test l1408 {
+    SELECT REGEXP_LIKE("XABCY", "(?i)abc");
+}
+expect unordered {
+    1
+}
+
+test l1412 {
+    SELECT REGEXP_LIKE("ABABC", "(?i)abc");
+}
+expect unordered {
+    1
+}
+
+test l1416 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab*c");
+}
+expect unordered {
+    1
+}
+
+test l1420 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab*bc");
+}
+expect unordered {
+    1
+}
+
+test l1424 {
+    SELECT REGEXP_LIKE("ABBC", "(?i)ab*bc");
+}
+expect unordered {
+    1
+}
+
+test l1428 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab*?bc");
+}
+expect unordered {
+    1
+}
+
+test l1432 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab\{0,\}?bc");
+}
+expect unordered {
+    1
+}
+
+test l1436 {
+    SELECT REGEXP_LIKE("ABBC", "(?i)ab+?bc");
+}
+expect unordered {
+    1
+}
+
+test l1440 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab+bc");
+}
+expect unordered {
+    0
+}
+
+test l1444 {
+    SELECT REGEXP_LIKE("ABQ", "(?i)ab+bc");
+}
+expect unordered {
+    0
+}
+
+test l1448 {
+    SELECT REGEXP_LIKE("ABQ", "(?i)ab\{1,\}bc");
+}
+expect unordered {
+    0
+}
+
+test l1452 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab+bc");
+}
+expect unordered {
+    1
+}
+
+test l1456 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab\{1,\}?bc");
+}
+expect unordered {
+    1
+}
+
+test l1460 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab\{1,3\}?bc");
+}
+expect unordered {
+    1
+}
+
+test l1464 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab\{3,4\}?bc");
+}
+expect unordered {
+    1
+}
+
+test l1468 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab\{4,5\}?bc");
+}
+expect unordered {
+    0
+}
+
+test l1472 {
+    SELECT REGEXP_LIKE("ABBC", "(?i)ab??bc");
+}
+expect unordered {
+    1
+}
+
+test l1476 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab??bc");
+}
+expect unordered {
+    1
+}
+
+test l1480 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab\{0,1\}?bc");
+}
+expect unordered {
+    1
+}
+
+test l1484 {
+    SELECT REGEXP_LIKE("ABBBBC", "(?i)ab??bc");
+}
+expect unordered {
+    0
+}
+
+test l1488 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab??c");
+}
+expect unordered {
+    1
+}
+
+test l1492 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab\{0,1\}?c");
+}
+expect unordered {
+    1
+}
+
+test l1496 {
+    SELECT REGEXP_LIKE("ABC", "(?i)^abc$");
+}
+expect unordered {
+    1
+}
+
+test l1500 {
+    SELECT REGEXP_LIKE("ABCC", "(?i)^abc$");
+}
+expect unordered {
+    0
+}
+
+test l1504 {
+    SELECT REGEXP_LIKE("ABCC", "(?i)^abc");
+}
+expect unordered {
+    1
+}
+
+test l1508 {
+    SELECT REGEXP_LIKE("AABC", "(?i)^abc$");
+}
+expect unordered {
+    0
+}
+
+test l1512 {
+    SELECT REGEXP_LIKE("AABC", "(?i)abc$");
+}
+expect unordered {
+    1
+}
+
+test l1516 {
+    SELECT REGEXP_LIKE("ABC", "(?i)^");
+}
+expect unordered {
+    1
+}
+
+test l1520 {
+    SELECT REGEXP_LIKE("ABC", "(?i)$");
+}
+expect unordered {
+    1
+}
+
+test l1524 {
+    SELECT REGEXP_LIKE("ABC", "(?i)a.c");
+}
+expect unordered {
+    1
+}
+
+test l1528 {
+    SELECT REGEXP_LIKE("AXC", "(?i)a.c");
+}
+expect unordered {
+    1
+}
+
+test l1532 {
+    SELECT REGEXP_LIKE("AXYZC", "(?i)a.*?c");
+}
+expect unordered {
+    1
+}
+
+test l1536 {
+    SELECT REGEXP_LIKE("AXYZD", "(?i)a.*c");
+}
+expect unordered {
+    0
+}
+
+test l1540 {
+    SELECT REGEXP_LIKE("ABC", "(?i)a[bc]d");
+}
+expect unordered {
+    0
+}
+
+test l1544 {
+    SELECT REGEXP_LIKE("ABD", "(?i)a[bc]d");
+}
+expect unordered {
+    1
+}
+
+test l1548 {
+    SELECT REGEXP_LIKE("ABD", "(?i)a[b-d]e");
+}
+expect unordered {
+    0
+}
+
+test l1552 {
+    SELECT REGEXP_LIKE("ACE", "(?i)a[b-d]e");
+}
+expect unordered {
+    1
+}
+
+test l1556 {
+    SELECT REGEXP_LIKE("AAC", "(?i)a[b-d]");
+}
+expect unordered {
+    1
+}
+
+test l1560 {
+    SELECT REGEXP_LIKE("A-", "(?i)a[-b]");
+}
+expect unordered {
+    1
+}
+
+test l1564 {
+    SELECT REGEXP_LIKE("A-", "(?i)a[b-]");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3697 HY000 The regular expression contains an [x-y] character range where x comes after y.
+test l1568 {
+    SELECT REGEXP_LIKE("-", "(?i)a[b-a]");
+}
+expect error {
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test l1572 {
+    SELECT REGEXP_LIKE("-", "(?i)a[]b");
+}
+expect error {
+}
+
+# mysql-error: 3696 HY000 The regular expression contains an unclosed bracket expression.
+test l1576 {
+    SELECT REGEXP_LIKE("-", "(?i)a[");
+}
+expect error {
+}
+
+test l1580 {
+    SELECT REGEXP_LIKE("A]", "(?i)a]");
+}
+expect unordered {
+    1
+}
+
+test l1584 {
+    SELECT REGEXP_LIKE("A]B", "(?i)a[]]b");
+}
+expect unordered {
+    1
+}
+
+test l1588 {
+    SELECT REGEXP_LIKE("AED", "(?i)a[^bc]d");
+}
+expect unordered {
+    1
+}
+
+test l1592 {
+    SELECT REGEXP_LIKE("ABD", "(?i)a[^bc]d");
+}
+expect unordered {
+    0
+}
+
+test l1596 {
+    SELECT REGEXP_LIKE("ADC", "(?i)a[^-b]c");
+}
+expect unordered {
+    1
+}
+
+test l1600 {
+    SELECT REGEXP_LIKE("A-C", "(?i)a[^-b]c");
+}
+expect unordered {
+    0
+}
+
+test l1604 {
+    SELECT REGEXP_LIKE("A]C", "(?i)a[^]b]c");
+}
+expect unordered {
+    0
+}
+
+test l1608 {
+    SELECT REGEXP_LIKE("ADC", "(?i)a[^]b]c");
+}
+expect unordered {
+    1
+}
+
+test l1612 {
+    SELECT REGEXP_LIKE("ABC", "(?i)ab|cd");
+}
+expect unordered {
+    1
+}
+
+test l1616 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)ab|cd");
+}
+expect unordered {
+    1
+}
+
+test l1620 {
+    SELECT REGEXP_LIKE("DEF", "(?i)()ef");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 5.
+test l1624 {
+    SELECT REGEXP_LIKE("-", "(?i)*a");
+}
+expect error {
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 6.
+test l1628 {
+    SELECT REGEXP_LIKE("-", "(?i)(*)b");
+}
+expect error {
+}
+
+test l1632 {
+    SELECT REGEXP_LIKE("B", "(?i)$b");
+}
+expect unordered {
+    0
+}
+
+# mysql-error: 3689 HY000 Unrecognized escape sequence in regular expression.
+test l1636 {
+    SELECT REGEXP_LIKE("-", "(?i)a\\\");
+}
+expect error {
+}
+
+test l1640 {
+    SELECT REGEXP_LIKE("A(B", "(?i)a\\\(b");
+}
+expect unordered {
+    1
+}
+
+test l1644 {
+    SELECT REGEXP_LIKE("AB", "(?i)a\\\(*b");
+}
+expect unordered {
+    1
+}
+
+test l1648 {
+    SELECT REGEXP_LIKE("A((B", "(?i)a\\\(*b");
+}
+expect unordered {
+    1
+}
+
+test l1652 {
+    SELECT REGEXP_LIKE("A\\\B", "(?i)a\\\\\\\b");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l1656 {
+    SELECT REGEXP_LIKE("-", "(?i)abc)");
+}
+expect error {
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l1660 {
+    SELECT REGEXP_LIKE("-", "(?i)(abc");
+}
+expect error {
+}
+
+test l1664 {
+    SELECT REGEXP_LIKE("ABC", "(?i)((a))");
+}
+expect unordered {
+    1
+}
+
+test l1668 {
+    SELECT REGEXP_LIKE("ABC", "(?i)(a)b(c)");
+}
+expect unordered {
+    1
+}
+
+test l1672 {
+    SELECT REGEXP_LIKE("AABBABC", "(?i)a+b+c");
+}
+expect unordered {
+    1
+}
+
+test l1676 {
+    SELECT REGEXP_LIKE("AABBABC", "(?i)a\{1,\}b\{1,\}c");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3688 HY000 Syntax error in regular expression on line 1, character 7.
+test l1680 {
+    SELECT REGEXP_LIKE("-", "(?i)a**");
+}
+expect error {
+}
+
+test l1684 {
+    SELECT REGEXP_LIKE("ABCABC", "(?i)a.+?c");
+}
+expect unordered {
+    1
+}
+
+test l1688 {
+    SELECT REGEXP_LIKE("ABCABC", "(?i)a.*?c");
+}
+expect unordered {
+    1
+}
+
+test l1692 {
+    SELECT REGEXP_LIKE("ABCABC", "(?i)a.\{0,5\}?c");
+}
+expect unordered {
+    1
+}
+
+test l1696 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)*");
+}
+expect unordered {
+    1
+}
+
+test l1700 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)\{0,\}");
+}
+expect unordered {
+    1
+}
+
+test l1704 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)+");
+}
+expect unordered {
+    1
+}
+
+test l1708 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)\{1,\}");
+}
+expect unordered {
+    1
+}
+
+test l1712 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)?");
+}
+expect unordered {
+    1
+}
+
+test l1716 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)\{0,1\}");
+}
+expect unordered {
+    1
+}
+
+test l1720 {
+    SELECT REGEXP_LIKE("AB", "(?i)(a+|b)\{0,1\}?");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l1724 {
+    SELECT REGEXP_LIKE("-", "(?i))(");
+}
+expect error {
+}
+
+test l1728 {
+    SELECT REGEXP_LIKE("CDE", "(?i)[^ab]*");
+}
+expect unordered {
+    1
+}
+
+test l1732 {
+    SELECT REGEXP_LIKE("", "(?i)abc");
+}
+expect unordered {
+    0
+}
+
+test l1736 {
+    SELECT REGEXP_LIKE("", "(?i)a*");
+}
+expect unordered {
+    1
+}
+
+test l1740 {
+    SELECT REGEXP_LIKE("ABBBCD", "(?i)([abc])*d");
+}
+expect unordered {
+    1
+}
+
+test l1744 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)([abc])*bcd");
+}
+expect unordered {
+    1
+}
+
+test l1748 {
+    SELECT REGEXP_LIKE("E", "(?i)a|b|c|d|e");
+}
+expect unordered {
+    1
+}
+
+test l1752 {
+    SELECT REGEXP_LIKE("EF", "(?i)(a|b|c|d|e)f");
+}
+expect unordered {
+    1
+}
+
+test l1756 {
+    SELECT REGEXP_LIKE("ABCDEFG", "(?i)abcd*efg");
+}
+expect unordered {
+    1
+}
+
+test l1760 {
+    SELECT REGEXP_LIKE("XABYABBBZ", "(?i)ab*");
+}
+expect unordered {
+    1
+}
+
+test l1764 {
+    SELECT REGEXP_LIKE("XAYABBBZ", "(?i)ab*");
+}
+expect unordered {
+    1
+}
+
+test l1768 {
+    SELECT REGEXP_LIKE("ABCDE", "(?i)(ab|cd)e");
+}
+expect unordered {
+    1
+}
+
+test l1772 {
+    SELECT REGEXP_LIKE("HIJ", "(?i)[abhgefdc]ij");
+}
+expect unordered {
+    1
+}
+
+test l1776 {
+    SELECT REGEXP_LIKE("ABCDE", "(?i)^(ab|cd)e");
+}
+expect unordered {
+    0
+}
+
+test l1780 {
+    SELECT REGEXP_LIKE("ABCDEF", "(?i)(abc|)ef");
+}
+expect unordered {
+    1
+}
+
+test l1784 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)(a|b)c*d");
+}
+expect unordered {
+    1
+}
+
+test l1788 {
+    SELECT REGEXP_LIKE("ABC", "(?i)(ab|ab*)bc");
+}
+expect unordered {
+    1
+}
+
+test l1792 {
+    SELECT REGEXP_LIKE("ABC", "(?i)a([bc]*)c*");
+}
+expect unordered {
+    1
+}
+
+test l1796 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)a([bc]*)(c*d)");
+}
+expect unordered {
+    1
+}
+
+test l1800 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)a([bc]+)(c*d)");
+}
+expect unordered {
+    1
+}
+
+test l1804 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)a([bc]*)(c+d)");
+}
+expect unordered {
+    1
+}
+
+test l1808 {
+    SELECT REGEXP_LIKE("ADCDCDE", "(?i)a[bcd]*dcdcde");
+}
+expect unordered {
+    1
+}
+
+test l1812 {
+    SELECT REGEXP_LIKE("ADCDCDE", "(?i)a[bcd]+dcdcde");
+}
+expect unordered {
+    0
+}
+
+test l1816 {
+    SELECT REGEXP_LIKE("ABC", "(?i)(ab|a)b*c");
+}
+expect unordered {
+    1
+}
+
+test l1820 {
+    SELECT REGEXP_LIKE("ABCD", "(?i)((a)(b)c)(d)");
+}
+expect unordered {
+    1
+}
+
+test l1824 {
+    SELECT REGEXP_LIKE("ALPHA", "(?i)[a-zA-Z_][a-zA-Z0-9_]*");
+}
+expect unordered {
+    1
+}
+
+test l1828 {
+    SELECT REGEXP_LIKE("ABH", "(?i)^a(bc+|b[eh])g|.h$");
+}
+expect unordered {
+    1
+}
+
+test l1832 {
+    SELECT REGEXP_LIKE("EFFGZ", "(?i)(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    1
+}
+
+test l1836 {
+    SELECT REGEXP_LIKE("IJ", "(?i)(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    1
+}
+
+test l1840 {
+    SELECT REGEXP_LIKE("EFFG", "(?i)(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    0
+}
+
+test l1844 {
+    SELECT REGEXP_LIKE("BCDD", "(?i)(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    0
+}
+
+test l1848 {
+    SELECT REGEXP_LIKE("REFFGZ", "(?i)(bc+d$|ef*g.|h?i(j|k))");
+}
+expect unordered {
+    1
+}
+
+test l1852 {
+    SELECT REGEXP_LIKE("A", "(?i)((((((((((a))))))))))");
+}
+expect unordered {
+    1
+}
+
+test l1856 {
+    SELECT REGEXP_LIKE("AA", "(?i)((((((((((a))))))))))\\\10");
+}
+expect unordered {
+    1
+}
+
+test l1860 {
+    SELECT REGEXP_LIKE("A", "(?i)(((((((((a)))))))))");
+}
+expect unordered {
+    1
+}
+
+test l1864 {
+    SELECT REGEXP_LIKE("A", "(?i)(?:(?:(?:(?:(?:(?:(?:(?:(?:(a))))))))))");
+}
+expect unordered {
+    1
+}
+
+test l1868 {
+    SELECT REGEXP_LIKE("C", "(?i)(?:(?:(?:(?:(?:(?:(?:(?:(?:(a|b|c))))))))))");
+}
+expect unordered {
+    1
+}
+
+test l1872 {
+    SELECT REGEXP_LIKE("UH-UH", "(?i)multiple words of text");
+}
+expect unordered {
+    0
+}
+
+test l1876 {
+    SELECT REGEXP_LIKE("MULTIPLE WORDS, YEAH", "(?i)multiple words");
+}
+expect unordered {
+    1
+}
+
+test l1880 {
+    SELECT REGEXP_LIKE("ABCDE", "(?i)(.*)c(.*)");
+}
+expect unordered {
+    1
+}
+
+test l1884 {
+    SELECT REGEXP_LIKE("(A, B)", "(?i)\\\((.*), (.*)\\\)");
+}
+expect unordered {
+    1
+}
+
+test l1888 {
+    SELECT REGEXP_LIKE("AB", "(?i)[k]");
+}
+expect unordered {
+    0
+}
+
+test l1892 {
+    SELECT REGEXP_LIKE("AC", "(?i)a[-]?c");
+}
+expect unordered {
+    1
+}
+
+test l1896 {
+    SELECT REGEXP_LIKE("ABCABC", "(?i)(abc)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l1900 {
+    SELECT REGEXP_LIKE("ABCABC", "(?i)([a-c]*)\\\1");
+}
+expect unordered {
+    1
+}
+
+test l1904 {
+    SELECT REGEXP_LIKE("abad", "a(?!b).");
+}
+expect unordered {
+    1
+}
+
+test l1908 {
+    SELECT REGEXP_LIKE("abad", "a(?=d).");
+}
+expect unordered {
+    1
+}
+
+test l1912 {
+    SELECT REGEXP_LIKE("abad", "a(?=c|d).");
+}
+expect unordered {
+    1
+}
+
+test l1916 {
+    SELECT REGEXP_LIKE("ace", "a(?:b|c|d)(.)");
+}
+expect unordered {
+    1
+}
+
+test l1920 {
+    SELECT REGEXP_LIKE("ace", "a(?:b|c|d)*(.)");
+}
+expect unordered {
+    1
+}
+
+test l1924 {
+    SELECT REGEXP_LIKE("ace", "a(?:b|c|d)+?(.)");
+}
+expect unordered {
+    1
+}
+
+test l1928 {
+    SELECT REGEXP_LIKE("ace", "a(?:b|(c|e)\{1,2\}?|d)+?(.)");
+}
+expect unordered {
+    1
+}
+
+test l1936 {
+    SELECT REGEXP_LIKE("a:bc-:de:f", "(?<!-):(.*?)(?<!-):");
+}
+expect unordered {
+    1
+}
+
+test l1940 {
+    SELECT REGEXP_LIKE("a:bc\\\:de:f", "(?<!\\\\\\\):(.*?)(?<!\\\\\\\):");
+}
+expect unordered {
+    1
+}
+
+test l1944 {
+    SELECT REGEXP_LIKE("a'bc?'de'f", "(?<!\\\?)'(.*?)(?<!\\\?)'");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l1948 {
+    SELECT REGEXP_LIKE("w", "w(?# comment")
+;
+}
+expect error {
+}
+
+test l1952 {
+    SELECT REGEXP_LIKE("wxyz", "w(?# comment 1)xy(?# comment 2)z")
+;
+}
+expect unordered {
+    1
+}
+
+test l1956 {
+    SELECT REGEXP_LIKE("W", "(?i)w");
+}
+expect unordered {
+    1
+}
+
+test l1968 {
+    SELECT REGEXP_LIKE("--ab_cd0123--", "\\\w+")
+;
+}
+expect unordered {
+    1
+}
+
+test l1972 {
+    SELECT REGEXP_LIKE("--ab_cd0123--", "[\\\w]+")
+;
+}
+expect unordered {
+    1
+}
+
+test l1976 {
+    SELECT REGEXP_LIKE("1234abc5678", "\\\D+");
+}
+expect unordered {
+    1
+}
+
+test l1980 {
+    SELECT REGEXP_LIKE("1234abc5678", "[\\\D]+");
+}
+expect unordered {
+    1
+}
+
+test l1984 {
+    SELECT REGEXP_LIKE("123abc", "[\\\da-fA-F]+");
+}
+expect unordered {
+    1
+}
+
+test l1988 {
+    SELECT REGEXP_LIKE("-", "[\\\d-x]");
+}
+expect unordered {
+    1
+}
+
+test l1992 {
+    SELECT REGEXP_LIKE(" testing!1972", "([\s]*)([\S]*)([\s]*)");
+}
+expect unordered {
+    1
+}
+
+test l1996 {
+    SELECT REGEXP_LIKE(" testing!1972", "(\s*)(\S*)(\s*)");
+}
+expect unordered {
+    1
+}
+
+test l2004 {
+    SELECT REGEXP_LIKE("\377", "\x00ff");
+}
+expect unordered {
+    0
+}
+
+test l2008 {
+    SELECT REGEXP_LIKE("\t\n\v\r\f\a", "\t\n\v\r\f\a");
+}
+expect unordered {
+    1
+}
+
+test l2012 {
+    SELECT REGEXP_LIKE("\t\n\v\r\f\b", "[\t][\n][\v][\r][\f][\b]");
+}
+expect unordered {
+    1
+}
+
+test l2016 {
+    SELECT REGEXP_LIKE("smil", "(([a-z]+):)?([a-z]+)$");
+}
+expect unordered {
+    1
+}
+
+test l2020 {
+    SELECT REGEXP_LIKE("", "((.)\1+)");
+}
+expect unordered {
+    0
+}
+
+test l2024 {
+    SELECT REGEXP_LIKE("abc\nabd", ".*d");
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 3691 HY000 Mismatched parenthesis in regular expression.
+test l2028 {
+    SELECT REGEXP_LIKE("", "(");
+}
+expect error {
+}
+
+test l2032 {
+    SELECT REGEXP_LIKE("!", "[\41]");
+}
+expect unordered {
+    0
+}
+
+test l2036 {
+    SELECT REGEXP_LIKE("x", "(x?)?");
+}
+expect unordered {
+    1
+}
+
+test l2040 {
+    SELECT REGEXP_LIKE("foo", "(?x) foo ");
+}
+expect unordered {
+    1
+}
+
+test l2044 {
+    SELECT REGEXP_LIKE("abcdefdof", "(?<!abc)(d.f)");
+}
+expect unordered {
+    1
+}
+
+test l2048 {
+    SELECT REGEXP_LIKE("laser_beam", "[\w-]+");
+}
+expect unordered {
+    0
+}
+
+test l2052 {
+    SELECT REGEXP_LIKE("xx:", ".*?\S *:");
+}
+expect unordered {
+    0
+}
+
+test l2056 {
+    SELECT REGEXP_LIKE("a   10", "a[ ]*?\ (\d+).*");
+}
+expect unordered {
+    0
+}
+
+test l2060 {
+    SELECT REGEXP_LIKE("a    10", "a[ ]*?\ (\d+).*");
+}
+expect unordered {
+    0
+}
+
+test l2064 {
+    SELECT REGEXP_LIKE("xx\nx\n", "(?ms).*?x\s*\Z(.*)");
+}
+expect unordered {
+    0
+}
+
+test l2068 {
+    SELECT REGEXP_LIKE("MMM", "(?i)M+");
+}
+expect unordered {
+    1
+}
+
+test l2072 {
+    SELECT REGEXP_LIKE("MMM", "(?i)m+");
+}
+expect unordered {
+    1
+}
+
+test l2076 {
+    SELECT REGEXP_LIKE("MMM", "(?i)[M]+");
+}
+expect unordered {
+    1
+}
+
+test l2080 {
+    SELECT REGEXP_LIKE("MMM", "(?i)[m]+");
+}
+expect unordered {
+    1
+}
+
+test l2084 {
+    SELECT REGEXP_LIKE("", "^*");
+}
+expect unordered {
+    1
+}
+
+test l2088 {
+    SELECT REGEXP_LIKE("one\ntwo\nthree\n", "^.*?$");
+}
+expect unordered {
+    0
+}
+
+test l2092 {
+    SELECT REGEXP_LIKE("a>b", "a[^>]*?b");
+}
+expect unordered {
+    0
+}
+
+test l2096 {
+    SELECT REGEXP_LIKE("foo", "^a*?$");
+}
+expect unordered {
+    0
+}
+
+test l2100 {
+    SELECT REGEXP_LIKE("ab", "^((a)c)?(ab)$");
+}
+expect unordered {
+    1
+}
+
+test l2104 {
+    SELECT REGEXP_LIKE("abc", "^([ab]*?)(?=(b)?)c");
+}
+expect unordered {
+    1
+}
+
+test l2108 {
+    SELECT REGEXP_LIKE("abc", "^([ab]*?)(?!(b))c");
+}
+expect unordered {
+    1
+}
+
+test l2112 {
+    SELECT REGEXP_LIKE("abc", "^([ab]*?)(?<!(a))c");
+}
+expect unordered {
+    1
+}
+
+test l2116 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog');
+}
+expect unordered {
+    1
+}
+
+test l2120 {
+    SELECT REGEXP_INSTR('dog cat dog', 'doggo');
+}
+expect unordered {
+    0
+}
+
+test l2124 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 2);
+}
+expect unordered {
+    9
+}
+
+test l2128 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2);
+}
+expect unordered {
+    9
+}
+
+test l2132 {
+    SELECT REGEXP_INSTR('aa aaa aaaa', 'a\{2\}');
+}
+expect unordered {
+    1
+}
+
+test l2136 {
+    SELECT REGEXP_INSTR('aa aaa aaaa', 'a\{4\}');
+}
+expect unordered {
+    8
+}
+
+test l2140 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, -1, 0);
+}
+expect unordered {
+    1
+}
+
+test l2144 {
+    SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 1, 1);
+}
+expect unordered {
+    4
+}
+
+test l2148 {
+    SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+');
+}
+expect unordered {
+    abc
+}
+
+test l2152 {
+    SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3);
+}
+expect unordered {
+    ghi
+}
+
+test l2156 {
+    SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 2, 2);
+}
+expect unordered {
+    def
+}
+
+test l2160 {
+    SELECT REGEXP_SUBSTR('abc def ghi', '[j-z]+');
+}
+expect unordered {
+    NULL
+}

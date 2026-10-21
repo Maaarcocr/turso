@@ -1,0 +1,71 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/check_scripts.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (a INTEGER PRIMARY KEY, b INTEGER, c varchar(20));
+    ALTER TABLE t1 ADD CONSTRAINT chk1 CHECK (b > 10) NOT ENFORCED;
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (b > 0);
+    ALTER TABLE t1 ADD CONSTRAINT chk3 CHECK ((a + b) / 2 >= 1) ENFORCED;
+    ALTER TABLE t1 ADD CONSTRAINT chk4 CHECK (upper(c) = c) ENFORCED;
+    ALTER TABLE t1 ADD CONSTRAINT chk5 CHECK (trim(c) = c) ENFORCED;
+    ALTER TABLE t1 ADD CONSTRAINT chk6 CHECK (trim(leading ' ' from c) = c) ENFORCED;
+    INSERT INTO t1 VALUES (1,1,'ABC');
+}
+
+setup s2 {
+    INSERT INTO t1 (a,b,c) VALUES (2,2,'abc');
+}
+
+@setup s1
+test l417 {
+    SELECT * FROM t1;
+}
+expect unordered {
+    1|1|ABC
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk2' is violated.
+@setup s1
+test l421 {
+    INSERT INTO t1 (a,b) VALUES (0,0);
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk3' is violated.
+@setup s1
+test l425 {
+    INSERT INTO t1 (a,b) VALUES (0,1);
+}
+expect error {
+}
+
+@setup s1
+test l429 {
+    INSERT INTO t1 (a,b,c) VALUES (2,2,'abc');
+}
+expect unordered {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk5' is violated.
+@setup s1
+@setup s2
+test l433 {
+    INSERT INTO t1 (a,b,c) VALUES (2,2,'ABC ');
+}
+expect error {
+}
+
+# mysql-error: 3819 HY000 Check constraint 'chk5' is violated.
+@setup s1
+@setup s2
+test l437 {
+    INSERT INTO t1 (a,b,c) VALUES (2,2,' ABC');
+}
+expect error {
+}

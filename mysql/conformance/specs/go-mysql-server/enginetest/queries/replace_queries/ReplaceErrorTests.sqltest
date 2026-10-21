@@ -1,0 +1,83 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/replace_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+test l168 {
+    REPLACE INTO mytable (s, i) VALUES ('x');
+}
+expect error {
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+test l172 {
+    REPLACE INTO mytable (s) VALUES ('x', 999);
+}
+expect error {
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+test l176 {
+    REPLACE INTO mytable (i, s) VALUES (999, 'x', 'y');
+}
+expect error {
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+test l180 {
+    REPLACE INTO mytable VALUES (999);
+}
+expect error {
+}
+
+# mysql-error: 1136 21S01 Column count doesn't match value count at row 1
+@setup s1
+test l184 {
+    REPLACE INTO mytable VALUES (999, 'x', 'y');
+}
+expect error {
+}
+
+# mysql-error: 1110 42000 Column 's' specified twice
+@setup s1
+test l196 {
+    REPLACE INTO mytable (i, s, s) VALUES (999, 'x', 'x');
+}
+expect error {
+}
+
+# mysql-error: 1110 42000 Column 's' specified twice
+@setup s1
+test l200 {
+    REPLACE INTO mytable SET i = 999, s = 'y', s = 'y';
+}
+expect error {
+}
+
+# mysql-error: 1048 23000 Column 'i' cannot be null
+@setup s1
+test l208 {
+    INSERT INTO mytable SET i = null, s = 'y';
+}
+expect error {
+}

@@ -1,0 +1,2453 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/trigger_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table a (x int primary key);
+}
+
+setup s2 {
+    create table b (y int primary key);
+}
+
+setup s3 {
+    create trigger insert_into_b after insert on a for each row insert into b values (new.x + 1);
+    insert into a values (1), (3), (5);
+}
+
+setup s4 {
+    insert into b values (0), (2), (4), (6), (8);
+}
+
+setup s5 {
+    create trigger insert_into_b after insert on a for each row delete from b where y = (new.x + 1);
+    insert into a values (1), (3), (5);
+}
+
+setup s6 {
+    create trigger insert_into_b after insert on a for each row update b set y = new.x where y = new.x + 1;
+    insert into a values (1), (3), (5);
+}
+
+setup s7 {
+    create trigger insert_into_b before insert on a for each row insert into b values (new.x + 1);
+    insert into a values (1), (3), (5);
+}
+
+setup s8 {
+    create table a (x int primary key, y int);
+}
+
+setup s9 {
+    create table b (z int primary key);
+    create trigger insert_into_b before insert on a for each row insert into b values (new.x + 1);
+    insert into a values (1,2), (3,4), (5,6);
+}
+
+setup s10 {
+    create trigger insert_into_b before insert on a for each row delete from b where y = (new.x + 1);
+    insert into a values (1), (3), (5);
+}
+
+setup s11 {
+    create trigger insert_into_b before insert on a for each row update b set y = new.x where y = new.x + 1;
+    insert into a values (1), (3), (5);
+}
+
+setup s12 {
+    create table a (x int primary key, y int default 1, z int);
+    create table b (x int primary key);
+}
+
+setup s13 {
+    create table c (x int primary key);
+    create table d (x int primary key);
+    insert into b values (1), (2);
+    insert into d values (1), (2);
+}
+
+setup s14 {
+    create trigger insert_into_a
+after insert on a
+for each row replace into c
+select * from d join (select * from b where new.x = b.x) as e using (x)
+where d.x = new.x;
+    insert into a (x,z) values (2,2);
+}
+
+setup s15 {
+    create trigger insert_into_a
+after insert on a
+for each row replace into c
+select * from d join b using (x)
+where d.x = new.x;
+    insert into a (x,z) values (2,2);
+}
+
+setup s16 {
+    create table c (x int primary key, y tinyint);
+    create table d (x int primary key);
+    insert into b values (1), (2);
+    insert into d values (1), (2);
+}
+
+setup s17 {
+    create trigger insert_into_a
+after insert on a
+for each row replace into c
+select d.x+2, 0 from d join b using (x)
+where d.x = new.x;
+    insert into a (x,z) values (2,2);
+}
+
+setup s18 {
+    create trigger insert_into_a
+after insert on a
+for each row replace into c
+select max(d.x + new.x), 0 from d join b using (x)
+where d.x = new.x;
+    insert into a (x,z) values (2,2);
+}
+
+setup s19 {
+    create trigger insert_into_a
+after insert on a
+for each row replace into c
+select first_value(d.x + new.x) over (partition by (x) order by x), 0 from d join b using (x)
+where d.x = new.x;
+    insert into a (x,z) values (2,2);
+}
+
+setup s20 {
+    create trigger insert_into_a before insert on a for each row set new.x = new.x + 1;
+    insert into a values (1);
+}
+
+setup s21 {
+    create table x (a int primary key, b int, c int);
+}
+
+setup s22 {
+    create trigger insert_into_x before insert on x for each row set new.a = new.a + 1, new.b = new.c, new.c = 0;
+    insert into x values (1, 10, 100);
+}
+
+setup s23 {
+    set @@auto_increment_increment = 1;
+    create trigger insert_into_x before insert on x for each row set new.a = new.a + 1, new.b = new.c, new.c = 0, @@auto_increment_increment = @@auto_increment_increment + 1;
+    insert into x values (1, 10, 100), (2, 20, 200);
+}
+
+setup s24 {
+    create trigger a1 before insert on a for each row set new.x = new.x * 2, new.y = new.y * 3;
+}
+
+setup s25 {
+    insert into a (y, x) values (5,7), (9,11);
+}
+
+setup s26 {
+    create table a (x int primary key, y int, z int default 5);
+    create trigger a1 before insert on a for each row set new.x = new.x * 2, new.y = new.y * 3, new.z = new.z * 5;
+}
+
+setup s27 {
+    insert into a (y, x) values (5,7), (9,11);
+}
+
+setup s28 {
+    insert into a values (1), (3), (5);
+}
+
+setup s29 {
+    create trigger insert_into_b after update on a for each row insert into b values (old.x + new.x + 1);
+    update a set x = x + 1 where x in (1, 3);
+}
+
+setup s30 {
+    insert into a values (0), (2), (4), (6), (8);
+}
+
+setup s31 {
+    insert into b values (1), (3), (5), (7), (9);
+}
+
+setup s32 {
+    create trigger delete_from_b after update on a for each row delete from b where y = old.x + new.x;
+    update a set x = x + 1 where x in (2,4);
+}
+
+setup s33 {
+    insert into b values (0), (2), (4), (8);
+}
+
+setup s34 {
+    create trigger update_b after update on a for each row update b set y = old.x + new.x + 1 where y = old.x;
+    update a set x = x + 1 where x in (2, 4);
+}
+
+setup s35 {
+    create trigger insert_into_b before update on a for each row insert into b values (old.x + new.x + 1);
+    update a set x = x + 1 where x in (1, 3);
+}
+
+setup s36 {
+    create trigger delete_from_b before update on a for each row delete from b where y = old.x + new.x;
+    update a set x = x + 1 where x in (2,4);
+}
+
+setup s37 {
+    create trigger update_b before update on a for each row update b set y = old.x + new.x + 1 where y = old.x;
+    update a set x = x + 1 where x in (2, 4);
+}
+
+setup s38 {
+    insert into a values (1), (10);
+}
+
+setup s39 {
+    create trigger update_a before update on a for each row set new.x = new.x + old.x;
+    update a set x = x + 1;
+}
+
+setup s40 {
+    create trigger no_step_on_snek before update on a for each row set new.x = old.x;
+    update a set x = x + 1;
+}
+
+setup s41 {
+    insert into a values (1,3), (10,20);
+}
+
+setup s42 {
+    create trigger update_a before update on a for each row set new.x = new.x + old.y, new.y = new.y + old.x;
+    update a set x = x + 1, y = y + 1;
+}
+
+setup s43 {
+    create trigger update_a before update on a for each row set new.x = new.x + new.y, new.y = new.y + old.y;
+    update a set x = x + 1, y = y + 1;
+}
+
+setup s44 {
+    create table a (x int primary key, y int, unique key (y));
+    create table b (z int primary key);
+    insert into a values (1,3), (10,20);
+    create trigger insert_b before update on a for each row insert into b values (old.x * 10);
+    update a set x = x + 1 where y = 20;
+}
+
+setup s45 {
+    create trigger insert_into_b after delete on a for each row insert into b values (old.x + 1);
+    delete from a where x in (1, 3);
+}
+
+setup s46 {
+    insert into b values (0), (2), (4), (6), (8);
+}
+
+setup s47 {
+    create trigger delete_from_b after delete on a for each row delete from b where y = old.x;
+    delete from a where x in (2,4,6);
+}
+
+setup s48 {
+    create trigger update_b after delete on a for each row update b set y = old.x + 1 where y = old.x;
+    delete from a where x in (2,4,6);
+}
+
+setup s49 {
+    create trigger insert_into_b before delete on a for each row insert into b values (old.x + 1);
+    delete from a where x in (2, 4, 6);
+}
+
+setup s50 {
+    create trigger delete_from_b before delete on a for each row delete from b where y = (old.x + 1);
+    delete from a where x in (2, 4, 6);
+}
+
+setup s51 {
+    create trigger update_b before delete on a for each row update b set y = old.x where y = old.x + 1;
+    delete from a where x in (2, 4, 6);
+}
+
+setup s52 {
+    create table a (x int primary key, z int, unique key (z));
+    create table b (y int primary key);
+    insert into a values (0,1), (2,3), (4,5);
+    create trigger insert_b before delete on a for each row insert into b values (old.x * 2);
+    delete from a where z > 2;
+}
+
+setup s53 {
+    create trigger a1 before insert on a for each row insert into b values (NEW.x * 7);
+    create trigger a2 after insert on a for each row insert into b values (New.x * 11);
+}
+
+setup s54 {
+    insert into a values (2), (3), (5);
+}
+
+setup s55 {
+    create trigger a1 before insert on a for each row set new.x = New.x + 1;
+}
+
+setup s56 {
+    create trigger a2 before insert on a for each row set new.x = New.x * 2;
+    create trigger a3 before insert on a for each row set new.x = New.x - 5;
+}
+
+setup s57 {
+    insert into a values (1), (3);
+}
+
+setup s58 {
+    create trigger a2 before insert on a for each row precedes a1 set new.x = New.x * 2;
+    create trigger a3 before insert on a for each row precedes a2 set new.x = New.x - 5;
+    create trigger a4 before insert on a for each row follows a2 set new.x = New.x * 3;
+}
+
+setup s59 {
+    insert into a values (1), (3);
+}
+
+setup s60 {
+    create trigger a1 before update on a for each row insert into b values (old.x * 7);
+    create trigger a2 after update on a for each row insert into b values (old.x * 11);
+}
+
+setup s61 {
+    insert into a values (2), (3), (5);
+}
+
+setup s62 {
+    update a set x = x * 2;
+}
+
+setup s63 {
+    create trigger a3 before update on a for each row insert into b values (old.x * 13);
+    create trigger a4 after update on a for each row insert into b values (old.x * 17);
+    insert into a values (2), (3), (5);
+}
+
+setup s64 {
+    update a set x = x * 2;
+}
+
+setup s65 {
+    create trigger a1 before delete on a for each row insert into b values (old.x * 7);
+    create trigger a2 after delete on a for each row insert into b values (old.x * 11);
+}
+
+setup s66 {
+    insert into a values (2), (3), (5);
+}
+
+setup s67 {
+    delete from a;
+}
+
+setup s68 {
+    create trigger a3 before delete on a for each row insert into b values (old.x * 13);
+    create trigger a4 after delete on a for each row insert into b values (old.x * 17);
+    insert into a values (2), (3), (5);
+}
+
+setup s69 {
+    delete from a;
+}
+
+setup s70 {
+    insert into b values (1), (3);
+    create trigger a1 before insert on a for each row set new.x = New.x + 1;
+    create trigger a2 before insert on a for each row precedes a1 set new.x = New.x * 2;
+    create trigger a3 before insert on a for each row precedes a2 set new.x = New.x - 5;
+    create trigger a4 before insert on a for each row follows a2 set new.x = New.x * 3;
+    create trigger a5 after insert on a for each row update b set y = y + 1 order by y asc;
+    create trigger a6 after insert on a for each row precedes a5 update b set y = y * 2 order by y asc;
+    create trigger a7 after insert on a for each row precedes a6 update b set y = y - 5 order by y asc;
+    create trigger a8 after insert on a for each row follows a6 update b set y = y * 3 order by y asc;
+}
+
+setup s71 {
+    insert into a values (1), (3);
+}
+
+setup s72 {
+    create table c (z int primary key);
+}
+
+setup s73 {
+    create trigger a1 before insert on a for each row insert into b values (new.x * 2);
+}
+
+setup s74 {
+    create trigger a2 before update on a for each row insert into b values (new.x * 3);
+    create trigger a3 before delete on a for each row insert into b values (old.x * 5);
+    create trigger b1 before insert on b for each row insert into c values (new.y * 7);
+    create trigger b2 before update on b for each row insert into c values (new.y * 11);
+    create trigger b3 before delete on b for each row insert into c values (old.y * 13);
+    insert into a values (1), (2), (3);
+}
+
+setup s75 {
+    create trigger b1 before insert on b for each row insert into c values (new.y * 7);
+    insert into a values (1), (2), (3);
+}
+
+setup s76 {
+    create trigger b1 after insert on b for each row insert into c values (new.y * 7);
+    insert into a values (1), (2), (3);
+}
+
+setup s77 {
+    create trigger a1 after insert on a for each row insert into b values (new.x * 2);
+}
+
+setup s78 {
+    create trigger b1 before insert on b for each row insert into c values (new.y * 7);
+    insert into a values (1), (2), (3);
+}
+
+setup s79 {
+    create trigger b1 after insert on b for each row insert into c values (new.y * 7);
+    insert into a values (1), (2), (3);
+}
+
+setup s80 {
+    insert into a values (1);
+}
+
+setup s81 {
+    insert into b values (10);
+    insert into c values (100);
+}
+
+setup s82 {
+    create trigger a1 before delete on a for each row delete from b where y = (old.x * 10);
+}
+
+setup s83 {
+    create trigger b1 before delete on b for each row delete from c where z = (old.y * 10);
+    delete from a where x = 1;
+}
+
+setup s84 {
+    create trigger b1 after delete on b for each row delete from c where z = (old.y * 10);
+    delete from a where x = 1;
+}
+
+setup s85 {
+    create trigger a1 after delete on a for each row delete from b where y = (old.x * 10);
+}
+
+setup s86 {
+    create trigger b1 before delete on b for each row delete from c where z = (old.y * 10);
+    delete from a where x = 1;
+}
+
+setup s87 {
+    create trigger b1 after delete on b for each row delete from c where z = (old.y * 10);
+    delete from a where x = 1;
+}
+
+setup s88 {
+    insert into b values (2);
+    insert into c values (3);
+}
+
+setup s89 {
+    create trigger a1 before update on a for each row update b set y = y + old.x + new.x;
+}
+
+setup s90 {
+    create trigger b1 before update on b for each row update c set z = z + old.y + new.y;
+    update a set x = x + 1;
+}
+
+setup s91 {
+    create trigger b1 after update on b for each row update c set z = z + old.y + new.y;
+    update a set x = x + 1;
+}
+
+setup s92 {
+    create trigger a1 after update on a for each row update b set y = y + old.x + new.x;
+}
+
+setup s93 {
+    create trigger b1 before update on b for each row update c set z = z + old.y + new.y;
+    update a set x = x + 1;
+}
+
+setup s94 {
+    create trigger b1 after update on b for each row update c set z = z + old.y + new.y;
+    update a set x = x + 1;
+}
+
+setup s95 {
+    create trigger t1 before insert on a for each row set new.x = new.x * 1;
+    create trigger t2 before insert on a for each row follows t1 set new.x = new.x * 2;
+    create trigger t3 before insert on a for each row set new.x = new.x * 3;
+    create trigger t4 before insert on a for each row precedes t3 set new.x = new.x * 5;
+}
+
+setup s96 {
+    drop trigger t1;
+}
+
+setup s97 {
+    drop trigger t3;
+}
+
+setup s98 {
+    drop trigger if exists t5;
+}
+
+setup s99 {
+    drop trigger t4;
+}
+
+setup s100 {
+    create table a (w int primary key);
+    create trigger t1 before insert on a for each row set new.w = new.w;
+    create trigger t2 before insert on a for each row set new.w = new.w * 100;
+}
+
+setup s101 {
+    create table b (x int primary key);
+    create table d (z int primary key);
+    create trigger t3 before insert on b for each row set new.x = new.x;
+    create trigger t4 before insert on b for each row set new.x = new.x * 100;
+    create trigger t7 before insert on d for each row set new.z = new.z;
+    create trigger t8 before insert on d for each row set new.z = new.z * 100;
+}
+
+setup s102 {
+    create trigger t1 before insert on a for each row set new.x = new.x;
+    create trigger t2 before insert on a for each row follows t1 set new.x = new.x * 10;
+    create trigger t3 before insert on a for each row precedes t1 set new.x = new.x * 100;
+    create trigger t4 before insert on a for each row follows t3 set new.x = new.x * 1000;
+    create trigger t5 before insert on a for each row precedes t2 set new.x = new.x * 10000;
+    create trigger t6 before insert on a for each row follows t4 set new.x = new.x * 100000;
+    create trigger t7 before insert on a for each row precedes t1 set new.x = new.x * 1000000;
+    create trigger t8 before insert on a for each row follows t6 set new.x = new.x * 10000000;
+}
+
+setup s103 {
+    create trigger insert_into_b after insert on a for each row insert into b values (new.x + 1);
+}
+
+setup s104 {
+    create table b (y int primary key);
+}
+
+setup s105 {
+    CREATE TABLE film_text (film_id smallint NOT NULL, title varchar(255) NOT NULL, description text, PRIMARY KEY (film_id));
+}
+
+setup s106 {
+    CREATE TABLE t0 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
+    INSERT INTO t0 VALUES (1, 2, 'abc'), (2, 3, 'def');
+}
+
+setup s107 {
+    CREATE TABLE t1 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
+}
+
+setup s108 {
+    CREATE PROCEDURE back_up(num INT, msg TEXT) INSERT INTO t1 (v1, v2) VALUES (num*2, msg);
+}
+
+setup s109 {
+    CREATE TABLE t_1 (id BINARY(2), other BINARY(2), status TINYINT UNSIGNED);
+    CREATE TABLE oldstatus (id BINARY(2), status TINYINT UNSIGNED);
+    INSERT INTO t_1 (id, other, status) VALUES ROW(0x3E32, 0xC336, 0), ROW(0xEDC1, 0xC336, 0), ROW(0x9B15, 0xC336, 0);
+    CREATE TRIGGER t_change_status before UPDATE ON t_1 FOR EACH ROW INSERT INTO oldstatus (id, status) SELECT id, status FROM t_1 WHERE id = NEW.id;
+    UPDATE t_1 SET status = 1 WHERE id = 0x3E32;
+}
+
+setup s110 {
+    create table src(a int, b int, c int);
+    create table dest(i int, j int);
+    create trigger trig before update on src for each row insert into dest(j, i) select a, c from src where b = new.b;
+    insert into src values (1, 2, 3);
+    update src set a = 4 where b = 2;
+}
+
+setup s111 {
+    CREATE TABLE t_1 (id BINARY(2), data VARCHAR(10));
+    CREATE TABLE t_2 (id BINARY(2), other BINARY(2), status TINYINT UNSIGNED default 0);
+    CREATE TABLE queue (id BINARY(2), data varchar(10));
+    CREATE VIEW v AS SELECT t_2.id, t_1.data, status FROM t_2 inner join t_1 on other=t_1.id;
+    INSERT INTO t_1 (id, data) VALUES (0xC336, 'Test');
+    INSERT INTO t_2 (id, other) VALUES ROW(0x3E32, 0xC336), ROW(0xEDC1, 0xC336), ROW(0x9B15, 0xC336);
+    CREATE TRIGGER t_change_status after UPDATE ON t_2 FOR EACH ROW INSERT INTO queue(id, data) select id, data from v where v.id = NEW.id;
+    UPDATE t_2 SET status = 1 WHERE id = 0x3E32;
+}
+
+setup s112 {
+    create table A(col0 int, col1 int);
+    create table B(col0 int, col1 int);
+    create table C(col0 int);
+    create trigger test_trigger after update on A for each row insert into C (col0) select col0 from B where B.col0 = new.col0;
+    drop table B;
+}
+
+setup s113 {
+    create table B(a int, b int);
+}
+
+setup s114 {
+    insert into C values (12);
+}
+
+setup s115 {
+    insert into A values (1, 2);
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l102 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l108 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l114 {
+    insert into a values (7), (9);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s5
+test l132 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s5
+test l138 {
+    select y from b order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s5
+test l144 {
+    insert into a values (7), (9);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s6
+test l162 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s6
+test l168 {
+    select y from b order by 1;
+}
+expect {
+    0
+    1
+    3
+    5
+    8
+}
+
+@setup s1
+@setup s2
+@setup s7
+test l185 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s7
+test l191 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s7
+test l197 {
+    insert into a values (7), (9);
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+test l214 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s8
+@setup s9
+test l220 {
+    select z from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s8
+@setup s9
+test l226 {
+    insert into a values (7,8), (9,10);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s10
+test l244 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s10
+test l250 {
+    select y from b order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s10
+test l256 {
+    insert into a values (7), (9);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s11
+test l274 {
+    select x from a order by 1;
+}
+expect {
+    1
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s4
+@setup s11
+test l280 {
+    select y from b order by 1;
+}
+expect {
+    0
+    1
+    3
+    5
+    8
+}
+
+@setup s12
+@setup s13
+@setup s14
+test l336 {
+    select x from c order by 1;
+}
+expect {
+    2
+}
+
+@setup s12
+@setup s13
+@setup s15
+test l358 {
+    select x from c order by 1;
+}
+expect {
+    2
+}
+
+@setup s12
+@setup s16
+@setup s17
+test l380 {
+    select x, y from c order by 1;
+}
+expect {
+    4|0
+}
+
+@setup s12
+@setup s16
+@setup s18
+test l402 {
+    select x, y from c order by 1;
+}
+expect {
+    4|0
+}
+
+@setup s12
+@setup s16
+@setup s19
+test l424 {
+    select x, y from c order by 1;
+}
+expect {
+    4|0
+}
+
+@setup s1
+@setup s20
+test l436 {
+    select x from a order by 1;
+}
+expect {
+    2
+}
+
+@setup s21
+@setup s22
+test l448 {
+    select * from x order by 1;
+}
+expect {
+    2|100|0
+}
+
+@setup s21
+@setup s23
+test l462 {
+    select *, @@auto_increment_increment from x order by 1;
+}
+expect {
+    2|100|0|3
+    3|200|0|3
+}
+
+@setup s8
+@setup s24
+test l476 {
+    insert into a (y, x) values (5,7), (9,11);
+}
+expect unordered {
+}
+
+@setup s8
+@setup s24
+@setup s25
+test l482 {
+    select x, y from a order by 1;
+}
+expect {
+    14|15
+    22|27
+}
+
+@setup s26
+test l498 {
+    insert into a (y, x) values (5,7), (9,11);
+}
+expect unordered {
+}
+
+@setup s26
+@setup s27
+test l504 {
+    select x, y, z from a order by 1;
+}
+expect {
+    14|15|25
+    22|27|25
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s29
+test l723 {
+    select x from a order by 1;
+}
+expect {
+    2
+    4
+    5
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s29
+test l729 {
+    select y from b order by 1;
+}
+expect {
+    4
+    8
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s29
+test l735 {
+    update a set x = x + 1 where x = 5;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s32
+test l760 {
+    select x from a order by 1;
+}
+expect {
+    0
+    3
+    5
+    6
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s32
+test l766 {
+    select y from b order by 1;
+}
+expect {
+    1
+    3
+    7
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s33
+@setup s34
+test l785 {
+    select x from a order by 1;
+}
+expect {
+    0
+    3
+    5
+    6
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s33
+@setup s34
+test l791 {
+    select y from b order by 1;
+}
+expect {
+    0
+    6
+    8
+    10
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s35
+test l809 {
+    select x from a order by 1;
+}
+expect {
+    2
+    4
+    5
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s35
+test l815 {
+    select y from b order by 1;
+}
+expect {
+    4
+    8
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s35
+test l821 {
+    update a set x = x + 1 where x = 5;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s36
+test l846 {
+    select x from a order by 1;
+}
+expect {
+    0
+    3
+    5
+    6
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s36
+test l852 {
+    select y from b order by 1;
+}
+expect {
+    1
+    3
+    7
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s33
+@setup s37
+test l871 {
+    select x from a order by 1;
+}
+expect {
+    0
+    3
+    5
+    6
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s33
+@setup s37
+test l877 {
+    select y from b order by 1;
+}
+expect {
+    0
+    6
+    8
+    10
+}
+
+@setup s1
+@setup s38
+@setup s39
+test l892 {
+    select x from a order by 1;
+}
+expect {
+    3
+    21
+}
+
+@setup s1
+@setup s38
+@setup s40
+test l905 {
+    select x from a order by 1;
+}
+expect {
+    1
+    10
+}
+
+@setup s8
+@setup s41
+@setup s42
+test l918 {
+    select x, y from a order by 1;
+}
+expect {
+    5|5
+    31|31
+}
+
+@setup s8
+@setup s41
+@setup s43
+test l932 {
+    select x, y from a order by 1;
+}
+expect {
+    6|7
+    32|41
+}
+
+@setup s44
+test l949 {
+    select x, y from a order by 1;
+}
+expect {
+    1|3
+    11|20
+}
+
+@setup s44
+test l956 {
+    select z from b;
+}
+expect unordered {
+    100
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s45
+test l1094 {
+    select x from a order by 1;
+}
+expect {
+    5
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s45
+test l1100 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+}
+
+@setup s1
+@setup s2
+@setup s28
+@setup s45
+test l1106 {
+    delete from a where x = 5;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s46
+@setup s47
+test l1125 {
+    select x from a order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s46
+@setup s47
+test l1131 {
+    select y from b order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s46
+@setup s48
+test l1150 {
+    select x from a order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s46
+@setup s48
+test l1156 {
+    select y from b order by 1;
+}
+expect {
+    0
+    3
+    5
+    7
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s49
+test l1174 {
+    select x from a order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s49
+test l1180 {
+    select y from b order by 1;
+}
+expect {
+    3
+    5
+    7
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s49
+test l1186 {
+    delete from a where x = 0;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s50
+test l1205 {
+    select x from a order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s50
+test l1211 {
+    select y from b order by 1;
+}
+expect {
+    1
+    9
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s51
+test l1230 {
+    select x from a order by 1;
+}
+expect {
+    0
+    8
+}
+
+@setup s1
+@setup s2
+@setup s30
+@setup s31
+@setup s51
+test l1236 {
+    select y from b order by 1;
+}
+expect {
+    1
+    2
+    4
+    6
+    9
+}
+
+@setup s52
+test l1254 {
+    select x from a order by 1;
+}
+expect {
+    0
+}
+
+@setup s52
+test l1260 {
+    select y from b order by 1;
+}
+expect {
+    4
+    8
+}
+
+@setup s1
+@setup s2
+@setup s53
+test l1358 {
+    insert into a values (2), (3), (5);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s53
+@setup s54
+test l1364 {
+    select x from a order by 1;
+}
+expect {
+    2
+    3
+    5
+}
+
+@setup s1
+@setup s2
+@setup s53
+@setup s54
+test l1370 {
+    select y from b order by 1;
+}
+expect {
+    14
+    21
+    22
+    33
+    35
+    55
+}
+
+@setup s1
+@setup s55
+@setup s56
+test l1387 {
+    insert into a values (1), (3);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s55
+@setup s56
+@setup s57
+test l1393 {
+    select x from a order by 1;
+}
+expect {
+    -1
+    3
+}
+
+@setup s1
+@setup s55
+@setup s58
+test l1412 {
+    insert into a values (1), (3);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s55
+@setup s58
+@setup s59
+test l1418 {
+    select x from a order by 1;
+}
+expect {
+    -23
+    -11
+}
+
+@setup s1
+@setup s2
+@setup s60
+@setup s61
+test l1436 {
+    update a set x = x * 2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s60
+@setup s61
+@setup s62
+test l1448 {
+    select x from a order by 1;
+}
+expect {
+    4
+    6
+    10
+}
+
+@setup s1
+@setup s2
+@setup s60
+@setup s61
+@setup s62
+test l1454 {
+    select y from b order by 1;
+}
+expect {
+    14
+    21
+    22
+    33
+    35
+    55
+}
+
+@setup s1
+@setup s2
+@setup s60
+@setup s63
+test l1474 {
+    update a set x = x * 2;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s60
+@setup s63
+@setup s64
+test l1486 {
+    select x from a order by 1;
+}
+expect {
+    4
+    6
+    10
+}
+
+@setup s1
+@setup s2
+@setup s60
+@setup s63
+@setup s64
+test l1492 {
+    select y from b order by 1;
+}
+expect {
+    14
+    21
+    22
+    26
+    33
+    34
+    35
+    39
+    51
+    55
+    65
+    85
+}
+
+@setup s1
+@setup s2
+@setup s65
+@setup s66
+test l1510 {
+    delete from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s65
+@setup s66
+@setup s67
+test l1516 {
+    select x from a order by 1;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+@setup s65
+@setup s66
+@setup s67
+test l1520 {
+    select y from b order by 1;
+}
+expect {
+    14
+    21
+    22
+    33
+    35
+    55
+}
+
+@setup s1
+@setup s2
+@setup s65
+@setup s68
+test l1540 {
+    delete from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s65
+@setup s68
+@setup s69
+test l1546 {
+    select x from a order by 1;
+}
+expect {
+}
+
+@setup s1
+@setup s2
+@setup s65
+@setup s68
+@setup s69
+test l1550 {
+    select y from b order by 1;
+}
+expect {
+    14
+    21
+    22
+    26
+    33
+    34
+    35
+    39
+    51
+    55
+    65
+    85
+}
+
+@setup s1
+@setup s2
+@setup s70
+test l1576 {
+    insert into a values (1), (3);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s70
+@setup s71
+test l1582 {
+    select x from a order by 1;
+}
+expect {
+    -23
+    -11
+}
+
+@setup s1
+@setup s2
+@setup s70
+@setup s71
+test l1588 {
+    select y from b order by 1;
+}
+expect {
+    -167
+    -95
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s74
+test l1710 {
+    select x from a order by 1;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s74
+test l1716 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s74
+test l1722 {
+    select z from c order by 1;
+}
+expect {
+    14
+    28
+    42
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s75
+test l1742 {
+    select x from a order by 1;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s75
+test l1748 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s75
+test l1754 {
+    select z from c order by 1;
+}
+expect {
+    14
+    28
+    42
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s76
+test l1773 {
+    select x from a order by 1;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s76
+test l1779 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s73
+@setup s76
+test l1785 {
+    select z from c order by 1;
+}
+expect {
+    14
+    28
+    42
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s77
+@setup s78
+test l1804 {
+    select x from a order by 1;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s77
+@setup s78
+test l1810 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s77
+@setup s78
+test l1816 {
+    select z from c order by 1;
+}
+expect {
+    14
+    28
+    42
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s77
+@setup s79
+test l1835 {
+    select x from a order by 1;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s77
+@setup s79
+test l1841 {
+    select y from b order by 1;
+}
+expect {
+    2
+    4
+    6
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s77
+@setup s79
+test l1847 {
+    select z from c order by 1;
+}
+expect {
+    14
+    28
+    42
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s82
+@setup s83
+test l1870 {
+    select x from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s82
+@setup s83
+test l1874 {
+    select y from b;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s82
+@setup s83
+test l1878 {
+    select z from c;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s82
+@setup s84
+test l1898 {
+    select x from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s82
+@setup s84
+test l1902 {
+    select y from b;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s82
+@setup s84
+test l1906 {
+    select z from c;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s85
+@setup s86
+test l1926 {
+    select x from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s85
+@setup s86
+test l1930 {
+    select y from b;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s85
+@setup s86
+test l1934 {
+    select z from c;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s85
+@setup s87
+test l1954 {
+    select x from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s85
+@setup s87
+test l1958 {
+    select y from b;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s81
+@setup s85
+@setup s87
+test l1962 {
+    select z from c;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s89
+@setup s90
+test l1983 {
+    select x from a;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s89
+@setup s90
+test l1989 {
+    select y from b;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s89
+@setup s90
+test l1995 {
+    select z from c;
+}
+expect unordered {
+    10
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s89
+@setup s91
+test l2017 {
+    select x from a;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s89
+@setup s91
+test l2023 {
+    select y from b;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s89
+@setup s91
+test l2029 {
+    select z from c;
+}
+expect unordered {
+    10
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s92
+@setup s93
+test l2051 {
+    select x from a;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s92
+@setup s93
+test l2057 {
+    select y from b;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s92
+@setup s93
+test l2063 {
+    select z from c;
+}
+expect unordered {
+    10
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s92
+@setup s94
+test l2085 {
+    select x from a;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s92
+@setup s94
+test l2091 {
+    select y from b;
+}
+expect unordered {
+    5
+}
+
+@setup s1
+@setup s2
+@setup s72
+@setup s80
+@setup s88
+@setup s92
+@setup s94
+test l2097 {
+    select z from c;
+}
+expect unordered {
+    10
+}
+
+@setup s1
+@setup s95
+test l2460 {
+    drop trigger t1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s95
+@setup s96
+test l2464 {
+    drop trigger t3;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s95
+@setup s96
+@setup s97
+test l2468 {
+    drop trigger t4;
+}
+expect unordered {
+}
+
+# mysql-error: 1360 HY000 Trigger does not exist
+@setup s1
+@setup s95
+@setup s96
+@setup s97
+test l2472 {
+    drop trigger t3;
+}
+expect error {
+}
+
+test l2476 {
+    drop trigger if exists t5;
+}
+expect unordered {
+}
+
+# mysql-error: 1360 HY000 Trigger does not exist
+@setup s98
+test l2480 {
+    drop trigger t5;
+}
+expect error {
+}
+
+@setup s1
+@setup s95
+@setup s96
+@setup s97
+@setup s99
+test l2491 {
+    drop trigger if exists t2;
+}
+expect unordered {
+}
+
+@setup s100
+test l2521 {
+    drop table a;
+}
+expect unordered {
+}
+
+@setup s101
+test l2536 {
+    drop table if exists b, d, e;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s102
+test l2563 {
+    drop table a;
+}
+expect unordered {
+}
+
+@setup s1
+test l2662 {
+    create trigger insert_into_b after insert on a for each row insert into b values (new.x + 1);
+}
+expect unordered {
+}
+
+test l2670 {
+    create table b (y int primary key);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s103
+test l2680 {
+    select x from a order by 1;
+}
+expect {
+}
+
+@setup s104
+test l2686 {
+    select y from b order by 1;
+}
+expect {
+}
+
+test l2733 {
+    CREATE TABLE film_text (film_id smallint NOT NULL, title varchar(255) NOT NULL, description text, PRIMARY KEY (film_id));
+}
+expect unordered {
+}
+
+test l2745 {
+    SELECT last_insert_id();
+}
+expect unordered {
+    0
+}
+
+@setup s105
+test l2753 {
+    SELECT COUNT(*) FROM film_text;
+}
+expect unordered {
+    0
+}
+
+@setup s105
+test l2761 {
+    SELECT COUNT(*) FROM film_text WHERE title = 'DIFFERENT MOVIE';
+}
+expect unordered {
+    0
+}
+
+@setup s106
+test l2783 {
+    SELECT * FROM t0;
+}
+expect unordered {
+    1|2|abc
+    2|3|def
+}
+
+@setup s107
+test l2801 {
+    CREATE PROCEDURE back_up(num INT, msg TEXT) INSERT INTO t1 (v1, v2) VALUES (num*2, msg);
+}
+expect unordered {
+}
+
+@setup s107
+@setup s108
+test l2818 {
+    SELECT * FROM t1;
+}
+expect unordered {
+}
+
+test l3493 {
+    select @a, @b, @c, @d;
+}
+expect unordered {
+    NULL|NULL|NULL|NULL
+}
+
+@setup s109
+test l3892 {
+    SELECT * FROM oldstatus;
+}
+expect unordered {
+    >2|0
+}
+
+@setup s110
+test l3896 {
+    select * from dest;
+}
+expect unordered {
+    3|1
+}
+
+@setup s111
+test l3916 {
+    SELECT * FROM queue;
+}
+expect unordered {
+    >2|Test
+}
+
+@setup s112
+test l3952 {
+    create table B(a int, b int);
+}
+expect unordered {
+}
+
+@setup s112
+@setup s113
+test l3977 {
+    insert into C values (12);
+}
+expect unordered {
+}
+
+@setup s112
+@setup s113
+@setup s114
+test l3983 {
+    insert into A values (1, 2);
+}
+expect unordered {
+}
+
+@setup s112
+@setup s113
+@setup s114
+@setup s115
+test l3993 {
+    select * from A;
+}
+expect unordered {
+    1|2
+}
+
+@setup s112
+@setup s113
+@setup s114
+@setup s115
+test l4012 {
+    drop trigger test_trigger;
+}
+expect unordered {
+}

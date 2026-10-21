@@ -1,0 +1,6066 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/script_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t (i int primary key, j int);
+    insert into t values (1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 2), (7, 2), (8, 2), (9, 2), (10, 2);
+}
+
+setup s2 {
+    CREATE TABLE test (id longtext);
+    INSERT INTO test (id) VALUES ('test_id');
+}
+
+setup s3 {
+    create table tbl (t text);
+    insert into tbl values ('abcdef');
+}
+
+setup s4 {
+    create table t0 (c0 tinyint);
+    insert into t0 values (null);
+}
+
+setup s5 {
+    create table tbl (t text) collate=utf8mb4_0900_ai_ci;
+    insert into tbl values ('abcdef');
+}
+
+setup s6 {
+    create table t (i int primary key, e enum('abc', 'def', 'ghi'));
+}
+
+setup s7 {
+    CREATE TABLE enumtest1 (pk int primary key, e enum('abc', 'XYZ'));
+}
+
+setup s8 {
+    INSERT INTO enumtest1 VALUES (1, 'abc'), (2, 'abc'), (3, 'XYZ');
+}
+
+setup s9 {
+    INSERT INTO enumtest1 VALUES (10, 'ABC'), (11, 'aBc'), (12, 'xyz');
+}
+
+setup s10 {
+    create table enums (e enum('a'));
+    insert into enums values ('a');
+}
+
+setup s11 {
+    CREATE TABLE enumtest1 (pk int primary key, e enum('abc', 'XYZ') collate utf8mb4_0900_ai_ci);
+}
+
+setup s12 {
+    INSERT INTO enumtest1 VALUES (1, 'abc'), (2, 'abc'), (3, 'XYZ');
+}
+
+setup s13 {
+    create table t (i int primary key, e enum('abc', 'def', 'ghi') not null);
+}
+
+setup s14 {
+    insert into t(i) values (1);
+}
+
+setup s15 {
+    insert into t(i) values (1);
+}
+
+setup s16 {
+    create table t1 (e enum('a') default 'a');
+}
+
+setup s17 {
+    insert into t1 values (default);
+}
+
+setup s18 {
+    insert into t1 values ();
+}
+
+setup s19 {
+    insert into t1() values ();
+}
+
+setup s20 {
+    insert into t1 values (null);
+}
+
+setup s21 {
+    create table t2 (e enum('a') default (1));
+}
+
+setup s22 {
+    insert into t2 values (default);
+}
+
+setup s23 {
+    insert into t2 values ();
+}
+
+setup s24 {
+    insert into t2() values ();
+}
+
+setup s25 {
+    insert into t2 values (null);
+}
+
+setup s26 {
+    create table t3 (e enum('a') default ('1'));
+}
+
+setup s27 {
+    insert into t3 values (default);
+}
+
+setup s28 {
+    insert into t3 values ();
+}
+
+setup s29 {
+    insert into t3() values ();
+}
+
+setup s30 {
+    insert into t3 values (null);
+}
+
+setup s31 {
+    CREATE TABLE t (e enum('a', 'b', 'c') PRIMARY KEY);
+}
+
+setup s32 {
+    SET sql_mode = 'STRICT_TRANS_TABLES';
+}
+
+setup s33 {
+    create table t (e enum('a', 'b', 'c'));
+}
+
+setup s34 {
+    create table et (e enum('a', 'b', '', 'c'));
+}
+
+setup s35 {
+    SET sql_mode = 'STRICT_ALL_TABLES';
+}
+
+setup s36 {
+    create table t (e enum('a', 'b', 'c'));
+}
+
+setup s37 {
+    SET sql_mode = '';
+    create table t (e enum('a', 'b', 'c'));
+}
+
+setup s38 {
+    insert into t values (0);
+}
+
+setup s39 {
+    CREATE TABLE shirts (name VARCHAR(40), size ENUM('x-small', 'small', 'medium', 'large', 'x-large'), color ENUM('red', 'blue'));
+}
+
+setup s40 {
+    INSERT INTO shirts VALUES ('shirt1', 'x-small', 'red');
+}
+
+setup s41 {
+    CREATE TABLE test_enum (pk int NOT NULL, e enum('a','b') DEFAULT NULL, PRIMARY KEY (pk));
+}
+
+setup s42 {
+    INSERT INTO test_enum (pk) VALUES (1);
+}
+
+setup s43 {
+    create table t (e enum('abc', 'defg', 'hijkl'));
+    insert into t values(1), (2), (3);
+}
+
+setup s44 {
+    create table t (e enum('ON', 'OFF', 'AUTO'));
+    set autocommit = 'ON';
+    insert into t values(@@autocommit), ('OFF'), ('AUTO');
+}
+
+setup s45 {
+    create table t(pk int primary key, c0 enum('a', 'b', 'c'));
+    insert into t values(0, 'a'), (1, 'b'), (2, 'c');
+    alter table t modify column c0 varchar(100);
+}
+
+setup s46 {
+    create table parent (e enum('a', 'b', 'c') primary key);
+    insert into parent values (1), (2);
+}
+
+setup s47 {
+    create table child0 (e enum('a', 'b', 'c'), foreign key (e) references parent (e));
+}
+
+setup s48 {
+    insert into child0 values (1), (2), (NULL);
+}
+
+setup s49 {
+    create table child1 (e enum('x', 'y', 'z'), foreign key (e) references parent (e));
+}
+
+setup s50 {
+    insert into child1 values (1), (2);
+}
+
+setup s51 {
+    insert into child1 values ('x'), ('y');
+}
+
+setup s52 {
+    create table child2 (e enum('b', 'c', 'a'), foreign key (e) references parent (e));
+}
+
+setup s53 {
+    insert into child2 values (1), (2);
+}
+
+setup s54 {
+    insert into child2 values ('c');
+}
+
+setup s55 {
+    create table child3 (e enum('x', 'y', 'z', 'a', 'b', 'c'), foreign key (e) references parent (e));
+}
+
+setup s56 {
+    insert into child3 values (1), (2);
+}
+
+setup s57 {
+    insert into child3 values ('x'), ('y');
+}
+
+setup s58 {
+    create table child4 (e enum('q'), foreign key (e) references parent (e));
+}
+
+setup s59 {
+    insert into child4 values (1);
+}
+
+setup s60 {
+    insert into child4 values ('q');
+}
+
+setup s61 {
+    create table animals(e enum('rat','ox','tiger','dog') primary key);
+    create table pets(e enum('cat','dog','fish','rat'), foreign key (e) references animals(e));
+}
+
+setup s62 {
+    insert into animals values('rat');
+}
+
+setup s63 {
+    insert into pets values ('cat');
+}
+
+setup s64 {
+    insert into animals values ('dog');
+    insert into pets values ('rat');
+}
+
+setup s65 {
+    create table t (pk int primary key, e enum('abc', 'def', 'ghi'));
+}
+
+setup s66 {
+    insert into t values (1, 1), (2, 3), (3, 2);
+}
+
+setup s67 {
+    update t set e = 2 where e = 'ghi';
+}
+
+setup s68 {
+    update t set e = 'ghi' where e = '3';
+}
+
+setup s69 {
+    delete from t where e = 2;
+}
+
+setup s70 {
+    create table enum_table (i int primary key, e enum('a','b') not null);
+    insert into enum_table values (1,'a'),(2,'b');
+    create table uv (u int primary key, v varchar(10));
+    insert into uv values (0, 'bug'),(1,'ant'),(3, null);
+}
+
+setup s71 {
+    create table set_tbl (i int primary key, s set('a','b','c'));
+    insert into set_tbl values (0, '');
+    insert into set_tbl values (1, 'a');
+    insert into set_tbl values (2, 'b');
+    insert into set_tbl values (3, 'c');
+    insert into set_tbl values (4, 'a,b');
+    insert into set_tbl values (6, 'b,c');
+    insert into set_tbl values (7, 'a,c');
+    insert into set_tbl values (8, 'a,b,c');
+}
+
+setup s72 {
+    create table collate_tbl (i int primary key, s varchar(10) collate utf8mb4_0900_ai_ci);
+    insert into collate_tbl values (0, '');
+    insert into collate_tbl values (1, 'a');
+    insert into collate_tbl values (2, 'b');
+    insert into collate_tbl values (3, 'c');
+    insert into collate_tbl values (4, 'a,b');
+    insert into collate_tbl values (6, 'b,c');
+    insert into collate_tbl values (7, 'a,c');
+    insert into collate_tbl values (8, 'a,b,c');
+}
+
+setup s73 {
+    create table text_tbl (i int primary key, s text);
+    insert into text_tbl values (0, '');
+    insert into text_tbl values (1, 'a');
+    insert into text_tbl values (2, 'b');
+    insert into text_tbl values (3, 'c');
+    insert into text_tbl values (4, 'a,b');
+    insert into text_tbl values (6, 'b,c');
+    insert into text_tbl values (7, 'a,c');
+    insert into text_tbl values (8, 'a,b,c');
+}
+
+setup s74 {
+    create table enum_tbl (i int primary key, s enum('a','b','c'));
+    insert into enum_tbl values (0, 'a'), (1, 'b'), (2, 'c');
+}
+
+setup s75 {
+    create table t (i int primary key, s set(''));
+    insert into t values (0, 0), (1, 1), (2, '');
+}
+
+setup s76 {
+    create table tt (i int primary key, s set('something',''));
+    insert into tt values (0, 'something,'), (1, ',something,'), (2, ',,,,,,');
+}
+
+setup s77 {
+    create table t (s set('abc', 'defg', 'hijkl'));
+    insert into t values(1), (2), (3), (7);
+}
+
+setup s78 {
+    create table t(pk int primary key, c0 set('abc', 'def','ghi'));
+    insert into t values(0, 'abc,def'), (1, 'def'), (2, 'ghi');
+    alter table t modify column c0 varchar(100);
+}
+
+setup s79 {
+    create table t (s set('a', 'b', 'c'));
+}
+
+setup s80 {
+    insert into t values ('a,b,a,c,a,b,b,b,c,c,c,a,a');
+}
+
+setup s81 {
+    create table t (pk int primary key, s set('abc', 'def'));
+}
+
+setup s82 {
+    insert into t values (0, 0), (1, 1), (2, 3), (3, 2);
+}
+
+setup s83 {
+    update t set s = 3 where s = 2;
+}
+
+setup s84 {
+    delete from t where s = 'abc,def';
+}
+
+setup s85 {
+    create table t (s set('a', 'b', 'c') primary key);
+}
+
+setup s86 {
+    create table t0 (s set('a', 'b', 'c') default (0));
+}
+
+setup s87 {
+    insert into t0 values ();
+}
+
+setup s88 {
+    create table t1 (s set('a', 'b', 'c') collate utf8mb4_0900_ai_ci);
+}
+
+setup s89 {
+    insert into t1 values ('A,B,c');
+}
+
+setup s90 {
+    create table t2 (s set('a', 'b', 'c') collate utf8mb4_0900_bin);
+}
+
+setup s91 {
+    create table parent (s set('a', 'b', 'c') primary key);
+    insert into parent values (1), (2);
+}
+
+setup s92 {
+    create table child0 (s set('a', 'b', 'c'), foreign key (s) references parent (s));
+}
+
+setup s93 {
+    insert into child0 values (1), (2), (NULL);
+}
+
+setup s94 {
+    create table child1 (s set('x', 'y', 'z'), foreign key (s) references parent (s));
+}
+
+setup s95 {
+    insert into child1 values (1), (2);
+}
+
+setup s96 {
+    insert into child1 values ('x'), ('y');
+}
+
+setup s97 {
+    create table child2 (s set('b', 'c', 'a'), foreign key (s) references parent (s));
+}
+
+setup s98 {
+    insert into child2 values (1), (2);
+}
+
+setup s99 {
+    insert into child2 values ('c');
+}
+
+setup s100 {
+    create table child3 (s set('x', 'y', 'z', 'a', 'b', 'c'), foreign key (s) references parent (s));
+}
+
+setup s101 {
+    insert into child3 values (1), (2);
+}
+
+setup s102 {
+    insert into child3 values ('x'), ('y');
+}
+
+setup s103 {
+    create table child4 (s set('q'), foreign key (s) references parent (s));
+}
+
+setup s104 {
+    insert into child4 values (1);
+}
+
+setup s105 {
+    insert into child4 values ('q');
+}
+
+setup s106 {
+    create table child (s set('x', 'y', 'z'), foreign key (s) references parent (s) on update cascade on delete cascade);
+}
+
+setup s107 {
+    insert into child values (1), (2);
+}
+
+setup s108 {
+    update parent set s = 'c' where s = 'a';
+}
+
+setup s109 {
+    create table tinyint_tbl (i tinyint primary key auto_increment);
+}
+
+setup s110 {
+    create table smallint_tbl (i smallint primary key auto_increment);
+}
+
+setup s111 {
+    create table mediumint_tbl (i mediumint primary key auto_increment);
+}
+
+setup s112 {
+    create table int_tbl (i int primary key auto_increment);
+}
+
+setup s113 {
+    create table bigint_tbl (i bigint primary key auto_increment);
+}
+
+setup s114 {
+    create table tinyint_tbl (i tinyint unsigned primary key auto_increment);
+}
+
+setup s115 {
+    create table smallint_tbl (i smallint unsigned primary key auto_increment);
+}
+
+setup s116 {
+    create table mediumint_tbl (i mediumint unsigned primary key auto_increment);
+}
+
+setup s117 {
+    create table int_tbl (i int unsigned primary key auto_increment);
+}
+
+setup s118 {
+    create table bigint_tbl (i bigint unsigned primary key auto_increment);
+}
+
+setup s119 {
+    create table ti8  (i tinyint primary key);
+    insert into ti8 values (-128), (-1), (0), (1), (127);
+}
+
+setup s120 {
+    create table ti16 (i smallint primary key);
+    insert into ti16 values (-32768), (-1), (0), (1), (32767);
+}
+
+setup s121 {
+    create table ti24 (i mediumint primary key);
+    insert into ti24 values (-8388608), (-1), (0), (1), (8388607);
+}
+
+setup s122 {
+    create table ti32 (i int primary key);
+    insert into ti32 values (-2147483648), (-1), (0), (1), (2147483647);
+}
+
+setup s123 {
+    create table ti64 (i bigint primary key);
+    insert into ti64 values (-9223372036854775808), (-1), (0), (1), (9223372036854775807);
+}
+
+setup s124 {
+    create table tui8 (i tinyint unsigned primary key);
+    insert into tui8 values (0), (1), (255);
+}
+
+setup s125 {
+    create table tui16 (i smallint unsigned primary key);
+    insert into tui16 values (0), (1), (65535);
+}
+
+setup s126 {
+    create table tui24 (i mediumint unsigned primary key);
+    insert into tui24 values (0), (1), (16777215);
+}
+
+setup s127 {
+    create table tui32 (i int unsigned primary key);
+    insert into tui32 values (0), (1), (4294967295);
+}
+
+setup s128 {
+    create table tui64 (i bigint unsigned primary key);
+    insert into tui64 values (0), (1), (18446744073709551615);
+}
+
+setup s129 {
+    create table parent (d decimal(4, 2) primary key);
+    insert into parent values (1.23), (45.67), (78.9);
+}
+
+setup s130 {
+    create table child_dec_4_2 (d decimal(4,2), foreign key (d) references parent (d));
+}
+
+setup s131 {
+    insert into child_dec_4_2 values (1.23), (45.67), (NULL);
+}
+
+setup s132 {
+    insert into child_dec_4_2 values (1.229999), (45.6711111), (78.90);
+}
+
+setup s133 {
+    create table child_dec_4_1 (d decimal(4,1), foreign key (d) references parent (d));
+}
+
+setup s134 {
+    create table child_dec_3_2 (d decimal(3,2), foreign key (d) references parent (d));
+}
+
+setup s135 {
+    create table child_dec_65_30 (d decimal(65,30), foreign key (d) references parent (d));
+}
+
+setup s136 {
+    create table parent_multi (d1 decimal(4,2), d2 decimal(3,1), primary key (d1, d2));
+    insert into parent_multi values (1.23, 4.5), (45.67, 78.9), (99.99, 0.1);
+}
+
+setup s137 {
+    create table child_multi_4_2_3_1 (d1 decimal(4,2), d2 decimal(3,1), foreign key (d1, d2) references parent_multi (d1, d2));
+}
+
+setup s138 {
+    insert into child_multi_4_2_3_1 values (1.23, 4.5), (45.67, 78.9), (NULL, NULL);
+}
+
+setup s139 {
+    create table t (i int primary key, d decimal(10, 2) unique);
+    insert into t values (1, 1);
+}
+
+setup s140 {
+    create table parent_datetime6 (dt datetime(6) primary key);
+    insert into parent_datetime6 values ('2001-02-03 12:34:56');
+    insert into parent_datetime6 values ('2001-02-03 12:34:56.123456');
+}
+
+setup s141 {
+    create table child_datetime0 (dt datetime, foreign key (dt) references parent_datetime6(dt));
+}
+
+setup s142 {
+    create table parent_datetime0 (dt datetime primary key);
+    insert into parent_datetime0 values ('2001-02-03 12:34:56');
+}
+
+setup s143 {
+    create table child_datetime6 (dt datetime(6), foreign key (dt) references parent_datetime0(dt));
+}
+
+setup s144 {
+    create table child1_timestamp0 (ts timestamp, foreign key (ts) references parent_datetime0(dt));
+}
+
+setup s145 {
+    create table child2_timestamp0 (ts timestamp, foreign key (ts) references parent_datetime6(dt));
+}
+
+setup s146 {
+    create table child1_timestamp6 (ts timestamp(6), foreign key (ts) references parent_datetime0(dt));
+}
+
+setup s147 {
+    create table child2_timestamp6 (ts timestamp(6), foreign key (ts) references parent_datetime6(dt));
+}
+
+setup s148 {
+    create table parent_timestamp6 (ts timestamp(6) primary key);
+    insert into parent_timestamp6 values ('2001-02-03 12:34:56');
+    insert into parent_timestamp6 values ('2001-02-03 12:34:56.123456');
+}
+
+setup s149 {
+    create table child_timestamp0 (ts timestamp, foreign key (ts) references parent_timestamp6(ts));
+}
+
+setup s150 {
+    create table parent_timestamp0 (ts timestamp primary key);
+    insert into parent_timestamp0 values ('2001-02-03 12:34:56');
+}
+
+setup s151 {
+    create table child_timestamp6 (ts timestamp(6), foreign key (ts) references parent_timestamp0(ts));
+}
+
+setup s152 {
+    create table child1_datetime0 (dt datetime, foreign key (dt) references parent_timestamp0(ts));
+}
+
+setup s153 {
+    create table child2_datetime0 (dt datetime, foreign key (dt) references parent_timestamp6(ts));
+}
+
+setup s154 {
+    create table child1_datetime6 (dt datetime(6), foreign key (dt) references parent_timestamp0(ts));
+}
+
+setup s155 {
+    create table child2_datetime6 (dt datetime(6), foreign key (dt) references parent_timestamp6(ts));
+}
+
+setup s156 {
+    create table parent_time6 (t time(6) primary key);
+    insert into parent_time6 values ('12:34:56');
+    insert into parent_time6 values ('12:34:56.123456');
+}
+
+setup s157 {
+    create table parent_time0 (t time primary key);
+    insert into parent_time0 values ('12:34:56');
+}
+
+setup s158 {
+    create table t(id int primary key auto_increment, words varchar(100));
+    insert into t(words) values ('foo'),('bar'),('baz'),('zap');
+    create table t2 as select * from t;
+    update t2 set words = 'boo' where id = 1;
+}
+
+setup s159 {
+    CREATE TABLE report_card (id INT PRIMARY KEY, name VARCHAR(255), entity_id INT, dashboard_id INT, description TEXT, display TEXT, collection_preview TEXT, dataset_query TEXT, collection_id INT, archived_directly BOOLEAN DEFAULT FALSE, collection_position INT, database_id INT, archived BOOLEAN DEFAULT FALSE, last_used_at DATETIME, table_id INT, query_type VARCHAR(50), type VARCHAR(50));
+    CREATE TABLE collection (id INT PRIMARY KEY, name VARCHAR(255), entity_id INT, location VARCHAR(500), authority_level VARCHAR(50), personal_owner_id INT, archived_directly BOOLEAN DEFAULT FALSE, type VARCHAR(50), archived BOOLEAN DEFAULT FALSE, namespace VARCHAR(100));
+    CREATE TABLE report_dashboard (id INT PRIMARY KEY, name VARCHAR(255), entity_id INT, description TEXT, collection_id INT, archived_directly BOOLEAN DEFAULT FALSE, collection_position INT, archived BOOLEAN DEFAULT FALSE, last_viewed_at DATETIME);
+    INSERT INTO report_card (id, name, entity_id, dashboard_id, type, archived_directly, archived, collection_position) VALUES (2, 'Card 2', 1002, NULL, 'question', FALSE, FALSE, NULL), (3, 'Card 3', 1003, NULL, 'question', FALSE, FALSE, NULL);
+    INSERT INTO collection (id, name, entity_id, location, type, archived, personal_owner_id, namespace) VALUES (2, 'Collection 2', 4002, '/test2/', 'normal', FALSE, NULL, NULL), (3, 'Collection 3', 4003, '/test3/', 'normal', FALSE, NULL, NULL);
+    INSERT INTO report_dashboard (id, name, entity_id, description, collection_id, archived_directly, archived, collection_position) VALUES (1, 'Dashboard 1', 3001, 'Test dashboard description', NULL, FALSE, FALSE, NULL), (2, 'Dashboard 2', 3002, 'Test dashboard 2 description', NULL, FALSE, FALSE, NULL);
+}
+
+setup s160 {
+    create table t1 (i int primary key);
+    create table t2 (j int primary key);
+    insert into t1 values (0), (1);
+    insert into t2 values (0), (2);
+}
+
+setup s161 {
+    CREATE TABLE o (o_id INT PRIMARY KEY, c_id INT, ship TEXT);
+    INSERT INTO o VALUES (10, 1, 'CA'), (20, 1, 'CA'), (30, 1, 'CA'), (40, 2, 'CA'), (50, 2, 'TX'), (60, 2, NULL), (70, 4, 'WY'), (80, 4, NULL), (90, 6, 'WA');
+}
+
+setup s162 {
+    CREATE TABLE test (pk INT PRIMARY KEY, doc TEXT, FULLTEXT idx (doc));
+    INSERT INTO test VALUES (2, 'g hhhh aaaab ooooo aaaa'), (1, 'bbbb ff cccc ddd eee'), (4, 'AAAA aaaa aaaac aaaa Aaaa aaaa'), (3, 'aaaA ff j kkkk llllllll');
+    SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'ONLY_FULL_GROUP_BY', '');
+}
+
+setup s163 {
+    create table emptytable(i mediumint primary key, s varchar(20));
+}
+
+setup s164 {
+    create table mytable(i bigint primary key, s varchar(20));
+    insert into mytable values (1, 'first'), (2, 'second'), (3, 'third');
+}
+
+setup s165 {
+    create table two_pk (pk1 tinyint, pk2 tinyint, c1 tinyint NOT NULL, primary key (pk1, pk2));
+    insert into two_pk values (0,0,0), (0,1,10), (1,0,20), (1,1,30);
+}
+
+setup s166 {
+    SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'ONLY_FULL_GROUP_BY', '');
+}
+
+setup s167 {
+    SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'ONLY_FULL_GROUP_BY', '');
+}
+
+setup s168 {
+    SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'ONLY_FULL_GROUP_BY', '');
+}
+
+setup s169 {
+    create table t0(c0 int, primary key(c0));
+    create table t1(c0 int);
+    create table t2(c0 int);
+    create table t3(c0 int);
+    insert into t0 values (1);
+    insert into t1 values (1);
+    insert into t2 values (1);
+}
+
+setup s170 {
+    create table names(first_name varchar(20), last_name varchar(20));
+    insert into names values ('john', 'smith'), ('bob','burger');
+}
+
+setup s171 {
+    SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',PIPES_AS_CONCAT');
+}
+
+setup s172 {
+    SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',PIPES_AS_CONCAT');
+}
+
+setup s173 {
+    create table t0(id int primary key, name longtext, description longtext, comment longtext, created_at timestamp(6), archived bool);
+    insert into t0 values (1, 'first', 'abc', 'def', '2025-10-14 10:00:00', b'0');
+}
+
+setup s174 {
+    create table t1(c0 int, c1 varchar(500));
+    insert into t1(c1, c0) values ('-1',1),('-2',2);
+}
+
+setup s175 {
+    CREATE TABLE t0(c0 INT , c1 INT);
+    INSERT INTO t0(c0, c1) VALUES (1, -2);
+}
+
+setup s176 {
+    create table t1(c0 int, primary key(c0));
+    insert into t1 values (1);
+}
+
+setup s177 {
+    create table t2(c0 varchar(500), primary key(c0));
+    insert into t2 values ('9');
+}
+
+setup s178 {
+    create table t3(c0 boolean, primary key(c0));
+    insert into t3 values(false);
+}
+
+setup s179 {
+    create table t0(c0 boolean);
+    create table t1(c0 boolean);
+    insert into t0 values (null);
+    insert into t1 values (true);
+}
+
+setup s180 {
+    create table t0(c1 boolean);
+    insert into t0 values (true);
+}
+
+setup s181 {
+    create table t1(c1 int);
+    insert into t1 values (2);
+}
+
+setup s182 {
+    CREATE TABLE t1(c0 boolean, c1 boolean);
+    insert into t1(c0) values (true), (false);
+    create view v0(c0) as select true having false;
+}
+
+setup s183 {
+    create table t1(c0 varchar(500), primary key(c0));
+    insert into t1(c0) values ('');
+}
+
+setup s184 {
+    create table test(x int, y int, z int);
+    insert into test values
+                     (null, 0, 0),
+                     (1, null, 1),
+                     (2, 2, null),
+                     (3, 2, 4),
+                     (4, 2, 3),
+                     (5, 6, 7),
+                     (6, 6, 5),
+                     (7, 8, 7),
+                     (8, 9, 7);
+}
+
+setup s185 {
+    CREATE TABLE issues (id INT PRIMARY KEY, title TEXT, status TEXT);
+    CREATE TABLE dependencies (issue_id INT, depends_on_id INT, type TEXT);
+    INSERT INTO issues (id, title, status) VALUES
+					(1, 'Login API',        'open'),
+					(2, 'Auth Library',    'in_progress'),
+					(3, 'User Profile',    'open'),
+					(4, 'Profile UI',      'open'),
+					(5, 'Settings Page',   'open'),
+					(6, 'Marketing Page',  'open'),
+					(7, 'Old Feature',     'closed');
+    INSERT INTO dependencies (issue_id, depends_on_id, type) VALUES
+					(3, 1, 'blocks'),
+					(3, 2, 'blocks'),
+					(4, 3, 'parent-child'),
+					(5, 4, 'parent-child');
+}
+
+setup s186 {
+    create table t(a decimal(6, 2), b decimal(8, 5), c decimal(5, 1));
+    insert into t values (2.75, 8.8, 3.1);
+}
+
+setup s187 {
+    CREATE TABLE bug_repro (id VARCHAR(32) PRIMARY KEY, status VARCHAR(16), name VARCHAR(32));
+    INSERT INTO bug_repro VALUES ('a', 'open', 'x'), ('b', 'open', 'y'), ('c', 'open', 'z');
+}
+
+setup s188 {
+    INSERT INTO bug_repro VALUES ('d', 'open', 'zz');
+}
+
+setup s189 {
+    CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR(255));
+}
+
+setup s190 {
+    INSERT IGNORE INTO t VALUES (1, UNHEX('5353442031544220322E3585204E564D65'));
+}
+
+setup s191 {
+    CREATE TABLE foo (id VARCHAR(36) PRIMARY KEY);
+    CREATE TABLE bar (id VARCHAR(36) PRIMARY KEY, foo_id VARCHAR(36) NOT NULL, approved_on DATETIME(3), FOREIGN KEY (foo_id) REFERENCES foo(id) ON DELETE CASCADE ON UPDATE CASCADE);
+    INSERT INTO foo VALUES('foo-1'), ('foo-2'), ('foo-3'), ('foo-4'), ('foo-5'), ('foo-6'), ('foo-7'), ('foo-8');
+    INSERT INTO bar VALUES
+('bar-1', 'foo-1', '2026-07-14 07:18:04.000'),
+('bar-2', 'foo-2', '2026-07-14 07:18:03.000'),
+('bar-3', 'foo-3', '2026-07-14 07:18:05.000'),
+('bar-4', 'foo-4', '2026-07-14 07:18:01.000'),
+('bar-5', 'foo-5', '2026-07-14 07:18:08.000'),
+('bar-6', 'foo-6', '2026-07-14 07:18:02.000'),
+('bar-7', 'foo-7', '2026-07-14 07:18:07.000'),
+('bar-8', 'foo-8', '2026-07-14 07:18:00.000');
+}
+
+@setup s1
+test l10159 {
+    select i, j, ntile(2) over(partition by j) from t;
+}
+expect unordered {
+    10|2|2
+    1|1|1
+    2|1|1
+    3|1|1
+    4|1|2
+    5|1|2
+    6|2|1
+    7|2|1
+    8|2|1
+    9|2|2
+}
+
+@setup s2
+test l10210 {
+    SELECT * FROM test WHERE id IN ('test_id');
+}
+expect unordered {
+    test_id
+}
+
+@setup s3
+test l10276 {
+    select left(t, 3) from tbl;
+}
+expect unordered {
+    abc
+}
+
+@setup s3
+test l10282 {
+    select right(t, 3) from tbl;
+}
+expect unordered {
+    def
+}
+
+@setup s3
+test l10288 {
+    select instr(t, 'bcd') from tbl;
+}
+expect unordered {
+    2
+}
+
+@setup s4
+test l10304 {
+    select ifnull(t0.c0, 128) as ref0 from t0;
+}
+expect unordered {
+    128
+}
+
+@setup s4
+test l10310 {
+    select if(t0.c0 = 1, t0.c0, 128) as ref0 from t0;
+}
+expect unordered {
+    128
+}
+
+@setup s5
+test l10324 {
+    select 'AbCdEf' in (select t from tbl);
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'c'
+test l10339 {
+    create table bad (c char primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'vc'
+test l10352 {
+    create table bad (vc char(100) primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'b'
+test l10365 {
+    create table bad (b binary(100) primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'vb'
+test l10378 {
+    create table bad (vb varbinary(100) primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'b'
+test l10391 {
+    create table bad (b blob primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'tb'
+test l10395 {
+    create table bad (tb tinyblob primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'mb'
+test l10399 {
+    create table bad (mb mediumblob primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'lb'
+test l10403 {
+    create table bad (lb longblob primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 't'
+test l10416 {
+    create table bad (t text primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'tt'
+test l10420 {
+    create table bad (tt tinytext primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'mt'
+test l10424 {
+    create table bad (mt mediumtext primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'lt'
+test l10428 {
+    create table bad (lt longtext primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s6
+test l10443 {
+    insert into t values (1, 500);
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s6
+test l10447 {
+    insert into t values (1, -1);
+}
+expect error {
+}
+
+@setup s7
+test l10461 {
+    INSERT INTO enumtest1 VALUES (1, 'abc'), (2, 'abc'), (3, 'XYZ');
+}
+expect unordered {
+}
+
+@setup s7
+@setup s8
+test l10465 {
+    SELECT * FROM enumtest1;
+}
+expect unordered {
+    1|abc
+    2|abc
+    3|XYZ
+}
+
+@setup s7
+@setup s8
+test l10470 {
+    INSERT INTO enumtest1 VALUES (10, 'ABC'), (11, 'aBc'), (12, 'xyz');
+}
+expect unordered {
+}
+
+@setup s7
+@setup s8
+@setup s9
+test l10487 {
+    DESCRIBE enumtest1;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    e|enum('abc','XYZ')|YES||NULL|
+}
+
+@setup s10
+test l10517 {
+    select (case e when 'a' then 42 end) from enums;
+}
+expect unordered {
+    42
+}
+
+@setup s10
+test l10521 {
+    select (case 'a' when e then 42 end) from enums;
+}
+expect unordered {
+    42
+}
+
+@setup s11
+test l10534 {
+    INSERT INTO enumtest1 VALUES (1, 'abc'), (2, 'abc'), (3, 'XYZ');
+}
+expect unordered {
+}
+
+@setup s11
+@setup s12
+test l10544 {
+    DESCRIBE enumtest1;
+}
+expect {
+    pk|int|NO|PRI|NULL|
+    e|enum('abc','XYZ')|YES||NULL|
+}
+
+# mysql-error: 1291 HY000 Column 'e' has duplicated value 'x' in ENUM
+test l10554 {
+    CREATE TABLE enumtest2 (pk int PRIMARY KEY, e enum('x ', 'X ', 'y', 'Y'));
+}
+expect error {
+}
+
+@setup s11
+@setup s12
+test l10558 {
+    INSERT INTO enumtest1 VALUES (10, 'ABC'), (11, 'aBc'), (12, 'xyz');
+}
+expect unordered {
+}
+
+@setup s13
+test l10581 {
+    insert into t(i) values (1);
+}
+expect unordered {
+}
+
+# mysql-error: 1048 23000 Column 'e' cannot be null
+@setup s13
+@setup s14
+test l10587 {
+    insert into t values (2, null);
+}
+expect error {
+}
+
+@setup s13
+@setup s14
+test l10598 {
+    select * from t;
+}
+expect unordered {
+    1|abc
+}
+
+@setup s6
+test l10613 {
+    insert into t(i) values (1);
+}
+expect unordered {
+}
+
+@setup s6
+@setup s15
+test l10619 {
+    select * from t;
+}
+expect unordered {
+    1|NULL
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+test l10632 {
+    create table bad (e enum('a') primary key default null);
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+test l10636 {
+    create table bad (e enum('a') default 0);
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+test l10640 {
+    create table bad (e enum('a') default '');
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+test l10644 {
+    create table bad (e enum('a') default '1');
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+test l10648 {
+    create table bad (e enum('a') default 1);
+}
+expect error {
+}
+
+test l10653 {
+    create table t1 (e enum('a') default 'a');
+}
+expect unordered {
+}
+
+@setup s16
+test l10669 {
+    insert into t1 values (default);
+}
+expect unordered {
+}
+
+@setup s16
+@setup s17
+test l10675 {
+    insert into t1 values ();
+}
+expect unordered {
+}
+
+@setup s16
+@setup s17
+@setup s18
+test l10681 {
+    insert into t1() values ();
+}
+expect unordered {
+}
+
+@setup s16
+@setup s17
+@setup s18
+@setup s19
+test l10687 {
+    select * from t1 order by e;
+}
+expect {
+    a
+    a
+    a
+}
+
+@setup s16
+@setup s17
+@setup s18
+@setup s19
+test l10695 {
+    insert into t1 values (null);
+}
+expect unordered {
+}
+
+@setup s16
+@setup s17
+@setup s18
+@setup s19
+@setup s20
+test l10701 {
+    select * from t1 order by e;
+}
+expect {
+    NULL
+    a
+    a
+    a
+}
+
+test l10711 {
+    create table t2 (e enum('a') default (1));
+}
+expect unordered {
+}
+
+@setup s21
+test l10725 {
+    insert into t2 values (default);
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+test l10731 {
+    insert into t2 values ();
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+@setup s23
+test l10737 {
+    insert into t2() values ();
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+@setup s23
+@setup s24
+test l10743 {
+    select * from t2 order by e;
+}
+expect {
+    a
+    a
+    a
+}
+
+@setup s21
+@setup s22
+@setup s23
+@setup s24
+test l10751 {
+    insert into t2 values (null);
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+@setup s23
+@setup s24
+@setup s25
+test l10757 {
+    select * from t2 order by e;
+}
+expect {
+    NULL
+    a
+    a
+    a
+}
+
+test l10767 {
+    create table t3 (e enum('a') default ('1'));
+}
+expect unordered {
+}
+
+@setup s26
+test l10783 {
+    insert into t3 values (default);
+}
+expect unordered {
+}
+
+@setup s26
+@setup s27
+test l10789 {
+    insert into t3 values ();
+}
+expect unordered {
+}
+
+@setup s26
+@setup s27
+@setup s28
+test l10795 {
+    insert into t3() values ();
+}
+expect unordered {
+}
+
+@setup s26
+@setup s27
+@setup s28
+@setup s29
+test l10801 {
+    select * from t3 order by e;
+}
+expect {
+    a
+    a
+    a
+}
+
+@setup s26
+@setup s27
+@setup s28
+@setup s29
+test l10809 {
+    insert into t3 values (null);
+}
+expect unordered {
+}
+
+@setup s26
+@setup s27
+@setup s28
+@setup s29
+@setup s30
+test l10815 {
+    select * from t3 order by e;
+}
+expect {
+    NULL
+    a
+    a
+    a
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'e'
+test l10833 {
+    CREATE TABLE t2 (e enum('a', 'b', 'c') PRIMARY KEY AUTO_INCREMENT);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'e'
+@setup s31
+test l10837 {
+    ALTER TABLE t MODIFY e enum('a', 'b', 'c') AUTO_INCREMENT;
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'e'
+@setup s31
+test l10841 {
+    ALTER TABLE t MODIFY COLUMN e enum('a', 'b', 'c') AUTO_INCREMENT;
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'e'
+@setup s31
+test l10845 {
+    ALTER TABLE t CHANGE e e enum('a', 'b', 'c') AUTO_INCREMENT;
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'e'
+@setup s31
+test l10849 {
+    ALTER TABLE t CHANGE COLUMN e e enum('a', 'b', 'c') AUTO_INCREMENT;
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s32
+@setup s33
+test l10864 {
+    insert into t values (0);
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 2
+@setup s32
+@setup s33
+test l10868 {
+    insert into t values ('a'), (0), ('b');
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+@setup s32
+test l10872 {
+    create table tt (e enum('a', 'b', 'c') default 0);
+}
+expect error {
+}
+
+@setup s32
+test l10876 {
+    create table et (e enum('a', 'b', '', 'c'));
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s32
+@setup s34
+test l10882 {
+    insert into et values (0);
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s35
+@setup s36
+test l10896 {
+    insert into t values (0);
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 2
+@setup s35
+@setup s36
+test l10900 {
+    insert into t values ('a'), (0), ('b');
+}
+expect error {
+}
+
+# mysql-error: 1067 42000 Invalid default value for 'e'
+@setup s35
+test l10904 {
+    create table tt (e enum('a', 'b', 'c') default 0);
+}
+expect error {
+}
+
+@setup s37
+test l10918 {
+    insert into t values (0);
+}
+expect unordered {
+}
+
+@setup s37
+@setup s38
+test l10924 {
+    select * from t;
+}
+expect raw {
+
+}
+
+@setup s32
+@setup s39
+test l10940 {
+    INSERT INTO shirts VALUES ('shirt1', 'x-small', 'red');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'size' at row 1
+@setup s32
+@setup s39
+@setup s40
+test l10946 {
+    INSERT INTO shirts VALUES ('shirt2', 'other', 'green');
+}
+expect error {
+}
+
+@setup s32
+test l10959 {
+    CREATE TABLE test_enum (pk int NOT NULL, e enum('a','b') DEFAULT NULL, PRIMARY KEY (pk));
+}
+expect unordered {
+}
+
+@setup s32
+@setup s41
+test l10965 {
+    INSERT INTO test_enum (pk) VALUES (1);
+}
+expect unordered {
+}
+
+@setup s32
+@setup s41
+@setup s42
+test l10971 {
+    SELECT pk, e FROM test_enum;
+}
+expect unordered {
+    1|NULL
+}
+
+@setup s43
+test l11023 {
+    select e, length(e) from t order by e;
+}
+expect {
+    abc|3
+    defg|4
+    hijkl|5
+}
+
+@setup s43
+test l11031 {
+    select e, bit_length(e) from t order by e;
+}
+expect {
+    abc|24
+    defg|32
+    hijkl|40
+}
+
+@setup s43
+test l11039 {
+    select e, concat(e, 'test') from t order by e;
+}
+expect {
+    abc|abctest
+    defg|defgtest
+    hijkl|hijkltest
+}
+
+@setup s43
+test l11047 {
+    select e, e like 'a%', e like '%g' from t order by e;
+}
+expect {
+    abc|1|0
+    defg|0|1
+    hijkl|0|0
+}
+
+@setup s43
+test l11055 {
+    select e from t where e like 'a%' order by e;
+}
+expect {
+    abc
+}
+
+@setup s43
+test l11061 {
+    select group_concat(e order by e) as grouped from t;
+}
+expect unordered {
+    abc,defg,hijkl
+}
+
+@setup s43
+test l11067 {
+    select e from t where e = 'abc';
+}
+expect unordered {
+    abc
+}
+
+@setup s43
+test l11073 {
+    select count(*) from t where e = 'defg';
+}
+expect unordered {
+    1
+}
+
+@setup s43
+test l11079 {
+    select (case e when 'abc' then 42 end) from t order by e;
+}
+expect {
+    42
+    NULL
+    NULL
+}
+
+@setup s43
+test l11087 {
+    select case when e = 'abc' then 'abc' when e = 'defg' then 123 else e end from t order by e;
+}
+expect {
+    abc
+    123
+    hijkl
+}
+
+@setup s43
+test l11095 {
+    select (case 'abc' when e then 42 end) from t order by e;
+}
+expect {
+    42
+    NULL
+    NULL
+}
+
+@setup s43
+test l11103 {
+    select (case e when 'abc' then e when 'defg' then e when 'hijkl' then e end) as e from t order by e;
+}
+expect {
+    abc
+    defg
+    hijkl
+}
+
+@setup s43
+test l11112 {
+    select (case e when 'abc' then e when 'defg' then e when 'hijkl' then 'something' end) as e from t order by e;
+}
+expect {
+    abc
+    defg
+    something
+}
+
+@setup s43
+test l11121 {
+    select (case e when 'abc' then e when 'defg' then e when 'hijkl' then 123 end) as e from t order by e;
+}
+expect {
+    123
+    abc
+    defg
+}
+
+@setup s43
+test l11129 {
+    select e, cast(e as signed) from t order by e;
+}
+expect {
+    abc|1
+    defg|2
+    hijkl|3
+}
+
+@setup s43
+test l11137 {
+    select e, cast(e as char) from t order by e;
+}
+expect {
+    abc|abc
+    defg|defg
+    hijkl|hijkl
+}
+
+@setup s43
+test l11145 {
+    select e, cast(e as binary) from t order by e;
+}
+expect {
+    abc|abc
+    defg|defg
+    hijkl|hijkl
+}
+
+@setup s43
+test l11153 {
+    select e from t where e like 'a%';
+}
+expect unordered {
+    abc
+}
+
+@setup s43
+test l11159 {
+    select e, cast(e as unsigned) from t order by e;
+}
+expect {
+    abc|1
+    defg|2
+    hijkl|3
+}
+
+@setup s43
+test l11167 {
+    select e, cast(e as decimal) from t order by e;
+}
+expect {
+    abc|1
+    defg|2
+    hijkl|3
+}
+
+@setup s43
+test l11175 {
+    select e, cast(e as float) from t order by e;
+}
+expect {
+    abc|1
+    defg|2
+    hijkl|3
+}
+
+@setup s43
+test l11183 {
+    select e, cast(e as double) from t order by e;
+}
+expect {
+    abc|1
+    defg|2
+    hijkl|3
+}
+
+@setup s44
+test l11202 {
+    select e, @@autocommit, e = @@autocommit from t order by e;
+}
+expect {
+    ON|1|1
+    OFF|1|0
+    AUTO|1|0
+}
+
+@setup s45
+test l11229 {
+    select * from t;
+}
+expect unordered {
+    0|a
+    1|b
+    2|c
+}
+
+@setup s46
+test l11261 {
+    create table child0 (e enum('a', 'b', 'c'), foreign key (e) references parent (e));
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+test l11267 {
+    insert into child0 values (1), (2), (NULL);
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s48
+test l11273 {
+    select * from child0 order by e;
+}
+expect {
+    NULL
+    a
+    b
+}
+
+@setup s46
+@setup s47
+test l11282 {
+    create table child1 (e enum('x', 'y', 'z'), foreign key (e) references parent (e));
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s49
+test l11288 {
+    insert into child1 values (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s50
+test l11294 {
+    insert into child1 values (3);
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s50
+test l11298 {
+    insert into child1 values ('x'), ('y');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s50
+@setup s51
+test l11304 {
+    insert into child1 values ('z');
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s46
+@setup s47
+@setup s49
+@setup s50
+@setup s51
+test l11308 {
+    insert into child1 values ('a');
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s50
+@setup s51
+test l11312 {
+    select * from child1 order by e;
+}
+expect {
+    x
+    x
+    y
+    y
+}
+
+@setup s46
+@setup s47
+@setup s49
+test l11322 {
+    create table child2 (e enum('b', 'c', 'a'), foreign key (e) references parent (e));
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+test l11328 {
+    insert into child2 values (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2`, CONSTRAINT `child2_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s53
+test l11334 {
+    insert into child2 values (3);
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s53
+test l11338 {
+    insert into child2 values ('c');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2`, CONSTRAINT `child2_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s53
+@setup s54
+test l11344 {
+    insert into child2 values ('a');
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s53
+@setup s54
+test l11348 {
+    select * from child2 order by e;
+}
+expect {
+    b
+    c
+    c
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+test l11357 {
+    create table child3 (e enum('x', 'y', 'z', 'a', 'b', 'c'), foreign key (e) references parent (e));
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+test l11363 {
+    insert into child3 values (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child3`, CONSTRAINT `child3_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s56
+test l11369 {
+    insert into child3 values (3);
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s56
+test l11373 {
+    insert into child3 values ('x'), ('y');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child3`, CONSTRAINT `child3_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s56
+@setup s57
+test l11379 {
+    insert into child3 values ('z');
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child3`, CONSTRAINT `child3_ibfk_1` FOREIGN KEY (`e`) REFERENCES `parent` (`e`))
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s56
+@setup s57
+test l11383 {
+    insert into child3 values ('a');
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s56
+@setup s57
+test l11387 {
+    select * from child3 order by e;
+}
+expect {
+    x
+    x
+    y
+    y
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+test l11397 {
+    create table child4 (e enum('q'), foreign key (e) references parent (e));
+}
+expect unordered {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s58
+test l11403 {
+    insert into child4 values (1);
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s58
+@setup s59
+test l11409 {
+    insert into child4 values (3);
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s58
+@setup s59
+test l11413 {
+    insert into child4 values ('q');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 'e' at row 1
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s58
+@setup s59
+@setup s60
+test l11419 {
+    insert into child4 values ('a');
+}
+expect error {
+}
+
+@setup s46
+@setup s47
+@setup s49
+@setup s52
+@setup s55
+@setup s58
+@setup s59
+@setup s60
+test l11423 {
+    select * from child4 order by e;
+}
+expect {
+    q
+    q
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`pets`, CONSTRAINT `pets_ibfk_1` FOREIGN KEY (`e`) REFERENCES `animals` (`e`))
+@setup s61
+test l11442 {
+    insert into pets values ('rat');
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`pets`, CONSTRAINT `pets_ibfk_1` FOREIGN KEY (`e`) REFERENCES `animals` (`e`))
+@setup s61
+test l11447 {
+    insert into pets values ('cat');
+}
+expect error {
+}
+
+@setup s61
+@setup s62
+@setup s63
+test l11452 {
+    select * from animals join pets on animals.e=pets.e;
+}
+expect unordered {
+}
+
+@setup s61
+@setup s62
+test l11457 {
+    insert into animals values ('dog');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`pets`, CONSTRAINT `pets_ibfk_1` FOREIGN KEY (`e`) REFERENCES `animals` (`e`))
+@setup s61
+test l11461 {
+    insert into pets values ('rat');
+}
+expect error {
+}
+
+@setup s61
+@setup s62
+@setup s63
+@setup s64
+test l11466 {
+    select * from animals join pets on animals.e=pets.e;
+}
+expect unordered {
+    rat|rat
+}
+
+@setup s65
+test l11517 {
+    insert into t values (1, 1), (2, 3), (3, 2);
+}
+expect unordered {
+}
+
+@setup s65
+@setup s66
+test l11523 {
+    update t set e = 2 where e = 'ghi';
+}
+expect unordered {
+}
+
+@setup s65
+@setup s66
+@setup s67
+test l11536 {
+    update t set e = 'ghi' where e = '3';
+}
+expect unordered {
+}
+
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+test l11549 {
+    select * from t;
+}
+expect unordered {
+    1|abc
+    2|def
+    3|def
+}
+
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+test l11557 {
+    delete from t where e = 2;
+}
+expect unordered {
+}
+
+@setup s65
+@setup s66
+@setup s67
+@setup s68
+@setup s69
+test l11563 {
+    select * from t;
+}
+expect unordered {
+    1|abc
+}
+
+@setup s70
+test l11582 {
+    select * from (select e from enum_table union select v from uv) sq;
+}
+expect unordered {
+    NULL
+    a
+    ant
+    b
+    bug
+}
+
+@setup s70
+test l11586 {
+    with a as (select e from enum_table union select v from uv) select * from a;
+}
+expect unordered {
+    NULL
+    a
+    ant
+    b
+    bug
+}
+
+@setup s71
+test l11633 {
+    select i, find_in_set('a', s) from set_tbl;
+}
+expect unordered {
+    0|0
+    1|1
+    2|0
+    3|0
+    4|1
+    6|0
+    7|1
+    8|1
+}
+
+@setup s72
+test l11646 {
+    select i, find_in_set('A', s) from collate_tbl;
+}
+expect unordered {
+    0|0
+    1|1
+    2|0
+    3|0
+    4|1
+    6|0
+    7|1
+    8|1
+}
+
+@setup s73
+test l11659 {
+    select i, find_in_set('a', s) from text_tbl;
+}
+expect unordered {
+    0|0
+    1|1
+    2|0
+    3|0
+    4|1
+    6|0
+    7|1
+    8|1
+}
+
+@setup s74
+test l11672 {
+    select i, find_in_set('a', s) from enum_tbl;
+}
+expect unordered {
+    0|1
+    1|0
+    2|0
+}
+
+@setup s75
+test l11692 {
+    select i, s + 0, s from t;
+}
+expect unordered {
+    0|0|
+    1|1|
+    2|0|
+}
+
+@setup s75
+test l11700 {
+    select i, s + 0, s from t where s = 0;
+}
+expect unordered {
+    0|0|
+    2|0|
+}
+
+@setup s75
+test l11707 {
+    select i, s + 0, s from t where s = '';
+}
+expect unordered {
+    0|0|
+    1|1|
+    2|0|
+}
+
+@setup s76
+test l11715 {
+    select i, s + 0, s from tt;
+}
+expect unordered {
+    0|3|something,
+    1|3|something,
+    2|2|
+}
+
+@setup s77
+test l11733 {
+    select s, length(s) from t order by s;
+}
+expect {
+    abc|3
+    defg|4
+    abc,defg|8
+    abc,defg,hijkl|14
+}
+
+@setup s77
+test l11742 {
+    select s, bit_length(s) from t order by s;
+}
+expect {
+    abc|24
+    defg|32
+    abc,defg|64
+    abc,defg,hijkl|112
+}
+
+@setup s77
+test l11751 {
+    select s, concat(s, 'test') from t order by s;
+}
+expect {
+    abc|abctest
+    defg|defgtest
+    abc,defg|abc,defgtest
+    abc,defg,hijkl|abc,defg,hijkltest
+}
+
+@setup s77
+test l11760 {
+    select s, s like 'a%', s like '%g' from t order by s;
+}
+expect {
+    abc|1|0
+    defg|0|1
+    abc,defg|1|1
+    abc,defg,hijkl|1|0
+}
+
+@setup s77
+test l11769 {
+    select s from t where s like 'a%' order by s;
+}
+expect {
+    abc
+    abc,defg
+    abc,defg,hijkl
+}
+
+@setup s77
+test l11777 {
+    select group_concat(s order by s) as grouped from t;
+}
+expect unordered {
+    abc,defg,abc,defg,abc,defg,hijkl
+}
+
+@setup s77
+test l11783 {
+    select s from t where s = 'abc';
+}
+expect unordered {
+    abc
+}
+
+@setup s77
+test l11789 {
+    select count(*) from t where s = 'defg';
+}
+expect unordered {
+    1
+}
+
+@setup s77
+test l11795 {
+    select (case s when 'abc' then 42 end) from t order by s;
+}
+expect {
+    42
+    NULL
+    NULL
+    NULL
+}
+
+@setup s77
+test l11804 {
+    select case when s = 'abc' then 'abc' when s = 'defg' then 123 else s end from t order by s;
+}
+expect {
+    abc
+    123
+    abc,defg
+    abc,defg,hijkl
+}
+
+@setup s77
+test l11813 {
+    select (case 'abc' when s then 42 end) from t order by s;
+}
+expect {
+    42
+    NULL
+    NULL
+    NULL
+}
+
+@setup s77
+test l11822 {
+    select (case s when 'abc' then s when 'defg' then s when 'hijkl' then s end) as s from t order by s;
+}
+expect {
+    NULL
+    NULL
+    abc
+    defg
+}
+
+@setup s77
+test l11831 {
+    select (case s when 'abc' then s when 'defg' then s when 'hijkl' then 'something' end) as s from t order by s;
+}
+expect {
+    NULL
+    NULL
+    abc
+    defg
+}
+
+@setup s77
+test l11840 {
+    select (case s when 'abc' then s when 'defg' then s when 'hijkl' then 123 end) as s from t order by s;
+}
+expect {
+    NULL
+    NULL
+    abc
+    defg
+}
+
+@setup s77
+test l11849 {
+    select s, cast(s as signed) from t order by s;
+}
+expect {
+    abc|1
+    defg|2
+    abc,defg|3
+    abc,defg,hijkl|7
+}
+
+@setup s77
+test l11858 {
+    select s, cast(s as char) from t order by s;
+}
+expect {
+    abc|abc
+    defg|defg
+    abc,defg|abc,defg
+    abc,defg,hijkl|abc,defg,hijkl
+}
+
+@setup s77
+test l11867 {
+    select s, cast(s as binary) from t order by s;
+}
+expect {
+    abc|abc
+    defg|defg
+    abc,defg|abc,defg
+    abc,defg,hijkl|abc,defg,hijkl
+}
+
+@setup s77
+test l11876 {
+    select s, cast(s as unsigned) from t order by s;
+}
+expect {
+    abc|1
+    defg|2
+    abc,defg|3
+    abc,defg,hijkl|7
+}
+
+@setup s77
+test l11885 {
+    select s, cast(s as decimal) from t order by s;
+}
+expect {
+    abc|1
+    defg|2
+    abc,defg|3
+    abc,defg,hijkl|7
+}
+
+@setup s77
+test l11894 {
+    select s, cast(s as float) from t order by s;
+}
+expect {
+    abc|1
+    defg|2
+    abc,defg|3
+    abc,defg,hijkl|7
+}
+
+@setup s77
+test l11903 {
+    select s, cast(s as double) from t order by s;
+}
+expect {
+    abc|1
+    defg|2
+    abc,defg|3
+    abc,defg,hijkl|7
+}
+
+@setup s78
+test l11923 {
+    select * from t;
+}
+expect unordered {
+    0|abc,def
+    1|def
+    2|ghi
+}
+
+@setup s79
+test l11954 {
+    insert into t values ('a,b,a,c,a,b,b,b,c,c,c,a,a');
+}
+expect unordered {
+}
+
+@setup s79
+@setup s80
+test l11960 {
+    select s + 0, s from t;
+}
+expect unordered {
+    7|a,b,c
+}
+
+# mysql-error: 1291 HY000 Column 's' has duplicated value 'a' in SET
+test l11967 {
+    create table tt (s set('a', 'a'));
+}
+expect error {
+}
+
+@setup s81
+test l11980 {
+    insert into t values (0, 0), (1, 1), (2, 3), (3, 2);
+}
+expect unordered {
+}
+
+@setup s81
+@setup s82
+test l11986 {
+    update t set s = 3 where s = 2;
+}
+expect unordered {
+}
+
+@setup s81
+@setup s82
+@setup s83
+test l11999 {
+    select * from t;
+}
+expect unordered {
+    0|
+    1|abc
+    2|abc,def
+    3|abc,def
+}
+
+@setup s81
+@setup s82
+@setup s83
+test l12008 {
+    delete from t where s = 'abc,def';
+}
+expect unordered {
+}
+
+@setup s81
+@setup s82
+@setup s83
+@setup s84
+test l12014 {
+    select * from t;
+}
+expect unordered {
+    0|
+    1|abc
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 's'
+test l12030 {
+    create table t2 (s set('a', 'b', 'c') primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 's'
+@setup s85
+test l12034 {
+    alter table t modify s set('a', 'b', 'c') auto_increment;
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 's'
+@setup s85
+test l12038 {
+    alter table t modify column s set('a', 'b', 'c') auto_increment;
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 's'
+@setup s85
+test l12042 {
+    alter table t change s s set('a', 'b', 'c') auto_increment;
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 's'
+@setup s85
+test l12046 {
+    alter table t change column s s set('a', 'b', 'c') auto_increment;
+}
+expect error {
+}
+
+test l12072 {
+    create table t0 (s set('a', 'b', 'c') default (0));
+}
+expect unordered {
+}
+
+@setup s86
+test l12078 {
+    insert into t0 values ();
+}
+expect unordered {
+}
+
+@setup s86
+@setup s87
+test l12084 {
+    select * from t0;
+}
+expect raw {
+
+}
+
+test l12091 {
+    create table t (s set('a', 'b', 'c') not null);
+}
+expect unordered {
+}
+
+@setup s88
+test l12125 {
+    insert into t1 values ('A,B,c');
+}
+expect unordered {
+}
+
+@setup s88
+@setup s89
+test l12131 {
+    select * from t1;
+}
+expect unordered {
+    a,b,c
+}
+
+# mysql-error: 1265 01000 Data truncated for column 's' at row 1
+@setup s90
+test l12145 {
+    insert into t2 values ('A,B,c');
+}
+expect error {
+}
+
+@setup s90
+test l12149 {
+    select * from t2;
+}
+expect unordered {
+}
+
+# mysql-error: 1291 HY000 Column 's' has duplicated value 'a' in SET
+test l12153 {
+    create table bad (s set('a', 'A') collate utf8mb4_0900_ai_ci);
+}
+expect error {
+}
+
+@setup s91
+test l12167 {
+    create table child0 (s set('a', 'b', 'c'), foreign key (s) references parent (s));
+}
+expect unordered {
+}
+
+@setup s91
+@setup s92
+test l12173 {
+    insert into child0 values (1), (2), (NULL);
+}
+expect unordered {
+}
+
+@setup s91
+@setup s92
+@setup s93
+test l12179 {
+    select * from child0 order by s;
+}
+expect {
+    NULL
+    a
+    b
+}
+
+@setup s91
+@setup s92
+test l12188 {
+    create table child1 (s set('x', 'y', 'z'), foreign key (s) references parent (s));
+}
+expect unordered {
+}
+
+@setup s91
+@setup s92
+@setup s94
+test l12194 {
+    insert into child1 values (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s95
+test l12200 {
+    insert into child1 values (3);
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s95
+test l12204 {
+    insert into child1 values ('x'), ('y');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1`, CONSTRAINT `child1_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s95
+@setup s96
+test l12210 {
+    insert into child1 values ('z');
+}
+expect error {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 's' at row 1
+@setup s91
+@setup s92
+@setup s94
+@setup s95
+@setup s96
+test l12214 {
+    insert into child1 values ('a');
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s95
+@setup s96
+test l12218 {
+    select * from child1 order by s;
+}
+expect {
+    x
+    x
+    y
+    y
+}
+
+@setup s91
+@setup s92
+@setup s94
+test l12228 {
+    create table child2 (s set('b', 'c', 'a'), foreign key (s) references parent (s));
+}
+expect unordered {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+test l12234 {
+    insert into child2 values (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2`, CONSTRAINT `child2_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s98
+test l12240 {
+    insert into child2 values (3);
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s98
+test l12244 {
+    insert into child2 values ('c');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2`, CONSTRAINT `child2_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s98
+@setup s99
+test l12250 {
+    insert into child2 values ('a');
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s98
+@setup s99
+test l12254 {
+    select * from child2 order by s;
+}
+expect {
+    b
+    c
+    c
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+test l12263 {
+    create table child3 (s set('x', 'y', 'z', 'a', 'b', 'c'), foreign key (s) references parent (s));
+}
+expect unordered {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+test l12269 {
+    insert into child3 values (1), (2);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child3`, CONSTRAINT `child3_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s101
+test l12275 {
+    insert into child3 values (3);
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s101
+test l12279 {
+    insert into child3 values ('x'), ('y');
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child3`, CONSTRAINT `child3_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s101
+@setup s102
+test l12285 {
+    insert into child3 values ('z');
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child3`, CONSTRAINT `child3_ibfk_1` FOREIGN KEY (`s`) REFERENCES `parent` (`s`))
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s101
+@setup s102
+test l12289 {
+    insert into child3 values ('a');
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s101
+@setup s102
+test l12293 {
+    select * from child3 order by s;
+}
+expect {
+    x
+    x
+    y
+    y
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+test l12303 {
+    create table child4 (s set('q'), foreign key (s) references parent (s));
+}
+expect unordered {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s103
+test l12309 {
+    insert into child4 values (1);
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 's' at row 1
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s103
+@setup s104
+test l12315 {
+    insert into child4 values (3);
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s103
+@setup s104
+test l12319 {
+    insert into child4 values ('q');
+}
+expect unordered {
+}
+
+# mysql-error: 1265 01000 Data truncated for column 's' at row 1
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s103
+@setup s104
+@setup s105
+test l12325 {
+    insert into child4 values ('a');
+}
+expect error {
+}
+
+@setup s91
+@setup s92
+@setup s94
+@setup s97
+@setup s100
+@setup s103
+@setup s104
+@setup s105
+test l12329 {
+    select * from child4 order by s;
+}
+expect {
+    q
+    q
+}
+
+@setup s91
+@setup s106
+test l12348 {
+    update parent set s = 'c' where s = 'a';
+}
+expect unordered {
+}
+
+@setup s91
+@setup s106
+@setup s107
+test l12354 {
+    select * from child order by s;
+}
+expect {
+    x
+    y
+}
+
+@setup s91
+@setup s106
+@setup s108
+test l12361 {
+    delete from parent where s = 'b';
+}
+expect unordered {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'b'
+test l12382 {
+    create table bad (b bit(1) primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'b'
+test l12386 {
+    create table bad (b bit(64) primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s109
+test l12426 {
+    insert into tinyint_tbl values (999);
+}
+expect error {
+}
+
+@setup s109
+test l12430 {
+    insert into tinyint_tbl values (127);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s110
+test l12449 {
+    insert into smallint_tbl values (99999);
+}
+expect error {
+}
+
+@setup s110
+test l12453 {
+    insert into smallint_tbl values (32767);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s111
+test l12472 {
+    insert into mediumint_tbl values (99999999);
+}
+expect error {
+}
+
+@setup s111
+test l12476 {
+    insert into mediumint_tbl values (8388607);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s112
+test l12495 {
+    insert into int_tbl values (99999999999);
+}
+expect error {
+}
+
+@setup s112
+test l12499 {
+    insert into int_tbl values (2147483647);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s113
+test l12518 {
+    insert into bigint_tbl values (99999999999999999999);
+}
+expect error {
+}
+
+@setup s113
+test l12522 {
+    insert into bigint_tbl values (9223372036854775807);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s114
+test l12554 {
+    insert into tinyint_tbl values (999);
+}
+expect error {
+}
+
+@setup s114
+test l12558 {
+    insert into tinyint_tbl values (255);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s115
+test l12577 {
+    insert into smallint_tbl values (99999);
+}
+expect error {
+}
+
+@setup s115
+test l12581 {
+    insert into smallint_tbl values (65535);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s116
+test l12600 {
+    insert into mediumint_tbl values (999999999);
+}
+expect error {
+}
+
+@setup s116
+test l12604 {
+    insert into mediumint_tbl values (16777215);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s117
+test l12623 {
+    insert into int_tbl values (99999999999);
+}
+expect error {
+}
+
+@setup s117
+test l12627 {
+    insert into int_tbl values (4294967295);
+}
+expect unordered {
+}
+
+# mysql-error: 1264 22003 Out of range value for column 'i' at row 1
+@setup s118
+test l12646 {
+    insert into bigint_tbl values (999999999999999999999);
+}
+expect error {
+}
+
+@setup s118
+test l12650 {
+    insert into bigint_tbl values (18446744073709551615);
+}
+expect unordered {
+}
+
+@setup s119
+test l12690 {
+    select * from ti8 where i = 999;
+}
+expect unordered {
+}
+
+@setup s119
+test l12694 {
+    select * from ti8 where i = -999;
+}
+expect unordered {
+}
+
+@setup s119
+test l12698 {
+    select * from ti8 where i != 999;
+}
+expect unordered {
+    -1
+    -128
+    0
+    1
+    127
+}
+
+@setup s119
+test l12708 {
+    select * from ti8 where i != -999;
+}
+expect unordered {
+    -1
+    -128
+    0
+    1
+    127
+}
+
+@setup s119
+test l12718 {
+    select * from ti8 where i > 999;
+}
+expect unordered {
+}
+
+@setup s119
+test l12722 {
+    select * from ti8 where i > -999;
+}
+expect unordered {
+    -1
+    -128
+    0
+    1
+    127
+}
+
+@setup s119
+test l12732 {
+    select * from ti8 where i >= 999;
+}
+expect unordered {
+}
+
+@setup s119
+test l12736 {
+    select * from ti8 where i >= -999;
+}
+expect unordered {
+    -1
+    -128
+    0
+    1
+    127
+}
+
+@setup s119
+test l12746 {
+    select * from ti8 where i < 999;
+}
+expect unordered {
+    -1
+    -128
+    0
+    1
+    127
+}
+
+@setup s119
+test l12756 {
+    select * from ti8 where i < -999;
+}
+expect unordered {
+}
+
+@setup s119
+test l12760 {
+    select * from ti8 where i <= 999;
+}
+expect unordered {
+    -1
+    -128
+    0
+    1
+    127
+}
+
+@setup s119
+test l12770 {
+    select * from ti8 where i <= -999;
+}
+expect unordered {
+}
+
+@setup s119
+test l12774 {
+    select * from ti8 where i in (0, 999);
+}
+expect unordered {
+    0
+}
+
+@setup s119
+test l12780 {
+    select * from ti8 where i in (0, -999);
+}
+expect unordered {
+    0
+}
+
+@setup s119
+test l12786 {
+    select * from ti8 where i not in (0, 999);
+}
+expect unordered {
+    -1
+    -128
+    1
+    127
+}
+
+@setup s119
+test l12795 {
+    select * from ti8 where i not in (0, -999);
+}
+expect unordered {
+    -1
+    -128
+    1
+    127
+}
+
+@setup s120
+test l12805 {
+    select * from ti16 where i = 99999;
+}
+expect unordered {
+}
+
+@setup s120
+test l12809 {
+    select * from ti16 where i = -99999;
+}
+expect unordered {
+}
+
+@setup s120
+test l12813 {
+    select * from ti16 where i != 99999;
+}
+expect unordered {
+    -1
+    -32768
+    0
+    1
+    32767
+}
+
+@setup s120
+test l12823 {
+    select * from ti16 where i != -99999;
+}
+expect unordered {
+    -1
+    -32768
+    0
+    1
+    32767
+}
+
+@setup s120
+test l12833 {
+    select * from ti16 where i > 99999;
+}
+expect unordered {
+}
+
+@setup s120
+test l12837 {
+    select * from ti16 where i > -99999;
+}
+expect unordered {
+    -1
+    -32768
+    0
+    1
+    32767
+}
+
+@setup s120
+test l12847 {
+    select * from ti16 where i >= 99999;
+}
+expect unordered {
+}
+
+@setup s120
+test l12851 {
+    select * from ti16 where i >= -99999;
+}
+expect unordered {
+    -1
+    -32768
+    0
+    1
+    32767
+}
+
+@setup s120
+test l12861 {
+    select * from ti16 where i < 99999;
+}
+expect unordered {
+    -1
+    -32768
+    0
+    1
+    32767
+}
+
+@setup s120
+test l12871 {
+    select * from ti16 where i < -99999;
+}
+expect unordered {
+}
+
+@setup s120
+test l12875 {
+    select * from ti16 where i <= 99999;
+}
+expect unordered {
+    -1
+    -32768
+    0
+    1
+    32767
+}
+
+@setup s120
+test l12885 {
+    select * from ti16 where i <= -99999;
+}
+expect unordered {
+}
+
+@setup s120
+test l12889 {
+    select * from ti16 where i in (0, 99999);
+}
+expect unordered {
+    0
+}
+
+@setup s120
+test l12895 {
+    select * from ti16 where i in (0, -99999);
+}
+expect unordered {
+    0
+}
+
+@setup s120
+test l12901 {
+    select * from ti16 where i not in (0, 99999);
+}
+expect unordered {
+    -1
+    -32768
+    1
+    32767
+}
+
+@setup s120
+test l12910 {
+    select * from ti16 where i not in (0, -99999);
+}
+expect unordered {
+    -1
+    -32768
+    1
+    32767
+}
+
+@setup s121
+test l12920 {
+    select * from ti24 where i = 9999999;
+}
+expect unordered {
+}
+
+@setup s121
+test l12924 {
+    select * from ti24 where i = -999999;
+}
+expect unordered {
+}
+
+@setup s121
+test l12928 {
+    select * from ti24 where i != 9999999;
+}
+expect unordered {
+    -1
+    -8388608
+    0
+    1
+    8388607
+}
+
+@setup s121
+test l12938 {
+    select * from ti24 where i != -9999999;
+}
+expect unordered {
+    -1
+    -8388608
+    0
+    1
+    8388607
+}
+
+@setup s121
+test l12948 {
+    select * from ti24 where i > 9999999;
+}
+expect unordered {
+}
+
+@setup s121
+test l12952 {
+    select * from ti24 where i > -9999999;
+}
+expect unordered {
+    -1
+    -8388608
+    0
+    1
+    8388607
+}
+
+@setup s121
+test l12962 {
+    select * from ti24 where i >= 9999999;
+}
+expect unordered {
+}
+
+@setup s121
+test l12966 {
+    select * from ti24 where i >= -9999999;
+}
+expect unordered {
+    -1
+    -8388608
+    0
+    1
+    8388607
+}
+
+@setup s121
+test l12976 {
+    select * from ti24 where i < 9999999;
+}
+expect unordered {
+    -1
+    -8388608
+    0
+    1
+    8388607
+}
+
+@setup s121
+test l12986 {
+    select * from ti24 where i < -9999999;
+}
+expect unordered {
+}
+
+@setup s121
+test l12990 {
+    select * from ti24 where i <= 9999999;
+}
+expect unordered {
+    -1
+    -8388608
+    0
+    1
+    8388607
+}
+
+@setup s121
+test l13000 {
+    select * from ti24 where i <= -9999999;
+}
+expect unordered {
+}
+
+@setup s121
+test l13004 {
+    select * from ti24 where i in (0, 9999999);
+}
+expect unordered {
+    0
+}
+
+@setup s121
+test l13010 {
+    select * from ti24 where i in (0, -9999999);
+}
+expect unordered {
+    0
+}
+
+@setup s121
+test l13016 {
+    select * from ti24 where i not in (0, 9999999);
+}
+expect unordered {
+    -1
+    -8388608
+    1
+    8388607
+}
+
+@setup s121
+test l13025 {
+    select * from ti24 where i not in (0, -9999999);
+}
+expect unordered {
+    -1
+    -8388608
+    1
+    8388607
+}
+
+@setup s122
+test l13035 {
+    select * from ti32 where i = 9999999999;
+}
+expect unordered {
+}
+
+@setup s122
+test l13039 {
+    select * from ti32 where i = -9999999999;
+}
+expect unordered {
+}
+
+@setup s122
+test l13043 {
+    select * from ti32 where i != 9999999999;
+}
+expect unordered {
+    -1
+    -2147483648
+    0
+    1
+    2147483647
+}
+
+@setup s122
+test l13053 {
+    select * from ti32 where i != -9999999999;
+}
+expect unordered {
+    -1
+    -2147483648
+    0
+    1
+    2147483647
+}
+
+@setup s122
+test l13063 {
+    select * from ti32 where i > 9999999999;
+}
+expect unordered {
+}
+
+@setup s122
+test l13067 {
+    select * from ti32 where i > -9999999999;
+}
+expect unordered {
+    -1
+    -2147483648
+    0
+    1
+    2147483647
+}
+
+@setup s122
+test l13077 {
+    select * from ti32 where i >= 9999999999;
+}
+expect unordered {
+}
+
+@setup s122
+test l13081 {
+    select * from ti32 where i >= -9999999999;
+}
+expect unordered {
+    -1
+    -2147483648
+    0
+    1
+    2147483647
+}
+
+@setup s122
+test l13091 {
+    select * from ti32 where i < 9999999999;
+}
+expect unordered {
+    -1
+    -2147483648
+    0
+    1
+    2147483647
+}
+
+@setup s122
+test l13101 {
+    select * from ti32 where i < -9999999999;
+}
+expect unordered {
+}
+
+@setup s122
+test l13105 {
+    select * from ti32 where i <= 9999999999;
+}
+expect unordered {
+    -1
+    -2147483648
+    0
+    1
+    2147483647
+}
+
+@setup s122
+test l13115 {
+    select * from ti32 where i <= -9999999999;
+}
+expect unordered {
+}
+
+@setup s122
+test l13119 {
+    select * from ti32 where i in (0, 9999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s122
+test l13125 {
+    select * from ti32 where i in (0, -9999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s122
+test l13131 {
+    select * from ti32 where i not in (0, 9999999999);
+}
+expect unordered {
+    -1
+    -2147483648
+    1
+    2147483647
+}
+
+@setup s122
+test l13140 {
+    select * from ti32 where i not in (0, -9999999999);
+}
+expect unordered {
+    -1
+    -2147483648
+    1
+    2147483647
+}
+
+@setup s123
+test l13150 {
+    select * from ti64 where i = 9999999999999999999;
+}
+expect unordered {
+}
+
+@setup s123
+test l13154 {
+    select * from ti64 where i = -9999999999999999999;
+}
+expect unordered {
+}
+
+@setup s123
+test l13158 {
+    select * from ti64 where i != 9999999999999999999;
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    0
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13168 {
+    select * from ti64 where i != -9999999999999999999;
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    0
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13178 {
+    select * from ti64 where i > 9999999999999999999;
+}
+expect unordered {
+}
+
+@setup s123
+test l13182 {
+    select * from ti64 where i > -9999999999999999999;
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    0
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13192 {
+    select * from ti64 where i >= 9999999999999999999;
+}
+expect unordered {
+}
+
+@setup s123
+test l13196 {
+    select * from ti64 where i >= -9999999999999999999;
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    0
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13206 {
+    select * from ti64 where i < 9999999999999999999;
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    0
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13216 {
+    select * from ti64 where i < -9999999999999999999;
+}
+expect unordered {
+}
+
+@setup s123
+test l13220 {
+    select * from ti64 where i <= 9999999999999999999;
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    0
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13230 {
+    select * from ti64 where i <= -9999999999999999999;
+}
+expect unordered {
+}
+
+@setup s123
+test l13234 {
+    select * from ti64 where i in (0, 9999999999999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s123
+test l13240 {
+    select * from ti64 where i in (0, -9999999999999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s123
+test l13246 {
+    select * from ti64 where i not in (0, 9999999999999999999);
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    1
+    9223372036854775807
+}
+
+@setup s123
+test l13255 {
+    select * from ti64 where i not in (0, -9999999999999999999);
+}
+expect unordered {
+    -1
+    -9223372036854775808
+    1
+    9223372036854775807
+}
+
+@setup s124
+test l13286 {
+    select * from tui8 where i = 999;
+}
+expect unordered {
+}
+
+@setup s124
+test l13290 {
+    select * from tui8 where i = -999;
+}
+expect unordered {
+}
+
+@setup s124
+test l13294 {
+    select * from tui8 where i != 999;
+}
+expect unordered {
+    0
+    1
+    255
+}
+
+@setup s124
+test l13302 {
+    select * from tui8 where i != -999;
+}
+expect unordered {
+    0
+    1
+    255
+}
+
+@setup s124
+test l13310 {
+    select * from tui8 where i > 999;
+}
+expect unordered {
+}
+
+@setup s124
+test l13314 {
+    select * from tui8 where i > -999;
+}
+expect unordered {
+    0
+    1
+    255
+}
+
+@setup s124
+test l13322 {
+    select * from tui8 where i >= 999;
+}
+expect unordered {
+}
+
+@setup s124
+test l13326 {
+    select * from tui8 where i >= -999;
+}
+expect unordered {
+    0
+    1
+    255
+}
+
+@setup s124
+test l13334 {
+    select * from tui8 where i < 999;
+}
+expect unordered {
+    0
+    1
+    255
+}
+
+@setup s124
+test l13342 {
+    select * from tui8 where i < -999;
+}
+expect unordered {
+}
+
+@setup s124
+test l13346 {
+    select * from tui8 where i <= 999;
+}
+expect unordered {
+    0
+    1
+    255
+}
+
+@setup s124
+test l13354 {
+    select * from tui8 where i <= -999;
+}
+expect unordered {
+}
+
+@setup s124
+test l13358 {
+    select * from tui8 where i in (0, 999);
+}
+expect unordered {
+    0
+}
+
+@setup s124
+test l13364 {
+    select * from tui8 where i in (0, -999);
+}
+expect unordered {
+    0
+}
+
+@setup s124
+test l13370 {
+    select * from tui8 where i not in (0, 999);
+}
+expect unordered {
+    1
+    255
+}
+
+@setup s124
+test l13377 {
+    select * from tui8 where i not in (0, -999);
+}
+expect unordered {
+    1
+    255
+}
+
+@setup s125
+test l13385 {
+    select * from tui16 where i = 99999;
+}
+expect unordered {
+}
+
+@setup s125
+test l13389 {
+    select * from tui16 where i = -99999;
+}
+expect unordered {
+}
+
+@setup s125
+test l13393 {
+    select * from tui16 where i != 99999;
+}
+expect unordered {
+    0
+    1
+    65535
+}
+
+@setup s125
+test l13401 {
+    select * from tui16 where i != -99999;
+}
+expect unordered {
+    0
+    1
+    65535
+}
+
+@setup s125
+test l13409 {
+    select * from tui16 where i > 99999;
+}
+expect unordered {
+}
+
+@setup s125
+test l13413 {
+    select * from tui16 where i > -99999;
+}
+expect unordered {
+    0
+    1
+    65535
+}
+
+@setup s125
+test l13421 {
+    select * from tui16 where i >= 99999;
+}
+expect unordered {
+}
+
+@setup s125
+test l13425 {
+    select * from tui16 where i >= -99999;
+}
+expect unordered {
+    0
+    1
+    65535
+}
+
+@setup s125
+test l13433 {
+    select * from tui16 where i < 99999;
+}
+expect unordered {
+    0
+    1
+    65535
+}
+
+@setup s125
+test l13441 {
+    select * from tui16 where i < -99999;
+}
+expect unordered {
+}
+
+@setup s125
+test l13445 {
+    select * from tui16 where i <= 99999;
+}
+expect unordered {
+    0
+    1
+    65535
+}
+
+@setup s125
+test l13453 {
+    select * from tui16 where i <= -99999;
+}
+expect unordered {
+}
+
+@setup s125
+test l13457 {
+    select * from tui16 where i in (0, 99999);
+}
+expect unordered {
+    0
+}
+
+@setup s125
+test l13463 {
+    select * from tui16 where i in (0, -99999);
+}
+expect unordered {
+    0
+}
+
+@setup s125
+test l13469 {
+    select * from tui16 where i not in (0, 99999);
+}
+expect unordered {
+    1
+    65535
+}
+
+@setup s125
+test l13476 {
+    select * from tui16 where i not in (0, -99999);
+}
+expect unordered {
+    1
+    65535
+}
+
+@setup s126
+test l13484 {
+    select * from tui24 where i = 99999999;
+}
+expect unordered {
+}
+
+@setup s126
+test l13488 {
+    select * from tui24 where i = -9999999;
+}
+expect unordered {
+}
+
+@setup s126
+test l13492 {
+    select * from tui24 where i != 99999999;
+}
+expect unordered {
+    0
+    1
+    16777215
+}
+
+@setup s126
+test l13500 {
+    select * from tui24 where i != -99999999;
+}
+expect unordered {
+    0
+    1
+    16777215
+}
+
+@setup s126
+test l13508 {
+    select * from tui24 where i > 99999999;
+}
+expect unordered {
+}
+
+@setup s126
+test l13512 {
+    select * from tui24 where i > -99999999;
+}
+expect unordered {
+    0
+    1
+    16777215
+}
+
+@setup s126
+test l13520 {
+    select * from tui24 where i >= 99999999;
+}
+expect unordered {
+}
+
+@setup s126
+test l13524 {
+    select * from tui24 where i >= -99999999;
+}
+expect unordered {
+    0
+    1
+    16777215
+}
+
+@setup s126
+test l13532 {
+    select * from tui24 where i < 99999999;
+}
+expect unordered {
+    0
+    1
+    16777215
+}
+
+@setup s126
+test l13540 {
+    select * from tui24 where i < -99999999;
+}
+expect unordered {
+}
+
+@setup s126
+test l13544 {
+    select * from tui24 where i <= 99999999;
+}
+expect unordered {
+    0
+    1
+    16777215
+}
+
+@setup s126
+test l13552 {
+    select * from tui24 where i <= -99999999;
+}
+expect unordered {
+}
+
+@setup s126
+test l13556 {
+    select * from tui24 where i in (0, 99999999);
+}
+expect unordered {
+    0
+}
+
+@setup s126
+test l13562 {
+    select * from tui24 where i in (0, -99999999);
+}
+expect unordered {
+    0
+}
+
+@setup s126
+test l13568 {
+    select * from tui24 where i not in (0, 99999999);
+}
+expect unordered {
+    1
+    16777215
+}
+
+@setup s126
+test l13575 {
+    select * from tui24 where i not in (0, -99999999);
+}
+expect unordered {
+    1
+    16777215
+}
+
+@setup s127
+test l13583 {
+    select * from tui32 where i = 9999999999;
+}
+expect unordered {
+}
+
+@setup s127
+test l13587 {
+    select * from tui32 where i = -9999999999;
+}
+expect unordered {
+}
+
+@setup s127
+test l13591 {
+    select * from tui32 where i != 9999999999;
+}
+expect unordered {
+    0
+    1
+    4294967295
+}
+
+@setup s127
+test l13599 {
+    select * from tui32 where i != -9999999999;
+}
+expect unordered {
+    0
+    1
+    4294967295
+}
+
+@setup s127
+test l13607 {
+    select * from tui32 where i > 9999999999;
+}
+expect unordered {
+}
+
+@setup s127
+test l13611 {
+    select * from tui32 where i > -9999999999;
+}
+expect unordered {
+    0
+    1
+    4294967295
+}
+
+@setup s127
+test l13619 {
+    select * from tui32 where i >= 9999999999;
+}
+expect unordered {
+}
+
+@setup s127
+test l13623 {
+    select * from tui32 where i >= -9999999999;
+}
+expect unordered {
+    0
+    1
+    4294967295
+}
+
+@setup s127
+test l13631 {
+    select * from tui32 where i < 9999999999;
+}
+expect unordered {
+    0
+    1
+    4294967295
+}
+
+@setup s127
+test l13639 {
+    select * from tui32 where i < -9999999999;
+}
+expect unordered {
+}
+
+@setup s127
+test l13643 {
+    select * from tui32 where i <= 9999999999;
+}
+expect unordered {
+    0
+    1
+    4294967295
+}
+
+@setup s127
+test l13651 {
+    select * from tui32 where i <= -9999999999;
+}
+expect unordered {
+}
+
+@setup s127
+test l13655 {
+    select * from tui32 where i in (0, 9999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s127
+test l13661 {
+    select * from tui32 where i in (0, -9999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s127
+test l13667 {
+    select * from tui32 where i not in (0, 9999999999);
+}
+expect unordered {
+    1
+    4294967295
+}
+
+@setup s127
+test l13674 {
+    select * from tui32 where i not in (0, -9999999999);
+}
+expect unordered {
+    1
+    4294967295
+}
+
+@setup s128
+test l13682 {
+    select * from tui64 where i = 99999999999999999999;
+}
+expect unordered {
+}
+
+@setup s128
+test l13686 {
+    select * from tui64 where i = -99999999999999999999;
+}
+expect unordered {
+}
+
+@setup s128
+test l13690 {
+    select * from tui64 where i != 99999999999999999999;
+}
+expect unordered {
+    0
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13698 {
+    select * from tui64 where i != -99999999999999999999;
+}
+expect unordered {
+    0
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13706 {
+    select * from tui64 where i > 99999999999999999999;
+}
+expect unordered {
+}
+
+@setup s128
+test l13710 {
+    select * from tui64 where i > -99999999999999999999;
+}
+expect unordered {
+    0
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13718 {
+    select * from tui64 where i >= 99999999999999999999;
+}
+expect unordered {
+}
+
+@setup s128
+test l13722 {
+    select * from tui64 where i >= -99999999999999999999;
+}
+expect unordered {
+    0
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13730 {
+    select * from tui64 where i < 99999999999999999999;
+}
+expect unordered {
+    0
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13738 {
+    select * from tui64 where i < -99999999999999999999;
+}
+expect unordered {
+}
+
+@setup s128
+test l13742 {
+    select * from tui64 where i <= 99999999999999999999;
+}
+expect unordered {
+    0
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13750 {
+    select * from tui64 where i <= -99999999999999999999;
+}
+expect unordered {
+}
+
+@setup s128
+test l13754 {
+    select * from tui64 where i in (0, 99999999999999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s128
+test l13760 {
+    select * from tui64 where i in (0, -99999999999999999999);
+}
+expect unordered {
+    0
+}
+
+@setup s128
+test l13766 {
+    select * from tui64 where i not in (0, 99999999999999999999);
+}
+expect unordered {
+    1
+    18446744073709551615
+}
+
+@setup s128
+test l13773 {
+    select * from tui64 where i not in (0, -99999999999999999999);
+}
+expect unordered {
+    1
+    18446744073709551615
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'f'
+test l13789 {
+    create table float_tbl (f float primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'd'
+test l13802 {
+    create table double_tbl (d double primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'd'
+test l13815 {
+    create table bad (d decimal primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'd'
+test l13819 {
+    create table bad (d decimal(65,30) primary key auto_increment);
+}
+expect error {
+}
+
+@setup s129
+test l13835 {
+    create table child_dec_4_2 (d decimal(4,2), foreign key (d) references parent (d));
+}
+expect unordered {
+}
+
+@setup s129
+@setup s130
+test l13841 {
+    insert into child_dec_4_2 values (1.23), (45.67), (NULL);
+}
+expect unordered {
+}
+
+@setup s129
+@setup s130
+@setup s131
+test l13847 {
+    insert into child_dec_4_2 values (1.229999), (45.6711111), (78.90);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_dec_4_2`, CONSTRAINT `child_dec_4_2_ibfk_1` FOREIGN KEY (`d`) REFERENCES `parent` (`d`))
+@setup s129
+@setup s130
+@setup s131
+@setup s132
+test l13853 {
+    insert into child_dec_4_2 values (99.99);
+}
+expect error {
+}
+
+@setup s129
+@setup s130
+test l13857 {
+    create table child_dec_4_1 (d decimal(4,1), foreign key (d) references parent (d));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_dec_4_1`, CONSTRAINT `child_dec_4_1_ibfk_1` FOREIGN KEY (`d`) REFERENCES `parent` (`d`))
+@setup s129
+@setup s130
+@setup s133
+test l13863 {
+    insert into child_dec_4_1 values (78.9);
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_dec_4_1`, CONSTRAINT `child_dec_4_1_ibfk_1` FOREIGN KEY (`d`) REFERENCES `parent` (`d`))
+@setup s129
+@setup s130
+@setup s133
+test l13867 {
+    insert into child_dec_4_1 values (99.9);
+}
+expect error {
+}
+
+@setup s129
+@setup s130
+@setup s133
+test l13871 {
+    create table child_dec_3_2 (d decimal(3,2), foreign key (d) references parent (d));
+}
+expect unordered {
+}
+
+@setup s129
+@setup s130
+@setup s133
+@setup s134
+test l13877 {
+    insert into child_dec_3_2 values (1.23);
+}
+expect unordered {
+}
+
+@setup s129
+@setup s130
+@setup s133
+@setup s134
+test l13883 {
+    create table child_dec_65_30 (d decimal(65,30), foreign key (d) references parent (d));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_dec_65_30`, CONSTRAINT `child_dec_65_30_ibfk_1` FOREIGN KEY (`d`) REFERENCES `parent` (`d`))
+@setup s129
+@setup s130
+@setup s133
+@setup s134
+@setup s135
+test l13889 {
+    insert into child_dec_65_30 values (1.23);
+}
+expect error {
+}
+
+@setup s136
+test l13893 {
+    create table child_multi_4_2_3_1 (d1 decimal(4,2), d2 decimal(3,1), foreign key (d1, d2) references parent_multi (d1, d2));
+}
+expect unordered {
+}
+
+@setup s136
+@setup s137
+test l13898 {
+    insert into child_multi_4_2_3_1 values (1.23, 4.5), (45.67, 78.9), (NULL, NULL);
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_multi_4_2_3_1`, CONSTRAINT `child_multi_4_2_3_1_ibfk_1` FOREIGN KEY (`d1`, `d2`) REFERENCES `parent_multi` (`d1`, `d2`))
+@setup s136
+@setup s137
+@setup s138
+test l13904 {
+    insert into child_multi_4_2_3_1 values (1.23, 9.9);
+}
+expect error {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1.00' for key 't.d'
+@setup s139
+test l13917 {
+    insert into t values (2, 1);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'd'
+test l13930 {
+    create table bad (d date primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'dt'
+test l13943 {
+    create table bad (dt datetime primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'dt'
+test l13947 {
+    create table bad (dt datetime(6) primary key auto_increment);
+}
+expect error {
+}
+
+@setup s140
+test l13965 {
+    create table child_datetime0 (dt datetime, foreign key (dt) references parent_datetime6(dt));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_datetime0`, CONSTRAINT `child_datetime0_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_datetime6` (`dt`))
+@setup s140
+@setup s141
+test l13971 {
+    insert into child_datetime0 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s142
+test l13975 {
+    create table child_datetime6 (dt datetime(6), foreign key (dt) references parent_datetime0(dt));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_datetime6`, CONSTRAINT `child_datetime6_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_datetime0` (`dt`))
+@setup s142
+@setup s143
+test l13981 {
+    insert into child_datetime6 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s142
+@setup s143
+test l13986 {
+    create table child1_timestamp0 (ts timestamp, foreign key (ts) references parent_datetime0(dt));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1_timestamp0`, CONSTRAINT `child1_timestamp0_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_datetime0` (`dt`))
+@setup s142
+@setup s143
+@setup s144
+test l13992 {
+    insert into child1_timestamp0 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s140
+@setup s141
+test l13996 {
+    create table child2_timestamp0 (ts timestamp, foreign key (ts) references parent_datetime6(dt));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2_timestamp0`, CONSTRAINT `child2_timestamp0_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_datetime6` (`dt`))
+@setup s140
+@setup s141
+@setup s145
+test l14002 {
+    insert into child2_timestamp0 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s142
+@setup s143
+@setup s144
+test l14007 {
+    create table child1_timestamp6 (ts timestamp(6), foreign key (ts) references parent_datetime0(dt));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1_timestamp6`, CONSTRAINT `child1_timestamp6_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_datetime0` (`dt`))
+@setup s142
+@setup s143
+@setup s144
+@setup s146
+test l14013 {
+    insert into child1_timestamp6 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s140
+@setup s141
+@setup s145
+test l14017 {
+    create table child2_timestamp6 (ts timestamp(6), foreign key (ts) references parent_datetime6(dt));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2_timestamp6`, CONSTRAINT `child2_timestamp6_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_datetime6` (`dt`))
+@setup s140
+@setup s141
+@setup s145
+@setup s147
+test l14023 {
+    insert into child2_timestamp6 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2_timestamp6`, CONSTRAINT `child2_timestamp6_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_datetime6` (`dt`))
+@setup s140
+@setup s141
+@setup s145
+@setup s147
+test l14027 {
+    insert into child2_timestamp6 values ('2001-02-03 12:34:56.123456');
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'ts'
+test l14040 {
+    create table bad (ts timestamp primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'ts'
+test l14044 {
+    create table bad (ts timestamp(6) primary key auto_increment);
+}
+expect error {
+}
+
+@setup s148
+test l14062 {
+    create table child_timestamp0 (ts timestamp, foreign key (ts) references parent_timestamp6(ts));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_timestamp0`, CONSTRAINT `child_timestamp0_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_timestamp6` (`ts`))
+@setup s148
+@setup s149
+test l14068 {
+    insert into child_timestamp0 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s150
+test l14072 {
+    create table child_timestamp6 (ts timestamp(6), foreign key (ts) references parent_timestamp0(ts));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child_timestamp6`, CONSTRAINT `child_timestamp6_ibfk_1` FOREIGN KEY (`ts`) REFERENCES `parent_timestamp0` (`ts`))
+@setup s150
+@setup s151
+test l14078 {
+    insert into child_timestamp6 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s150
+@setup s151
+test l14083 {
+    create table child1_datetime0 (dt datetime, foreign key (dt) references parent_timestamp0(ts));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1_datetime0`, CONSTRAINT `child1_datetime0_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_timestamp0` (`ts`))
+@setup s150
+@setup s151
+@setup s152
+test l14089 {
+    insert into child1_datetime0 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s148
+@setup s149
+test l14093 {
+    create table child2_datetime0 (dt datetime, foreign key (dt) references parent_timestamp6(ts));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2_datetime0`, CONSTRAINT `child2_datetime0_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_timestamp6` (`ts`))
+@setup s148
+@setup s149
+@setup s153
+test l14099 {
+    insert into child2_datetime0 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s150
+@setup s151
+@setup s152
+test l14104 {
+    create table child1_datetime6 (dt datetime(6), foreign key (dt) references parent_timestamp0(ts));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child1_datetime6`, CONSTRAINT `child1_datetime6_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_timestamp0` (`ts`))
+@setup s150
+@setup s151
+@setup s152
+@setup s154
+test l14110 {
+    insert into child1_datetime6 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+@setup s148
+@setup s149
+@setup s153
+test l14114 {
+    create table child2_datetime6 (dt datetime(6), foreign key (dt) references parent_timestamp6(ts));
+}
+expect unordered {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2_datetime6`, CONSTRAINT `child2_datetime6_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_timestamp6` (`ts`))
+@setup s148
+@setup s149
+@setup s153
+@setup s155
+test l14120 {
+    insert into child2_datetime6 values ('2001-02-03 12:34:56');
+}
+expect error {
+}
+
+# mysql-error: 1452 23000 Cannot add or update a child row: a foreign key constraint fails (`test`.`child2_datetime6`, CONSTRAINT `child2_datetime6_ibfk_1` FOREIGN KEY (`dt`) REFERENCES `parent_timestamp6` (`ts`))
+@setup s148
+@setup s149
+@setup s153
+@setup s155
+test l14124 {
+    insert into child2_datetime6 values ('2001-02-03 12:34:56.123456');
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 't'
+test l14137 {
+    create table bad (t time primary key auto_increment);
+}
+expect error {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 't'
+test l14141 {
+    create table bad (t time(6) primary key auto_increment);
+}
+expect error {
+}
+
+@setup s156
+test l14159 {
+    create table child_time0 (t time, foreign key (t) references parent_time6(t));
+}
+expect unordered {
+}
+
+@setup s157
+test l14170 {
+    create table child_time6 (t time(6), foreign key (t) references parent_time0(t));
+}
+expect unordered {
+}
+
+# mysql-error: 1063 42000 Incorrect column specifier for column 'y'
+test l14190 {
+    create table bad (y year primary key auto_increment);
+}
+expect error {
+}
+
+@setup s158
+test l14210 {
+    select * from (
+    select id, words from t
+    union
+    select id, words from t2
+) as combined
+where
+    combined.id = 1;
+}
+expect unordered {
+    1|boo
+    1|foo
+}
+
+@setup s158
+test l14225 {
+    select * from (
+    select 'parent' as tbl, id, words from t
+    union
+    select 'child' as tbl, id, words from t2
+) as combined
+where
+    combined.id = 1;
+}
+expect unordered {
+    child|1|boo
+    parent|1|foo
+}
+
+@setup s159
+test l14254 {
+    WITH visible_collection_ids AS (SELECT id FROM collection AS c WHERE (1 <> c.id)) 
+				SELECT 5 AS model_ranking, c.id, c.name, c.description, c.entity_id, c.display, c.collection_preview, c.dataset_query, c.collection_id, 'card' AS model 
+				FROM report_card AS c WHERE (c.dashboard_id IS NULL) AND (archived = FALSE) AND (c.type = 'question') 
+				UNION 
+				SELECT 7 AS model_ranking, id, name, name AS description, entity_id, NULL AS display, NULL AS collection_preview, NULL AS dataset_query, id AS collection_id, 'collection' AS model 
+				FROM collection AS col WHERE (archived = FALSE) AND (id <> 1) AND (personal_owner_id IS NULL) AND (namespace IS NULL) 
+				UNION 
+				SELECT 1 AS model_ranking, d.id, d.name, d.description, d.entity_id, NULL AS display, NULL AS collection_preview, NULL AS dataset_query, NULL AS collection_id, 'dashboard' AS model 
+				FROM report_dashboard AS d WHERE (archived = FALSE);
+}
+expect unordered {
+    1|1|Dashboard 1|Test dashboard description|3001|NULL|NULL|NULL|NULL|dashboard
+    1|2|Dashboard 2|Test dashboard 2 description|3002|NULL|NULL|NULL|NULL|dashboard
+    5|2|Card 2|NULL|1002|NULL|NULL|NULL|NULL|card
+    5|3|Card 3|NULL|1003|NULL|NULL|NULL|NULL|card
+    7|2|Collection 2|Collection 2|4002|NULL|NULL|NULL|2|collection
+    7|3|Collection 3|Collection 3|4003|NULL|NULL|NULL|3|collection
+}
+
+@setup s160
+test l14287 {
+    select * from t1 union (
+    select j from t2
+    where (
+        j > 10
+        or
+        j in (
+            select j from t1 join t2
+        )
+    )
+);
+}
+expect unordered {
+    0
+    1
+    2
+}
+
+@setup s160
+test l14306 {
+    select * from t1 intersect (
+    select j from t2
+    where (
+        j > 10
+        or
+        j in (
+            select j from t1 join t2
+        )
+    )
+);
+}
+expect unordered {
+    0
+}
+
+@setup s160
+test l14323 {
+    select * from t1 except (
+    select j from t2
+    where (
+        j > 10
+        or
+        j in (
+            select j from t1 join t2
+        )
+    )
+);
+}
+expect unordered {
+    1
+}
+
+@setup s161
+test l14352 {
+    select row_number() over () as rn from o where c_id=-999;
+}
+expect unordered {
+}
+
+@setup s161
+test l14358 {
+    select row_number() over () as rn from o where c_id=1;
+}
+expect unordered {
+    1
+    2
+    3
+}
+
+@setup s161
+test l14362 {
+    select rank() over() as rnk from o where c_id=-999;
+}
+expect unordered {
+}
+
+@setup s161
+test l14368 {
+    select o_id, c_id, rank() over(order by o_id) as rnk from o where c_id=1;
+}
+expect unordered {
+    10|1|1
+    20|1|2
+    30|1|3
+}
+
+@setup s161
+test l14376 {
+    select dense_rank() over() as rnk from o where c_id=-999;
+}
+expect unordered {
+}
+
+@setup s161
+test l14383 {
+    select ship, dense_rank() over (order by ship) as drnk from o where c_id in (1, 2) order by ship;
+}
+expect {
+    NULL|1
+    CA|2
+    CA|2
+    CA|2
+    CA|2
+    TX|3
+}
+
+@setup s161
+test l14394 {
+    select count(*) from o where c_id=-999;
+}
+expect unordered {
+    0
+}
+
+test l14414 {
+    SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'ONLY_FULL_GROUP_BY', '');
+}
+expect unordered {
+}
+
+@setup s162
+test l14419 {
+    SELECT pk, count(pk), MATCH(doc) AGAINST('aaaa') AS relevancy FROM test ORDER BY relevancy DESC;
+}
+expect {
+    1|4|0
+}
+
+# mysql-error: 1140 42000 In aggregated query without GROUP BY, expression #2 of SELECT list contains nonaggregated column 'test.emptytable.i'; this is incompatible with sql_mode=only_full_group_by
+@setup s163
+test l14436 {
+    SELECT count(*), i, concat(i, i), 123, 'abc', concat('abc', 'def') FROM emptytable;
+}
+expect error {
+}
+
+# mysql-error: 1140 42000 In aggregated query without GROUP BY, expression #2 of SELECT list contains nonaggregated column 'test.mytable.i'; this is incompatible with sql_mode=only_full_group_by
+@setup s164
+test l14440 {
+    SELECT count(*), i, concat(i, i), 123, 'abc', concat('abc', 'def') FROM mytable where false;
+}
+expect error {
+}
+
+# mysql-error: 1140 42000 In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.two_pk.pk1'; this is incompatible with sql_mode=only_full_group_by
+@setup s165
+test l14444 {
+    SELECT pk1, SUM(c1) FROM two_pk;
+}
+expect error {
+}
+
+@setup s163
+@setup s166
+test l14452 {
+    SELECT count(*), i, concat(i, i), 123, 'abc', concat('abc', 'def') FROM emptytable;
+}
+expect unordered {
+    0|NULL|NULL|123|abc|abcdef
+}
+
+@setup s164
+@setup s167
+test l14458 {
+    SELECT count(*), i, concat(i, i), 123, 'abc', concat('abc', 'def') FROM mytable where false;
+}
+expect unordered {
+    0|NULL|NULL|123|abc|abcdef
+}
+
+@setup s165
+@setup s168
+test l14464 {
+    SELECT pk1, SUM(c1) FROM two_pk;
+}
+expect unordered {
+    0|60
+}
+
+@setup s169
+test l14483 {
+    select * from t2, t3, t0, t1;
+}
+expect unordered {
+}
+
+@setup s169
+test l14487 {
+    select * from t2, t3, t0, t1 order by t0.c0;
+}
+expect {
+}
+
+test l14501 {
+    select true || false;
+}
+expect unordered {
+    1
+}
+
+test l14505 {
+    select '0' || '0';
+}
+expect unordered {
+    0
+}
+
+test l14509 {
+    select 'Hello' || ' ' || 'World';
+}
+expect unordered {
+    0
+}
+
+test l14513 {
+    select 1 || 0;
+}
+expect unordered {
+    1
+}
+
+@setup s170
+test l14517 {
+    select first_name || ' ' || last_name as full_name from names order by full_name;
+}
+expect {
+    0
+    0
+}
+
+test l14521 {
+    select 1 + 2 || 3 + 4;
+}
+expect unordered {
+    1
+}
+
+test l14525 {
+    select true || 1 || 'abc';
+}
+expect unordered {
+    1
+}
+
+test l14529 {
+    select (1 || 2) || (3 || 4);
+}
+expect unordered {
+    1
+}
+
+test l14533 {
+    select (1 + 2) || (3 + 4);
+}
+expect unordered {
+    1
+}
+
+test l14537 {
+    select ((1 || 2) || 3) || 4;
+}
+expect unordered {
+    1
+}
+
+test l14541 {
+    select ((1 + 2) || 3) + 4;
+}
+expect unordered {
+    5
+}
+
+test l14545 {
+    SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',PIPES_AS_CONCAT');
+}
+expect unordered {
+}
+
+@setup s171
+test l14549 {
+    select true || false;
+}
+expect unordered {
+    10
+}
+
+@setup s171
+test l14553 {
+    select '0' || '0';
+}
+expect unordered {
+    00
+}
+
+@setup s171
+test l14557 {
+    select 'Hello' || ' ' || 'World';
+}
+expect unordered {
+    Hello World
+}
+
+@setup s171
+test l14561 {
+    select 1 || 0;
+}
+expect unordered {
+    10
+}
+
+@setup s170
+@setup s172
+test l14565 {
+    select first_name || ' ' || last_name as full_name from names order by full_name;
+}
+expect {
+    bob burger
+    john smith
+}
+
+@setup s171
+test l14569 {
+    select 1 + 2 || 3 + 4;
+}
+expect unordered {
+    28
+}
+
+@setup s171
+test l14573 {
+    select true || 1 || 'abc';
+}
+expect unordered {
+    11abc
+}
+
+@setup s171
+test l14577 {
+    select (1 || 2) || (3 || 4);
+}
+expect unordered {
+    1234
+}
+
+@setup s171
+test l14581 {
+    select (1 + 2) || (3 + 4);
+}
+expect unordered {
+    37
+}
+
+@setup s171
+test l14585 {
+    select ((1 || 2) || 3) || 4;
+}
+expect unordered {
+    1234
+}
+
+@setup s171
+test l14589 {
+    select ((1 + 2) || 3) + 4;
+}
+expect unordered {
+    37
+}
+
+@setup s173
+test l14603 {
+    select * from (select id, name, description, archived from t0 as test0 where (id in (select id from t0))) as dummy_alias order by dummy_alias.name asc;
+}
+expect {
+    1|first|abc|0
+}
+
+@setup s174
+test l14618 {
+    SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0 WHERE (t1.c0)*(t1.c0)) union all SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0 WHERE (t1.c0)*(t1.c0));
+}
+expect unordered {
+    1|-1
+    1|-1
+    2|-2
+    2|-2
+}
+
+@setup s174
+test l14628 {
+    SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0) union all SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM (SELECT NULL WHERE FALSE) AS sub0);
+}
+expect unordered {
+    1|-1
+    1|-1
+    2|-2
+    2|-2
+}
+
+@setup s175
+test l14653 {
+    SELECT * FROM t0 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) alias0 WHERE (CASE -1 WHEN t0.c1 THEN false END));
+}
+expect unordered {
+    1|-2
+}
+
+@setup s176
+test l14658 {
+    select * from t1 where not exists (select 1 from (select 1) as subquery where weekday(t1.c0));
+}
+expect unordered {
+    1
+}
+
+@setup s177
+test l14663 {
+    SELECT * FROM t2 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) AS sub0 WHERE ASIN(t2.c0));
+}
+expect unordered {
+    9
+}
+
+@setup s178
+test l14670 {
+    SELECT * FROM t3 WHERE NOT EXISTS (SELECT 1 FROM (SELECT 1) AS sub0 WHERE LOG2(t3.c0));
+}
+expect unordered {
+    0
+}
+
+@setup s179
+test l14686 {
+    SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t0 WHERE (t0.c0)OR(t1.c0));
+}
+expect unordered {
+}
+
+@setup s180
+test l14703 {
+    select 1 from t0 where (19 or 's') != (7 != t0.c1);
+}
+expect unordered {
+}
+
+@setup s180
+@setup s181
+test l14707 {
+    SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t0 WHERE ((((19)OR('s')))!=(((7)!=(t0.c1)))));
+}
+expect unordered {
+    2
+}
+
+@setup s182
+test l14722 {
+    SELECT * from t1 where not exists (select 1 from v0 where (case t1.c1 when false then v0.c0 else t1.c0 end)) order by c0;
+}
+expect {
+    0|NULL
+    1|NULL
+}
+
+@setup s183
+test l14737 {
+    select 1 from t1 where false=t1.c0;
+}
+expect unordered {
+    1
+}
+
+@setup s184
+test l14759 {
+    select x, y, z,
+       						(x between y and z), (x between x and z), (x between y and x), (x between y and y),
+       						(x between x and x) from test order by x;
+}
+expect {
+    NULL|0|0|NULL|NULL|NULL|NULL|NULL
+    1|NULL|1|NULL|1|NULL|NULL|1
+    2|2|NULL|NULL|NULL|1|1|1
+    3|2|4|1|1|1|0|1
+    4|2|3|0|0|1|0|1
+    5|6|7|0|1|0|0|1
+    6|6|5|0|0|1|1|1
+    7|8|7|0|1|0|0|1
+    8|9|7|0|0|0|0|1
+}
+
+@setup s184
+test l14775 {
+    select x from test where (x between y and z) order by x;
+}
+expect {
+    3
+}
+
+@setup s184
+test l14779 {
+    select x from test where (x between x and z) order by x;
+}
+expect {
+    1
+    3
+    5
+    7
+}
+
+@setup s184
+test l14783 {
+    select x from test where (x between y and x) order by x;
+}
+expect {
+    2
+    3
+    4
+    6
+}
+
+@setup s184
+test l14787 {
+    select x from test where (x between y and y) order by x;
+}
+expect {
+    2
+    6
+}
+
+@setup s184
+test l14791 {
+    select x from test where (x between x and x) order by x;
+}
+expect {
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+}
+
+@setup s185
+test l14845 {
+    WITH blocked_directly AS (
+						SELECT DISTINCT d.issue_id
+						FROM dependencies d
+						JOIN issues blocker ON d.depends_on_id = blocker.id
+						WHERE d.type = 'blocks'
+						  AND blocker.status IN ('open', 'in_progress', 'blocked', 'deferred', 'hooked')
+					  )
+					SELECT i.id
+					FROM issues i
+					WHERE i.status = 'open'
+					  AND NOT EXISTS (
+						SELECT 1 FROM blocked_directly WHERE issue_id = i.id
+					  );
+}
+expect unordered {
+    1
+    4
+    5
+    6
+}
+
+@setup s185
+test l14861 {
+    SELECT i.id
+						FROM issues i
+						WHERE i.status = 'open'
+						  AND NOT EXISTS (
+							SELECT 1 FROM (
+					  SELECT DISTINCT d.issue_id
+						FROM dependencies d
+						JOIN issues blocker ON d.depends_on_id = blocker.id
+						WHERE d.type = 'blocks' AND blocker.status IN ('open', 'in_progress', 'blocked', 'deferred', 'hooked')
+					) as blocked WHERE blocked.issue_id = i.id);
+}
+expect unordered {
+    1
+    4
+    5
+    6
+}
+
+@setup s186
+test l14886 {
+    select greatest(a, b, c), least(a, b, c) from t;
+}
+expect unordered {
+    8.80000|2.75000
+}
+
+# mysql-error: 1235 42000 This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'
+@setup s187
+test l14902 {
+    SELECT * FROM bug_repro WHERE id NOT IN (SELECT id FROM bug_repro WHERE status='open' LIMIT 1);
+}
+expect error {
+}
+
+# mysql-error: 1235 42000 This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'
+@setup s187
+test l14909 {
+    UPDATE bug_repro SET status='closed' WHERE id NOT IN (SELECT id FROM bug_repro WHERE status='open' LIMIT 1);
+}
+expect error {
+}
+
+@setup s187
+test l14913 {
+    INSERT INTO bug_repro VALUES ('d', 'open', 'zz');
+}
+expect unordered {
+}
+
+# mysql-error: 1235 42000 This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'
+@setup s187
+@setup s188
+test l14917 {
+    DELETE FROM bug_repro WHERE status='open' AND id NOT IN (SELECT id FROM bug_repro WHERE status='open' LIMIT 1);
+}
+expect error {
+}
+
+@setup s187
+@setup s188
+test l14921 {
+    select * from bug_repro;
+}
+expect unordered {
+    a|open|x
+    b|open|y
+    c|open|z
+    d|open|zz
+}
+
+# mysql-error: 1093 HY000 You can't specify target table 'bug_repro' for update in FROM clause
+@setup s187
+@setup s188
+test l14929 {
+    UPDATE bug_repro SET status='delete this' WHERE id NOT IN (SELECT id FROM bug_repro WHERE status='keep this');
+}
+expect error {
+}
+
+@setup s187
+@setup s188
+test l14933 {
+    select * from bug_repro;
+}
+expect unordered {
+    a|open|x
+    b|open|y
+    c|open|z
+    d|open|zz
+}
+
+@setup s189
+test l14952 {
+    INSERT IGNORE INTO t VALUES (1, UNHEX('5353442031544220322E3585204E564D65'));
+}
+expect unordered {
+}
+
+@setup s189
+@setup s190
+test l14958 {
+    SELECT name, HEX(name) FROM t WHERE id = 1;
+}
+expect unordered {
+    SSD 1TB 2.5|5353442031544220322E35
+}
+
+@setup s191
+test l15001 {
+    SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) ASC LIMIT 1;
+}
+expect {
+    foo-8
+}
+
+@setup s191
+test l15005 {
+    SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) DESC LIMIT 1;
+}
+expect {
+    foo-5
+}
+
+@setup s191
+test l15009 {
+    SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) ASC LIMIT 2;
+}
+expect {
+    foo-8
+    foo-4
+}
+
+@setup s191
+test l15013 {
+    SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) DESC LIMIT 2;
+}
+expect {
+    foo-5
+    foo-7
+}
+
+@setup s191
+test l15017 {
+    SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) ASC LIMIT 4;
+}
+expect {
+    foo-8
+    foo-4
+    foo-6
+    foo-2
+}
+
+@setup s191
+test l15021 {
+    SELECT * FROM foo ORDER BY (SELECT MAX(r.approved_on) FROM bar r WHERE r.foo_id = foo.id) DESC LIMIT 4;
+}
+expect {
+    foo-5
+    foo-7
+    foo-3
+    foo-1
+}

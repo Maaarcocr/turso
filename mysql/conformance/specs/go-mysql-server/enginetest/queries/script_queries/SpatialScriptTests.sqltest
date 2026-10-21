@@ -1,0 +1,1115 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/script_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE test (i int primary key, p point default (point(123.456, 7.89)));
+    insert into test (i) values (0);
+}
+
+setup s2 {
+    CREATE TABLE test (i int primary key, l linestring default (linestring(point(1,2), point(3,4))));
+    insert into test (i) values (0);
+}
+
+setup s3 {
+    CREATE TABLE test (i int primary key, p polygon default (polygon(linestring(point(0,0), point(1,1), point(2,2), point(0,0)))));
+    insert into test (i) values (0);
+}
+
+setup s4 {
+    CREATE TABLE test (i int primary key, g geometry  default (point(123.456, 7.89)));
+    insert into test (i) values (0);
+}
+
+setup s5 {
+    CREATE TABLE test (i int primary key, g geometry default (linestring(point(1,2), point(3,4))));
+    insert into test (i) values (0);
+}
+
+setup s6 {
+    CREATE TABLE test (i int primary key, g geometry default (polygon(linestring(point(0,0), point(1,1), point(2,2), point(0,0)))));
+    insert into test (i) values (0);
+}
+
+setup s7 {
+    CREATE TABLE null_default (pk int NOT NULL PRIMARY KEY, v1 geometry DEFAULT NULL, v2 linestring DEFAULT NULL, v3 point DEFAULT NULL, v4 polygon DEFAULT NULL);
+    insert into null_default(pk) values (0);
+}
+
+setup s8 {
+    CREATE TABLE tab0 (i int primary key, g geometry srid 4326 default (point(1,1)));
+}
+
+setup s9 {
+    INSERT INTO tab0 VALUES (1, ST_GEOMFROMTEXT(ST_ASWKT(POINT(1,2)), 4326));
+}
+
+setup s10 {
+    INSERT INTO tab0 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(LINESTRING(POINT(1, 6),POINT(4, 3))), 4326));
+}
+
+setup s11 {
+    CREATE TABLE tab1 (i int primary key, l linestring srid 0);
+}
+
+setup s12 {
+    INSERT INTO tab1 VALUES (1, LINESTRING(POINT(0, 0),POINT(2, 2)));
+}
+
+setup s13 {
+    CREATE TABLE tab2 (i int primary key);
+}
+
+setup s14 {
+    ALTER TABLE tab2 ADD COLUMN p POINT NOT NULL SRID 0;
+}
+
+setup s15 {
+    INSERT INTO tab2 VALUES (1, POINT(2, 2));
+}
+
+setup s16 {
+    ALTER TABLE tab2 CHANGE COLUMN p p POINT NOT NULL;
+}
+
+setup s17 {
+    INSERT INTO tab2 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(POINT(1, 6)), 4326));
+}
+
+setup s18 {
+    delete from tab2 where i = 1;
+}
+
+setup s19 {
+    CREATE TABLE tab3 (i int primary key, y polygon NOT NULL);
+}
+
+setup s20 {
+    INSERT INTO tab3 VALUES (1, polygon(linestring(point(0,0),point(8,0),point(12,9),point(0,9),point(0,0))));
+}
+
+setup s21 {
+    ALTER TABLE tab3 MODIFY COLUMN y POLYGON NOT NULL SRID 0;
+}
+
+setup s22 {
+    ALTER TABLE tab3 MODIFY COLUMN y GEOMETRY NULL SRID 0;
+}
+
+setup s23 {
+    CREATE TABLE table1 (i int primary key, p point srid 4326);
+    INSERT INTO table1 VALUES (1, ST_SRID(POINT(1, 5), 4326));
+}
+
+setup s24 {
+    ALTER TABLE table1 CHANGE COLUMN p p geometry srid 4326;
+}
+
+setup s25 {
+    INSERT INTO table1 VALUES (2, ST_SRID(LINESTRING(POINT(0, 0),POINT(2, 2)),4326));
+}
+
+setup s26 {
+    CREATE TABLE test (i int primary key, g geometry NOT NULL);
+    INSERT INTO test VALUES (1, POINT(0,0));
+    INSERT INTO test VALUES (2, LINESTRING(POINT(0,0),POINT(1,1)));
+    INSERT INTO test VALUES (3, POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0))));
+    INSERT INTO test VALUES (4, MULTIPOINT(POINT(0,0),POINT(1,1)));
+    INSERT INTO test VALUES (5, MULTILINESTRING(LINESTRING(POINT(0,0),POINT(1,1))));
+    INSERT INTO test VALUES (6, MULTIPOLYGON(POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0)))));
+    INSERT INTO test VALUES (7, GEOMETRYCOLLECTION(POINT(0,0)));
+}
+
+setup s27 {
+    CREATE TABLE test (i int primary key, l linestring NOT NULL);
+    INSERT INTO test VALUES (1, LINESTRING(POINT(0,0),POINT(1,1)));
+    INSERT INTO test VALUES (2, LINESTRING(POINT(0,0),POINT(1,1),POINT(2,2),POINT(3,3)));
+}
+
+@setup s1
+test l15037 {
+    select st_aswkt(p) from test;
+}
+expect unordered {
+    POINT(123.456 7.89)
+}
+
+@setup s1
+test l15045 {
+    describe test;
+}
+expect {
+    i|int|NO|PRI|NULL|
+    p|point|YES||point(123.456,7.89)|DEFAULT_GENERATED
+}
+
+@setup s2
+test l15061 {
+    select st_aswkt(l) from test;
+}
+expect unordered {
+    LINESTRING(1 2,3 4)
+}
+
+@setup s2
+test l15069 {
+    describe test;
+}
+expect {
+    i|int|NO|PRI|NULL|
+    l|linestring|YES||linestring(point(1,2),point(3,4))|DEFAULT_GENERATED
+}
+
+@setup s3
+test l15085 {
+    select st_aswkt(p) from test;
+}
+expect unordered {
+    POLYGON((0 0,1 1,2 2,0 0))
+}
+
+@setup s3
+test l15093 {
+    describe test;
+}
+expect {
+    i|int|NO|PRI|NULL|
+    p|polygon|YES||polygon(linestring(point(0,0),point(1,1),point(2,2),point(0,0)))|DEFAULT_GENERATED
+}
+
+@setup s4
+test l15109 {
+    select st_aswkt(g) from test;
+}
+expect unordered {
+    POINT(123.456 7.89)
+}
+
+@setup s4
+test l15117 {
+    describe test;
+}
+expect {
+    i|int|NO|PRI|NULL|
+    g|geometry|YES||point(123.456,7.89)|DEFAULT_GENERATED
+}
+
+@setup s5
+test l15133 {
+    select st_aswkt(g) from test;
+}
+expect unordered {
+    LINESTRING(1 2,3 4)
+}
+
+@setup s5
+test l15141 {
+    describe test;
+}
+expect {
+    i|int|NO|PRI|NULL|
+    g|geometry|YES||linestring(point(1,2),point(3,4))|DEFAULT_GENERATED
+}
+
+@setup s6
+test l15157 {
+    select st_aswkt(g) from test;
+}
+expect unordered {
+    POLYGON((0 0,1 1,2 2,0 0))
+}
+
+@setup s6
+test l15165 {
+    describe test;
+}
+expect {
+    i|int|NO|PRI|NULL|
+    g|geometry|YES||polygon(linestring(point(0,0),point(1,1),point(2,2),point(0,0)))|DEFAULT_GENERATED
+}
+
+@setup s7
+test l15180 {
+    select * from null_default;
+}
+expect unordered {
+    0|NULL|NULL|NULL|NULL
+}
+
+@setup s8
+test l15196 {
+    INSERT INTO tab0 VALUES (1, ST_GEOMFROMTEXT(ST_ASWKT(POINT(1,2)), 4326));
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+test l15200 {
+    select i, ST_ASWKT(g) FROM tab0;
+}
+expect unordered {
+    1|POINT(1 2)
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'g'. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s8
+@setup s9
+test l15204 {
+    INSERT INTO tab0 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(POINT(2,4))));
+}
+expect error {
+}
+
+@setup s8
+@setup s9
+test l15208 {
+    INSERT INTO tab0 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(LINESTRING(POINT(1, 6),POINT(4, 3))), 4326));
+}
+expect unordered {
+}
+
+@setup s8
+@setup s9
+@setup s10
+test l15212 {
+    select i, ST_ASWKT(g) FROM tab0;
+}
+expect unordered {
+    1|POINT(1 2)
+    2|LINESTRING(1 6,4 3)
+}
+
+@setup s11
+test l15228 {
+    INSERT INTO tab1 VALUES (1, LINESTRING(POINT(0, 0),POINT(2, 2)));
+}
+expect unordered {
+}
+
+@setup s11
+@setup s12
+test l15232 {
+    select i, ST_ASWKT(l) FROM tab1;
+}
+expect unordered {
+    1|LINESTRING(0 0,2 2)
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'l'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s11
+@setup s12
+test l15236 {
+    INSERT INTO tab1 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(LINESTRING(POINT(1, 6),POINT(4, 3))), 4326));
+}
+expect error {
+}
+
+@setup s11
+@setup s12
+test l15240 {
+    select i, ST_ASWKT(l) FROM tab1;
+}
+expect unordered {
+    1|LINESTRING(0 0,2 2)
+}
+
+@setup s13
+test l15252 {
+    ALTER TABLE tab2 ADD COLUMN p POINT NOT NULL SRID 0;
+}
+expect unordered {
+}
+
+@setup s13
+@setup s14
+test l15260 {
+    INSERT INTO tab2 VALUES (1, POINT(2, 2));
+}
+expect unordered {
+}
+
+@setup s13
+@setup s14
+@setup s15
+test l15264 {
+    select i, ST_ASWKT(p) FROM tab2;
+}
+expect unordered {
+    1|POINT(2 2)
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s13
+@setup s14
+@setup s15
+test l15268 {
+    INSERT INTO tab2 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(POINT(1, 6)), 4326));
+}
+expect error {
+}
+
+@setup s13
+@setup s14
+@setup s15
+test l15272 {
+    select i, ST_ASWKT(p) FROM tab2;
+}
+expect unordered {
+    1|POINT(2 2)
+}
+
+@setup s13
+@setup s14
+@setup s15
+test l15276 {
+    ALTER TABLE tab2 CHANGE COLUMN p p POINT NOT NULL;
+}
+expect unordered {
+}
+
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+test l15280 {
+    INSERT INTO tab2 VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(POINT(1, 6)), 4326));
+}
+expect unordered {
+}
+
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l15284 {
+    select i, ST_ASWKT(p) FROM tab2;
+}
+expect unordered {
+    1|POINT(2 2)
+    2|POINT(1 6)
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l15288 {
+    ALTER TABLE tab2 CHANGE COLUMN p p POINT NOT NULL SRID 4326;
+}
+expect error {
+}
+
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+test l15292 {
+    delete from tab2 where i = 1;
+}
+expect unordered {
+}
+
+@setup s13
+@setup s14
+@setup s15
+@setup s16
+@setup s17
+@setup s18
+test l15296 {
+    ALTER TABLE tab2 CHANGE COLUMN p p POINT NOT NULL SRID 4326;
+}
+expect unordered {
+}
+
+@setup s19
+test l15316 {
+    INSERT INTO tab3 VALUES (1, polygon(linestring(point(0,0),point(8,0),point(12,9),point(0,9),point(0,0))));
+}
+expect unordered {
+}
+
+@setup s19
+@setup s20
+test l15320 {
+    select i, ST_ASWKT(y) FROM tab3;
+}
+expect unordered {
+    1|POLYGON((0 0,8 0,12 9,0 9,0 0))
+}
+
+@setup s19
+@setup s20
+test l15324 {
+    ALTER TABLE tab3 MODIFY COLUMN y POLYGON NOT NULL SRID 0;
+}
+expect unordered {
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'y'. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s19
+@setup s20
+@setup s21
+test l15328 {
+    ALTER TABLE tab3 MODIFY COLUMN y POLYGON NOT NULL SRID 4326;
+}
+expect error {
+}
+
+@setup s19
+@setup s20
+@setup s21
+test l15332 {
+    select i, ST_ASWKT(y) FROM tab3;
+}
+expect unordered {
+    1|POLYGON((0 0,8 0,12 9,0 9,0 0))
+}
+
+@setup s19
+@setup s20
+@setup s21
+test l15336 {
+    ALTER TABLE tab3 MODIFY COLUMN y GEOMETRY NULL SRID 0;
+}
+expect unordered {
+}
+
+@setup s19
+@setup s20
+@setup s21
+@setup s22
+test l15340 {
+    select i, ST_ASWKT(y) FROM tab3;
+}
+expect unordered {
+    1|POLYGON((0 0,8 0,12 9,0 9,0 0))
+}
+
+# mysql-error: 3548 SR001 There's no spatial reference system with SRID 1.
+test l15354 {
+    CREATE TABLE table3 (i int primary key, p point srid 1);
+}
+expect error {
+}
+
+test l15358 {
+    CREATE TABLE table3 (i int primary key, p point srid 3857);
+}
+expect unordered {
+}
+
+@setup s23
+test l15368 {
+    SELECT i, ST_ASWKT(p) FROM table1;
+}
+expect unordered {
+    1|POINT(5 1)
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s23
+test l15372 {
+    INSERT INTO table1 VALUES (2, POINT(2, 5));
+}
+expect error {
+}
+
+@setup s23
+test l15376 {
+    SELECT i, ST_ASWKT(p) FROM table1;
+}
+expect unordered {
+    1|POINT(5 1)
+}
+
+# mysql-error: 1416 22003 Cannot get geometry object from data you send to the GEOMETRY field
+@setup s23
+test l15380 {
+    ALTER TABLE table1 CHANGE COLUMN p p linestring srid 4326;
+}
+expect error {
+}
+
+# mysql-error: 3643 HY000 The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column.
+@setup s23
+test l15384 {
+    ALTER TABLE table1 CHANGE COLUMN p p geometry srid 0;
+}
+expect error {
+}
+
+@setup s23
+test l15388 {
+    ALTER TABLE table1 CHANGE COLUMN p p geometry srid 4326;
+}
+expect unordered {
+}
+
+@setup s23
+@setup s24
+test l15396 {
+    INSERT INTO table1 VALUES (2, ST_SRID(LINESTRING(POINT(0, 0),POINT(2, 2)),4326));
+}
+expect unordered {
+}
+
+# mysql-error: 1416 22003 Cannot get geometry object from data you send to the GEOMETRY field
+@setup s23
+@setup s24
+@setup s25
+test l15400 {
+    ALTER TABLE table1 CHANGE COLUMN p p point srid 4326;
+}
+expect error {
+}
+
+@setup s26
+test l15422 {
+    SELECT i, ST_GEOMETRYTYPE(g) FROM test ORDER BY i;
+}
+expect {
+    1|POINT
+    2|LINESTRING
+    3|POLYGON
+    4|MULTIPOINT
+    5|MULTILINESTRING
+    6|MULTIPOLYGON
+    7|GEOMCOLLECTION
+}
+
+test l15434 {
+    SELECT ST_GEOMETRYTYPE(NULL);
+}
+expect unordered {
+    NULL
+}
+
+@setup s27
+test l15451 {
+    SELECT i, ST_NUMPOINTS(l) FROM test ORDER BY i;
+}
+expect {
+    1|2
+    2|4
+}
+
+test l15459 {
+    SELECT ST_NUMPOINTS(POINT(0,0));
+}
+expect unordered {
+    NULL
+}
+
+test l15463 {
+    SELECT ST_NUMPOINTS(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15477 {
+    SELECT ST_NUMGEOMETRIES(POINT(0,0));
+}
+expect unordered {
+    NULL
+}
+
+test l15481 {
+    SELECT ST_NUMGEOMETRIES(MULTIPOINT(POINT(0,0),POINT(1,1),POINT(2,2)));
+}
+expect unordered {
+    3
+}
+
+test l15485 {
+    SELECT ST_NUMGEOMETRIES(GEOMETRYCOLLECTION(POINT(0,0),LINESTRING(POINT(0,0),POINT(1,1))));
+}
+expect unordered {
+    2
+}
+
+test l15489 {
+    SELECT ST_NUMGEOMETRIES(GEOMETRYCOLLECTION());
+}
+expect unordered {
+    0
+}
+
+test l15493 {
+    SELECT ST_NUMGEOMETRIES(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15506 {
+    SELECT ST_ASWKT(ST_GEOMETRYN(MULTIPOINT(POINT(0,0),POINT(1,1),POINT(2,2)), 1));
+}
+expect unordered {
+    POINT(0 0)
+}
+
+test l15510 {
+    SELECT ST_ASWKT(ST_GEOMETRYN(MULTIPOINT(POINT(0,0),POINT(1,1),POINT(2,2)), 3));
+}
+expect unordered {
+    POINT(2 2)
+}
+
+test l15515 {
+    SELECT ST_GEOMETRYN(MULTIPOINT(POINT(0,0),POINT(1,1)), 3);
+}
+expect unordered {
+    NULL
+}
+
+test l15520 {
+    SELECT ST_GEOMETRYN(MULTIPOINT(POINT(0,0)), 0);
+}
+expect unordered {
+    NULL
+}
+
+test l15525 {
+    SELECT ST_GEOMETRYN(POINT(5,10), 1);
+}
+expect unordered {
+    NULL
+}
+
+test l15529 {
+    SELECT ST_GEOMETRYN(NULL, 1);
+}
+expect unordered {
+    NULL
+}
+
+test l15542 {
+    SELECT ST_ASWKT(ST_EXTERIORRING(POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0)))));
+}
+expect unordered {
+    LINESTRING(0 0,1 0,1 1,0 0)
+}
+
+test l15547 {
+    SELECT ST_ASWKT(ST_EXTERIORRING(POLYGON(LINESTRING(POINT(0,0),POINT(10,0),POINT(10,10),POINT(0,0)),LINESTRING(POINT(1,1),POINT(2,1),POINT(2,2),POINT(1,1)))));
+}
+expect unordered {
+    LINESTRING(0 0,10 0,10 10,0 0)
+}
+
+test l15551 {
+    SELECT ST_EXTERIORRING(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15564 {
+    SELECT ST_ASWKT(ST_POINTN(LINESTRING(POINT(0,0),POINT(1,1),POINT(2,2)), 1));
+}
+expect unordered {
+    POINT(0 0)
+}
+
+test l15568 {
+    SELECT ST_ASWKT(ST_POINTN(LINESTRING(POINT(0,0),POINT(1,1),POINT(2,2)), 3));
+}
+expect unordered {
+    POINT(2 2)
+}
+
+test l15573 {
+    SELECT ST_POINTN(LINESTRING(POINT(0,0),POINT(1,1)), 3);
+}
+expect unordered {
+    NULL
+}
+
+test l15577 {
+    SELECT ST_POINTN(NULL, 1);
+}
+expect unordered {
+    NULL
+}
+
+test l15591 {
+    SELECT ST_CONTAINS(POINT(0,0), POINT(0,0));
+}
+expect unordered {
+    1
+}
+
+test l15596 {
+    SELECT ST_CONTAINS(POINT(0,0), POINT(1,1));
+}
+expect unordered {
+    0
+}
+
+test l15600 {
+    SELECT ST_CONTAINS(NULL, POINT(0,0));
+}
+expect unordered {
+    NULL
+}
+
+test l15614 {
+    SELECT ST_ASWKT(ST_ENVELOPE(POINT(1,2)));
+}
+expect unordered {
+    POINT(1 2)
+}
+
+test l15619 {
+    SELECT ST_ASWKT(ST_ENVELOPE(LINESTRING(POINT(0,0),POINT(5,0))));
+}
+expect unordered {
+    LINESTRING(0 0,5 0)
+}
+
+test l15624 {
+    SELECT ST_ASWKT(ST_ENVELOPE(LINESTRING(POINT(0,0),POINT(3,4))));
+}
+expect unordered {
+    POLYGON((0 0,3 0,3 4,0 4,0 0))
+}
+
+test l15629 {
+    SELECT ST_ASWKT(ST_ENVELOPE(POLYGON(LINESTRING(POINT(0,0),POINT(10,0),POINT(10,5),POINT(0,0)))));
+}
+expect unordered {
+    POLYGON((0 0,10 0,10 5,0 5,0 0))
+}
+
+test l15633 {
+    SELECT ST_ENVELOPE(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15647 {
+    SELECT ST_DISJOINT(POINT(0,0), POINT(0,0));
+}
+expect unordered {
+    0
+}
+
+test l15652 {
+    SELECT ST_DISJOINT(POINT(0,0), POINT(1,1));
+}
+expect unordered {
+    1
+}
+
+test l15657 {
+    SELECT ST_DISJOINT(POINT(0,0), LINESTRING(POINT(0,0),POINT(1,1)));
+}
+expect unordered {
+    0
+}
+
+test l15661 {
+    SELECT ST_DISJOINT(NULL, POINT(0,0));
+}
+expect unordered {
+    NULL
+}
+
+test l15675 {
+    SELECT ST_NUMINTERIORRINGS(POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0))));
+}
+expect unordered {
+    0
+}
+
+test l15680 {
+    SELECT ST_NUMINTERIORRINGS(POLYGON(LINESTRING(POINT(0,0),POINT(10,0),POINT(10,10),POINT(0,0)),LINESTRING(POINT(1,1),POINT(2,1),POINT(2,2),POINT(1,1))));
+}
+expect unordered {
+    1
+}
+
+test l15685 {
+    SELECT ST_NUMINTERIORRING(POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0))));
+}
+expect unordered {
+    0
+}
+
+test l15689 {
+    SELECT ST_NUMINTERIORRINGS(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15702 {
+    SELECT ST_ASWKT(ST_INTERIORRINGN(POLYGON(LINESTRING(POINT(0,0),POINT(10,0),POINT(10,10),POINT(0,0)),LINESTRING(POINT(1,1),POINT(2,1),POINT(2,2),POINT(1,1))), 1));
+}
+expect unordered {
+    LINESTRING(1 1,2 1,2 2,1 1)
+}
+
+test l15707 {
+    SELECT ST_INTERIORRINGN(POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0))), 1);
+}
+expect unordered {
+    NULL
+}
+
+test l15711 {
+    SELECT ST_INTERIORRINGN(NULL, 1);
+}
+expect unordered {
+    NULL
+}
+
+test l15724 {
+    SELECT ST_ISEMPTY(GEOMETRYCOLLECTION());
+}
+expect unordered {
+    1
+}
+
+test l15728 {
+    SELECT ST_ISEMPTY(GEOMETRYCOLLECTION(POINT(0,0)));
+}
+expect unordered {
+    0
+}
+
+test l15732 {
+    SELECT ST_ISEMPTY(POINT(0,0));
+}
+expect unordered {
+    0
+}
+
+test l15736 {
+    SELECT ST_ISEMPTY(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15750 {
+    SELECT ST_ASWKT(ST_CENTROID(POINT(3,5)));
+}
+expect unordered {
+    POINT(3 5)
+}
+
+test l15755 {
+    SELECT ST_ASWKT(ST_CENTROID(LINESTRING(POINT(0,0),POINT(10,0))));
+}
+expect unordered {
+    POINT(5 0)
+}
+
+test l15760 {
+    SELECT ST_ASWKT(ST_CENTROID(POLYGON(LINESTRING(POINT(0,0),POINT(4,0),POINT(4,4),POINT(0,4),POINT(0,0)))));
+}
+expect unordered {
+    POINT(2 2)
+}
+
+test l15765 {
+    SELECT ST_ASWKT(ST_CENTROID(MULTIPOINT(POINT(0,0),POINT(10,0),POINT(10,10),POINT(0,10))));
+}
+expect unordered {
+    POINT(5 5)
+}
+
+test l15769 {
+    SELECT ST_CENTROID(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15783 {
+    SELECT ST_ASWKT(ST_CONVEXHULL(POINT(1,2)));
+}
+expect unordered {
+    POINT(1 2)
+}
+
+test l15788 {
+    SELECT ST_ASWKT(ST_CONVEXHULL(MULTIPOINT(POINT(0,0),POINT(1,1),POINT(2,2))));
+}
+expect unordered {
+    LINESTRING(0 0,2 2)
+}
+
+test l15793 {
+    SELECT ST_ASWKT(ST_CONVEXHULL(MULTIPOINT(POINT(0,0),POINT(4,0),POINT(4,4),POINT(0,4))));
+}
+expect unordered {
+    POLYGON((0 0,4 0,4 4,0 4,0 0))
+}
+
+test l15798 {
+    SELECT ST_ASWKT(ST_CONVEXHULL(MULTIPOINT(POINT(0,0),POINT(4,0),POINT(4,4),POINT(0,4),POINT(2,2))));
+}
+expect unordered {
+    POLYGON((0 0,4 0,4 4,0 4,0 0))
+}
+
+test l15802 {
+    SELECT ST_CONVEXHULL(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15816 {
+    SELECT ST_ISSIMPLE(POINT(0,0));
+}
+expect unordered {
+    1
+}
+
+test l15821 {
+    SELECT ST_ISSIMPLE(LINESTRING(POINT(0,0),POINT(1,1),POINT(2,0)));
+}
+expect unordered {
+    1
+}
+
+test l15826 {
+    SELECT ST_ISSIMPLE(LINESTRING(POINT(0,0),POINT(2,2),POINT(2,0),POINT(0,2)));
+}
+expect unordered {
+    0
+}
+
+test l15831 {
+    SELECT ST_ISSIMPLE(MULTIPOINT(POINT(0,0),POINT(1,1)));
+}
+expect unordered {
+    1
+}
+
+test l15836 {
+    SELECT ST_ISSIMPLE(MULTIPOINT(POINT(0,0),POINT(0,0)));
+}
+expect unordered {
+    0
+}
+
+test l15840 {
+    SELECT ST_ISSIMPLE(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15854 {
+    SELECT ST_ASWKT(ST_VALIDATE(POINT(1,2)));
+}
+expect unordered {
+    POINT(1 2)
+}
+
+test l15859 {
+    SELECT ST_ASWKT(ST_VALIDATE(POLYGON(LINESTRING(POINT(0,0),POINT(1,0),POINT(1,1),POINT(0,0)))));
+}
+expect unordered {
+    POLYGON((0 0,1 0,1 1,0 0))
+}
+
+test l15864 {
+    SELECT ST_ASWKT(ST_VALIDATE(LINESTRING(POINT(0,0),POINT(1,1))));
+}
+expect unordered {
+    LINESTRING(0 0,1 1)
+}
+
+test l15868 {
+    SELECT ST_VALIDATE(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15882 {
+    SELECT ST_GEOHASH(0, 0, 5);
+}
+expect unordered {
+    s0000
+}
+
+test l15887 {
+    SELECT ST_GEOHASH(POINT(0, 0), 5);
+}
+expect unordered {
+    s0000
+}
+
+test l15892 {
+    SELECT LEFT(ST_GEOHASH(-87.65, 41.85, 10), 5);
+}
+expect unordered {
+    dp3wj
+}
+
+test l15896 {
+    SELECT ST_GEOHASH(NULL, NULL, 5);
+}
+expect unordered {
+    NULL
+}
+
+test l15907 {
+    SELECT ROUND(ST_LATFROMGEOHASH('s0000'), 1);
+}
+expect unordered {
+    0
+}
+
+test l15911 {
+    SELECT ROUND(ST_LONGFROMGEOHASH('s0000'), 1);
+}
+expect unordered {
+    0
+}
+
+test l15915 {
+    SELECT ST_LATFROMGEOHASH(NULL);
+}
+expect unordered {
+    NULL
+}
+
+test l15925 {
+    SELECT ROUND(ST_X(ST_POINTFROMGEOHASH('s0000', 0)), 1);
+}
+expect unordered {
+    0
+}
+
+test l15929 {
+    SELECT ROUND(ST_Y(ST_POINTFROMGEOHASH('s0000', 0)), 1);
+}
+expect unordered {
+    0
+}
+
+test l15933 {
+    SELECT ST_POINTFROMGEOHASH(NULL, 0);
+}
+expect unordered {
+    NULL
+}

@@ -1,0 +1,82 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/view_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE test_table (id INT, name VARCHAR(50), active BOOLEAN);
+    INSERT INTO test_table VALUES (1, 'Alice', true), (2, 'Bob', false), (3, 'Charlie', true);
+}
+
+setup s2 {
+    CREATE VIEW simple_view AS (SELECT id, name FROM test_table WHERE active = true);
+}
+
+setup s3 {
+    CREATE VIEW complex_view AS (SELECT id, name, CONCAT('user_', id) AS user_id FROM test_table WHERE active = true);
+}
+
+setup s4 {
+    CREATE TABLE task_history (id INT, task VARCHAR(100), db_id INT, started_at DATETIME, ended_at DATETIME, duration INT, task_details TEXT);
+    INSERT INTO task_history VALUES (1, 'Task 1', 1, '2023-01-01 10:00:00', '2023-01-01 11:00:00', 3600000, 'Task details 1'), (2, 'Task 2', 2, '2023-01-02 10:00:00', '2023-01-02 12:00:00', 7200000, 'Task details 2');
+}
+
+setup s5 {
+    CREATE OR REPLACE VIEW v_tasks AS (SELECT id, task, CONCAT('database_', db_id) AS database_qualified_id, started_at, ended_at, CAST(duration AS DOUBLE) / 1000 AS duration_seconds, task_details AS details FROM task_history);
+}
+
+@setup s1
+test l680 {
+    CREATE VIEW simple_view AS (SELECT id, name FROM test_table WHERE active = true);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l686 {
+    SELECT * FROM simple_view ORDER BY id;
+}
+expect {
+    1|Alice
+    3|Charlie
+}
+
+@setup s1
+@setup s2
+test l690 {
+    CREATE VIEW complex_view AS (SELECT id, name, CONCAT('user_', id) AS user_id FROM test_table WHERE active = true);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l696 {
+    SELECT * FROM complex_view ORDER BY id;
+}
+expect {
+    1|Alice|user_1
+    3|Charlie|user_3
+}
+
+@setup s4
+test l700 {
+    CREATE OR REPLACE VIEW v_tasks AS (SELECT id, task, CONCAT('database_', db_id) AS database_qualified_id, started_at, ended_at, CAST(duration AS DOUBLE) / 1000 AS duration_seconds, task_details AS details FROM task_history);
+}
+expect unordered {
+}
+
+@setup s4
+@setup s5
+test l706 {
+    SELECT * FROM v_tasks ORDER BY id;
+}
+expect {
+    1|Task 1|database_1|2023-01-01 10:00:00|2023-01-01 11:00:00|3600|Task details 1
+    2|Task 2|database_2|2023-01-02 10:00:00|2023-01-02 12:00:00|7200|Task details 2
+}

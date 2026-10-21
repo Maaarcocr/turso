@@ -1,0 +1,151 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/numeric_error_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table float_pk (a int, b double, primary key(a,b));
+    insert into float_pk values (1, -4e+212);
+}
+
+setup s2 {
+    create table decimal_uk (a int, b decimal(65,30), primary key(a), unique key (b));
+    insert into decimal_uk values (1, 9999999999999999999999999.9999999999999999999999999999999);
+}
+
+setup s3 {
+    create table decimal_nuk (a int, b decimal(65,30), primary key(a), key (b));
+    insert into decimal_nuk values (1, 9999999999999999999999999.9999999999999999999999999999999);
+}
+
+setup s4 {
+    create table decimal_pk (a int, b decimal(65,30), primary key(a,b));
+    insert into decimal_pk values (1, 9999999999999999999999999.9999999999999999999999999999999);
+}
+
+setup s5 {
+    create table i8 (i tinyint primary key);
+    insert into i8 values (127);
+}
+
+setup s6 {
+    create table i16 (i smallint primary key);
+    insert into i16 values (32767);
+}
+
+setup s7 {
+    create table i32 (i int primary key);
+    insert into i32 values (2147483647);
+}
+
+setup s8 {
+    create table i64 (i bigint primary key);
+    insert into i64 values (9223372036854775807);
+}
+
+setup s9 {
+    create table ui8 (i tinyint unsigned primary key);
+    insert into ui8 values (255);
+}
+
+setup s10 {
+    create table ui16 (i smallint unsigned primary key);
+    insert into ui16 values (65535);
+}
+
+setup s11 {
+    create table ui32 (i int unsigned primary key);
+    insert into ui32 values (4294967295);
+}
+
+setup s12 {
+    create table ui64 (i bigint unsigned primary key);
+    insert into ui64 values (18446744073709551615);
+}
+
+@setup s1
+test l46 {
+    delete from float_pk where a = 1 and b = -4e+212;
+}
+expect unordered {
+}
+
+@setup s2
+test l50 {
+    delete from decimal_uk where b = 9999999999999999999999999.9999999999999999999999999999999;
+}
+expect unordered {
+}
+
+@setup s3
+test l54 {
+    delete from decimal_nuk where b = 9999999999999999999999999.9999999999999999999999999999999;
+}
+expect unordered {
+}
+
+@setup s4
+test l58 {
+    delete from decimal_pk where a = 1 and b = 9999999999999999999999999.9999999999999999999999999999999;
+}
+expect unordered {
+}
+
+@setup s5
+test l62 {
+    delete from i8 where i = 127;
+}
+expect unordered {
+}
+
+@setup s6
+test l66 {
+    delete from i16 where i = 32767;
+}
+expect unordered {
+}
+
+@setup s7
+test l70 {
+    delete from i32 where i = 2147483647;
+}
+expect unordered {
+}
+
+@setup s8
+test l74 {
+    delete from i64 where i = 9223372036854775807;
+}
+expect unordered {
+}
+
+@setup s9
+test l78 {
+    delete from ui8 where i = 255;
+}
+expect unordered {
+}
+
+@setup s10
+test l82 {
+    delete from ui16 where i = 65535;
+}
+expect unordered {
+}
+
+@setup s11
+test l86 {
+    delete from ui32 where i = 4294967295;
+}
+expect unordered {
+}
+
+@setup s12
+test l90 {
+    delete from ui64 where i = 18446744073709551615;
+}
+expect unordered {
+}

@@ -1,0 +1,88 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/vector_index_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table vectors (id int primary key, v json not null);
+    insert into vectors values (1, '[4.0,3.0]'), (2, '[0.0,0.0]'), (3, '[-1.0,1.0]'), (4, '[0.0,-2.0]');
+}
+
+setup s2 {
+    set @query_vec = '[0.0,0.0]';
+}
+
+setup s3 {
+    insert into vectors values (5, '[1.0,0.0]');
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+@setup s1
+test l39 {
+    select * from vectors order by VEC_DISTANCE('[0.0,0.0]', v) limit 4;
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+@setup s1
+@setup s2
+test l50 {
+    select * from vectors order by VEC_DISTANCE(@query_vec, v) limit 4;
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+@setup s1
+test l61 {
+    select `id`+1 from vectors order by VEC_DISTANCE('[0.0,0.0]', v) limit 4;
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+@setup s1
+test l72 {
+    select * from vectors order by VEC_DISTANCE('[0.0,0.0]', v);
+}
+expect error {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE_L2_SQUARED does not exist
+@setup s1
+test l82 {
+    select * from vectors order by VEC_DISTANCE_L2_SQUARED('[0.0,-2.0]', v) limit 4;
+}
+expect error {
+}
+
+@setup s1
+test l93 {
+    select * from vectors order by v limit 4;
+}
+expect {
+    4|[0.0, -2.0]
+    3|[-1.0, 1.0]
+    2|[0.0, 0.0]
+    1|[4.0, 3.0]
+}
+
+@setup s1
+test l104 {
+    insert into vectors values (5, '[1.0,0.0]');
+}
+expect unordered {
+}
+
+# mysql-error: 1305 42000 FUNCTION test.VEC_DISTANCE does not exist
+@setup s1
+@setup s3
+test l107 {
+    select * from vectors order by VEC_DISTANCE('[0.0,0.0]', v);
+}
+expect error {
+}

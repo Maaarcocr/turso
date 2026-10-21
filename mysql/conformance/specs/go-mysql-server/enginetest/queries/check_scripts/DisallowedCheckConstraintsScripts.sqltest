@@ -1,0 +1,142 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/check_scripts.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    CREATE TABLE t1 (a INTEGER PRIMARY KEY, b INTEGER);
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: current_user.
+@setup s1
+test l656 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (current_user = "root@");
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: user.
+@setup s1
+test l660 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (user() = "root@");
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: now.
+@setup s1
+test l664 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (now() > '2021');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: curdate.
+@setup s1
+test l668 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (current_date() > '2021');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: uuid.
+@setup s1
+test l672 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (uuid() > 'a');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: database.
+@setup s1
+test l676 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (database() = 'foo');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: database.
+@setup s1
+test l680 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (schema() = 'foo');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: version().
+@setup s1
+test l684 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (version() = 'foo');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: last_insert_id.
+@setup s1
+test l688 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (last_insert_id() = 0);
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: rand.
+@setup s1
+test l692 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (rand() < .8);
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: curdate.
+@setup s1
+test l704 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (curdate() > '2021');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: curtime.
+@setup s1
+test l708 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (curtime() > '2021');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: now.
+@setup s1
+test l712 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (current_timestamp() > '2021');
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: connection_id.
+@setup s1
+test l716 {
+    ALTER TABLE t1 ADD CONSTRAINT chk2 CHECK (connection_id() = 2);
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 'chk2' contains disallowed function: current_user.
+test l747 {
+    CREATE TABLE t3 (
+	a int primary key CONSTRAINT chk2 CHECK (current_user = "root@")
+);
+}
+expect error {
+}
+
+# mysql-error: 3814 HY000 An expression of a check constraint 't3_chk_1' contains disallowed function: current_user.
+test l755 {
+    CREATE TABLE t3 (
+	a int primary key,
+	CHECK (current_user = "root@")
+);
+}
+expect error {
+}

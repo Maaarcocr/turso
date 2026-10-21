@@ -1,0 +1,123 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/blob_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table blobt (i bigint primary key, b longblob);
+    insert into blobt values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+setup s2 {
+    create table textt (i bigint primary key, t text);
+    insert into textt values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+@setup s1
+test l85 {
+    insert into blobt values (4, '100000000');
+    select * from blobt where i = 4;
+}
+expect unordered {
+    4|100000000
+}
+
+@setup s1
+test l91 {
+    update blobt set b = '100000000' where i = 1;
+    select * from blobt where i = 1;
+}
+expect unordered {
+    1|100000000
+}
+
+@setup s1
+test l97 {
+    delete from blobt where i = 1;
+    select * from blobt;
+}
+expect unordered {
+    2|second row
+    3|third row
+}
+
+@setup s1
+test l106 {
+    alter table blobt rename column b to v, add v1 int;
+    select * from blobt;
+}
+expect unordered {
+    1|first row|NULL
+    2|second row|NULL
+    3|third row|NULL
+}
+
+@setup s1
+test l116 {
+    ALTER TABLE blobt ADD COLUMN v2 BIGINT DEFAULT (i + 2) AFTER b;
+    select * from blobt;
+}
+expect unordered {
+    1|first row|3
+    2|second row|4
+    3|third row|5
+}
+
+@setup s2
+test l126 {
+    insert into textt values (4, '100000000');
+    select * from textt where i = 4;
+}
+expect unordered {
+    4|100000000
+}
+
+@setup s2
+test l132 {
+    update textt set t = '100000000' where i = 1;
+    select * from textt where i = 1;
+}
+expect unordered {
+    1|100000000
+}
+
+@setup s2
+test l138 {
+    delete from textt where i = 1;
+    select * from textt;
+}
+expect unordered {
+    2|second row
+    3|third row
+}
+
+@setup s2
+test l147 {
+    alter table textt rename column t to v, add v1 int;
+    select * from textt;
+}
+expect unordered {
+    1|first row|NULL
+    2|second row|NULL
+    3|third row|NULL
+}
+
+@setup s2
+test l157 {
+    ALTER TABLE textt ADD COLUMN v2 BIGINT DEFAULT (i + 2) AFTER t;
+    select * from textt;
+}
+expect unordered {
+    1|first row|3
+    2|second row|4
+    3|third row|5
+}

@@ -1,0 +1,919 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/trigger_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table a (i int primary key);
+    create table b (x int);
+}
+
+setup s2 {
+    create trigger trig before insert on a for each row insert into b values (new.i);
+}
+
+setup s3 {
+    insert into a values (1), (2);
+}
+
+setup s4 {
+    create trigger trig after insert on a for each row insert into b values (new.i);
+}
+
+setup s5 {
+    insert into a values (1), (2);
+}
+
+setup s6 {
+    insert into b values (0);
+}
+
+setup s7 {
+    create trigger trig before insert on a for each row update b set x = x + 1;
+}
+
+setup s8 {
+    insert into a values (1), (2);
+}
+
+setup s9 {
+    create trigger trig after insert on a for each row update b set x = x + 1;
+}
+
+setup s10 {
+    insert into a values (1), (2);
+}
+
+setup s11 {
+    insert into a values (1);
+    insert into b values (1), (2);
+}
+
+setup s12 {
+    create trigger trig before insert on a for each row delete from b where x = new.i;
+}
+
+setup s13 {
+    insert into a values (2);
+}
+
+setup s14 {
+    create trigger trig after insert on a for each row delete from b where x = new.i;
+}
+
+setup s15 {
+    insert into a values (2);
+}
+
+setup s16 {
+    insert into a values (0);
+}
+
+setup s17 {
+    insert into a values (0);
+}
+
+setup s18 {
+    insert into a values (0);
+}
+
+setup s19 {
+    create trigger trig before update on a for each row insert into b values (new.i);
+}
+
+setup s20 {
+    update a set i = 1;
+}
+
+setup s21 {
+    create trigger trig after update on a for each row insert into b values (new.i);
+}
+
+setup s22 {
+    update a set i = 1;
+}
+
+setup s23 {
+    insert into b values (0);
+}
+
+setup s24 {
+    create trigger trig before update on a for each row update b set x = x + new.i;
+}
+
+setup s25 {
+    update a set i = 1;
+}
+
+setup s26 {
+    create trigger trig after update on a for each row update b set x = x + new.i;
+}
+
+setup s27 {
+    update a set i = 1;
+}
+
+setup s28 {
+    insert into b values (1), (2);
+}
+
+setup s29 {
+    create trigger trig before update on a for each row delete from b where x = new.i;
+}
+
+setup s30 {
+    update a set i = 1;
+}
+
+setup s31 {
+    create trigger trig after update on a for each row delete from b where x = new.i;
+}
+
+setup s32 {
+    update a set i = 1;
+}
+
+setup s33 {
+    create table a (x int primary key);
+    create table b (y int primary key);
+    create trigger a1 before insert on a for each row insert into b values (NEW.x * 7);
+    create trigger a2 after insert on a for each row insert into b values (New.x * 11);
+    insert into a values (2), (3), (5);
+}
+
+setup s34 {
+    set @@autocommit = off;
+    create table a (i int primary key);
+    create table b (x int);
+}
+
+setup s35 {
+    create trigger trig before insert on a for each row insert into b values (new.i);
+}
+
+setup s36 {
+    insert into a values (1), (2);
+}
+
+setup s37 {
+    insert into a values (0);
+    create trigger trig before update on a for each row insert into b values (new.i);
+}
+
+setup s38 {
+    update a set i = 1;
+}
+
+@setup s1
+@setup s2
+test l4069 {
+    insert into a values (1), (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l4075 {
+    select x from b order by x;
+}
+expect {
+    1
+    2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s2
+@setup s3
+test l4081 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+@setup s3
+test l4085 {
+    select * from b;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s4
+test l4101 {
+    insert into a values (1), (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s4
+@setup s5
+test l4107 {
+    select x from b order by x;
+}
+expect {
+    1
+    2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s4
+@setup s5
+test l4113 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s4
+@setup s5
+test l4117 {
+    select * from b;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s1
+@setup s6
+@setup s7
+test l4134 {
+    insert into a values (1), (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s6
+@setup s7
+@setup s8
+test l4140 {
+    select * from b;
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s6
+@setup s7
+@setup s8
+test l4146 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s6
+@setup s7
+@setup s8
+test l4150 {
+    select * from b;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s6
+@setup s9
+test l4167 {
+    insert into a values (1), (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s6
+@setup s9
+@setup s10
+test l4173 {
+    select * from b;
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s6
+@setup s9
+@setup s10
+test l4179 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s6
+@setup s9
+@setup s10
+test l4183 {
+    select * from b;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s11
+@setup s12
+test l4201 {
+    insert into a values (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+test l4207 {
+    select x from b order by x;
+}
+expect {
+    1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+test l4213 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s11
+@setup s12
+@setup s13
+test l4217 {
+    select * from b;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s11
+@setup s14
+test l4235 {
+    insert into a values (2);
+}
+expect unordered {
+}
+
+@setup s1
+@setup s11
+@setup s14
+@setup s15
+test l4241 {
+    select x from b order by x;
+}
+expect {
+    1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s11
+@setup s14
+@setup s15
+test l4247 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s11
+@setup s14
+@setup s15
+test l4251 {
+    select * from b;
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s2
+test l4267 {
+    insert into a values (1), (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+test l4271 {
+    select * from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l4275 {
+    select * from b;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s2
+test l4279 {
+    insert into a values (0);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '0' for key 'a.PRIMARY'
+@setup s1
+@setup s2
+@setup s16
+test l4285 {
+    insert into a values (1), (2), (0);
+}
+expect error {
+}
+
+@setup s1
+@setup s2
+@setup s16
+test l4289 {
+    select * from a;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s2
+@setup s16
+test l4295 {
+    select * from b;
+}
+expect unordered {
+    0
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s1
+@setup s4
+test l4311 {
+    insert into a values (1), (1);
+}
+expect error {
+}
+
+@setup s1
+@setup s4
+test l4315 {
+    select * from a;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s4
+test l4319 {
+    select * from b;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s4
+test l4323 {
+    insert into a values (0);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry '0' for key 'a.PRIMARY'
+@setup s1
+@setup s4
+@setup s17
+test l4329 {
+    insert into a values (1), (2), (0);
+}
+expect error {
+}
+
+@setup s1
+@setup s4
+@setup s17
+test l4333 {
+    select * from a;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s4
+@setup s17
+test l4339 {
+    select * from b;
+}
+expect unordered {
+    0
+}
+
+@setup s1
+@setup s18
+@setup s19
+test l4357 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s18
+@setup s19
+@setup s20
+test l4369 {
+    select x from b;
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s1
+@setup s18
+@setup s19
+@setup s20
+test l4375 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s1
+@setup s18
+@setup s19
+@setup s20
+test l4379 {
+    select * from b;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s18
+@setup s21
+test l4396 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s18
+@setup s21
+@setup s22
+test l4408 {
+    select x from b;
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s1
+@setup s18
+@setup s21
+@setup s22
+test l4414 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s1
+@setup s18
+@setup s21
+@setup s22
+test l4418 {
+    select * from b;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s18
+@setup s23
+@setup s24
+test l4436 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s18
+@setup s23
+@setup s24
+@setup s25
+test l4448 {
+    select x from b;
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s1
+@setup s18
+@setup s23
+@setup s24
+@setup s25
+test l4454 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s1
+@setup s18
+@setup s23
+@setup s24
+@setup s25
+test l4458 {
+    select * from b;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s18
+@setup s23
+@setup s26
+test l4476 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s18
+@setup s23
+@setup s26
+@setup s27
+test l4488 {
+    select x from b;
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s1
+@setup s18
+@setup s23
+@setup s26
+@setup s27
+test l4494 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s1
+@setup s18
+@setup s23
+@setup s26
+@setup s27
+test l4498 {
+    select * from b;
+}
+expect unordered {
+    1
+}
+
+@setup s1
+@setup s18
+@setup s28
+@setup s29
+test l4516 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s18
+@setup s28
+@setup s29
+@setup s30
+test l4528 {
+    select x from b;
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s1
+@setup s18
+@setup s28
+@setup s29
+@setup s30
+test l4534 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s1
+@setup s18
+@setup s28
+@setup s29
+@setup s30
+test l4538 {
+    select * from b;
+}
+expect unordered {
+    2
+}
+
+@setup s1
+@setup s18
+@setup s28
+@setup s31
+test l4556 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s1
+@setup s18
+@setup s28
+@setup s31
+@setup s32
+test l4568 {
+    select x from b;
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s1
+@setup s18
+@setup s28
+@setup s31
+@setup s32
+test l4574 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s1
+@setup s18
+@setup s28
+@setup s31
+@setup s32
+test l4578 {
+    select * from b;
+}
+expect unordered {
+    2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '14' for key 'b.PRIMARY'
+@setup s33
+test l4614 {
+    insert into a values (2), (3), (5);
+}
+expect error {
+}
+
+@setup s33
+test l4618 {
+    select x from a order by 1;
+}
+expect {
+    2
+    3
+    5
+}
+
+@setup s33
+test l4624 {
+    select y from b order by 1;
+}
+expect {
+    14
+    21
+    22
+    33
+    35
+    55
+}
+
+@setup s34
+@setup s35
+test l4642 {
+    insert into a values (1), (2);
+}
+expect unordered {
+}
+
+@setup s34
+@setup s35
+@setup s36
+test l4648 {
+    select x from b order by x;
+}
+expect {
+    1
+    2
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 'a.PRIMARY'
+@setup s34
+@setup s35
+@setup s36
+test l4654 {
+    insert into a values (1);
+}
+expect error {
+}
+
+@setup s34
+@setup s35
+@setup s36
+test l4658 {
+    select * from b;
+}
+expect unordered {
+    1
+    2
+}
+
+@setup s34
+@setup s37
+test l4676 {
+    update a set i = 1;
+}
+expect unordered {
+}
+
+@setup s34
+@setup s37
+@setup s38
+test l4688 {
+    select x from b;
+}
+expect unordered {
+    1
+}
+
+# mysql-error: 1366 HY000 Incorrect integer value: 'not int' for column 'i' at row 1
+@setup s34
+@setup s37
+@setup s38
+test l4694 {
+    update a set i = 'not int';
+}
+expect error {
+}
+
+@setup s34
+@setup s37
+@setup s38
+test l4698 {
+    select * from b;
+}
+expect unordered {
+    1
+}

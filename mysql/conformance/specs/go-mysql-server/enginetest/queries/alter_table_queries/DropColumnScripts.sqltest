@@ -1,0 +1,136 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    ALTER TABLE mytable DROP COLUMN s;
+}
+
+setup s3 {
+    CREATE TABLE t1 (a int, b varchar(10), c bigint, k bigint primary key);
+    insert into t1 values (1, 'abc', 2, 3), (4, 'def', 5, 6);
+}
+
+setup s4 {
+    ALTER TABLE t1 DROP COLUMN a;
+}
+
+setup s5 {
+    CREATE TABLE t2 (a int, b varchar(10), c bigint, k bigint primary key);
+    insert into t2 values (1, 'abc', 2, 3), (4, 'def', 5, 6);
+}
+
+setup s6 {
+    ALTER TABLE t2 DROP COLUMN b;
+}
+
+setup s7 {
+    create table t4 (a int primary key, b int, c int default (b+10));
+}
+
+@setup s1
+@setup s2
+test l2408 {
+    SHOW FULL COLUMNS FROM mytable;
+}
+expect {
+    i|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+}
+
+@setup s1
+@setup s2
+test l2412 {
+    select * from mytable order by i;
+}
+expect {
+    1
+    2
+    3
+}
+
+@setup s3
+test l2425 {
+    ALTER TABLE t1 DROP COLUMN a;
+}
+expect unordered {
+}
+
+@setup s3
+@setup s4
+test l2429 {
+    SHOW FULL COLUMNS FROM t1;
+}
+expect {
+    b|varchar(10)|utf8mb4_0900_ai_ci|YES||NULL||select,insert,update,references|
+    c|bigint|NULL|YES||NULL||select,insert,update,references|
+    k|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+}
+
+@setup s3
+@setup s4
+test l2437 {
+    SELECT * FROM t1 ORDER BY b;
+}
+expect {
+    abc|2|3
+    def|5|6
+}
+
+@setup s5
+test l2453 {
+    ALTER TABLE t2 DROP COLUMN b;
+}
+expect unordered {
+}
+
+@setup s5
+@setup s6
+test l2457 {
+    SHOW FULL COLUMNS FROM t2;
+}
+expect {
+    a|int|NULL|YES||NULL||select,insert,update,references|
+    c|bigint|NULL|YES||NULL||select,insert,update,references|
+    k|bigint|NULL|NO|PRI|NULL||select,insert,update,references|
+}
+
+@setup s5
+@setup s6
+test l2465 {
+    SELECT * FROM t2 ORDER BY c;
+}
+expect {
+    1|2|3
+    4|5|6
+}
+
+@setup s1
+test l2515 {
+    ALTER TABLE mytable DROP COLUMN s;
+}
+expect unordered {
+}
+
+# mysql-error: 3766 HY000 Column 'b' of table 't4' has a default value expression dependency and cannot be dropped or renamed.
+@setup s7
+test l2519 {
+    ALTER TABLE t4 DROP COLUMN b;
+}
+expect error {
+}

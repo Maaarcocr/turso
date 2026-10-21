@@ -1,0 +1,616 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/alter_table_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table t1 (i int, j int);
+    insert into t1 values (1,1), (1,2), (1,3);
+}
+
+setup s2 {
+    create table t1 (pk varchar(20), v varchar(20) default (concat(pk, '-foo')), primary key (pk, v));
+    insert into t1 values ('a1', 'a2'), ('a2', 'a3'), ('a3', 'a4');
+}
+
+setup s3 {
+    alter table t1 drop primary key;
+}
+
+setup s4 {
+    insert into t1 values ('a1', 'a2');
+}
+
+setup s5 {
+    delete from t1 where pk = 'a1' limit 1;
+}
+
+setup s6 {
+    alter table t1 add primary key (pk, v);
+}
+
+setup s7 {
+    alter table t1 drop primary key;
+}
+
+setup s8 {
+    alter table t1 add index myidx (v);
+}
+
+setup s9 {
+    alter table t1 add primary key (pk);
+}
+
+setup s10 {
+    insert into t1 values ('a4', 'a3');
+}
+
+setup s11 {
+    alter table t1 drop primary key;
+}
+
+setup s12 {
+    truncate t1;
+}
+
+setup s13 {
+    alter table t1 drop index myidx;
+}
+
+setup s14 {
+    alter table t1 add primary key (pk, v);
+}
+
+setup s15 {
+    ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (v);
+}
+
+setup s16 {
+    alter table t1 drop primary key;
+}
+
+setup s17 {
+    CREATE TABLE test(pk int AUTO_INCREMENT PRIMARY KEY, val int);
+}
+
+setup s18 {
+    ALTER TABLE test modify pk int;
+}
+
+setup s19 {
+    ALTER TABLE test drop primary key;
+}
+
+setup s20 {
+    INSERT INTO test VALUES (2, 2), (3, 3);
+}
+
+setup s21 {
+    create table t (id int primary key AUTO_INCREMENT, c1 varchar(255));
+    insert into t (c1) values ('one');
+}
+
+setup s22 {
+    ALTER TABLE t ADD UNIQUE KEY id (id);
+}
+
+setup s23 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+
+setup s24 {
+    insert into t (c1) values('two');
+}
+
+setup s25 {
+    ALTER TABLE t ADD KEY id (id);
+}
+
+setup s26 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+
+setup s27 {
+    insert into t (c1) values('two');
+}
+
+setup s28 {
+    create table t (id1 int AUTO_INCREMENT, id2 int not null, c1 varchar(255), primary key (id1, id2));
+    insert into t (id2, c1) values (-1, 'one');
+}
+
+setup s29 {
+    ALTER TABLE t ADD KEY c1id1 (c1, id1);
+}
+
+setup s30 {
+    ALTER TABLE t ADD KEY id1c1 (id1, c1);
+}
+
+setup s31 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+
+setup s32 {
+    insert into t (id2, c1) values(-2, 'two');
+}
+
+# mysql-error: 1062 23000 Duplicate entry '1' for key 't1.PRIMARY'
+@setup s1
+test l1578 {
+    alter table t1 add primary key (i);
+}
+expect error {
+}
+
+@setup s1
+test l1590 {
+    alter table t1 add primary key (i, j);
+}
+expect unordered {
+}
+
+@setup s2
+test l1612 {
+    select * from t1 order by pk;
+}
+expect {
+    a1|a2
+    a2|a3
+    a3|a4
+}
+
+@setup s2
+test l1620 {
+    alter table t1 drop primary key;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+test l1624 {
+    select * from t1 order by pk;
+}
+expect {
+    a1|a2
+    a2|a3
+    a3|a4
+}
+
+@setup s2
+@setup s3
+test l1632 {
+    insert into t1 values ('a1', 'a2');
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+test l1636 {
+    select * from t1 order by pk;
+}
+expect {
+    a1|a2
+    a1|a2
+    a2|a3
+    a3|a4
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a1-a2' for key 't1.PRIMARY'
+@setup s2
+@setup s3
+@setup s4
+test l1645 {
+    alter table t1 add primary key (pk, v);
+}
+expect error {
+}
+
+@setup s2
+@setup s3
+@setup s4
+test l1649 {
+    delete from t1 where pk = 'a1' limit 1;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+test l1653 {
+    alter table t1 add primary key (pk, v);
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+test l1666 {
+    alter table t1 drop primary key;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+test l1670 {
+    alter table t1 add index myidx (v);
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+test l1674 {
+    alter table t1 add primary key (pk);
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+test l1678 {
+    insert into t1 values ('a4', 'a3');
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+@setup s10
+test l1692 {
+    select * from t1 where v = 'a3' order by pk;
+}
+expect {
+    a2|a3
+    a4|a3
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+@setup s10
+test l1699 {
+    alter table t1 drop primary key;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+test l1703 {
+    truncate t1;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+@setup s12
+test l1707 {
+    alter table t1 drop index myidx;
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+test l1711 {
+    alter table t1 add primary key (pk, v);
+}
+expect unordered {
+}
+
+@setup s2
+@setup s3
+@setup s4
+@setup s5
+@setup s6
+@setup s7
+@setup s8
+@setup s9
+@setup s10
+@setup s11
+@setup s12
+@setup s13
+@setup s14
+test l1715 {
+    insert into t1 values ('a1', 'a2'), ('a2', 'a3'), ('a3', 'a4');
+}
+expect unordered {
+}
+
+@setup s2
+test l1728 {
+    ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (v);
+}
+expect unordered {
+}
+
+# mysql-error: 1062 23000 Duplicate entry 'a3' for key 't1.PRIMARY'
+@setup s2
+@setup s15
+test l1732 {
+    INSERT INTO t1 (pk, v) values ('a100', 'a3');
+}
+expect error {
+}
+
+@setup s2
+@setup s15
+test l1736 {
+    alter table t1 drop primary key;
+}
+expect unordered {
+}
+
+# mysql-error: 1091 42000 Can't DROP 'PRIMARY'; check that column/key exists
+@setup s2
+@setup s15
+@setup s16
+test l1740 {
+    ALTER TABLE t1 ADD PRIMARY KEY (pk, v), DROP PRIMARY KEY;
+}
+expect error {
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+@setup s17
+test l1791 {
+    ALTER TABLE test DROP PRIMARY KEY;
+}
+expect error {
+}
+
+@setup s17
+test l1795 {
+    ALTER TABLE test modify pk int;
+}
+expect unordered {
+}
+
+@setup s17
+@setup s18
+test l1808 {
+    ALTER TABLE test drop primary key;
+}
+expect unordered {
+}
+
+# mysql-error: 1048 23000 Column 'pk' cannot be null
+@setup s17
+@setup s18
+@setup s19
+test l1820 {
+    INSERT INTO test VALUES (1, 1), (NULL, 1);
+}
+expect error {
+}
+
+@setup s17
+@setup s18
+@setup s19
+test l1824 {
+    INSERT INTO test VALUES (2, 2), (3, 3);
+}
+expect unordered {
+}
+
+@setup s17
+@setup s18
+@setup s19
+@setup s20
+test l1828 {
+    SELECT * FROM test ORDER BY pk;
+}
+expect {
+    2|2
+    3|3
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+@setup s21
+test l1845 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+expect error {
+}
+
+@setup s21
+test l1850 {
+    ALTER TABLE t ADD UNIQUE KEY id (id);
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+test l1854 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+@setup s23
+test l1866 {
+    insert into t (c1) values('two');
+}
+expect unordered {
+}
+
+@setup s21
+@setup s22
+@setup s23
+@setup s24
+test l1870 {
+    select * from t;
+}
+expect unordered {
+    1|one
+    2|two
+}
+
+@setup s21
+test l1889 {
+    ALTER TABLE t ADD KEY id (id);
+}
+expect unordered {
+}
+
+@setup s21
+@setup s25
+test l1893 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+expect unordered {
+}
+
+@setup s21
+@setup s25
+@setup s26
+test l1905 {
+    insert into t (c1) values('two');
+}
+expect unordered {
+}
+
+@setup s21
+@setup s25
+@setup s26
+@setup s27
+test l1909 {
+    select * from t;
+}
+expect unordered {
+    1|one
+    2|two
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+@setup s28
+test l1922 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+expect error {
+}
+
+@setup s28
+test l1927 {
+    ALTER TABLE t ADD KEY c1id1 (c1, id1);
+}
+expect unordered {
+}
+
+# mysql-error: 1075 42000 Incorrect table definition; there can be only one auto column and it must be defined as a key
+@setup s28
+@setup s29
+test l1931 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+expect error {
+}
+
+@setup s28
+@setup s29
+test l1936 {
+    ALTER TABLE t ADD KEY id1c1 (id1, c1);
+}
+expect unordered {
+}
+
+@setup s28
+@setup s29
+@setup s30
+test l1940 {
+    ALTER TABLE t DROP PRIMARY KEY;
+}
+expect unordered {
+}
+
+@setup s28
+@setup s29
+@setup s30
+@setup s31
+test l1944 {
+    insert into t (id2, c1) values(-2, 'two');
+}
+expect unordered {
+}
+
+@setup s28
+@setup s29
+@setup s30
+@setup s31
+@setup s32
+test l1948 {
+    select * from t;
+}
+expect unordered {
+    1|-1|one
+    2|-2|two
+}

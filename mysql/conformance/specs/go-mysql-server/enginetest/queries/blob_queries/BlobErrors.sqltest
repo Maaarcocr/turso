@@ -1,0 +1,176 @@
+# Recorded from MySQL by mysql/conformance/tools/record_mysql.py. Do not edit;
+# re-record instead (see mysql/conformance/SPECS.md).
+# oracle: MySQL 8.4.10 (mysql:8.4.10), default profile from target.toml
+# source: https://github.com/dolthub/go-mysql-server.git @ 478bed778dd282aa13aa48ebd75b0549ebe75698
+#   enginetest/queries/blob_queries.go
+# license: Apache-2.0
+@database :memory:
+
+setup s1 {
+    create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL);
+    insert into mytable values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+    create unique index mytable_s on mytable (s);
+    create index mytable_i_s on mytable (i,s);
+    create index `idx_si` on mytable (`s`,`i`);
+    create view myview as SELECT * FROM mytable;
+}
+
+setup s2 {
+    create table blobt (i bigint primary key, b longblob);
+    insert into blobt values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+setup s3 {
+    create table textt (i bigint primary key, t text);
+    insert into textt values
+    (1, 'first row'),
+    (2, 'second row'),
+    (3, 'third row');
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 's' used in key specification without a key length
+@setup s1
+test l170 {
+    alter table mytable modify s blob;
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 's' used in key specification without a key length
+@setup s1
+test l174 {
+    alter table mytable modify s text;
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'b' used in key specification without a key length
+@setup s2
+test l178 {
+    alter table blobt add index bidx (b);
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'b' used in key specification without a key length
+@setup s2
+test l182 {
+    alter table blobt add index tidx (i, b);
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+@setup s2
+test l186 {
+    alter table blobt add index bidx (b(3073));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 't' used in key specification without a key length
+@setup s3
+test l190 {
+    alter table textt add index tidx (t);
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+@setup s3
+test l194 {
+    alter table textt add index tidx (t(769));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 't' used in key specification without a key length
+@setup s3
+test l198 {
+    alter table textt add index tidx (i, t);
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'b' used in key specification without a key length
+test l202 {
+    create table b (b blob primary key);
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'b' used in key specification without a key length
+test l206 {
+    create table b (b tinyblob primary key);
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 't' used in key specification without a key length
+test l210 {
+    create table t (t text primary key);
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 't' used in key specification without a key length
+test l214 {
+    create table t (t text, primary key (t));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'b' used in key specification without a key length
+test l218 {
+    create table b (b blob, primary key (b));
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l222 {
+    create table b (b blob, primary key (b(3073)));
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l226 {
+    create table t (t text, primary key (t(769)));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'b' used in key specification without a key length
+test l230 {
+    create table b (i int primary key, b blob, index bidx(b));
+}
+expect error {
+}
+
+# mysql-error: 1071 42000 Specified key was too long; max key length is 3072 bytes
+test l234 {
+    create table b (i int primary key, b blob, index bidx(b(3073)));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'v1' used in key specification without a key length
+test l238 {
+    CREATE TABLE b (pk BIGINT PRIMARY KEY, v1 TEXT, INDEX (v1));
+}
+expect error {
+}
+
+# mysql-error: 1170 42000 BLOB/TEXT column 'v1' used in key specification without a key length
+test l242 {
+    CREATE TABLE b (pk BIGINT PRIMARY KEY, v1 TINYTEXT, INDEX (v1));
+}
+expect error {
+}
