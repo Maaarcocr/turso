@@ -1,8 +1,8 @@
 use turso_core::{Numeric, Result, Value};
 
 use super::convert::{
-    double, double_value, hex_literal_value, integer, is_space, out_of_range, parse_digits,
-    split_sign, string, string_to_double, unsigned_value, Integer,
+    double, double_value, integer, is_space, out_of_range, parse_digits, split_sign, string,
+    string_to_double, Integer,
 };
 
 #[derive(Clone, Copy)]
@@ -13,25 +13,15 @@ enum Rounding {
 
 #[derive(Clone, Copy)]
 enum Number {
-    Signed(i64),
-    Unsigned(u64),
+    Integer(i64),
     Double(f64),
 }
 
 impl Number {
     fn to_double(self) -> f64 {
         match self {
-            Number::Signed(value) => value as f64,
-            Number::Unsigned(value) => value as f64,
+            Number::Integer(value) => value as f64,
             Number::Double(value) => value,
-        }
-    }
-
-    fn sign_and_magnitude(self) -> (bool, u64) {
-        match self {
-            Number::Signed(value) => (value < 0, value.unsigned_abs()),
-            Number::Unsigned(value) => (false, value),
-            Number::Double(_) => unreachable!("a DOUBLE has no integer magnitude"),
         }
     }
 }
@@ -50,17 +40,11 @@ fn round_with(args: &[Value], rounding: Rounding) -> Result<Value> {
             Some(places) => places,
             None => return Ok(Value::Null),
         },
-        None => Integer {
-            value: 0,
-            unsigned: false,
-        },
+        None => Integer { value: 0 },
     };
     Ok(match number(&args[0]) {
         None => Value::Null,
-        Some(Number::Signed(value)) => Value::from_i64(round_signed(value, places, rounding)),
-        Some(Number::Unsigned(value)) => {
-            Value::from_f64(round_double(value as f64, places, rounding))
-        }
+        Some(Number::Integer(value)) => Value::from_i64(round_signed(value, places, rounding)),
         Some(Number::Double(value)) => Value::from_f64(round_double(value, places, rounding)),
     })
 }
@@ -153,10 +137,10 @@ fn convert_base(number: &Value, from: i32, to: i32) -> Value {
     if !is_valid_base(from) || !is_valid_base(to) || digits.len() == 0 {
         return Value::Null;
     }
-    let value = match number {
-        Value::Blob(bytes) => hex_literal_value(bytes),
-        _ if from < 0 => parse_signed_in_base(digits.as_bytes(), from.unsigned_abs()) as u64,
-        _ => parse_unsigned_in_base(digits.as_bytes(), from.unsigned_abs()),
+    let value = if from < 0 {
+        parse_signed_in_base(digits.as_bytes(), from.unsigned_abs()) as u64
+    } else {
+        parse_unsigned_in_base(digits.as_bytes(), from.unsigned_abs())
     };
     Value::build_text(format_in_base(value, to))
 }
@@ -222,18 +206,22 @@ fn format_in_base(value: u64, base: i32) -> String {
 }
 
 pub(super) fn bit_count(args: &[Value]) -> Result<Value> {
-    Ok(integer(&args[0]).map_or(Value::Null, |value| {
-        Value::from_i64(i64::from(value.as_unsigned().count_ones()))
-    }))
+    let bits = match &args[0] {
+        Value::Blob(bytes) => bytes.iter().map(|byte| byte.count_ones()).sum(),
+        other => match integer(other) {
+            Some(value) => value.as_unsigned().count_ones(),
+            None => return Ok(Value::Null),
+        },
+    };
+    Ok(Value::from_i64(i64::from(bits)))
 }
 
 pub(super) fn abs(args: &[Value]) -> Result<Value> {
     Ok(match number(&args[0]) {
         None => Value::Null,
-        Some(Number::Signed(value)) => {
+        Some(Number::Integer(value)) => {
             Value::from_i64(value.checked_abs().ok_or_else(|| out_of_range("BIGINT"))?)
         }
-        Some(Number::Unsigned(value)) => unsigned_value(value),
         Some(Number::Double(value)) => Value::from_f64(value.abs()),
     })
 }
@@ -261,8 +249,7 @@ pub(super) fn floor(args: &[Value]) -> Result<Value> {
 fn round_to_integer(value: &Value, round: fn(f64) -> f64) -> Value {
     match number(value) {
         None => Value::Null,
-        Some(Number::Signed(value)) => Value::from_i64(value),
-        Some(Number::Unsigned(value)) => unsigned_value(value),
+        Some(Number::Integer(value)) => Value::from_i64(value),
         Some(Number::Double(value)) => Value::from_f64(round(value)),
     }
 }
@@ -271,33 +258,25 @@ pub(super) fn modulo(args: &[Value]) -> Result<Value> {
     let (Some(dividend), Some(divisor)) = (number(&args[0]), number(&args[1])) else {
         return Ok(Value::Null);
     };
-    if let (Number::Double(_), _) | (_, Number::Double(_)) = (dividend, divisor) {
-        let divisor = divisor.to_double();
-        if divisor == 0.0 {
-            return Ok(Value::Null);
+    Ok(match (dividend, divisor) {
+        (_, Number::Integer(0)) => Value::Null,
+        (Number::Integer(dividend), Number::Integer(divisor)) => {
+            let remainder = dividend.unsigned_abs() % divisor.unsigned_abs();
+            let remainder = remainder as i64;
+            Value::from_i64(if dividend < 0 { -remainder } else { remainder })
         }
-        return Ok(Value::from_f64(dividend.to_double() % divisor));
-    }
-    let (negative, magnitude) = dividend.sign_and_magnitude();
-    let (_, divisor) = divisor.sign_and_magnitude();
-    if divisor == 0 {
-        return Ok(Value::Null);
-    }
-    let remainder = magnitude % divisor;
-    Ok(if negative {
-        Value::from_i64((remainder as i64).wrapping_neg())
-    } else {
-        unsigned_value(remainder)
+        _ if divisor.to_double() == 0.0 => Value::Null,
+        _ => Value::from_f64(dividend.to_double() % divisor.to_double()),
     })
 }
 
 fn number(value: &Value) -> Option<Number> {
     Some(match value {
         Value::Null => return None,
-        Value::Numeric(Numeric::Integer(value)) => Number::Signed(*value),
+        Value::Numeric(Numeric::Integer(value)) => Number::Integer(*value),
         Value::Numeric(Numeric::Float(value)) => Number::Double(f64::from(*value)),
         Value::Text(text) => Number::Double(string_to_double(text.as_str().as_bytes())),
-        Value::Blob(bytes) => Number::Unsigned(hex_literal_value(bytes)),
+        Value::Blob(bytes) => Number::Double(string_to_double(bytes)),
     })
 }
 

@@ -105,13 +105,17 @@ back to SQLite parsing. Owned specs: `conformance/my-sqltests/functions-string.s
 Arguments are converted the way MySQL converts them: a string used as a number
 takes its longest numeric prefix (`'12abc'` is 12, `'0x10'` is 0), an integer
 argument read from a string stops at the first non-digit and wraps above the
-signed range, a DOUBLE used as an integer rounds half to even, and a binary
-string (an `X'..'` literal) used as a number is its big-endian unsigned value
-(0 above 8 bytes). Numbers used as strings print as MySQL prints them. Strings
+signed range, and a DOUBLE used as an integer rounds half to even. A BLOB
+argument is a MySQL binary string: string functions work on its bytes and
+return binary strings, and used as a number it is parsed like text (MySQL
+reads hex literals as numbers instead, so those must reach numeric arguments
+as integers). Numbers used as strings print as MySQL prints them. Strings
 compare with `utf8mb4_0900_ai_ci` (ICU root collation at primary strength: no
-case or accent differences, trailing spaces count); binary strings compare
-byte by byte, and `LOCATE`, `INSTR` and `FIELD` convert a binary string
-compared with text to `utf8mb4`, failing on invalid UTF-8 as MySQL does.
+case or accent differences, trailing spaces count). Binary strings compare
+byte by byte in `STRCMP`, `GREATEST`, `LEAST` and `FIND_IN_SET`; `LOCATE`,
+`INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD` and `SUBSTRING_INDEX`
+convert a binary argument used with a text string to `utf8mb4`, failing on
+invalid UTF-8 as MySQL does.
 Results above the signed BIGINT range are returned as text, and functions
 whose result would exceed `max_allowed_packet` (64 MiB) return `NULL` instead
 of allocating it. Regular expressions run on `fancy-regex` with MySQL's ICU

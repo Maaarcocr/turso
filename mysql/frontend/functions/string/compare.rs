@@ -4,7 +4,7 @@ use turso_core::{Numeric, Result, Value};
 
 use super::collation::compare;
 
-use super::convert::{double, integer, string, string_compared_with_text, Str};
+use super::convert::{double, integer, string, string_converted_to_text, Str};
 
 #[derive(Clone, Copy, PartialEq)]
 enum ComparisonType {
@@ -28,10 +28,10 @@ pub(super) fn field(args: &[Value]) -> Result<Value> {
     let mut candidates = args[1..].iter().enumerate();
     let found = match comparison {
         ComparisonType::String => {
-            let compared_with_text = args.iter().any(|value| matches!(value, Value::Text(_)));
+            let convert_binary = args.iter().any(|value| matches!(value, Value::Text(_)));
             let strings = args
                 .iter()
-                .map(|value| string_compared_with_text(value, compared_with_text))
+                .map(|value| string_converted_to_text(value, convert_binary))
                 .collect::<Result<Vec<_>>>()?;
             let Some(target) = &strings[0] else {
                 return Ok(Value::from_i64(0));
