@@ -1299,7 +1299,8 @@ pub fn translate_alter_table(
                     )));
                 }
                 let written_ty = column.written_ty_str.as_deref().unwrap_or(ty);
-                let is_builtin = ty.is_empty() || is_builtin_strict_type(written_ty);
+                let is_builtin = ty.is_empty()
+                    || (btree.dialect_marker.is_none() && is_builtin_strict_type(written_ty));
                 // Domain types require STRICT tables because domain constraints
                 // (CHECK, NOT NULL, DEFAULT) are only enforced on STRICT tables.
                 if !is_builtin && !btree.is_strict {

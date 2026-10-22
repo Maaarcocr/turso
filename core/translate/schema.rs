@@ -808,7 +808,7 @@ fn validate(
     table_name: &str,
     resolver: &Resolver,
     conn: &Connection,
-    rowid_decision: RowidDecision,
+    table_marker: Option<&TableMarker>,
 ) -> Result<()> {
     if let ast::CreateTableBody::ColumnsAndConstraints {
         options,
@@ -873,7 +873,7 @@ fn validate(
         for c in columns {
             if let Some(ref col_type) = c.col_type {
                 let type_name = &column_declared_type(&col_type.name);
-                let is_builtin = is_builtin_strict_type(&col_type.name);
+                let is_builtin = table_marker.is_none() && is_builtin_strict_type(&col_type.name);
 
                 // Array columns require STRICT tables because the encode/decode
                 // pipeline is only emitted for STRICT tables.
@@ -957,7 +957,8 @@ fn validate(
             }
         }
 
-        let table = create_table_with_rowid_decision(table_name, body, 0, rowid_decision)?;
+        let table =
+            create_table_with_rowid_decision(table_name, body, 0, rowid_decision(table_marker))?;
         if !table.has_rowid {
             if table.has_autoincrement {
                 bail_parse_error!("AUTOINCREMENT is not allowed on WITHOUT ROWID tables");
@@ -1255,16 +1256,12 @@ pub fn translate_create_table(
         ctas_info.is_some(),
         input,
     )?;
-    let rowid_decision = match &table_marker {
-        Some(marker) => RowidDecision::FromMarker(marker.rowid_alias),
-        None => RowidDecision::BySqliteRule,
-    };
     validate(
         &body,
         &normalized_tbl_name,
         resolver,
         connection,
-        rowid_decision,
+        table_marker.as_ref(),
     )?;
     let bound_sequence_names = resolver.dialect.binds_names_at_create()
         && bind_default_sequence_names(&mut body, resolver)?;
@@ -1510,7 +1507,12 @@ pub fn translate_create_table(
     // https://github.com/sqlite/sqlite/blob/95f6df5b8d55e67d1e34d2bff217305a2f21b1fb/src/build.c#L2856-L2871
     // https://github.com/sqlite/sqlite/blob/95f6df5b8d55e67d1e34d2bff217305a2f21b1fb/src/build.c#L1334C5-L1336C65
 
-    let index_regs = collect_autoindexes(&body, program, &normalized_tbl_name, rowid_decision)?;
+    let index_regs = collect_autoindexes(
+        &body,
+        program,
+        &normalized_tbl_name,
+        rowid_decision(table_marker.as_ref()),
+    )?;
     if let Some(index_regs) = index_regs.as_ref() {
         for index_reg in index_regs.iter() {
             program.emit_insn(Insn::CreateBtree {
@@ -1690,6 +1692,13 @@ fn new_table_marker(
             .any(Column::is_rowid_alias),
     };
     Ok(Some(TableMarker::new(dialect.name(), rowid_alias)))
+}
+
+fn rowid_decision(table_marker: Option<&TableMarker>) -> RowidDecision {
+    match table_marker {
+        Some(marker) => RowidDecision::FromMarker(marker.rowid_alias),
+        None => RowidDecision::BySqliteRule,
+    }
 }
 
 /// Binds the sequences named in the column defaults of `body` to the

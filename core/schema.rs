@@ -861,9 +861,6 @@ fn bootstrap_builtin_types(
     registry: &mut HashMap<String, Arc<TypeDef>>,
     rules: &crate::dialect::TypeRules,
 ) -> crate::Result<()> {
-    use turso_parser::ast::{Cmd, Stmt};
-    use turso_parser::parser::Parser;
-
     for builtin in BUILTIN_TYPES {
         let behaviour = rules
             .behaviour_override(builtin.name)
@@ -873,18 +870,7 @@ fn bootstrap_builtin_types(
         } else {
             format!("{} {behaviour}", builtin.storage)
         };
-        let mut parser = Parser::new(sql.as_bytes());
-        let Ok(Some(Cmd::Stmt(Stmt::CreateType {
-            type_name, body, ..
-        }))) = parser.next_cmd()
-        else {
-            return Err(crate::LimboError::InternalError(format!(
-                "failed to parse built-in type SQL: {sql}"
-            )));
-        };
-
-        let type_def = TypeDef::from_create_type(&type_name, &body, true, sql.clone())?;
-        registry.insert(type_name.to_lowercase(), Arc::new(type_def));
+        register_type_sql(registry, sql)?;
     }
 
     // Register aliases
@@ -898,6 +884,38 @@ fn bootstrap_builtin_types(
             registry.insert(alias.to_string(), type_def);
         }
     }
+    Ok(())
+}
+
+fn bootstrap_dialect_types(
+    registry: &mut HashMap<String, Arc<TypeDef>>,
+    dialect_types: &[crate::dialect::DialectType],
+) -> crate::Result<()> {
+    for dialect_type in dialect_types {
+        register_type_sql(registry, dialect_type.create_type_sql())?;
+    }
+    Ok(())
+}
+
+fn register_type_sql(
+    registry: &mut HashMap<String, Arc<TypeDef>>,
+    sql: String,
+) -> crate::Result<()> {
+    use turso_parser::ast::{Cmd, Stmt};
+    use turso_parser::parser::Parser;
+
+    let mut parser = Parser::new(sql.as_bytes());
+    let Ok(Some(Cmd::Stmt(Stmt::CreateType {
+        type_name, body, ..
+    }))) = parser.next_cmd()
+    else {
+        return Err(crate::LimboError::InternalError(format!(
+            "failed to parse built-in type SQL: {sql}"
+        )));
+    };
+    let name = crate::util::dequote(&type_name);
+    let type_def = TypeDef::from_create_type(&name, &body, true, sql.clone())?;
+    registry.insert(type_registry_key(&name), Arc::new(type_def));
     Ok(())
 }
 
@@ -1054,8 +1072,17 @@ impl Schema {
         let incompatible_views = HashSet::default();
         let incompatible_materialized_view_roots = HashMap::default();
         let mut type_registry = HashMap::default();
+        let type_rules = dialect.type_rules();
+        turso_assert!(
+            type_rules.dialect_types.is_empty() || dialect.marks_tables(),
+            "a dialect with its own type names must mark its tables"
+        );
         if enable_custom_types {
-            bootstrap_builtin_types(&mut type_registry, dialect.type_rules())?;
+            if type_rules.dialect_types.is_empty() {
+                bootstrap_builtin_types(&mut type_registry, type_rules)?;
+            } else {
+                bootstrap_dialect_types(&mut type_registry, type_rules.dialect_types)?;
+            }
         }
         let mut schema = Self {
             tables,
@@ -1231,6 +1258,9 @@ impl Schema {
                 Some(td) => {
                     chain.try_push(Arc::clone(td))?;
                     current = type_registry_key(td.base());
+                    if td.is_builtin {
+                        return Ok((current, chain));
+                    }
                 }
                 None => {
                     // current is not in the registry — it's a primitive

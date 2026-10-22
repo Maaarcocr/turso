@@ -148,103 +148,12 @@ fn dialect_writes_marker(dialect: &dyn Dialect, marker: &TableMarker) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::database::DatabaseFile;
+    use crate::dialect::test_dialect::{ints, marking, open_db, query, stored_sql, MarkingDialect};
     use crate::{ConnectOpts, Connection, Database, MemoryIO, OpenFlags, Value, IO};
     use std::sync::Arc;
 
-    struct MarkingDialect {
-        name: &'static str,
-    }
-
-    impl Dialect for MarkingDialect {
-        fn name(&self) -> &'static str {
-            self.name
-        }
-
-        fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-            if sql.trim_start().starts_with("/*") {
-                crate::bail_parse_error!("the marking dialect's parser does not read comments");
-            }
-            sqlite::parse(sql)
-        }
-
-        fn parse_table_sql(&self, sql: &str, root_page: i64) -> Result<BTreeTable> {
-            BTreeTable::from_sql(sql, root_page)
-        }
-
-        fn parse_table_sql_ast(&self, sql: &str) -> Result<ast::Stmt> {
-            sqlite::parse_table_sql_ast(sql)
-        }
-
-        fn table_sql_for_replay(&self, sql: &str) -> Result<String> {
-            sqlite::table_sql_for_replay(sql)
-        }
-
-        fn format_table_sql(
-            &self,
-            input: &str,
-            tbl_name: &ast::QualifiedName,
-            body: &ast::CreateTableBody,
-        ) -> Result<String> {
-            SqliteDialect.format_table_sql(input, tbl_name, body)
-        }
-
-        fn register_catalog(
-            &self,
-            schema: &mut crate::schema::Schema,
-            enable_custom_types: bool,
-        ) -> Result<()> {
-            sqlite::register_builtin_catalog(schema, enable_custom_types)
-        }
-
-        fn resolve_function(
-            &self,
-            name: &str,
-            arg_count: usize,
-        ) -> Result<Option<crate::function::Func>> {
-            sqlite::resolve_builtin_function(name, arg_count)
-        }
-
-        fn marks_tables(&self) -> bool {
-            true
-        }
-    }
-
-    fn marking() -> Arc<dyn Dialect> {
-        Arc::new(MarkingDialect { name: "marking" })
-    }
-
-    fn open_db(io: &Arc<dyn IO>, path: &str, dialect: Arc<dyn Dialect>) -> Result<Arc<Database>> {
-        let file = io.open_file(path, OpenFlags::Create, true)?;
-        let db_file = Arc::new(DatabaseFile::new(file));
-        Database::open(
-            io.clone(),
-            path,
-            crate::OpenOptions::new(dialect).storage(db_file),
-        )
-    }
-
-    fn query(conn: &Arc<Connection>, sql: &str) -> Vec<Vec<Value>> {
-        conn.prepare(sql).unwrap().run_collect_rows().unwrap()
-    }
-
-    fn stored_sql(conn: &Arc<Connection>, name: &str) -> String {
-        let rows = query(
-            conn,
-            &format!("SELECT sql FROM sqlite_schema WHERE name = '{name}'"),
-        );
-        assert_eq!(rows.len(), 1, "no schema row for {name}");
-        rows[0][0].to_string().trim_matches('\'').to_string()
-    }
-
     fn rowid_and_id(conn: &Arc<Connection>, table: &str) -> Vec<Vec<Value>> {
         query(conn, &format!("SELECT rowid, id FROM {table} ORDER BY id"))
-    }
-
-    fn ints(rows: &[&[i64]]) -> Vec<Vec<Value>> {
-        rows.iter()
-            .map(|row| row.iter().map(|v| Value::from_i64(*v)).collect())
-            .collect()
     }
 
     fn create_keyed_tables(conn: &Arc<Connection>) {

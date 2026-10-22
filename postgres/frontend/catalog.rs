@@ -193,6 +193,7 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
          FUNCTION abs(numeric) RETURNS numeric numeric_abs",
     )],
     cast_uses_parameter_defaults: true,
+    dialect_types: &[],
 };
 
 pub fn encode_pg_schema_sql(sql: &str) -> String {

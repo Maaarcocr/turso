@@ -10,9 +10,13 @@
 //! build (`pragma_*`, `json_each`/`json_tree`, `sqlite_dbpage`,
 //! `btree_dump`, `sqlite_turso_types`).
 
+pub mod dialect_types;
 pub mod marker;
 pub mod sqlite;
+#[cfg(test)]
+pub(crate) mod test_dialect;
 
+pub use dialect_types::{DialectType, StorageType};
 pub use marker::TableMarker;
 pub use sqlite::SqliteDialect;
 
@@ -201,12 +205,14 @@ pub trait Dialect: Send + Sync + 'static {
 pub struct TypeRules {
     pub builtin_behaviour_overrides: &'static [(&'static str, &'static str)],
     pub cast_uses_parameter_defaults: bool,
+    pub dialect_types: &'static [DialectType],
 }
 
 impl TypeRules {
     pub const SQLITE: TypeRules = TypeRules {
         builtin_behaviour_overrides: &[],
         cast_uses_parameter_defaults: false,
+        dialect_types: &[],
     };
 
     pub(crate) fn behaviour_override(&self, type_name: &str) -> Option<&'static str> {

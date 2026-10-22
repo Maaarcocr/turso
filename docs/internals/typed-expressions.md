@@ -844,10 +844,10 @@ rolled-back insert, so MySQL can leave gaps where Turso does not.
 
 ### Type names
 
-The dialect's type rules gain a *name table*: a function from a declared type
-(name and parameters, as in `ast::Type`) to a *dialect type*. `TypeRules` is a
-`'static` value, so the name table is a function pointer in it. A dialect type
-has:
+The dialect's type rules gain a *name table*, `TypeRules::dialect_types`: a
+static list of *dialect types*, each found by its declared name (`INT`,
+`INT UNSIGNED`, `DECIMAL`); the declared parameters (`DECIMAL(10,2)`) are the
+type's parameters. A dialect type has:
 
 - the core storage type and its parameters (next section): `INT` is
   `ranged_integer(-2147483648, 2147483647)`, `DECIMAL(10,2)` is
@@ -1152,6 +1152,16 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Name table (commit 15).** Core builds a CREATE TYPE statement for each
+  dialect type from its storage type, its extra parameters and its behaviour,
+  and registers it in every schema of the dialect instead of core's built-in
+  types, when the schema is created. So every lookup by name (column types,
+  CAST, operator signatures, type functions) finds the dialect's types, and
+  in marked tables `INT`, `INTEGER`, `REAL`, `TEXT`, `BLOB` and `ANY` are
+  looked up like any other name. The BASE of a built-in or dialect type is
+  always a storage class, never another type, so a dialect type may be named
+  `integer` and have BASE `integer`. Like every custom type, a dialect type
+  is sorted and compared only through its own `OPERATOR '<'` and `'='`.
 - **Marker (commit 14).** `core/dialect/marker.rs` reads and writes the
   marker; schema loading, ALTER TABLE, VACUUM and `Connection::parse_sql` go
   through it, and the table keeps it in `BTreeTable::dialect_marker`. The
