@@ -76,7 +76,7 @@ Known gaps:
 - Unlike InnoDB, a failed insert does not use up an `AUTO_INCREMENT` value.
 - `FOREIGN KEY` constraints are stored but Turso does not enforce them unless `PRAGMA foreign_keys` is on.
 - Generated columns can only call functions that core also knows by name, so `->>` (`JSON_UNQUOTE`) in a generated column fails.
-- `CREATE TABLE ... AS SELECT` needs a type for each result column; a function result such as `SUM(...)` or `CONCAT(...)` has none yet and fails.
+- `CREATE TABLE ... AS SELECT` needs a type for each result column. Columns, number literals and integer arithmetic have one (`BIGINT`, `DOUBLE`, or the column's type); string literals, function and aggregate results such as `CONCAT(...)` or `SUM(...)`, and arithmetic on `DOUBLE` columns have none yet and fail.
 - Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, spatial `SRID` and `SPATIAL` keys, `FULLTEXT` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
 ## SELECT statements and expressions
