@@ -679,6 +679,18 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT GROUP_CONCAT (a || b, ';') FROM t",
         ),
         ("SELECT INTERVAL(5, 1, 10)", "SELECT INTERVAL (5, 1, 10)"),
+        (
+            "SELECT CAST(a AS JSON), CAST(a = 1 AS JSON), JSON_ARRAY(TRUE, a), 1 MEMBER OF (j)",
+            "SELECT __mysql_cast_as_json (a), __mysql_cast_boolean_as_json (a = 1), JSON_ARRAY (__mysql_cast_boolean_as_json (TRUE), a), __mysql_member_of (1, j)",
+        ),
+        (
+            "SELECT GET_FORMAT(DATE, 'USA'), UTC_DATE, LOCALTIMESTAMP()",
+            "SELECT GET_FORMAT ('DATE', 'USA'), CURRENT_DATE, CURRENT_TIMESTAMP",
+        ),
+        (
+            "SELECT MOD(7, 0xFF), IF(0x01, 'yes', 'no'), CONCAT(0x41)",
+            "SELECT MOD (7, 255), \"IF\" (1, 'yes', 'no'), CONCAT (x'41')",
+        ),
     ];
 
     for (sql, expected) in cases {
@@ -734,10 +746,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "collation",
             sql: "SELECT a COLLATE utf8mb4_bin FROM t",
-        },
-        SqlCase {
-            name: "cast to json",
-            sql: "SELECT CAST(a AS JSON) FROM t",
         },
         SqlCase {
             name: "cast to date",
@@ -854,6 +862,18 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "temporal compared with a number",
             sql: "SELECT DATE '2020-01-01' = 1",
+        },
+        SqlCase {
+            name: "json compared with a number",
+            sql: "SELECT CAST(a AS JSON) = 1",
+        },
+        SqlCase {
+            name: "json in arithmetic",
+            sql: "SELECT CAST(a AS JSON) + 1",
+        },
+        SqlCase {
+            name: "json in a lazily evaluated function",
+            sql: "SELECT CONCAT_WS(NULL, CAST(a AS JSON))",
         },
         SqlCase {
             name: "temporal compared with an invalid string",
