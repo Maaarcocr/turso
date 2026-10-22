@@ -85,7 +85,8 @@ pub(crate) use affinity::{
 };
 pub(crate) use arrays::{
     emit_array_decode, emit_custom_type_assign_columns, emit_custom_type_decode_columns,
-    emit_custom_type_encode_columns, emit_row_number_counter,
+    emit_custom_type_encode_columns, emit_generated_key_range_check, emit_key_assign,
+    emit_key_conversion, emit_key_encode, emit_row_number_counter,
 };
 pub(crate) use binary::expr_is_array;
 pub use binding::{bind_and_rewrite_expr, BindingBehavior};

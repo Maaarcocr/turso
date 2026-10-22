@@ -678,7 +678,7 @@ pub(crate) fn emit_type_expr(
     let param_result: Result<()> = (|| {
         // Skip `value` param (already handled above); match remaining params
         // against the user-provided ty_params by position.
-        if type_def.takes_label_list {
+        if type_def.takes_label_list() {
             let labels = column
                 .ty_params
                 .iter()

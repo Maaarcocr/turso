@@ -822,6 +822,14 @@ fn emit_update_column_values<'a>(
                 rowid_set_clause_reg,
                 &t_ctx.resolver,
             )?;
+            if let Some(btree) = column_ctx.target_table.table.btree() {
+                crate::translate::expr::emit_key_conversion(
+                    program,
+                    &t_ctx.resolver,
+                    &btree,
+                    rowid_set_clause_reg,
+                )?;
+            }
             program.emit_insn(Insn::MustBeInt {
                 reg: rowid_set_clause_reg,
                 target_pc: None,
@@ -867,6 +875,14 @@ fn emit_update_column_values<'a>(
                         rowid_set_clause_reg,
                         &t_ctx.resolver,
                     )?;
+                    if let Some(btree) = column_ctx.target_table.table.btree() {
+                        crate::translate::expr::emit_key_conversion(
+                            program,
+                            &t_ctx.resolver,
+                            &btree,
+                            rowid_set_clause_reg,
+                        )?;
+                    }
 
                     program.emit_insn(Insn::MustBeInt {
                         reg: rowid_set_clause_reg,

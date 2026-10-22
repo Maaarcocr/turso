@@ -225,6 +225,7 @@ pub struct TypeRules {
     pub decimal_literal_type: Option<&'static str>,
     pub string_literals_are_text: bool,
     pub result_parameters: Option<ResultParameters>,
+    pub zero_generates_key: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,6 +260,7 @@ impl TypeRules {
         decimal_literal_type: None,
         string_literals_are_text: false,
         result_parameters: None,
+        zero_generates_key: false,
     };
 
     pub(crate) fn behaviour_override(&self, type_name: &str) -> Option<&'static str> {

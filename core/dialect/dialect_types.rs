@@ -75,6 +75,14 @@ impl StorageType {
         matches!(self, StorageType::Enumeration | StorageType::LabelSet)
     }
 
+    pub(crate) fn largest_key(self) -> Option<i64> {
+        match self {
+            StorageType::Integer | StorageType::Uint64 => Some(i64::MAX),
+            StorageType::RangedInteger { max, .. } => Some(max),
+            _ => None,
+        }
+    }
+
     fn parameters(self) -> &'static str {
         match self {
             StorageType::DatetimeMicros | StorageType::TimeMicros => "fsp integer DEFAULT 0",

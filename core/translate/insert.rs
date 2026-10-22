@@ -507,6 +507,15 @@ pub fn translate_insert(
         .then(|| crate::translate::expr::emit_row_number_counter(program));
     if ctx.table.is_strict {
         emit_custom_type_assign(program, resolver, &insertion, row_number_reg)?;
+        if has_user_provided_rowid {
+            crate::translate::expr::emit_key_assign(
+                program,
+                resolver,
+                ctx.table,
+                insertion.key_register(),
+                row_number_reg,
+            )?;
+        }
     } else {
         let affinity = insertion
             .col_mappings
@@ -652,7 +661,16 @@ pub fn translate_insert(
         }
     }
 
-    if has_user_provided_rowid {
+    if ctx.table.dialect_marker.is_some() && ctx.table.has_rowid {
+        emit_marked_table_key(
+            program,
+            resolver,
+            &ctx,
+            &insertion,
+            has_user_provided_rowid,
+            row_number_reg,
+        )?;
+    } else if has_user_provided_rowid {
         emit_check_for_user_provided_rowid(program, &insertion, &ctx);
     }
 
@@ -660,6 +678,13 @@ pub fn translate_insert(
 
     if ctx.table.has_rowid {
         emit_rowid_generation(program, &ctx, &insertion, resolver, is_mvcc)?;
+        crate::translate::expr::emit_generated_key_range_check(
+            program,
+            resolver,
+            ctx.table,
+            insertion.key_register(),
+            row_number_reg,
+        )?;
     }
 
     program.preassign_label_to_next_insn(ctx.key_labels.key_ready_for_check);
@@ -1174,6 +1199,82 @@ fn emit_check_for_user_provided_rowid(
     program.emit_insn(Insn::Goto {
         target_pc: ctx.key_labels.key_ready_for_check,
     });
+}
+
+fn emit_marked_table_key(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    ctx: &InsertEmitCtx,
+    insertion: &Insertion,
+    key_is_provided: bool,
+    row_number_reg: Option<usize>,
+) -> Result<()> {
+    let no_key = program.allocate_label();
+    if key_is_provided {
+        program.emit_insn(Insn::IsNull {
+            reg: insertion.key_register(),
+            target_pc: no_key,
+        });
+        crate::translate::expr::emit_key_encode(
+            program,
+            resolver,
+            ctx.table,
+            insertion.key_register(),
+            row_number_reg,
+        )?;
+        program.emit_insn(Insn::MustBeInt {
+            reg: insertion.key_register(),
+            target_pc: None,
+        });
+        if ctx.table.has_autoincrement && resolver.schema().type_rules.zero_generates_key {
+            let zero = program.alloc_register();
+            program.emit_insn(Insn::Integer {
+                value: 0,
+                dest: zero,
+            });
+            program.emit_insn(Insn::Eq {
+                lhs: insertion.key_register(),
+                rhs: zero,
+                target_pc: ctx.key_labels.key_generation,
+                flags: CmpInsFlags::default(),
+                collation: None,
+            });
+        }
+        program.emit_insn(Insn::Goto {
+            target_pc: ctx.key_labels.key_ready_for_check,
+        });
+    }
+    program.preassign_label_to_next_insn(no_key);
+    let Some((_, key_column)) = ctx.table.get_rowid_alias_column() else {
+        return Ok(());
+    };
+    if ctx.table.has_autoincrement || !key_column.notnull() {
+        return Ok(());
+    }
+    let effective = if ctx.statement_on_conflict.is_some() {
+        ctx.on_conflict
+    } else {
+        key_column
+            .notnull_conflict_clause
+            .unwrap_or(ResolveType::Abort)
+    };
+    if matches!(effective, ResolveType::Ignore) {
+        program.emit_insn(Insn::Goto {
+            target_pc: ctx.loop_labels.row_done,
+        });
+    } else {
+        program.emit_insn(Insn::Halt {
+            err_code: SQLITE_CONSTRAINT_NOTNULL,
+            description: format!(
+                "{}.{}",
+                ctx.table.name,
+                key_column.name.as_deref().unwrap_or_default()
+            ),
+            on_error: program.constraint_halt_on_error(effective),
+            description_reg: None,
+        });
+    }
+    Ok(())
 }
 
 fn emit_epilogue(

@@ -920,7 +920,7 @@ fn validate(
                                     .as_ref()
                                     .map_or(0, |size| size.parameters().len());
                                 let expected = td.user_params().count();
-                                if td.takes_label_list && provided == 0 {
+                                if td.takes_label_list() && provided == 0 {
                                     bail_parse_error!(
                                         "type \"{}\" requires at least one label",
                                         type_name
@@ -1683,17 +1683,34 @@ fn new_table_marker(
     if !options.contains_strict() {
         bail_parse_error!("tables in the {} dialect must be STRICT", dialect.name());
     }
-    let rowid_alias = match TableMarker::read(input.trim_start())? {
-        Some((marker, _)) if marker.dialect == dialect.name() => marker.rowid_alias,
+    let rowid_alias_of_statement = match TableMarker::read(input.trim_start())? {
+        Some((marker, _)) if marker.dialect == dialect.name() => Some(marker.rowid_alias),
         Some((marker, _)) => bail_parse_error!(
             "a table marked for the {} dialect cannot be created in the {} dialect",
             marker.dialect,
             dialect.name()
         ),
-        None => create_table(table_name, body, 0)?
-            .columns()
-            .iter()
-            .any(Column::is_rowid_alias),
+        None => None,
+    };
+    let integer_key = crate::schema::create_table_with_rowid_decision(
+        table_name,
+        body,
+        0,
+        RowidDecision::AnyDeclaredType,
+    )?
+    .get_rowid_alias_column()
+    .is_some_and(|(_, column)| {
+        resolver
+            .schema()
+            .largest_key_of_type(&column.ty_str)
+            .is_some()
+    });
+    let rowid_alias = match rowid_alias_of_statement {
+        Some(true) if !integer_key => bail_parse_error!(
+            "table {table_name} is marked rowid_alias but its primary key is not of an integer type"
+        ),
+        Some(rowid_alias) => rowid_alias,
+        None => integer_key,
     };
     Ok(Some(TableMarker::new(dialect.name(), rowid_alias)))
 }

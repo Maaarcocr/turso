@@ -1466,7 +1466,7 @@ fn is_typed_cast(def: &TypeDef, param_count: usize, uses_defaults: bool) -> bool
     if def.is_domain {
         return true;
     }
-    if def.takes_label_list {
+    if def.takes_label_list() {
         return def.accepts_param_count(param_count);
     }
     let user_param_count = def.user_params().count();

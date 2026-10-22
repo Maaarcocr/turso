@@ -684,6 +684,9 @@ pub fn emit_upsert(
                 resolver,
                 NoConstantOptReason::RegisterReuse,
             )?;
+            if let Some(btree) = table.btree() {
+                crate::translate::expr::emit_key_conversion(program, resolver, &btree, r)?;
+            }
             program.emit_insn(Insn::MustBeInt {
                 reg: r,
                 target_pc: None,
@@ -726,6 +729,9 @@ pub fn emit_upsert(
                 dst_reg: r,
                 extra_amount: 0,
             });
+            if let Some(btree) = table.btree() {
+                crate::translate::expr::emit_key_conversion(program, resolver, &btree, r)?;
+            }
             program.emit_insn(Insn::MustBeInt {
                 reg: r,
                 target_pc: None,

@@ -291,7 +291,7 @@ pub struct TypeDef {
     /// Empty for regular CREATE TYPE definitions.
     pub domain_checks: std::vec::Vec<ast::DomainConstraint>,
     pub kind: TypeDefKind,
-    pub takes_label_list: bool,
+    pub storage: Option<crate::dialect::StorageType>,
 }
 
 impl TypeDef {
@@ -464,7 +464,7 @@ impl TypeDef {
                 is_domain: false,
                 sql,
                 domain_checks: std::vec::Vec::new(),
-                takes_label_list: false,
+                storage: None,
                 kind: TypeDefKind::Custom {
                     params: params.clone(),
                     base: base.clone(),
@@ -498,7 +498,7 @@ impl TypeDef {
                     is_domain: false,
                     sql,
                     domain_checks: std::vec::Vec::new(),
-                    takes_label_list: false,
+                    storage: None,
                     kind: TypeDefKind::Struct(StructDef {
                         fields: struct_fields,
                     }),
@@ -531,7 +531,7 @@ impl TypeDef {
                     is_domain: false,
                     sql,
                     domain_checks: std::vec::Vec::new(),
-                    takes_label_list: false,
+                    storage: None,
                     kind: TypeDefKind::Union(UnionDef {
                         // Arc<[T]> is a shared-pointer boundary: collect directly,
                         // skipping the intermediate allocator Vec.
@@ -560,7 +560,7 @@ impl TypeDef {
             is_domain: true,
             sql,
             domain_checks: constraints.to_vec(),
-            takes_label_list: false,
+            storage: None,
             kind: TypeDefKind::Custom {
                 params: std::vec::Vec::new(),
                 base: base_type.to_string(),
@@ -600,8 +600,13 @@ impl TypeDef {
         self.user_params().filter(|p| p.default.is_none()).count()
     }
 
+    pub fn takes_label_list(&self) -> bool {
+        self.storage
+            .is_some_and(crate::dialect::StorageType::takes_label_list)
+    }
+
     pub fn accepts_param_count(&self, count: usize) -> bool {
-        if self.takes_label_list {
+        if self.takes_label_list() {
             return count >= 1;
         }
         count >= self.required_user_param_count() && count <= self.user_params().count()
@@ -928,7 +933,7 @@ fn bootstrap_dialect_types(
 ) -> crate::Result<()> {
     for dialect_type in dialect_types {
         let mut type_def = parse_type_sql(dialect_type.create_type_sql())?;
-        type_def.takes_label_list = dialect_type.storage.takes_label_list();
+        type_def.storage = Some(dialect_type.storage);
         registry.insert(type_registry_key(&type_def.name), Arc::new(type_def));
     }
     Ok(())
@@ -1221,6 +1226,12 @@ impl Schema {
     /// CREATE TABLE validation, CAST).
     pub fn get_type_def_unchecked(&self, type_name: &str) -> Option<&Arc<TypeDef>> {
         self.type_registry.get(&type_registry_key(type_name))
+    }
+
+    pub(crate) fn largest_key_of_type(&self, type_name: &str) -> Option<i64> {
+        self.get_type_def_unchecked(type_name)?
+            .storage?
+            .largest_key()
     }
 
     /// Resolve a custom type fully: look it up (with strictness gate) and chase
@@ -2837,6 +2848,7 @@ impl Schema {
 
                     let mut table = table;
                     table.resolve_custom_type_affinities(self);
+                    table.check_marked_rowid_alias(self)?;
                     table.propagate_domain_constraints(self)?;
                     let has_autoinc = table.has_autoincrement;
                     let tbl_name = table.name.clone();
@@ -4181,6 +4193,26 @@ impl BTreeTable {
         Ok(())
     }
 
+    fn check_marked_rowid_alias(&self, schema: &Schema) -> Result<()> {
+        if !self
+            .dialect_marker
+            .as_ref()
+            .is_some_and(|marker| marker.rowid_alias)
+        {
+            return Ok(());
+        }
+        let (_, column) = self
+            .get_rowid_alias_column()
+            .expect("a table marked rowid_alias has a rowid column");
+        if schema.largest_key_of_type(&column.ty_str).is_none() {
+            return Err(LimboError::Corrupt(format!(
+                "malformed database schema: table {} is marked rowid_alias but the type {} of its key is not an integer type",
+                self.name, column.ty_str
+            )));
+        }
+        Ok(())
+    }
+
     pub fn get_rowid_alias_column(&self) -> Option<(usize, &Column)> {
         self.columns
             .iter()
@@ -5307,6 +5339,7 @@ fn constraint_column_collation(expr: &Expr) -> Result<(&Expr, Option<CollationSe
 pub(crate) enum RowidDecision {
     BySqliteRule,
     FromMarker(bool),
+    AnyDeclaredType,
 }
 
 impl RowidDecision {
@@ -5314,6 +5347,7 @@ impl RowidDecision {
         match self {
             RowidDecision::BySqliteRule => typename_exactly_integer,
             RowidDecision::FromMarker(rowid_alias) => rowid_alias,
+            RowidDecision::AnyDeclaredType => true,
         }
     }
 }
@@ -5805,9 +5839,7 @@ pub(crate) fn create_table_with_rowid_decision(
     }
 
     if rowid_decision == RowidDecision::FromMarker(true)
-        && !cols
-            .iter()
-            .any(|col| col.is_rowid_alias() && col.ty() == Type::Integer)
+        && !cols.iter().any(|col| col.is_rowid_alias())
     {
         crate::bail_parse_error!(
             "table {} is marked rowid_alias but its primary key cannot be the rowid",
@@ -5829,7 +5861,13 @@ pub(crate) fn create_table_with_rowid_decision(
         });
 
         if let Some(col) = pk_col {
-            if col.ty() != Type::Integer {
+            let integer_key = match rowid_decision {
+                RowidDecision::BySqliteRule => col.ty() == Type::Integer,
+                RowidDecision::FromMarker(_) | RowidDecision::AnyDeclaredType => {
+                    col.is_rowid_alias()
+                }
+            };
+            if !integer_key {
                 crate::bail_parse_error!("AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY");
             }
         }

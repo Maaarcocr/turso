@@ -199,6 +199,7 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
     decimal_literal_type: None,
     string_literals_are_text: false,
     result_parameters: None,
+    zero_generates_key: false,
 };
 
 pub fn encode_pg_schema_sql(sql: &str) -> String {

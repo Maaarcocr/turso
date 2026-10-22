@@ -1152,6 +1152,26 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Integer keys (commit 24).** At CREATE TABLE in a marking dialect, core
+  parses the table once with every single primary key column as the rowid
+  candidate (`RowidDecision::AnyDeclaredType`, which keeps SQLite's other
+  conditions: one key column, a rowid table, no column-level `DESC`), and the
+  key is the rowid when the name table maps its declared type directly to an
+  integer storage type (`TypeDef::storage`; a domain over one does not count).
+  A statement that carries its own marker keeps that decision, but
+  `rowid_alias` on a key of another type is an error. At load,
+  `rowid_alias` on a key whose declared type is not an integer storage type is
+  a Corrupt error. In a marked table the key goes through ASSIGN before BEFORE
+  triggers, then ENCODE, and a value that is still not an integer (a `uint64`
+  above 9223372036854775807) is an out-of-range error before `MustBeInt`;
+  UPDATE and UPSERT DO UPDATE do the same and check NOT NULL. INSERT
+  generates a key for NULL or a missing key only when the table has
+  AUTOINCREMENT or the key is not NOT NULL, and for 0 when AUTOINCREMENT and
+  `TypeRules::zero_generates_key` are both set; otherwise a NULL key fails NOT
+  NULL (OR IGNORE skips the row). A generated key larger than the type's
+  largest value fails with "no more keys". ALTER COLUMN of the key of a marked
+  table stays refused, because ALTER COLUMN loses the values of an INTEGER
+  PRIMARY KEY column in every dialect (a separate bug).
 - **Assignment conversions (commit 23).** CREATE TYPE takes `ASSIGN expr`,
   `CAST expr` and a function name after `CAST FROM ... AS IMPLICIT`, also for
   user types; the stored CREATE TYPE text keeps them. ASSIGN runs where SQLite
@@ -1170,8 +1190,7 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   SQLite's check of the DEFAULT against the names INT, REAL, TEXT and BLOB;
   when the table has rows it converts the DEFAULT into the column's type
   once, so an invalid DEFAULT fails the ALTER TABLE instead of every later
-  read. Turso has no stored generated columns. ASSIGN does not run for the
-  rowid yet (commit 24). In INSERT, a virtual generated column is computed
+  read. Turso has no stored generated columns. In INSERT, a virtual generated column is computed
   from the already-encoded values of the other columns, so one that reads an
   encoded column (`numeric`, `uint64`) fails the STRICT check; this is older
   than this commit and not fixed here.
@@ -1257,9 +1276,9 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   marker; schema loading, ALTER TABLE, VACUUM and `Connection::parse_sql` go
   through it, and the table keeps it in `BTreeTable::dialect_marker`. The
   check that refuses PostgreSQL tables outside PostgreSQL moved there from the
-  SQLite dialect. ALTER COLUMN of the rowid column of a marked table is refused
-  until commit 24: Turso's ALTER COLUMN removes PRIMARY KEY from the column,
-  which would leave a `rowid_alias` marker on a table without a key. (In every
+  SQLite dialect. ALTER COLUMN of the rowid column of a marked table is refused:
+  Turso's ALTER COLUMN removes PRIMARY KEY from the column, which would leave
+  a `rowid_alias` marker on a table without a key. (In every
   dialect, ALTER COLUMN of an INTEGER PRIMARY KEY column also loses the
   column's values; that is a separate bug.)
 

@@ -200,6 +200,184 @@ pub(crate) fn emit_array_decode(
     Ok(())
 }
 
+pub(crate) fn emit_key_conversion(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    table: &BTreeTable,
+    key_reg: usize,
+) -> Result<()> {
+    let Some(column) = marked_key_column(table) else {
+        return Ok(());
+    };
+    if column.notnull() {
+        program.emit_insn(Insn::HaltIfNull {
+            target_reg: key_reg,
+            err_code: crate::error::SQLITE_CONSTRAINT_NOTNULL,
+            description: key_description(table, column),
+            on_error: None,
+        });
+    }
+    emit_key_assign(program, resolver, table, key_reg, None)?;
+    emit_key_encode(program, resolver, table, key_reg, None)
+}
+
+pub(crate) fn emit_key_assign(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    table: &BTreeTable,
+    key_reg: usize,
+    row_number_reg: Option<usize>,
+) -> Result<()> {
+    let Some(column) = marked_key_column(table) else {
+        return Ok(());
+    };
+    emit_custom_type_assign_columns(
+        program,
+        resolver,
+        std::slice::from_ref(column),
+        key_reg,
+        None,
+        &ColumnLayout::Identity { column_count: 1 },
+        row_number_reg,
+    )
+}
+
+pub(crate) fn emit_key_encode(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    table: &BTreeTable,
+    key_reg: usize,
+    row_number_reg: Option<usize>,
+) -> Result<()> {
+    let Some(column) = marked_key_column(table) else {
+        return Ok(());
+    };
+    emit_custom_type_encode_columns(
+        program,
+        resolver,
+        std::slice::from_ref(column),
+        key_reg,
+        None,
+        &table.name,
+        &ColumnLayout::Identity { column_count: 1 },
+        row_number_reg,
+    )?;
+    let is_integer = program.allocate_label();
+    program.emit_insn(Insn::IsNull {
+        reg: key_reg,
+        target_pc: is_integer,
+    });
+    program.emit_insn(Insn::IsType {
+        reg: key_reg,
+        target_pc: is_integer,
+        value_type: crate::types::ValueType::Integer,
+    });
+    emit_key_error(
+        program,
+        column,
+        row_number_reg,
+        "out of range",
+        format!("key out of range for {}", key_description(table, column)),
+    );
+    program.preassign_label_to_next_insn(is_integer);
+    Ok(())
+}
+
+pub(crate) fn emit_generated_key_range_check(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    table: &BTreeTable,
+    key_reg: usize,
+    row_number_reg: Option<usize>,
+) -> Result<()> {
+    let Some(column) = marked_key_column(table) else {
+        return Ok(());
+    };
+    let largest = resolver
+        .schema()
+        .largest_key_of_type(&column.ty_str)
+        .ok_or_else(|| {
+            LimboError::InternalError(format!(
+                "the key {} has no integer type",
+                key_description(table, column)
+            ))
+        })?;
+    if largest == i64::MAX {
+        return Ok(());
+    }
+    let largest_reg = program.alloc_register();
+    program.emit_insn(Insn::Integer {
+        value: largest,
+        dest: largest_reg,
+    });
+    let in_range = program.allocate_label();
+    program.emit_insn(Insn::Le {
+        lhs: key_reg,
+        rhs: largest_reg,
+        target_pc: in_range,
+        flags: CmpInsFlags::default(),
+        collation: None,
+    });
+    emit_key_error(
+        program,
+        column,
+        row_number_reg,
+        "no more keys",
+        format!("no more keys for {}", key_description(table, column)),
+    );
+    program.preassign_label_to_next_insn(in_range);
+    Ok(())
+}
+
+fn marked_key_column(table: &BTreeTable) -> Option<&Column> {
+    table.dialect_marker.as_ref()?;
+    table.get_rowid_alias_column().map(|(_, column)| column)
+}
+
+fn key_description(table: &BTreeTable, column: &Column) -> String {
+    format!(
+        "{}.{}",
+        table.name,
+        column.name.as_deref().unwrap_or_default()
+    )
+}
+
+fn emit_key_error(
+    program: &mut ProgramBuilder,
+    column: &Column,
+    row_number_reg: Option<usize>,
+    kind: &str,
+    message: String,
+) {
+    if let (Some(row_reg), Some(name)) = (row_number_reg, column.name.as_deref()) {
+        program.emit_insn(Insn::TypeConversionContext {
+            column: Some(std::sync::Arc::from(name)),
+            row_reg,
+        });
+    }
+    let args = program.alloc_registers(2);
+    program.emit_insn(Insn::String8 {
+        value: kind.to_string(),
+        dest: args,
+    });
+    program.emit_insn(Insn::String8 {
+        value: message,
+        dest: args + 1,
+    });
+    let unused = program.alloc_register();
+    program.emit_insn(Insn::Function {
+        constant_mask: 0,
+        start_reg: args,
+        dest: unused,
+        func: crate::function::FuncCtx {
+            func: crate::function::Func::Scalar(crate::function::ScalarFunc::Storage(
+                crate::dialect::StorageFunc::ConversionError,
+            )),
+            arg_count: 2,
+        },
+    });
+}
+
 pub(crate) fn emit_custom_type_assign_columns(
     program: &mut ProgramBuilder,
     resolver: &Resolver,

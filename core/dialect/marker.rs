@@ -183,18 +183,25 @@ mod tests {
         query(conn, &format!("SELECT rowid, id FROM {table} ORDER BY id"))
     }
 
+    fn text_key_row() -> Vec<Vec<Value>> {
+        vec![vec![Value::from_i64(1), Value::build_text("5")]]
+    }
+
     fn create_keyed_tables(conn: &Arc<Connection>) {
         conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, a INT) STRICT")
             .unwrap();
-        conn.execute("CREATE TABLE u(id INT PRIMARY KEY, a INT) STRICT")
+        conn.execute("CREATE TABLE u(id TEXT PRIMARY KEY, a INT) STRICT")
             .unwrap();
         conn.execute(
             "/* turso_dialect:marking */ CREATE TABLE w(id INTEGER PRIMARY KEY, a INT) STRICT",
         )
         .unwrap();
         conn.execute("INSERT INTO t VALUES (5, 1)").unwrap();
-        conn.execute("INSERT INTO u VALUES (5, 1)").unwrap();
+        conn.execute("INSERT INTO u VALUES ('5', 1)").unwrap();
         conn.execute("INSERT INTO w VALUES (5, 1)").unwrap();
+        conn.execute("CREATE TABLE v(id INT PRIMARY KEY, a INT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO v VALUES (5, 1)").unwrap();
     }
 
     #[test]
@@ -277,10 +284,15 @@ mod tests {
         );
         assert_eq!(
             stored_sql(&conn, "u"),
-            "/* turso_dialect:marking */ CREATE TABLE u (id INT PRIMARY KEY, a INT) STRICT"
+            "/* turso_dialect:marking */ CREATE TABLE u (id TEXT PRIMARY KEY, a INT) STRICT"
         );
         assert_eq!(rowid_and_id(&conn, "t"), ints(&[&[5, 5]]));
-        assert_eq!(rowid_and_id(&conn, "u"), ints(&[&[1, 5]]));
+        assert_eq!(rowid_and_id(&conn, "u"), text_key_row());
+        assert_eq!(
+            stored_sql(&conn, "v"),
+            "/* turso_dialect:marking rowid_alias */ CREATE TABLE v (id INT PRIMARY KEY, a INT) STRICT"
+        );
+        assert_eq!(rowid_and_id(&conn, "v"), ints(&[&[5, 5]]));
         conn.close().unwrap();
     }
 
@@ -312,6 +324,8 @@ mod tests {
             .unwrap();
         assert!(stored_sql(&conn, "t2").starts_with(marker));
 
+        conn.execute("ALTER TABLE v ADD COLUMN b TEXT").unwrap();
+        assert!(stored_sql(&conn, "v").starts_with(marker));
         conn.execute("ALTER TABLE u ADD COLUMN b TEXT").unwrap();
         assert!(stored_sql(&conn, "u").starts_with("/* turso_dialect:marking */ CREATE TABLE"));
         conn.close().unwrap();
@@ -320,6 +334,7 @@ mod tests {
         let db = open_db(&io, "marker-alter.db", marking()).unwrap();
         let conn = db.connect(ConnectOpts::new()).unwrap();
         assert_eq!(query(&conn, "SELECT rowid, key FROM t2"), ints(&[&[5, 5]]));
+        assert_eq!(rowid_and_id(&conn, "v"), ints(&[&[5, 5]]));
         conn.close().unwrap();
     }
 
@@ -335,11 +350,15 @@ mod tests {
         let db = open_db(&io, "marker-reopen.db", marking()).unwrap();
         let conn = db.connect(ConnectOpts::new()).unwrap();
         assert_eq!(rowid_and_id(&conn, "t"), ints(&[&[5, 5]]));
-        assert_eq!(rowid_and_id(&conn, "u"), ints(&[&[1, 5]]));
+        assert_eq!(rowid_and_id(&conn, "u"), text_key_row());
         assert_eq!(rowid_and_id(&conn, "w"), ints(&[&[1, 5]]));
-        assert!(conn.execute("INSERT INTO u VALUES (5, 2)").is_err());
+        assert_eq!(rowid_and_id(&conn, "v"), ints(&[&[5, 5]]));
+        assert!(conn.execute("INSERT INTO u VALUES ('5', 2)").is_err());
         assert!(conn.execute("INSERT INTO w VALUES (5, 2)").is_err());
-        conn.execute("INSERT INTO u VALUES (6, 2)").unwrap();
+        assert!(conn
+            .execute("INSERT INTO v VALUES (2147483648, 2)")
+            .is_err());
+        conn.execute("INSERT INTO u VALUES ('6', 2)").unwrap();
         conn.close().unwrap();
     }
 
@@ -451,6 +470,184 @@ mod tests {
         }
     }
 
+    fn conversion_error(error: LimboError) -> crate::TypeConversionError {
+        match error {
+            LimboError::TypeConversion(conversion) => *conversion,
+            other => panic!("expected a conversion error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn integer_keys_are_converted_like_columns() {
+        use crate::ConversionErrorKind;
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "keys-converted.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE a(id INT PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("CREATE TABLE b(id UBIGINT PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("CREATE TABLE c(id TINYINT(3) PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("CREATE TABLE d(id DOUBLE PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        for table in ["a", "b", "c"] {
+            assert!(
+                stored_sql(&conn, table).starts_with("/* turso_dialect:marking rowid_alias */"),
+                "{table}"
+            );
+        }
+        assert!(stored_sql(&conn, "d").starts_with("/* turso_dialect:marking */"));
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT tbl_name FROM sqlite_schema WHERE type = 'index'"
+            ),
+            vec![vec![Value::build_text("d")]]
+        );
+
+        conn.execute("INSERT INTO a VALUES (1.5, 'x'), (7, 'y')")
+            .unwrap();
+        assert_eq!(rowid_and_id(&conn, "a"), ints(&[&[2, 2], &[7, 7]]));
+        let error = conversion_error(
+            conn.execute("INSERT INTO a VALUES (3, 'x'), (2147483648, 'y')")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+        assert_eq!((error.column.as_deref(), error.row), (Some("id"), Some(2)));
+        let error = conversion_error(
+            conn.execute("INSERT INTO a VALUES ('12abc', 'x')")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::InvalidValue);
+        assert!(conn.execute("INSERT INTO c VALUES (128, 'x')").is_err());
+
+        conn.execute("INSERT INTO b VALUES (9223372036854775807, 'x')")
+            .unwrap();
+        let error = conversion_error(
+            conn.execute("INSERT INTO b VALUES (9223372036854775808, 'y')")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+        assert_eq!(query(&conn, "SELECT rowid = id FROM b"), ints(&[&[1]]));
+
+        let error = conversion_error(
+            conn.execute("UPDATE a SET id = 2147483648 WHERE id = 2")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+        conn.execute("UPDATE a SET id = 9.5 WHERE id = 2").unwrap();
+        conn.execute("INSERT INTO a VALUES (7, 'z') ON CONFLICT(id) DO UPDATE SET id = 20.5")
+            .unwrap();
+        assert_eq!(rowid_and_id(&conn, "a"), ints(&[&[10, 10], &[21, 21]]));
+        let error = conversion_error(
+            conn.execute(
+                "INSERT INTO a VALUES (10, 'z') ON CONFLICT(id) DO UPDATE SET id = 2147483648",
+            )
+            .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+    }
+
+    #[test]
+    fn keys_are_generated_only_with_autoincrement_or_for_nullable_keys() {
+        use crate::ConversionErrorKind;
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "keys-generated.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE n(id INT NOT NULL PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        for statement in [
+            "INSERT INTO n VALUES (NULL, 'x')",
+            "INSERT INTO n(v) VALUES ('x')",
+        ] {
+            let error = conn.execute(statement).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("NOT NULL constraint failed: n.id"),
+                "{statement}: {error}"
+            );
+        }
+        conn.execute("INSERT OR IGNORE INTO n VALUES (NULL, 'x')")
+            .unwrap();
+        conn.execute("INSERT INTO n VALUES (0, 'x')").unwrap();
+        assert_eq!(rowid_and_id(&conn, "n"), ints(&[&[0, 0]]));
+
+        conn.execute("CREATE TABLE g(id INT PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO g VALUES (NULL, 'x'), (0, 'y')")
+            .unwrap();
+        assert_eq!(rowid_and_id(&conn, "g"), ints(&[&[0, 0], &[1, 1]]));
+
+        conn.execute("CREATE TABLE ai(id INT NOT NULL PRIMARY KEY AUTOINCREMENT, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO ai VALUES (NULL, 'a'), (0, 'b')")
+            .unwrap();
+        conn.execute("INSERT INTO ai(v) VALUES ('c')").unwrap();
+        assert_eq!(
+            rowid_and_id(&conn, "ai"),
+            ints(&[&[1, 1], &[2, 2], &[3, 3]])
+        );
+        conn.execute("UPDATE ai SET id = 0 WHERE v = 'a'").unwrap();
+        let error = conn
+            .execute("UPDATE ai SET id = NULL WHERE v = 'b'")
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("NOT NULL constraint failed: ai.id"),
+            "{error}"
+        );
+        conn.execute("INSERT INTO ai VALUES (2147483647, 'd')")
+            .unwrap();
+        let error = conversion_error(conn.execute("INSERT INTO ai(v) VALUES ('e')").unwrap_err());
+        assert_eq!(error.kind, ConversionErrorKind::NoMoreKeys);
+        assert_eq!(
+            query(&conn, "SELECT id FROM ai ORDER BY id"),
+            ints(&[&[0], &[2], &[3], &[2147483647]])
+        );
+
+        let error = conn
+            .execute("CREATE TABLE r(id DOUBLE PRIMARY KEY AUTOINCREMENT) STRICT")
+            .unwrap_err();
+        assert!(error.to_string().contains("AUTOINCREMENT"), "{error}");
+    }
+
+    #[cfg(all(feature = "fs", not(target_family = "wasm")))]
+    #[test]
+    fn a_rowid_alias_marker_on_a_key_that_is_not_an_integer_is_corrupt() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("corrupt-key.db");
+        let io: Arc<dyn IO> = Arc::new(crate::io::PlatformIO::new().unwrap());
+        {
+            let db = Database::open_file(io.clone(), path.to_str().unwrap(), marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT) STRICT")
+                .unwrap();
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").unwrap();
+            conn.close().unwrap();
+        }
+        let mut bytes = std::fs::read(&path).unwrap();
+        let from = b"id INTEGER PRIMARY KEY";
+        let at = bytes
+            .windows(from.len())
+            .position(|window| window == from)
+            .expect("the table text is in the database file");
+        bytes[at..at + from.len()].copy_from_slice(b"id DECIMAL PRIMARY KEY");
+        std::fs::write(&path, bytes).unwrap();
+
+        let error = Database::open_file(io, path.to_str().unwrap(), marking())
+            .and_then(|db| db.connect(ConnectOpts::new()))
+            .and_then(|conn| conn.prepare("SELECT * FROM t"))
+            .expect_err("a rowid key of a decimal type must not load");
+        assert!(
+            matches!(error, LimboError::Corrupt(_))
+                && error.to_string().contains("not an integer type"),
+            "{error}"
+        );
+    }
+
     #[cfg(all(feature = "fs", not(target_family = "wasm")))]
     #[test]
     fn vacuum_keeps_the_marker_and_the_rowid_decision() {
@@ -484,7 +681,8 @@ mod tests {
             assert_eq!(stored_sql(conn, "u"), u_sql);
             assert_eq!(stored_sql(conn, "w"), w_sql);
             assert_eq!(rowid_and_id(conn, "t"), ints(&[&[5, 5]]));
-            assert!(conn.execute("INSERT INTO u VALUES (5, 2)").is_err());
+            assert_eq!(rowid_and_id(conn, "v"), ints(&[&[5, 5]]));
+            assert!(conn.execute("INSERT INTO u VALUES ('5', 2)").is_err());
             assert!(conn.execute("INSERT INTO w VALUES (5, 2)").is_err());
         }
     }

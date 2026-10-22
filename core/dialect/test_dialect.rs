@@ -41,6 +41,7 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
     decimal_literal_type: Some("decimal"),
     string_literals_are_text: true,
     result_parameters: Some(test_result_parameters),
+    zero_generates_key: true,
     dialect_types: &[
         DialectType {
             name: "decimal",
