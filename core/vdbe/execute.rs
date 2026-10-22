@@ -78,9 +78,9 @@ use crate::{
 };
 use crate::{
     error::{
-        LimboError, SQLITE_CONSTRAINT, SQLITE_CONSTRAINT_CHECK, SQLITE_CONSTRAINT_FOREIGNKEY,
-        SQLITE_CONSTRAINT_NOTNULL, SQLITE_CONSTRAINT_PRIMARYKEY, SQLITE_CONSTRAINT_TRIGGER,
-        SQLITE_ERROR, SQLITE_FULL,
+        LimboError, SQLITE_CONSTRAINT, SQLITE_CONSTRAINT_CHECK, SQLITE_CONSTRAINT_DATATYPE,
+        SQLITE_CONSTRAINT_FOREIGNKEY, SQLITE_CONSTRAINT_NOTNULL, SQLITE_CONSTRAINT_PRIMARYKEY,
+        SQLITE_CONSTRAINT_TRIGGER, SQLITE_ERROR, SQLITE_FULL,
     },
     function::{AggFunc, MathFunc, MathFuncArity, ScalarFunc, VectorFunc},
     functions::{
@@ -3870,7 +3870,9 @@ pub fn halt(
         SQLITE_CONSTRAINT_FOREIGNKEY => {
             Some(LimboError::ForeignKeyConstraint(description.to_string()))
         }
-        SQLITE_CONSTRAINT_TRIGGER => Some(LimboError::Constraint(description.to_string())),
+        SQLITE_CONSTRAINT_TRIGGER | SQLITE_CONSTRAINT_DATATYPE => {
+            Some(LimboError::Constraint(description.to_string()))
+        }
         SQLITE_FULL => Some(LimboError::DatabaseFull),
         // SQLITE_ERROR is a generic error (e.g. ALTER TABLE validation), not a constraint.
         // SqlError displays bare like sqlite3_errmsg and abort() doesn't apply

@@ -378,6 +378,7 @@ pub const SQLITE_CONSTRAINT_PRIMARYKEY: usize = SQLITE_CONSTRAINT | (6 << 8);
 pub const SQLITE_CONSTRAINT_FOREIGNKEY: usize = SQLITE_CONSTRAINT | (3 << 8);
 pub const SQLITE_CONSTRAINT_NOTNULL: usize = SQLITE_CONSTRAINT | (5 << 8);
 pub const SQLITE_CONSTRAINT_TRIGGER: usize = SQLITE_CONSTRAINT | (7 << 8);
+pub const SQLITE_CONSTRAINT_DATATYPE: usize = SQLITE_CONSTRAINT | (12 << 8);
 pub const SQLITE_FULL: usize = 13; // we want this in autoincrement - incase if user inserts max allowed int
 pub const SQLITE_CONSTRAINT_UNIQUE: usize = 2067;
 // Standard SQLite error code; kept for documentation and potential

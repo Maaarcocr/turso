@@ -610,14 +610,20 @@ pub(super) fn emit_domain_cast_constraints(
                 .unwrap_or_else(|| format!("{}_{}", td.name, i));
 
             // Bind `value` → reg, translate check expr, verify truthy
-            program
+            let outer_value = program
                 .id_register_overrides
                 .insert("value".to_string(), reg);
 
             let expr_result_reg = program.alloc_register();
-            translate_expr(program, None, &dc.check, expr_result_reg, resolver)?;
+            let translated = translate_expr(program, None, &dc.check, expr_result_reg, resolver);
 
-            program.id_register_overrides.remove("value");
+            match outer_value {
+                Some(outer_reg) => program
+                    .id_register_overrides
+                    .insert("value".to_string(), outer_reg),
+                None => program.id_register_overrides.remove("value"),
+            };
+            translated?;
 
             let passed_label = program.allocate_label();
 
@@ -662,7 +668,7 @@ pub(crate) fn emit_type_expr(
     type_def: &TypeDef,
     resolver: &Resolver,
 ) -> Result<usize> {
-    // Set up value override
+    let outer_overrides = program.id_register_overrides.clone();
     program
         .id_register_overrides
         .insert("value".to_string(), value_reg);
@@ -704,8 +710,7 @@ pub(crate) fn emit_type_expr(
         )
     });
 
-    // Always clean up overrides, even on error
-    program.id_register_overrides.clear();
+    program.id_register_overrides = outer_overrides;
 
     result
 }

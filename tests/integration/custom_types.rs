@@ -29,6 +29,21 @@ mod tests {
     }
 
     #[test]
+    fn test_typed_cast_reports_invalid_input_without_an_error_code_prefix() {
+        let opts = turso_core::DatabaseOpts::new().with_custom_types(true);
+        let db = TempDatabase::builder().with_opts(opts).build();
+        let conn = db.connect_limbo();
+        let message = conn
+            .execute("SELECT CAST('12abc' AS bigint)")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("invalid input for type bigint") && !message.contains("undocumented"),
+            "{message}"
+        );
+    }
+
+    #[test]
     fn test_new_numeric_functions_need_custom_types() {
         let db = TempDatabase::new_empty();
         let conn = db.connect_limbo();

@@ -514,7 +514,7 @@ pub(crate) fn emit_cast_into_type(
             value_type: expected,
         });
         program.emit_insn(Insn::Halt {
-            err_code: crate::error::SQLITE_CONSTRAINT,
+            err_code: crate::error::SQLITE_CONSTRAINT_DATATYPE,
             description: format!(
                 "cannot convert to type {}: the encoded value is not {}",
                 named.def.name, resolved.primitive
@@ -556,31 +556,7 @@ pub(crate) fn emit_conversion_into_type(
             extra_amount: 0,
         });
     }
-    let done = program.allocate_label();
-    program.emit_insn(Insn::IsNull {
-        reg: dest_reg,
-        target_pc: done,
-    });
-    let column = conversion_column(named);
-    emit_input_type_check(program, dest_reg, named);
-    let Some(resolved) = resolver.schema().resolve_type_unchecked(&named.def.name)? else {
-        return Err(LimboError::InternalError(format!(
-            "type {} is not registered",
-            named.def.name
-        )));
-    };
-    for def in &resolved.chain {
-        if let Some(encode) = def.encode() {
-            emit_type_expr(program, encode, dest_reg, dest_reg, &column, def, resolver)?;
-        }
-    }
-    for def in resolved.chain.iter().rev() {
-        if let Some(decode) = def.decode() {
-            emit_type_expr(program, decode, dest_reg, dest_reg, &column, def, resolver)?;
-        }
-    }
-    program.preassign_label_to_next_insn(done);
-    Ok(())
+    emit_cast_into_type(program, dest_reg, named, resolver)
 }
 
 pub(crate) fn emit_type_keys(
@@ -704,7 +680,7 @@ fn emit_input_type_check(program: &mut ProgramBuilder, reg: usize, named: &Named
         value_type: expected,
     });
     program.emit_insn(Insn::Halt {
-        err_code: crate::error::SQLITE_CONSTRAINT,
+        err_code: crate::error::SQLITE_CONSTRAINT_DATATYPE,
         description: format!("invalid input for type {}", named.def.name),
         on_error: None,
         description_reg: None,

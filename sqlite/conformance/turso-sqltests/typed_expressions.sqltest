@@ -601,3 +601,14 @@ test materialized-view-rejects-grouping-by-keyed-values {
 expect error {
     GROUP BY on values compared by a type key are not yet supported
 }
+
+@requires strict "uses STRICT tables"
+test cast-inside-encode-keeps-the-encoded-value {
+    CREATE TYPE pos(value any) BASE text ENCODE CASE WHEN CAST(value AS numeric(10,2)) < CAST(0 AS numeric(10,2)) THEN RAISE(ABORT, 'negative') ELSE value END DECODE value;
+    CREATE TABLE t1(x pos) STRICT;
+    INSERT INTO t1 VALUES ('5');
+    SELECT x FROM t1;
+}
+expect {
+    5
+}
