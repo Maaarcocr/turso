@@ -2183,6 +2183,18 @@ pub fn insn_to_row(
                 0,
                 format!("r[{dest}]=r[{lhs}] << r[{rhs}]"),
             ),
+            Insn::TypeConversionContext { column, row_reg } => (
+                "TypeConversionContext",
+                *row_reg as i64,
+                0,
+                0,
+                Value::build_text(column.as_deref().unwrap_or("").to_string()),
+                0,
+                match column {
+                    Some(column) => format!("converting column {column} of row r[{row_reg}]"),
+                    None => String::new(),
+                },
+            ),
             Insn::AddImm { register, value } => (
                 "AddImm",
                 *register as i64,

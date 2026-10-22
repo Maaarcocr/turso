@@ -3842,7 +3842,9 @@ fn limbo_err_code(err: &LimboError) -> i32 {
     match err {
         LimboError::Corrupt(..) => SQLITE_CORRUPT,
         LimboError::NotADB => SQLITE_NOTADB,
-        LimboError::Constraint(_) | LimboError::ForeignKeyConstraint(_) => SQLITE_CONSTRAINT,
+        LimboError::Constraint(_)
+        | LimboError::ForeignKeyConstraint(_)
+        | LimboError::TypeConversion(_) => SQLITE_CONSTRAINT,
         LimboError::DatabaseFull | LimboError::SequenceExhausted { .. } => SQLITE_FULL,
         LimboError::TableLocked => SQLITE_LOCKED,
         LimboError::ReadOnly => SQLITE_READONLY,

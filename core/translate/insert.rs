@@ -677,7 +677,7 @@ pub fn translate_insert(
         });
 
         // Encode values for columns with custom types.
-        emit_custom_type_encode(program, resolver, &insertion, &ctx.table.name)?;
+        emit_custom_type_encode(program, resolver, &insertion, ctx.table)?;
 
         // Post-encode TypeCheck: validate that encode produced the correct storage type (BASE).
         // We don't check generated columns in this initial pass because their dependencies could
@@ -4205,7 +4205,7 @@ fn emit_custom_type_encode(
     program: &mut ProgramBuilder,
     resolver: &Resolver,
     insertion: &Insertion,
-    table_name: &str,
+    table: &BTreeTable,
 ) -> Result<()> {
     let columns: Vec<_> = insertion
         .col_mappings
@@ -4213,13 +4213,18 @@ fn emit_custom_type_encode(
         .map(|m| m.column.clone())
         .collect();
     let layout = ColumnLayout::from_columns(&columns)?;
+    let row_number_reg = table
+        .dialect_marker
+        .is_some()
+        .then(|| crate::translate::expr::emit_row_number_counter(program));
     crate::translate::expr::emit_custom_type_encode_columns(
         program,
         resolver,
         &columns,
         insertion.first_col_register(),
-        None, // INSERT: encode all columns
-        table_name,
+        None,
+        &table.name,
         &layout,
+        row_number_reg,
     )
 }

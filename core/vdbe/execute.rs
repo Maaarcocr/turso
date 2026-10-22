@@ -10170,6 +10170,41 @@ pub fn op_function(
     insn: &Insn,
     pager: &Arc<Pager>,
 ) -> InsnResult {
+    run_function(program, state, insn, pager).map_err(|error| match *error {
+        LimboError::TypeConversion(mut conversion) => {
+            if let Some((column, row_reg)) = &state.type_conversion_context {
+                conversion.column = Some(column.to_string());
+                conversion.row = match state.registers[*row_reg].get_value() {
+                    Value::Numeric(Numeric::Integer(row)) => Some(*row),
+                    _ => None,
+                };
+            }
+            Box::new(LimboError::TypeConversion(conversion))
+        }
+        other => Box::new(other),
+    })
+}
+
+pub fn op_type_conversion_context(
+    _program: &Program,
+    state: &mut ProgramState,
+    insn: &Insn,
+    _pager: &Arc<Pager>,
+) -> InsnResult {
+    load_insn!(TypeConversionContext { column, row_reg }, insn);
+    state.type_conversion_context = column
+        .as_ref()
+        .map(|column| (std::sync::Arc::clone(column), *row_reg));
+    state.pc += 1;
+    Ok(InsnFunctionStepResult::Step)
+}
+
+fn run_function(
+    program: &Program,
+    state: &mut ProgramState,
+    insn: &Insn,
+    pager: &Arc<Pager>,
+) -> InsnResult {
     load_insn!(
         Function {
             constant_mask: _,

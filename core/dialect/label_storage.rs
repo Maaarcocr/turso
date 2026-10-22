@@ -1,5 +1,5 @@
 use crate::numeric::Numeric;
-use crate::{LimboError, Result, Value};
+use crate::{ConversionErrorKind, LimboError, Result, TypeConversionError, Value};
 
 const MAX_SET_LABELS: usize = 64;
 
@@ -125,7 +125,10 @@ fn expect_text<'a>(value: &'a Value, type_name: &str) -> Result<&'a str> {
 }
 
 fn invalid_value(type_name: &str, text: &str) -> LimboError {
-    LimboError::Constraint(format!("invalid value for {type_name}: {text}"))
+    TypeConversionError::raise(
+        ConversionErrorKind::InvalidValue,
+        format!("invalid value for {type_name}: {text}"),
+    )
 }
 
 fn bad_label_list(list: &str) -> LimboError {

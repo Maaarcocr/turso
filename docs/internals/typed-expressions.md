@@ -1152,6 +1152,16 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Error kinds (commit 22).** A conversion error is
+  `LimboError::TypeConversion` with a `ConversionErrorKind`, the message, and
+  the column and row when known; its text is the message, followed by the
+  column and row in parentheses. The core storage functions report their
+  kinds; `conversion_error(kind, message)` lets ENCODE and ASSIGN expressions
+  report one (ranged integers use it). For INSERT and UPDATE of a marked
+  table, a `TypeConversionContext` instruction before each column's ENCODE
+  names the column and a counter register counts rows from 1, so the error
+  gets both; other statements and unmarked tables emit nothing new. The C API
+  reports these errors as SQLITE_CONSTRAINT.
 - **Argument types of dialect functions (after commit 21).** When core
   compiles a call to a `Func::Dialect` function it records each argument's
   static type (`ArgumentType`: a class, or a type name with its parameters as

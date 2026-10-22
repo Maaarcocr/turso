@@ -1,5 +1,5 @@
 use crate::numeric::Numeric;
-use crate::{LimboError, Result, Value};
+use crate::{ConversionErrorKind, LimboError, Result, TypeConversionError, Value};
 use chrono::{Datelike, NaiveDate};
 use std::cmp::Ordering;
 
@@ -251,7 +251,10 @@ fn fraction_text(fraction: i64, fsp: u32) -> String {
 }
 
 fn invalid_value(type_name: &str, text: &str) -> LimboError {
-    LimboError::Constraint(format!("invalid value for {type_name}: {text}"))
+    TypeConversionError::raise(
+        ConversionErrorKind::InvalidValue,
+        format!("invalid value for {type_name}: {text}"),
+    )
 }
 
 #[cfg(test)]

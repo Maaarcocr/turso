@@ -737,6 +737,7 @@ impl From<LimboError> for TursoError {
             LimboError::ForeignKeyConstraint(e) | LimboError::Constraint(e) => {
                 TursoError::Constraint(e)
             }
+            LimboError::TypeConversion(e) => TursoError::Constraint(e.to_string()),
             LimboError::Corrupt(e) => TursoError::Corrupt(e),
             LimboError::NotADB => TursoError::NotAdb("file is not a database".to_string()),
             e @ (LimboError::DatabaseFull | LimboError::SequenceExhausted { .. }) => {

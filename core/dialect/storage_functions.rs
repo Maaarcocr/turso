@@ -1,6 +1,6 @@
 use super::{label_storage, time_storage};
 use crate::numeric::Numeric;
-use crate::{LimboError, Result, Value};
+use crate::{ConversionErrorKind, LimboError, Result, TypeConversionError, Value};
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::EnumIter)]
@@ -28,6 +28,7 @@ pub enum StorageFunc {
     Int64Sub,
     Int64Mul,
     Int64Neg,
+    ConversionError,
 }
 
 impl StorageFunc {
@@ -60,6 +61,7 @@ impl StorageFunc {
             StorageFunc::Int64Sub => "int64_sub",
             StorageFunc::Int64Mul => "int64_mul",
             StorageFunc::Int64Neg => "int64_neg",
+            StorageFunc::ConversionError => "conversion_error",
         }
     }
 
@@ -86,7 +88,8 @@ impl StorageFunc {
             | StorageFunc::LabelSetDecode
             | StorageFunc::Int64Add
             | StorageFunc::Int64Sub
-            | StorageFunc::Int64Mul => 2,
+            | StorageFunc::Int64Mul
+            | StorageFunc::ConversionError => 2,
         }
     }
 
@@ -97,10 +100,12 @@ impl StorageFunc {
                 self.name()
             )));
         }
-        if args.iter().any(|arg| matches!(arg, Value::Null)) {
+        if self != StorageFunc::ConversionError && args.iter().any(|arg| matches!(arg, Value::Null))
+        {
             return Ok(Value::Null);
         }
         match self {
+            StorageFunc::ConversionError => Err(conversion_error(&args[0], &args[1])),
             StorageFunc::Int64Add | StorageFunc::Int64Sub | StorageFunc::Int64Mul => {
                 let lhs = int64_operand(&args[0])?;
                 let rhs = int64_operand(&args[1])?;
@@ -258,25 +263,48 @@ fn uint64_value(number: i128) -> Result<Value> {
     }
 }
 
+fn conversion_error(kind: &Value, message: &Value) -> LimboError {
+    let Value::Text(kind_name) = kind else {
+        return LimboError::InvalidArgument(format!("unknown conversion error kind: {kind}"));
+    };
+    match ConversionErrorKind::from_name(kind_name.as_str()) {
+        Some(kind) => TypeConversionError::raise(kind, message.to_string()),
+        None => LimboError::InvalidArgument(format!(
+            "unknown conversion error kind: {}",
+            kind_name.as_str()
+        )),
+    }
+}
+
 fn int64_operand(value: &Value) -> Result<i64> {
     match value {
         Value::Numeric(Numeric::Integer(number)) => Ok(*number),
-        other => Err(LimboError::Constraint(format!(
-            "invalid value for int64: {other}"
-        ))),
+        other => Err(TypeConversionError::raise(
+            ConversionErrorKind::InvalidValue,
+            format!("invalid value for int64: {other}"),
+        )),
     }
 }
 
 fn int64_out_of_range(expression: &str) -> LimboError {
-    LimboError::Constraint(format!("value out of range for int64: {expression}"))
+    TypeConversionError::raise(
+        ConversionErrorKind::OutOfRange,
+        format!("value out of range for int64: {expression}"),
+    )
 }
 
 fn uint64_out_of_range(value: &str) -> LimboError {
-    LimboError::Constraint(format!("value out of range for uint64: {value}"))
+    TypeConversionError::raise(
+        ConversionErrorKind::OutOfRange,
+        format!("value out of range for uint64: {value}"),
+    )
 }
 
 fn uint64_invalid(value: &str) -> LimboError {
-    LimboError::Constraint(format!("invalid value for uint64: {value}"))
+    TypeConversionError::raise(
+        ConversionErrorKind::InvalidValue,
+        format!("invalid value for uint64: {value}"),
+    )
 }
 
 #[cfg(test)]

@@ -1036,6 +1036,7 @@ pub struct ProgramState {
     pub(crate) extension_state: crate::native_ext::ExtensionState,
     pub pc: InsnReference,
     pub(crate) error_target: Option<BranchOffset>,
+    pub(crate) type_conversion_context: Option<(std::sync::Arc<str>, usize)>,
     pub(crate) cursors: Vec<Option<Cursor>>,
     /// Database id associated with each opened cursor. Ephemeral and pseudo
     /// cursors have no database id.
@@ -1254,6 +1255,7 @@ impl ProgramState {
             sequence_inner_retry_count: 0,
             current_time: None,
             error_target: None,
+            type_conversion_context: None,
             #[cfg(feature = "json")]
             json_cache: JsonCacheCell::new(),
             active_op_state: ActiveOpStateSlot::default(),
@@ -1408,6 +1410,7 @@ impl ProgramState {
         self.explicit_checkpoint_guard = None;
         self.current_time = None;
         self.error_target = None;
+        self.type_conversion_context = None;
         #[cfg(feature = "json")]
         self.json_cache.clear();
 

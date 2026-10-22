@@ -1857,6 +1857,11 @@ pub enum Insn {
         dest: usize,
     },
 
+    TypeConversionContext {
+        column: Option<std::sync::Arc<str>>,
+        row_reg: usize,
+    },
+
     /// Add immediate value to register and force integer conversion.
     /// Add the constant P2 to the value in register P1. The result is always an integer.
     /// To force any register to be an integer, just add 0.
@@ -2462,6 +2467,7 @@ impl InsnVariants {
             InsnVariants::ShiftRight => execute::op_shift_right,
             InsnVariants::ShiftLeft => execute::op_shift_left,
             InsnVariants::AddImm => execute::op_add_imm,
+            InsnVariants::TypeConversionContext => execute::op_type_conversion_context,
             InsnVariants::Variable => execute::op_variable,
             InsnVariants::ZeroOrNull => execute::op_zero_or_null,
             InsnVariants::Not => execute::op_not,

@@ -130,7 +130,8 @@ fn ranged_integer_conversions(min: i64, max: i64, type_name: &str) -> String {
         return String::new();
     }
     format!(
-        " ENCODE CASE WHEN {} THEN value ELSE RAISE(ABORT, 'integer out of range for {}') END DECODE value",
+        " ENCODE CASE WHEN {} THEN value \
+         ELSE conversion_error('out of range', 'integer out of range for {}') END DECODE value",
         limits.join(" AND "),
         type_name.replace('\'', "''")
     )
@@ -158,7 +159,8 @@ mod tests {
             tinyint.create_type_sql(),
             "CREATE TYPE \"tinyint\"(value integer, width integer DEFAULT NULL) BASE integer \
              ENCODE CASE WHEN value >= -128 AND value <= 127 THEN value \
-             ELSE RAISE(ABORT, 'integer out of range for tinyint') END DECODE value "
+             ELSE conversion_error('out of range', 'integer out of range for tinyint') END \
+             DECODE value "
         );
         let unsigned_bigint = DialectType {
             name: "bigint unsigned",
@@ -566,6 +568,67 @@ mod tests {
                     .to_string()
             )]]
         );
+    }
+
+    fn conversion_error(error: crate::LimboError) -> crate::TypeConversionError {
+        match error {
+            crate::LimboError::TypeConversion(conversion) => *conversion,
+            other => panic!("expected a conversion error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn conversion_errors_name_their_kind_column_and_row() {
+        use crate::ConversionErrorKind;
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "conversion-errors.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, tiny TINYINT, u UBIGINT) STRICT")
+            .unwrap();
+
+        let error = conversion_error(
+            conn.execute("INSERT INTO t VALUES (1, 1, 1), (2, 200, 1), (3, 1, 1)")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+        assert_eq!(error.column.as_deref(), Some("tiny"));
+        assert_eq!(error.row, Some(2));
+        assert_eq!(error.message, "integer out of range for tinyint");
+        assert_eq!(query(&conn, "SELECT count(*) FROM t"), ints(&[&[0]]));
+
+        let error = conversion_error(
+            conn.execute("INSERT INTO t VALUES (1, 1, 'abc')")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::InvalidValue);
+        assert_eq!((error.column.as_deref(), error.row), (Some("u"), Some(1)));
+
+        conn.execute("INSERT INTO t VALUES (1, 1, 1), (2, 100, 1)")
+            .unwrap();
+        let error = conversion_error(conn.execute("UPDATE t SET tiny = tiny + 28").unwrap_err());
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+        assert_eq!(
+            (error.column.as_deref(), error.row),
+            (Some("tiny"), Some(2))
+        );
+        assert_eq!(
+            query(&conn, "SELECT tiny FROM t ORDER BY id"),
+            ints(&[&[1], &[100]])
+        );
+
+        let error = conversion_error(
+            conn.prepare("SELECT conversion_error('too long', 'value too long')")
+                .unwrap()
+                .run_collect_rows()
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::TooLong);
+        assert_eq!((error.column, error.row), (None, None));
+        assert!(conn
+            .prepare("SELECT conversion_error('broken', 'x')")
+            .unwrap()
+            .run_collect_rows()
+            .is_err());
     }
 
     #[test]

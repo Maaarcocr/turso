@@ -206,6 +206,7 @@ pub(crate) fn emit_array_decode(
 /// If `only_columns` is `Some`, only encode columns whose index is in the set.
 /// This is needed for UPDATE/UPSERT where non-SET columns are already encoded
 /// (read from disk), and re-encoding them would corrupt data.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_custom_type_encode_columns(
     program: &mut ProgramBuilder,
     resolver: &Resolver,
@@ -214,12 +215,19 @@ pub(crate) fn emit_custom_type_encode_columns(
     only_columns: Option<&ColumnMask>,
     table_name: &str,
     layout: &ColumnLayout,
+    row_number_reg: Option<usize>,
 ) -> Result<()> {
     for (i, col) in columns.iter().enumerate() {
         if let Some(filter) = only_columns {
             if !filter.get(i) {
                 continue;
             }
+        }
+        if let (Some(row_reg), Some(name)) = (row_number_reg, col.name.as_deref()) {
+            program.emit_insn(Insn::TypeConversionContext {
+                column: Some(std::sync::Arc::from(name)),
+                row_reg,
+            });
         }
 
         let reg = layout.to_register(start_reg, i);
@@ -269,7 +277,27 @@ pub(crate) fn emit_custom_type_encode_columns(
             program.preassign_label_to_next_insn(label);
         }
     }
+    if let Some(row_reg) = row_number_reg {
+        program.emit_insn(Insn::TypeConversionContext {
+            column: None,
+            row_reg,
+        });
+    }
     Ok(())
+}
+
+pub(crate) fn emit_row_number_counter(program: &mut ProgramBuilder) -> usize {
+    let reg = program.alloc_register();
+    program.emit_insn(Insn::Integer {
+        value: 0,
+        dest: reg,
+    });
+    program.mark_last_insn_constant();
+    program.emit_insn(Insn::AddImm {
+        register: reg,
+        value: 1,
+    });
+    reg
 }
 
 /// Emit decode expressions for columns with custom types in a contiguous register range.

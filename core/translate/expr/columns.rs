@@ -131,6 +131,7 @@ pub fn emit_stored_column(
         None,
         &table.name,
         &ColumnLayout::Identity { column_count: 1 },
+        None,
     )?;
     program.preassign_label_to_next_insn(has_field_label);
     Ok(())

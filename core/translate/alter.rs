@@ -2773,6 +2773,7 @@ fn emit_strict_column_conversion(
         Some(&column_mask),
         &rewritten_table.name,
         layout,
+        None,
     )?;
     program.emit_insn(Insn::TypeCheck {
         start_reg,

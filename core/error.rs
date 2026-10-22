@@ -58,6 +58,8 @@ pub enum LimboError {
     #[error("{0}")]
     Constraint(String),
     #[error("{0}")]
+    TypeConversion(Box<TypeConversionError>),
+    #[error("{0}")]
     /// We need to specify for ROLLBACK|FAIL resolve types when to roll the tx back
     /// so instead of matching on the string, we introduce a specific ForeignKeyConstraint error
     ForeignKeyConstraint(String),
@@ -129,6 +131,56 @@ pub enum LimboError {
     UnsupportedEncoding(String),
     #[error("Out of memory")]
     OutOfMemory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeConversionError {
+    pub kind: ConversionErrorKind,
+    pub message: String,
+    pub column: Option<String>,
+    pub row: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversionErrorKind {
+    OutOfRange,
+    InvalidValue,
+    TooLong,
+    NoMoreKeys,
+}
+
+impl ConversionErrorKind {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.to_ascii_lowercase().as_str() {
+            "out of range" => Some(Self::OutOfRange),
+            "invalid value" => Some(Self::InvalidValue),
+            "too long" => Some(Self::TooLong),
+            "no more keys" => Some(Self::NoMoreKeys),
+            _ => None,
+        }
+    }
+}
+
+impl TypeConversionError {
+    pub fn raise(kind: ConversionErrorKind, message: impl Into<String>) -> LimboError {
+        LimboError::TypeConversion(Box::new(Self {
+            kind,
+            message: message.into(),
+            column: None,
+            row: None,
+        }))
+    }
+}
+
+impl std::fmt::Display for TypeConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)?;
+        match (&self.column, self.row) {
+            (Some(column), Some(row)) => write!(f, " (column {column}, row {row})"),
+            (Some(column), None) => write!(f, " (column {column})"),
+            _ => Ok(()),
+        }
+    }
 }
 
 /// `?` in functions returning boxed errors (see `InsnResult`) composes

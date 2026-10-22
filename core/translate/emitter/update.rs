@@ -1736,7 +1736,10 @@ fn emit_update_insns<'a>(
     // This ensures that if a constraint fails, indexes remain consistent.
     if let Some(btree_table) = target_table.table.btree() {
         if btree_table.is_strict {
-            // Encode updated columns (the others are already encoded)
+            let row_number_reg = btree_table
+                .dialect_marker
+                .is_some()
+                .then(|| crate::translate::expr::emit_row_number_counter(program));
             crate::translate::expr::emit_custom_type_encode_columns(
                 program,
                 &t_ctx.resolver,
@@ -1745,6 +1748,7 @@ fn emit_update_insns<'a>(
                 Some(&updated_column_indices),
                 table_name,
                 &layout,
+                row_number_reg,
             )?;
 
             // Post-encode TypeCheck: validate encoded values match storage type.
