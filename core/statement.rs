@@ -1383,6 +1383,9 @@ impl Statement {
         let Some(column) = self.program.result_columns.get(idx) else {
             return Ok(None);
         };
+        if let Some(info) = self.named_expression_type_info(&column.expr) {
+            return Ok(Some(info));
+        }
         // Direct table-column reference: pull declared name, array depth, and
         // any registered CREATE TYPE / CREATE DOMAIN resolution out of the
         // schema. Anything else falls through to the expression-affinity
@@ -1416,19 +1419,10 @@ impl Statement {
             // through CREATE TYPE is a Custom. A column whose declared name
             // does not appear in the type registry is a Builtin.
             let (base_type, kind) = match resolved {
-                Some(resolved) => {
-                    let leaf = resolved.leaf();
-                    let kind = if leaf.is_struct() {
-                        ColumnTypeKind::Struct
-                    } else if leaf.is_union() {
-                        ColumnTypeKind::Union
-                    } else if leaf.is_domain {
-                        ColumnTypeKind::Domain
-                    } else {
-                        ColumnTypeKind::Custom
-                    };
-                    (Some(resolved.primitive.to_uppercase()), kind)
-                }
+                Some(resolved) => (
+                    Some(resolved.primitive.to_uppercase()),
+                    custom_type_kind(&resolved),
+                ),
                 None => (None, ColumnTypeKind::Builtin),
             };
             drop(schema);
@@ -1459,6 +1453,35 @@ impl Statement {
             base_type: None,
             kind: ColumnTypeKind::Builtin,
         }))
+    }
+
+    fn named_expression_type_info(&self, expr: &turso_parser::ast::Expr) -> Option<ColumnTypeInfo> {
+        let tables = &self.program.table_references;
+        if let turso_parser::ast::Expr::Column { table, .. } = expr {
+            if !matches!(
+                tables.find_table_by_internal_id(*table),
+                Some((_, crate::schema::Table::FromClauseSubquery(_)))
+            ) {
+                return None;
+            }
+        }
+        let schema = self.program.connection.schema.read();
+        let env = translate::expr::TypeEnv::new(&schema);
+        let translate::expr::ExprType::Named(named) =
+            translate::expr::expr_type(expr, Some(tables), &env)
+        else {
+            return None;
+        };
+        let resolved = schema
+            .resolve_type_unchecked(&named.def.name)
+            .ok()
+            .flatten()?;
+        Some(ColumnTypeInfo {
+            declared_name: named.def.name.clone(),
+            array_dimensions: 0,
+            base_type: Some(resolved.primitive.to_uppercase()),
+            kind: custom_type_kind(&resolved),
+        })
     }
 
     /// Returns the type affinity name of a result column (e.g., "INTEGER", "TEXT", "REAL", "BLOB", "NUMERIC").
@@ -1913,6 +1936,19 @@ impl Drop for Statement {
             self.program.connection.end_nested();
             self.nested_guard_active = false;
         }
+    }
+}
+
+fn custom_type_kind(resolved: &crate::schema::ResolvedType) -> ColumnTypeKind {
+    let leaf = resolved.leaf();
+    if leaf.is_struct() {
+        ColumnTypeKind::Struct
+    } else if leaf.is_union() {
+        ColumnTypeKind::Union
+    } else if leaf.is_domain {
+        ColumnTypeKind::Domain
+    } else {
+        ColumnTypeKind::Custom
     }
 }
 
