@@ -1369,6 +1369,22 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
   the dialect's result rule (`"sum"` gives the sum's parameters, then `/` its
   own). The column name stays the one written. Types without a declared sum,
   and all queries with custom types off, are unchanged.
+- **Ordered numeric storage (commit 30).** `numeric_encode` writes the v2
+  bytes (the same bytes as `numeric_key`), and `numeric_decode(value[,
+  scale])` reads v1 and v2; for v2 it applies the declared scale, or drops
+  trailing zeros when the scale is NULL. The built-in numeric type and the
+  `StorageType::Numeric` dialect types decode with `numeric_decode(value,
+  scale)`. The built-in numeric type now has `TypeDef.storage =
+  Some(StorageType::Numeric)`, and `StorageType::Numeric` is a stored-key
+  type whose `<` (`numeric_lt`) follows the index order, so ranges, ORDER BY
+  and min/max on an index of a numeric column use the index. The PostgreSQL
+  frontend gives a decimal literal the precision and scale of its digits
+  (`2.50` is `CAST('2.50' AS numeric(3,2))`), so `2.50 * 2` is `5.00` as in
+  PostgreSQL. An explicit cast to an unconstrained numeric
+  (`'1.50'::numeric`) reads back as `1.5`; PostgreSQL keeps `1.50`.
+  Materialized views read the stored value of a typed column without
+  DECODE (this was already true before), so expressions over a numeric
+  column in a view see the value without its declared scale.
 
 **Aggregates.** Only type-declared aggregates: `FUNCTION sum(numeric) RETURNS
 numeric numeric_sum` and `avg`, with native exact accumulators. A type without

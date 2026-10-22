@@ -276,13 +276,13 @@ impl<T> OrOverflow<T> for Option<T> {
 
 /// Parse a Value (text, int, float, or blob) into a BigDecimal.
 fn value_to_bigdecimal(val: &Value) -> Result<bigdecimal::BigDecimal> {
-    use crate::numeric::decimal::{blob_to_bigdecimal, check_numeric_range, parse_decimal};
+    use crate::numeric::decimal::{check_numeric_range, decode_stored_numeric, parse_decimal};
     use bigdecimal::BigDecimal;
     match val {
         Value::Numeric(Numeric::Integer(i)) => Ok(BigDecimal::from(*i)),
         Value::Numeric(Numeric::Float(f)) => parse_decimal(&f.to_string()),
         Value::Text(t) => parse_decimal(&t.value),
-        Value::Blob(b) => check_numeric_range(blob_to_bigdecimal(b)?),
+        Value::Blob(b) => check_numeric_range(decode_stored_numeric(b, None)?),
         _ => Err(LimboError::Constraint(format!(
             "cannot convert to numeric: \"{val}\""
         ))),
@@ -11593,9 +11593,7 @@ pub fn op_function(
                 let result = match val.get_value() {
                     Value::Null => Value::Null,
                     other => {
-                        use crate::numeric::decimal::{
-                            bigdecimal_to_blob, parse_decimal, validate_precision_scale,
-                        };
+                        use crate::numeric::decimal::{parse_decimal, validate_precision_scale};
 
                         let precision = match precision_reg.get_value() {
                             Value::Numeric(Numeric::Integer(i)) => Some(*i),
@@ -11633,18 +11631,31 @@ pub fn op_function(
                             Some(precision) => validate_precision_scale(&bd, precision, scale)?,
                             None => bd,
                         };
-                        Value::from_blob(bigdecimal_to_blob(&validated))
+                        Value::from_blob(crate::numeric::decimal::numeric_key(&validated)?)
                     }
                 };
                 state.registers[*dest].set_value(result);
             }
             ScalarFunc::NumericDecode => {
-                check_arg_count!(arg_count, 1);
                 let val = &state.registers[*start_reg];
+                let scale = match arg_count {
+                    1 => None,
+                    2 => match state.registers[*start_reg + 1].get_value() {
+                        Value::Numeric(Numeric::Integer(scale)) => Some(*scale),
+                        Value::Null => None,
+                        other => {
+                            return Err(LimboError::Constraint(format!(
+                                "numeric_decode: scale must be an integer, got \"{other}\""
+                            ))
+                            .into());
+                        }
+                    },
+                    _ => unreachable!("numeric_decode takes one or two arguments"),
+                };
                 let result = match val.get_value() {
                     Value::Null => Value::Null,
                     Value::Blob(b) => {
-                        let bd = crate::numeric::decimal::blob_to_bigdecimal(b)?;
+                        let bd = crate::numeric::decimal::decode_stored_numeric(b, scale)?;
                         Value::build_text(crate::numeric::decimal::format_numeric(&bd))
                     }
                     other => {

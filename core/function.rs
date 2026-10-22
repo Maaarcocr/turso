@@ -1399,7 +1399,6 @@ impl ScalarFunc {
             Self::BooleanToInt
             | Self::IntToBoolean
             | Self::ValidateIpAddr
-            | Self::NumericDecode
             | Self::NumericKey
             | Self::NumericNeg
             | Self::NumericAbs => &[1],
@@ -1412,6 +1411,7 @@ impl ScalarFunc {
             | Self::DatePlus
             | Self::DateMinus => &[2],
             Self::NumericEncode => &[3],
+            Self::NumericDecode => &[1, 2],
             Self::Storage(func) => match func.arity() {
                 1 => &[1],
                 _ => &[2],

@@ -87,6 +87,7 @@ impl StorageType {
             StorageType::DatetimeMicros => function_is("datetime_micros_lt"),
             StorageType::TimeMicros => function_is("time_micros_lt"),
             StorageType::Uint64 => function_is("uint64_lt"),
+            StorageType::Numeric => function_is("numeric_lt"),
             _ => self.stores_values_unchanged() && function.is_none(),
         }
     }
@@ -100,6 +101,7 @@ impl StorageType {
                 | StorageType::Uint64
                 | StorageType::Enumeration
                 | StorageType::LabelSet
+                | StorageType::Numeric
         )
     }
 
@@ -156,7 +158,7 @@ impl StorageType {
                 DECODE enumeration_decode(value, labels) KEY enumeration_encode(value, labels)"
                 .to_string(),
             StorageType::Numeric => " ENCODE numeric_encode(value, precision, scale) \
-                DECODE numeric_decode(value) KEY numeric_key(value)"
+                DECODE numeric_decode(value, scale) KEY numeric_key(value)"
                 .to_string(),
             StorageType::LabelSet => " ENCODE label_set_encode(value, labels) \
                 DECODE label_set_decode(value, labels) KEY label_set_encode(value, labels)"
