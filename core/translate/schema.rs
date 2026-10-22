@@ -920,8 +920,13 @@ fn validate(
                                     .as_ref()
                                     .map_or(0, |size| size.parameters().len());
                                 let expected = td.user_params().count();
-                                let required = td.required_user_param_count();
-                                if provided < required || provided > expected {
+                                if td.takes_label_list && provided == 0 {
+                                    bail_parse_error!(
+                                        "type \"{}\" requires at least one label",
+                                        type_name
+                                    );
+                                }
+                                if !td.accepts_param_count(provided) {
                                     bail_parse_error!(
                                         "type \"{}\" requires {} parameter(s), got {}",
                                         type_name,

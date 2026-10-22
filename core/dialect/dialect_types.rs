@@ -17,6 +17,8 @@ pub enum StorageType {
     DateDays,
     DatetimeMicros,
     TimeMicros,
+    Enumeration,
+    LabelSet,
 }
 
 impl DialectType {
@@ -45,7 +47,9 @@ impl StorageType {
             StorageType::Text
             | StorageType::DateDays
             | StorageType::DatetimeMicros
-            | StorageType::TimeMicros => "text",
+            | StorageType::TimeMicros
+            | StorageType::Enumeration
+            | StorageType::LabelSet => "text",
             StorageType::Blob => "blob",
             StorageType::Uint64 => "any",
         }
@@ -57,17 +61,23 @@ impl StorageType {
             | StorageType::RangedInteger { .. }
             | StorageType::DateDays
             | StorageType::DatetimeMicros
-            | StorageType::TimeMicros => "integer",
+            | StorageType::TimeMicros
+            | StorageType::Enumeration => "integer",
             StorageType::Real => "real",
             StorageType::Text => "text",
             StorageType::Blob => "blob",
-            StorageType::Uint64 => "any",
+            StorageType::Uint64 | StorageType::LabelSet => "any",
         }
+    }
+
+    pub(crate) fn takes_label_list(self) -> bool {
+        matches!(self, StorageType::Enumeration | StorageType::LabelSet)
     }
 
     fn parameters(self) -> &'static str {
         match self {
             StorageType::DatetimeMicros | StorageType::TimeMicros => "fsp integer DEFAULT 0",
+            StorageType::Enumeration | StorageType::LabelSet => "labels text",
             _ => "",
         }
     }
@@ -92,6 +102,12 @@ impl StorageType {
                 .to_string(),
             StorageType::TimeMicros => " ENCODE time_micros_encode(value, fsp) \
                 DECODE time_micros_decode(value, fsp) KEY time_micros_encode(value, 6)"
+                .to_string(),
+            StorageType::Enumeration => " ENCODE enumeration_encode(value, labels) \
+                DECODE enumeration_decode(value, labels) KEY enumeration_encode(value, labels)"
+                .to_string(),
+            StorageType::LabelSet => " ENCODE label_set_encode(value, labels) \
+                DECODE label_set_decode(value, labels) KEY label_set_encode(value, labels)"
                 .to_string(),
         }
     }
@@ -364,6 +380,72 @@ mod tests {
                 text("0001-01-01"),
                 text("9999-12-31"),
             ]]
+        );
+    }
+
+    #[cfg(all(feature = "fs", not(target_family = "wasm")))]
+    #[test]
+    fn labels_are_stored_as_positions_and_bit_masks() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.db");
+        let io: Arc<dyn IO> = Arc::new(crate::io::PlatformIO::new().unwrap());
+        let open = || {
+            crate::Database::open_file_with_flags(
+                io.clone(),
+                path.to_str().unwrap(),
+                crate::OpenFlags::Create,
+                crate::DatabaseOpts::new().with_vacuum(true),
+                None,
+                marking(),
+            )
+            .unwrap()
+        };
+        let text = |value: &str| Value::build_text(value.to_string());
+        {
+            let db = open();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "/* turso_dialect:marking rowid_alias */ CREATE TABLE t(id INTEGER PRIMARY KEY, \
+                 size ENUMERATION('small','large'), tags LABEL_SET('a','b','c')) STRICT",
+            )
+            .unwrap();
+            for row in [
+                "(1, 'large', 'c,a')",
+                "(2, 'small', '')",
+                "(3, 'large', 'b')",
+            ] {
+                conn.execute(format!("INSERT INTO t VALUES {row}")).unwrap();
+            }
+            for row in ["(4, 'medium', '')", "(5, 'small', 'a,d')"] {
+                assert!(
+                    conn.execute(format!("INSERT INTO t VALUES {row}")).is_err(),
+                    "{row}"
+                );
+            }
+            let error = conn
+                .execute("CREATE TABLE u(size ENUMERATION) STRICT")
+                .unwrap_err();
+            assert!(error.to_string().contains("at least one label"), "{error}");
+            conn.execute("VACUUM").unwrap();
+            conn.close().unwrap();
+        }
+        let db = open();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT id, size, tags FROM t ORDER BY size, id"),
+            vec![
+                vec![Value::from_i64(2), text("small"), text("")],
+                vec![Value::from_i64(1), text("large"), text("a,c")],
+                vec![Value::from_i64(3), text("large"), text("b")],
+            ]
+        );
+        assert_eq!(
+            query(&conn, "SELECT min(size), max(size) FROM t"),
+            vec![vec![text("large"), text("small")]]
+        );
+        assert_eq!(
+            query(&conn, "SELECT id FROM t WHERE size = 'small'"),
+            ints(&[&[2]])
         );
     }
 

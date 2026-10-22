@@ -1152,6 +1152,14 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Enumeration and label-set storage (commit 19).** The storage type
+  declares one parameter, `labels`; a type built on it accepts any number of
+  column parameters (at least one), and core passes them to ENCODE, DECODE and
+  KEY as one text value, the labels as SQL string literals joined by commas
+  (`'small','large'`). `enumeration_encode`/`_decode` and
+  `label_set_encode`/`_decode` are in `core/dialect/label_storage.rs`; ENCODE
+  matches labels exactly (matching without case is ASSIGN's job). A label set
+  has at most 64 labels; its mask is stored in the `uint64` form.
 - **Type parameter lists (commit 18).** `ast::TypeSize::List` holds a
   parameter list with a text value or more than two values. Only a parser made
   with `Parser::with_type_parameter_lists()` reads it; core uses one for the

@@ -11,6 +11,7 @@
 //! `btree_dump`, `sqlite_turso_types`).
 
 pub mod dialect_types;
+mod label_storage;
 pub mod marker;
 pub mod sqlite;
 pub mod storage_functions;

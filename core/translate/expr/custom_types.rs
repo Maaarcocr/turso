@@ -678,6 +678,25 @@ pub(crate) fn emit_type_expr(
     let param_result: Result<()> = (|| {
         // Skip `value` param (already handled above); match remaining params
         // against the user-provided ty_params by position.
+        if type_def.takes_label_list {
+            let labels = column
+                .ty_params
+                .iter()
+                .map(|label| label.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let reg = program.alloc_register();
+            program.emit_insn(Insn::String8 {
+                value: labels,
+                dest: reg,
+            });
+            for param in type_def.user_params() {
+                program
+                    .id_register_overrides
+                    .insert(param.name.clone(), reg);
+            }
+            return Ok(());
+        }
         let user_params: Vec<_> = type_def.user_params().collect();
         for (i, param) in user_params.iter().enumerate() {
             let param_expr = column

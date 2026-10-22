@@ -289,6 +289,7 @@ pub struct TypeDef {
     /// Empty for regular CREATE TYPE definitions.
     pub domain_checks: std::vec::Vec<ast::DomainConstraint>,
     pub kind: TypeDefKind,
+    pub takes_label_list: bool,
 }
 
 impl TypeDef {
@@ -445,6 +446,7 @@ impl TypeDef {
                 is_domain: false,
                 sql,
                 domain_checks: std::vec::Vec::new(),
+                takes_label_list: false,
                 kind: TypeDefKind::Custom {
                     params: params.clone(),
                     base: base.clone(),
@@ -476,6 +478,7 @@ impl TypeDef {
                     is_domain: false,
                     sql,
                     domain_checks: std::vec::Vec::new(),
+                    takes_label_list: false,
                     kind: TypeDefKind::Struct(StructDef {
                         fields: struct_fields,
                     }),
@@ -508,6 +511,7 @@ impl TypeDef {
                     is_domain: false,
                     sql,
                     domain_checks: std::vec::Vec::new(),
+                    takes_label_list: false,
                     kind: TypeDefKind::Union(UnionDef {
                         // Arc<[T]> is a shared-pointer boundary: collect directly,
                         // skipping the intermediate allocator Vec.
@@ -536,6 +540,7 @@ impl TypeDef {
             is_domain: true,
             sql,
             domain_checks: constraints.to_vec(),
+            takes_label_list: false,
             kind: TypeDefKind::Custom {
                 params: std::vec::Vec::new(),
                 base: base_type.to_string(),
@@ -571,6 +576,13 @@ impl TypeDef {
 
     pub fn required_user_param_count(&self) -> usize {
         self.user_params().filter(|p| p.default.is_none()).count()
+    }
+
+    pub fn accepts_param_count(&self, count: usize) -> bool {
+        if self.takes_label_list {
+            return count >= 1;
+        }
+        count >= self.required_user_param_count() && count <= self.user_params().count()
     }
 
     /// Returns the original SQL used to create this type or domain.
@@ -892,7 +904,9 @@ fn bootstrap_dialect_types(
     dialect_types: &[crate::dialect::DialectType],
 ) -> crate::Result<()> {
     for dialect_type in dialect_types {
-        register_type_sql(registry, dialect_type.create_type_sql())?;
+        let mut type_def = parse_type_sql(dialect_type.create_type_sql())?;
+        type_def.takes_label_list = dialect_type.storage.takes_label_list();
+        registry.insert(type_registry_key(&type_def.name), Arc::new(type_def));
     }
     Ok(())
 }
@@ -901,6 +915,12 @@ fn register_type_sql(
     registry: &mut HashMap<String, Arc<TypeDef>>,
     sql: String,
 ) -> crate::Result<()> {
+    let type_def = parse_type_sql(sql)?;
+    registry.insert(type_registry_key(&type_def.name), Arc::new(type_def));
+    Ok(())
+}
+
+fn parse_type_sql(sql: String) -> crate::Result<TypeDef> {
     use turso_parser::ast::{Cmd, Stmt};
     use turso_parser::parser::Parser;
 
@@ -914,9 +934,7 @@ fn register_type_sql(
         )));
     };
     let name = crate::util::dequote(&type_name);
-    let type_def = TypeDef::from_create_type(&name, &body, true, sql.clone())?;
-    registry.insert(type_registry_key(&name), Arc::new(type_def));
-    Ok(())
+    TypeDef::from_create_type(&name, &body, true, sql.clone())
 }
 
 struct BuiltinType {

@@ -67,6 +67,19 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 OPERATOR '=' (time_micros, time_micros)",
         },
         DialectType {
+            name: "enumeration",
+            storage: StorageType::Enumeration,
+            parameters: "",
+            behaviour: "OPERATOR '<' (enumeration, enumeration) \
+                OPERATOR '=' (enumeration, enumeration)",
+        },
+        DialectType {
+            name: "label_set",
+            storage: StorageType::LabelSet,
+            parameters: "",
+            behaviour: "OPERATOR '<' (label_set, label_set) OPERATOR '=' (label_set, label_set)",
+        },
+        DialectType {
             name: "text",
             storage: StorageType::Text,
             parameters: "",

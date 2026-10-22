@@ -1,4 +1,4 @@
-use super::time_storage;
+use super::{label_storage, time_storage};
 use crate::numeric::Numeric;
 use crate::{LimboError, Result, Value};
 use std::cmp::Ordering;
@@ -20,6 +20,10 @@ pub enum StorageFunc {
     TimeMicrosEncode,
     TimeMicrosDecode,
     TimeMicrosLt,
+    EnumerationEncode,
+    EnumerationDecode,
+    LabelSetEncode,
+    LabelSetDecode,
 }
 
 impl StorageFunc {
@@ -44,6 +48,10 @@ impl StorageFunc {
             StorageFunc::TimeMicrosEncode => "time_micros_encode",
             StorageFunc::TimeMicrosDecode => "time_micros_decode",
             StorageFunc::TimeMicrosLt => "time_micros_lt",
+            StorageFunc::EnumerationEncode => "enumeration_encode",
+            StorageFunc::EnumerationDecode => "enumeration_decode",
+            StorageFunc::LabelSetEncode => "label_set_encode",
+            StorageFunc::LabelSetDecode => "label_set_decode",
         }
     }
 
@@ -62,7 +70,11 @@ impl StorageFunc {
             | StorageFunc::DatetimeMicrosDecode
             | StorageFunc::TimeMicrosEncode
             | StorageFunc::TimeMicrosDecode
-            | StorageFunc::TimeMicrosLt => 2,
+            | StorageFunc::TimeMicrosLt
+            | StorageFunc::EnumerationEncode
+            | StorageFunc::EnumerationDecode
+            | StorageFunc::LabelSetEncode
+            | StorageFunc::LabelSetDecode => 2,
         }
     }
 
@@ -78,6 +90,10 @@ impl StorageFunc {
         }
         match self {
             StorageFunc::Uint64Encode => uint64_encode(&args[0]),
+            StorageFunc::EnumerationEncode => label_storage::enumeration_encode(&args[0], &args[1]),
+            StorageFunc::EnumerationDecode => label_storage::enumeration_decode(&args[0], &args[1]),
+            StorageFunc::LabelSetEncode => label_storage::label_set_encode(&args[0], &args[1]),
+            StorageFunc::LabelSetDecode => label_storage::label_set_decode(&args[0], &args[1]),
             StorageFunc::DateDaysEncode => time_storage::date_days_encode(&args[0]),
             StorageFunc::DateDaysDecode => time_storage::date_days_decode(&args[0]),
             StorageFunc::DatetimeMicrosEncode => {
