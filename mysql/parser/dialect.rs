@@ -1,0 +1,490 @@
+use crate::MysqlParserError;
+use sqlparser::ast::{
+    BinaryOperator, DateTimeField, Expr, ExtractSyntax, Function, FunctionArguments, Ident,
+    Interval, ObjectName, Statement, UnaryOperator,
+};
+use sqlparser::dialect::{Dialect, MySqlDialect, Precedence};
+use sqlparser::keywords::Keyword;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Word};
+use std::any::TypeId;
+
+#[derive(Debug, Default)]
+pub(crate) struct MySql {
+    inner: MySqlDialect,
+}
+
+const OR: u8 = 5;
+const XOR: u8 = 7;
+const AND: u8 = 10;
+const NOT: u8 = 15;
+const IS: u8 = 20;
+const COMPARISON: u8 = 22;
+const PREDICATE: u8 = 24;
+const BIT_OR: u8 = 30;
+const BIT_AND: u8 = 32;
+const SHIFT: u8 = 34;
+const ADDITION: u8 = 36;
+const MULTIPLICATION: u8 = 38;
+const BIT_XOR: u8 = 40;
+const UNARY: u8 = 45;
+const JSON_ARROW: u8 = 50;
+
+pub(crate) const TEMPORAL_UNITS: &[&str] = &[
+    "MICROSECOND",
+    "SECOND",
+    "MINUTE",
+    "HOUR",
+    "DAY",
+    "WEEK",
+    "MONTH",
+    "QUARTER",
+    "YEAR",
+    "SECOND_MICROSECOND",
+    "MINUTE_MICROSECOND",
+    "MINUTE_SECOND",
+    "HOUR_MICROSECOND",
+    "HOUR_SECOND",
+    "HOUR_MINUTE",
+    "DAY_MICROSECOND",
+    "DAY_SECOND",
+    "DAY_MINUTE",
+    "DAY_HOUR",
+    "YEAR_MONTH",
+];
+
+pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {
+    let dialect = MySql::default();
+    let tokens = Tokenizer::new(&dialect, sql)
+        .with_unescape(false)
+        .tokenize_with_location()
+        .map_err(ParserError::from)?;
+    let tokens = tokens
+        .into_iter()
+        .map(|token| unescape_token(token, sql))
+        .collect();
+    Ok(Parser::new(&dialect)
+        .with_tokens_with_locations(tokens)
+        .parse_statements()?)
+}
+
+fn unescape_token(token: TokenWithSpan, sql: &str) -> TokenWithSpan {
+    let TokenWithSpan { token, span } = token;
+    let token = match token {
+        Token::SingleQuotedString(raw) => Token::SingleQuotedString(unescape_string(&raw, '\'')),
+        Token::DoubleQuotedString(raw) => Token::DoubleQuotedString(unescape_string(&raw, '"')),
+        Token::NationalStringLiteral(raw) => {
+            Token::NationalStringLiteral(unescape_string(&raw, '\''))
+        }
+        Token::Word(word) => unescape_word(word),
+        Token::HexStringLiteral(digits) if starts_with_zero_x(sql, span.start) => {
+            if digits.is_empty() {
+                Token::make_word("0x", None)
+            } else if digits.len() % 2 == 1 {
+                Token::HexStringLiteral(format!("0{digits}"))
+            } else {
+                Token::HexStringLiteral(digits)
+            }
+        }
+        other => other,
+    };
+    TokenWithSpan { token, span }
+}
+
+fn unescape_word(word: Word) -> Token {
+    match word.quote_style {
+        Some(quote) => {
+            let doubled = format!("{quote}{quote}");
+            Token::Word(Word {
+                value: word.value.replace(&doubled, &quote.to_string()),
+                ..word
+            })
+        }
+        None => match bit_literal_digits(&word.value) {
+            Some(digits) => Token::SingleQuotedByteStringLiteral(digits.to_string()),
+            None => Token::Word(word),
+        },
+    }
+}
+
+fn bit_literal_digits(word: &str) -> Option<&str> {
+    let digits = word.strip_prefix("0b")?;
+    (!digits.is_empty() && digits.bytes().all(|byte| matches!(byte, b'0' | b'1'))).then_some(digits)
+}
+
+fn starts_with_zero_x(sql: &str, start: sqlparser::tokenizer::Location) -> bool {
+    let Some(line) = sql.split('\n').nth((start.line as usize).saturating_sub(1)) else {
+        return false;
+    };
+    line.chars()
+        .skip((start.column as usize).saturating_sub(1))
+        .take(2)
+        .eq("0x".chars())
+}
+
+fn unescape_string(raw: &str, quote: char) -> String {
+    let mut value = String::with_capacity(raw.len());
+    let mut chars = raw.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == quote && chars.peek() == Some(&quote) {
+            chars.next();
+            value.push(quote);
+            continue;
+        }
+        if ch != '\\' {
+            value.push(ch);
+            continue;
+        }
+        let Some(escaped) = chars.next() else {
+            value.push('\\');
+            break;
+        };
+        match escaped {
+            '0' => value.push('\0'),
+            'b' => value.push('\u{8}'),
+            'n' => value.push('\n'),
+            'r' => value.push('\r'),
+            't' => value.push('\t'),
+            'Z' => value.push('\u{1a}'),
+            '%' | '_' => {
+                value.push('\\');
+                value.push(escaped);
+            }
+            other => value.push(other),
+        }
+    }
+    value
+}
+
+impl Dialect for MySql {
+    fn dialect(&self) -> TypeId {
+        TypeId::of::<MySqlDialect>()
+    }
+
+    fn get_next_precedence(&self, parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let precedence = match &parser.peek_token_ref().token {
+            Token::Word(word) if word.quote_style.is_none() => match word.keyword {
+                Keyword::OR => OR,
+                Keyword::XOR => XOR,
+                Keyword::AND => AND,
+                Keyword::DIV | Keyword::MOD => MULTIPLICATION,
+                Keyword::IS => IS,
+                Keyword::IN
+                | Keyword::BETWEEN
+                | Keyword::LIKE
+                | Keyword::REGEXP
+                | Keyword::RLIKE
+                | Keyword::MEMBER => PREDICATE,
+                Keyword::NOT => match &parser.peek_nth_token_ref(1).token {
+                    Token::Word(next)
+                        if matches!(
+                            next.keyword,
+                            Keyword::IN
+                                | Keyword::BETWEEN
+                                | Keyword::LIKE
+                                | Keyword::REGEXP
+                                | Keyword::RLIKE
+                                | Keyword::MEMBER
+                        ) =>
+                    {
+                        PREDICATE
+                    }
+                    _ => return None,
+                },
+                _ => return None,
+            },
+            Token::StringConcat => OR,
+            Token::Overlap => AND,
+            Token::Eq
+            | Token::DoubleEq
+            | Token::Neq
+            | Token::Lt
+            | Token::LtEq
+            | Token::Gt
+            | Token::GtEq
+            | Token::Spaceship => COMPARISON,
+            Token::Pipe => BIT_OR,
+            Token::Ampersand => BIT_AND,
+            Token::ShiftLeft | Token::ShiftRight => SHIFT,
+            Token::Plus | Token::Minus => ADDITION,
+            Token::Mul | Token::Div | Token::Mod => MULTIPLICATION,
+            Token::Caret => BIT_XOR,
+            Token::Arrow | Token::LongArrow => JSON_ARROW,
+            _ => return None,
+        };
+        Some(Ok(precedence))
+    }
+
+    fn prec_value(&self, precedence: Precedence) -> u8 {
+        match precedence {
+            Precedence::Period => 100,
+            Precedence::DoubleColon => 60,
+            Precedence::AtTz => 55,
+            Precedence::MulDivModOp => MULTIPLICATION,
+            Precedence::PlusMinus => ADDITION,
+            Precedence::Xor => XOR,
+            Precedence::Ampersand => BIT_AND,
+            Precedence::Caret => BIT_XOR,
+            Precedence::Pipe | Precedence::Colon => BIT_OR,
+            Precedence::Between | Precedence::Like => PREDICATE,
+            Precedence::Eq => COMPARISON,
+            Precedence::Is => IS,
+            Precedence::PgOther => JSON_ARROW,
+            Precedence::UnaryNot => NOT,
+            Precedence::And => AND,
+            Precedence::Or => OR,
+        }
+    }
+
+    fn parse_prefix(&self, parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+        let op = match &parser.peek_token_ref().token {
+            Token::ExclamationMark => UnaryOperator::BangNot,
+            Token::Minus => UnaryOperator::Minus,
+            Token::Plus => UnaryOperator::Plus,
+            Token::Tilde => UnaryOperator::BitwiseNot,
+            Token::Word(word)
+                if word.quote_style.is_none() && word.keyword == Keyword::INTERVAL =>
+            {
+                let name = Ident::new(word.value.clone());
+                parser.advance_token();
+                return Some(parse_interval_function_or_interval(parser, name));
+            }
+            Token::Word(word)
+                if word.quote_style.is_none()
+                    && word.keyword == Keyword::EXTRACT
+                    && parser.peek_nth_token_ref(1).token == Token::LParen =>
+            {
+                parser.advance_token();
+                return Some(parse_extract(parser));
+            }
+            _ => return None,
+        };
+        parser.advance_token();
+        Some(parser.parse_subexpr(UNARY).map(|expr| Expr::UnaryOp {
+            op,
+            expr: Box::new(expr),
+        }))
+    }
+
+    fn parse_infix(
+        &self,
+        parser: &mut Parser,
+        expr: &Expr,
+        precedence: u8,
+    ) -> Option<Result<Expr, ParserError>> {
+        let op = if parser.parse_keyword(Keyword::DIV) {
+            BinaryOperator::MyIntegerDivide
+        } else if parser.parse_keyword(Keyword::MOD) {
+            BinaryOperator::Modulo
+        } else {
+            return None;
+        };
+        Some(
+            parser
+                .parse_subexpr(precedence)
+                .map(|right| Expr::BinaryOp {
+                    left: Box::new(expr.clone()),
+                    op,
+                    right: Box::new(right),
+                }),
+        )
+    }
+
+    fn is_identifier_start(&self, ch: char) -> bool {
+        self.inner.is_identifier_start(ch)
+    }
+
+    fn is_identifier_part(&self, ch: char) -> bool {
+        self.inner.is_identifier_part(ch)
+    }
+
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        self.inner.is_delimited_identifier_start(ch)
+    }
+
+    fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
+        self.inner.identifier_quote_style(identifier)
+    }
+
+    fn supports_string_literal_backslash_escape(&self) -> bool {
+        self.inner.supports_string_literal_backslash_escape()
+    }
+
+    fn supports_string_literal_concatenation(&self) -> bool {
+        self.inner.supports_string_literal_concatenation()
+    }
+
+    fn ignores_wildcard_escapes(&self) -> bool {
+        self.inner.ignores_wildcard_escapes()
+    }
+
+    fn supports_numeric_prefix(&self) -> bool {
+        self.inner.supports_numeric_prefix()
+    }
+
+    fn supports_bitwise_shift_operators(&self) -> bool {
+        self.inner.supports_bitwise_shift_operators()
+    }
+
+    fn supports_multiline_comment_hints(&self) -> bool {
+        self.inner.supports_multiline_comment_hints()
+    }
+
+    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        self.inner.parse_statement(parser)
+    }
+
+    fn require_interval_qualifier(&self) -> bool {
+        self.inner.require_interval_qualifier()
+    }
+
+    fn supports_limit_comma(&self) -> bool {
+        self.inner.supports_limit_comma()
+    }
+
+    fn supports_create_table_select(&self) -> bool {
+        self.inner.supports_create_table_select()
+    }
+
+    fn supports_insert_set(&self) -> bool {
+        self.inner.supports_insert_set()
+    }
+
+    fn supports_user_host_grantee(&self) -> bool {
+        self.inner.supports_user_host_grantee()
+    }
+
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        self.inner.is_table_factor_alias(explicit, kw, parser)
+    }
+
+    fn supports_table_hints(&self) -> bool {
+        self.inner.supports_table_hints()
+    }
+
+    fn requires_single_line_comment_whitespace(&self) -> bool {
+        self.inner.requires_single_line_comment_whitespace()
+    }
+
+    fn supports_match_against(&self) -> bool {
+        self.inner.supports_match_against()
+    }
+
+    fn supports_select_modifiers(&self) -> bool {
+        self.inner.supports_select_modifiers()
+    }
+
+    fn supports_set_names(&self) -> bool {
+        self.inner.supports_set_names()
+    }
+
+    fn supports_comma_separated_set_assignments(&self) -> bool {
+        self.inner.supports_comma_separated_set_assignments()
+    }
+
+    fn supports_update_order_by(&self) -> bool {
+        self.inner.supports_update_order_by()
+    }
+
+    fn supports_data_type_signed_suffix(&self) -> bool {
+        self.inner.supports_data_type_signed_suffix()
+    }
+
+    fn supports_cross_join_constraint(&self) -> bool {
+        self.inner.supports_cross_join_constraint()
+    }
+
+    fn supports_double_ampersand_operator(&self) -> bool {
+        self.inner.supports_double_ampersand_operator()
+    }
+
+    fn supports_binary_kw_as_cast(&self) -> bool {
+        self.inner.supports_binary_kw_as_cast()
+    }
+
+    fn supports_comment_optimizer_hint(&self) -> bool {
+        self.inner.supports_comment_optimizer_hint()
+    }
+
+    fn supports_constraint_keyword_without_name(&self) -> bool {
+        self.inner.supports_constraint_keyword_without_name()
+    }
+
+    fn supports_key_column_option(&self) -> bool {
+        self.inner.supports_key_column_option()
+    }
+}
+
+fn parse_interval_function_or_interval(
+    parser: &mut Parser,
+    name: Ident,
+) -> Result<Expr, ParserError> {
+    if parser.peek_token_ref().token == Token::LParen {
+        let function = parser.maybe_parse(|parser| {
+            let function = parser.parse_function(ObjectName::from(vec![name.clone()]))?;
+            let Expr::Function(Function {
+                args: FunctionArguments::List(list),
+                ..
+            }) = &function
+            else {
+                return parser.expected("INTERVAL(N, N1, ...)", parser.peek_token());
+            };
+            if list.args.len() < 2 || is_temporal_unit(&parser.peek_token_ref().token) {
+                return parser.expected("INTERVAL(N, N1, ...)", parser.peek_token());
+            }
+            Ok(function)
+        })?;
+        if let Some(function) = function {
+            return Ok(function);
+        }
+    }
+    parse_interval(parser)
+}
+
+fn is_temporal_unit(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Word(word)
+            if word.quote_style.is_none()
+                && TEMPORAL_UNITS.contains(&word.value.to_ascii_uppercase().as_str())
+    )
+}
+
+fn parse_interval(parser: &mut Parser) -> Result<Expr, ParserError> {
+    let value = parser.parse_expr()?;
+    let unit = parse_temporal_unit(parser)?;
+    Ok(Expr::Interval(Interval {
+        value: Box::new(value),
+        leading_field: Some(unit),
+        leading_precision: None,
+        last_field: None,
+        fractional_seconds_precision: None,
+    }))
+}
+
+fn parse_extract(parser: &mut Parser) -> Result<Expr, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let field = parse_temporal_unit(parser)?;
+    parser.expect_keyword_is(Keyword::FROM)?;
+    let expr = parser.parse_expr()?;
+    parser.expect_token(&Token::RParen)?;
+    Ok(Expr::Extract {
+        field,
+        syntax: ExtractSyntax::From,
+        expr: Box::new(expr),
+    })
+}
+
+fn parse_temporal_unit(parser: &mut Parser) -> Result<DateTimeField, ParserError> {
+    let token = parser.next_token();
+    match &token.token {
+        Token::Word(word) if word.quote_style.is_none() => {
+            let unit = word.value.to_ascii_uppercase();
+            if TEMPORAL_UNITS.contains(&unit.as_str()) {
+                return Ok(DateTimeField::Custom(Ident::new(unit)));
+            }
+            parser.expected("a MySQL temporal unit", token)
+        }
+        _ => parser.expected("a MySQL temporal unit", token),
+    }
+}
