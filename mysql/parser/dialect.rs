@@ -1,17 +1,20 @@
+use crate::ddl_type::{MAX_DECIMAL_PRECISION, MAX_DECIMAL_SCALE};
 use crate::MysqlParserError;
 use sqlparser::ast::{
-    BinaryOperator, DateTimeField, Expr, ExtractSyntax, Function, FunctionArguments, Ident,
-    Interval, ObjectName, Statement, UnaryOperator,
+    BinaryOperator, CastKind, DataType, DateTimeField, ExactNumberInfo, Expr, ExtractSyntax,
+    Function, FunctionArguments, Ident, Interval, ObjectName, Statement, UnaryOperator,
 };
 use sqlparser::dialect::{Dialect, MySqlDialect, Precedence};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Word};
 use std::any::TypeId;
+use std::cell::RefCell;
 
 #[derive(Debug, Default)]
 pub(crate) struct MySql {
     inner: MySqlDialect,
+    rejected_cast: RefCell<Option<String>>,
 }
 
 const OR: u8 = 5;
@@ -63,9 +66,13 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserE
         .into_iter()
         .map(|token| unescape_token(token, sql))
         .collect();
-    Ok(Parser::new(&dialect)
+    let statements = Parser::new(&dialect)
         .with_tokens_with_locations(tokens)
-        .parse_statements()?)
+        .parse_statements()?;
+    if let Some(reason) = dialect.rejected_cast.take() {
+        return Err(MysqlParserError::Rejected(reason));
+    }
+    Ok(statements)
 }
 
 fn unescape_token(token: TokenWithSpan, sql: &str) -> TokenWithSpan {
@@ -257,6 +264,20 @@ impl Dialect for MySql {
                 parser.advance_token();
                 return Some(parse_extract(parser));
             }
+            Token::Word(word)
+                if word.quote_style.is_none()
+                    && matches!(word.keyword, Keyword::CAST | Keyword::CONVERT)
+                    && parser.peek_nth_token_ref(1).token == Token::LParen =>
+            {
+                let keyword = word.keyword;
+                parser.advance_token();
+                let cast = if keyword == Keyword::CAST {
+                    parser.parse_cast_expr(CastKind::Cast)
+                } else {
+                    parser.parse_convert_expr(false)
+                };
+                return Some(cast.inspect(|cast| self.check_cast_target(cast)));
+            }
             _ => return None,
         };
         parser.advance_token();
@@ -412,6 +433,49 @@ impl Dialect for MySql {
 
     fn supports_key_column_option(&self) -> bool {
         self.inner.supports_key_column_option()
+    }
+}
+
+impl MySql {
+    fn check_cast_target(&self, cast: &Expr) {
+        let data_type = match cast {
+            Expr::Cast { data_type, .. } => data_type,
+            Expr::Convert {
+                data_type: Some(data_type),
+                ..
+            } => data_type,
+            _ => return,
+        };
+        let (DataType::Decimal(info) | DataType::Dec(info)) = data_type else {
+            return;
+        };
+        if let Some(reason) = invalid_cast_decimal(info) {
+            self.rejected_cast.borrow_mut().get_or_insert(reason);
+        }
+    }
+}
+
+fn invalid_cast_decimal(info: &ExactNumberInfo) -> Option<String> {
+    let (precision, scale) = match *info {
+        ExactNumberInfo::None => return None,
+        ExactNumberInfo::Precision(precision) => (precision, 0),
+        ExactNumberInfo::PrecisionAndScale(precision, scale) => match u64::try_from(scale) {
+            Ok(scale) => (precision, scale),
+            Err(_) => return Some(format!("DECIMAL{info} has a negative scale")),
+        },
+    };
+    if precision < scale {
+        Some(format!("DECIMAL{info} has fewer digits than decimals"))
+    } else if precision > MAX_DECIMAL_PRECISION {
+        Some(format!(
+            "DECIMAL{info} has more than {MAX_DECIMAL_PRECISION} digits"
+        ))
+    } else if scale > MAX_DECIMAL_SCALE {
+        Some(format!(
+            "DECIMAL{info} has more than {MAX_DECIMAL_SCALE} decimals"
+        ))
+    } else {
+        None
     }
 }
 

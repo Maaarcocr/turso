@@ -8,8 +8,8 @@ use turso_parser::ast;
 
 const MAX_VARCHAR_LENGTH: u64 = 16_383;
 const MAX_CHAR_LENGTH: u64 = 255;
-const MAX_DECIMAL_PRECISION: u64 = 65;
-const MAX_DECIMAL_SCALE: u64 = 30;
+pub(crate) const MAX_DECIMAL_PRECISION: u64 = 65;
+pub(crate) const MAX_DECIMAL_SCALE: u64 = 30;
 const MAX_FLOAT_DIGITS: u64 = 255;
 const MAX_FRACTIONAL_SECONDS: u64 = 6;
 const MAX_SET_MEMBERS: usize = 6;

@@ -257,6 +257,55 @@ expect {
     12|-5|5|abc|7|1.5|x
 }
 
+test cast-to-decimal-accepts-mysql-limits {
+    SELECT CAST(1 AS DECIMAL(0)), CAST(2 AS DECIMAL(0, 0)), CAST(3 AS DECIMAL(65)) = 3, CAST(4 AS DECIMAL(65, 30)) = 4, CONVERT(0, DECIMAL(30, 30)) = 0;
+}
+expect {
+    1|2|1|1|1
+}
+
+# mysql-error: 1427 For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '').
+test cast-to-decimal-with-more-decimals-than-digits-fails {
+    SELECT CAST(1.5 AS DECIMAL(0, 4));
+}
+expect error {
+}
+
+# mysql-error: 1426 Too-big precision 66 specified for '1.5'. Maximum is 65.
+test cast-to-decimal-with-more-than-65-digits-fails {
+    SELECT CAST(1.5 AS DECIMAL(66, 30));
+}
+expect error {
+}
+
+# mysql-error: 1425 Too big scale 31 specified for column '1.5'. Maximum is 30.
+test cast-to-decimal-with-more-than-30-decimals-fails {
+    SELECT CAST(1.5 AS DECIMAL(65, 31));
+}
+expect error {
+}
+
+# mysql-error: 1427 For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '').
+test convert-to-invalid-decimal-fails {
+    SELECT CONVERT(1.5, DECIMAL(1, 2));
+}
+expect error {
+}
+
+# mysql-error: 1426 Too-big precision 66 specified for '1'. Maximum is 65.
+test invalid-decimal-cast-fails-when-it-is-not-evaluated {
+    SELECT IF(0, CAST(1 AS DECIMAL(66)), 1);
+}
+expect error {
+}
+
+# mysql-error: 1427 For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '').
+test invalid-decimal-cast-fails-beside-syntax-that-is-not-lowered {
+    SELECT 0x01 + CAST(1 AS DECIMAL(0, 4));
+}
+expect error {
+}
+
 test string-functions-with-special-syntax {
     SELECT TRIM(LEADING 'x' FROM 'xxaxx'), TRIM(TRAILING 'x' FROM 'xxaxx'), TRIM(BOTH 'x' FROM 'xxaxx'), TRIM('  a  '), SUBSTRING('abcdef' FROM 2 FOR 3), SUBSTRING('abcdef', 3), SUBSTR('abcdef' FROM 4);
 }
