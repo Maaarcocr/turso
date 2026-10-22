@@ -517,6 +517,27 @@ expect {
     a X c|abc def X|a[b]c|XX
 }
 
+test binary-strings-are-bytes {
+    SELECT LENGTH(X'C3A9'), CHAR_LENGTH(X'C3A9'), HEX(X'FF'), CONCAT('a', X'62'), UPPER(X'61'), LPAD(X'41', 3, 'b'), BIT_COUNT(X'FF');
+}
+expect {
+    2|2|FF|ab|a|bbA|8
+}
+
+test binary-strings-compared-with-text-become-text {
+    SELECT LOCATE(X'62', 'aBc'), FIELD('a', X'41'), REPLACE('abc', X'62', 'X'), SUBSTRING_INDEX('a,b', X'2C', 1);
+}
+expect {
+    2|1|aXc|a
+}
+
+test binary-strings-used-as-numbers-are-parsed {
+    SELECT ABS(UNHEX('3634')), LEFT('abcdef', UNHEX('32')), BIT_COUNT(UNHEX('37')), TRUNCATE(UNHEX('312E3539'), 1);
+}
+expect {
+    64|ab|5|1.5
+}
+
 test numeric-functions-parse-string-prefixes {
     SELECT ABS('-12abc'), MOD('10abc', 3), POW('2', 3), CEIL('1.5'), FLOOR('-1.5x'), SIGN('-3');
 }
@@ -604,6 +625,20 @@ expect error {
 # mysql-error: 1411 Incorrect string value: 'abc' for function bin_to_uuid
 test bin-to-uuid-rejects-wrong-length {
     SELECT BIN_TO_UUID('abc');
+}
+expect error {
+}
+
+# mysql-error: 3854 Cannot convert string '\xFF' from binary to utf8mb4
+test invalid-utf8-binary-replaced-into-text-is-an-error {
+    SELECT REPLACE('abc', X'FF', 'X');
+}
+expect error {
+}
+
+# mysql-error: 3854 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test invalid-utf8-binary-located-in-text-is-an-error {
+    SELECT LOCATE(X'AACC', 'abc');
 }
 expect error {
 }

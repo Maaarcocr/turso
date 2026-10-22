@@ -25,11 +25,11 @@ pub(super) fn sha2(args: &[Value]) -> Result<Value> {
         return Ok(Value::Null);
     };
     let bytes = text.as_bytes();
-    let digest = match (bits.unsigned, bits.value) {
-        (_, 0 | 256) => hex::encode(Sha256::digest(bytes)),
-        (_, 224) => hex::encode(Sha224::digest(bytes)),
-        (_, 384) => hex::encode(Sha384::digest(bytes)),
-        (_, 512) => hex::encode(Sha512::digest(bytes)),
+    let digest = match bits.value {
+        0 | 256 => hex::encode(Sha256::digest(bytes)),
+        224 => hex::encode(Sha224::digest(bytes)),
+        384 => hex::encode(Sha384::digest(bytes)),
+        512 => hex::encode(Sha512::digest(bytes)),
         _ => return Ok(Value::Null),
     };
     Ok(Value::build_text(digest))
