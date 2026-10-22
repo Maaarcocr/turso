@@ -2,9 +2,13 @@ use super::*;
 use crate::alloc::{TryClone, TursoIteratorExt};
 use crate::schema::GeneratedType;
 use crate::translate::emitter::HashLabels;
-use crate::translate::expr::{comparison_affinity, maybe_apply_affinity};
-use crate::translate::plan::ColumnUsedMask;
+use crate::translate::expr::{
+    comparison_affinity, emit_type_key, emit_value_conversion_in_place, hash_join_key_form,
+    maybe_apply_affinity, HashKeyForm, TypeEnv,
+};
+use crate::translate::plan::{ColumnUsedMask, HashJoinKey};
 use crate::vdbe::builder::SelfTableContext;
+use crate::LimboError;
 
 #[derive(Debug, Clone)]
 /// Payload layout metadata recorded during hash-build planning or reuse.
@@ -351,6 +355,15 @@ impl<'a, 'plan> PreparedHashBuild<'a, 'plan> {
                 )?;
             }
         }
+        emit_typed_hash_keys(
+            planner.program,
+            &planner.hash_join_op.join_keys,
+            planner.predicates,
+            planner.table_references,
+            build_key_start_reg,
+            HashJoinSide::Build,
+            &planner.t_ctx.resolver,
+        )?;
 
         if let Some(count) = std::num::NonZeroUsize::new(num_keys) {
             planner.program.emit_insn(Insn::Affinity {
@@ -509,6 +522,52 @@ impl<'a, 'plan> PreparedHashBuild<'a, 'plan> {
 /// `origin`; applying them while building the hash table would drop
 /// unmatched build rows before null-extension. Terms with outer-query
 /// references run where those references are in scope.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HashJoinSide {
+    Build,
+    Probe,
+}
+
+fn emit_typed_hash_keys(
+    program: &mut ProgramBuilder,
+    join_keys: &[HashJoinKey],
+    predicates: &[WhereTerm],
+    table_references: &TableReferences,
+    start_reg: usize,
+    side: HashJoinSide,
+    resolver: &Resolver,
+) -> Result<()> {
+    let env = TypeEnv::from_resolver(resolver);
+    for (idx, join_key) in join_keys.iter().enumerate() {
+        let (lhs, rhs) = match join_key.build_side {
+            BinaryExprSide::Lhs => (
+                join_key.get_build_expr(predicates),
+                join_key.get_probe_expr(predicates),
+            ),
+            BinaryExprSide::Rhs => (
+                join_key.get_probe_expr(predicates),
+                join_key.get_build_expr(predicates),
+            ),
+        };
+        match hash_join_key_form(lhs, rhs, Some(table_references), &env) {
+            Some(HashKeyForm::Values) => {}
+            Some(HashKeyForm::Keys { conversions, key }) => {
+                let side_is_lhs =
+                    (side == HashJoinSide::Build) == (join_key.build_side == BinaryExprSide::Lhs);
+                let conversion = &conversions[if side_is_lhs { 0 } else { 1 }];
+                emit_value_conversion_in_place(program, start_reg + idx, conversion, resolver)?;
+                emit_type_key(program, start_reg + idx, &key, resolver)?;
+            }
+            None => {
+                return Err(LimboError::InternalError(
+                    "hash join key compares values that cannot be hashed".to_string(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn build_prefilter_where_terms(
     predicates: &[WhereTerm],
     table_references: &TableReferences,
@@ -695,6 +754,15 @@ impl<'a, 'plan> HashProbeSetupEmitter<'a, 'plan> {
                 &self.t_ctx.resolver,
             )?;
         }
+        emit_typed_hash_keys(
+            self.program,
+            &self.hash_join_op.join_keys,
+            self.predicates,
+            self.table_references,
+            probe_key_start_reg,
+            HashJoinSide::Probe,
+            &self.t_ctx.resolver,
+        )?;
 
         if let Some(count) = std::num::NonZeroUsize::new(num_keys) {
             self.program.emit_insn(Insn::Affinity {

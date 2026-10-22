@@ -146,7 +146,7 @@ The operator is chosen from the signatures of the operands' types. A literal str
 
 A value converted to a type goes through the type's ENCODE and DECODE, so it is validated and normalized like a stored value: comparing a `date` column with `'garbage'` is an error, and comparing a `uuid` column with an upper-case literal finds the stored lower-case value. A type that declares no `=` operator still compares a literal or parameter with its values after this conversion.
 
-The same `=` and `<` are used wherever SQL compares values, not only by the operators themselves: `IN (...)` lists, `CASE x WHEN ...`, `IS` and `IS NOT`, `nullif()`, the scalar `min()` and `max()`, row values such as `(a, b) < (c, d)`, and join conditions, including `USING` and `NATURAL` joins. For a `numeric` column `p` holding `2.00`, `p IN (2)` is true and `max(p, 10)` is `10`.
+The same `=` and `<` are used wherever SQL compares values, not only by the operators themselves: `IN (...)` lists and `IN (SELECT ...)`, `CASE x WHEN ...`, `IS` and `IS NOT`, `nullif()`, the scalar `min()` and `max()`, row values such as `(a, b) < (c, d)`, and join conditions, including `USING` and `NATURAL` joins. For a `numeric` column `p` holding `2.00`, `p IN (2)` is true and `max(p, 10)` is `10`.
 
 `CASE`, `coalesce()`, `ifnull()`, `iif()`, `min()` and `max()` return a value of a type when all their non-NULL branches have that type or are converted to it by a `CAST FROM ... AS IMPLICIT` clause or are `?` parameters; those branches are converted. So `coalesce(p, 0) + 1` is `numeric` arithmetic. A text literal or a value of unknown type is not converted: `coalesce(p, 'none')` returns `'none'` when `p` is NULL, and the result has no type.
 
@@ -193,7 +193,7 @@ The `=` operator, when defined, is also used to derive `!=`. The `<` operator is
 
 ### KEY
 
-`KEY key-expr` gives a key for a value of the type: an expression of `value` (the value as DECODE returns it) whose result is equal for two values exactly when the type's `=` says they are equal. `SELECT DISTINCT`, aggregates with `DISTINCT` such as `count(DISTINCT x)`, and `GROUP BY` compare these keys instead of the values, and output one of the values they compared equal. Without `KEY`, they compare the values.
+`KEY key-expr` gives a key for a value of the type: an expression of `value` (the value as DECODE returns it) whose result is equal for two values exactly when the type's `=` says they are equal. `SELECT DISTINCT`, aggregates with `DISTINCT` such as `count(DISTINCT x)`, `GROUP BY` and hash joins compare these keys instead of the values, and output one of the values they compared equal. Without `KEY`, they compare the values, and a join on a type whose `=` is a function is not run as a hash join.
 
 The built-in `numeric` type has `KEY numeric_key(value)`, so `2`, `2.0` and `2.00` count as one value. `numeric_key(x)` returns a blob that sorts like the numbers.
 

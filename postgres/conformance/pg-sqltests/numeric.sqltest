@@ -129,3 +129,16 @@ test numeric-group-by-ignores-scale {
 expect {
     3
 }
+
+test numeric-in-subquery-compares-as-numbers {
+    CREATE TABLE a (q numeric(10,0));
+    CREATE TABLE b (y numeric(10,1));
+    INSERT INTO a VALUES ('10'), ('20');
+    INSERT INTO b VALUES ('10.0'), ('30.0');
+    SELECT q FROM a WHERE q IN (SELECT y FROM b);
+    SELECT q FROM a WHERE q NOT IN (SELECT y FROM b);
+}
+expect {
+    10
+    20
+}

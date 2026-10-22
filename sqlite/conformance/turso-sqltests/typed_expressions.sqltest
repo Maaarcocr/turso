@@ -380,3 +380,48 @@ expect {
     2
     3
 }
+
+@requires strict "uses STRICT tables"
+test in-subquery-uses-the-type-equality {
+    CREATE TABLE t1(q numeric(10,0)) STRICT;
+    CREATE INDEX t1_q ON t1(q);
+    CREATE TABLE t2(y numeric(10,1)) STRICT;
+    CREATE TABLE t4(x INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('10'), ('20'), (NULL);
+    INSERT INTO t2 VALUES ('10.0'), ('30.0');
+    INSERT INTO t4 VALUES (10), (NULL);
+    SELECT q, q IN (SELECT y FROM t2), q NOT IN (SELECT y FROM t2), q IN (SELECT x FROM t4), q NOT IN (SELECT x FROM t4) FROM t1 ORDER BY q;
+    SELECT q FROM t1 WHERE q IN (SELECT y FROM t2);
+    SELECT q FROM t1 WHERE q NOT IN (SELECT y FROM t2);
+    SELECT q FROM t1 WHERE q IN (SELECT y FROM t2 WHERE y > t1.q - 1);
+}
+expect {
+    ||||
+    10|1|0|1|0
+    20|0|1||
+    10
+    20
+    10
+}
+
+@requires strict "uses STRICT tables"
+test hash-join-compares-typed-values-by-key {
+    CREATE TABLE t1(q numeric(10,0)) STRICT;
+    CREATE TABLE t2(y numeric(10,1)) STRICT;
+    CREATE TABLE t4(x INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('10'), ('20');
+    INSERT INTO t2 VALUES ('10.0'), ('30.0');
+    INSERT INTO t4 VALUES (10), (30);
+    EXPLAIN QUERY PLAN SELECT t1.q, t2.y FROM t1 JOIN t2 ON t1.q = t2.y;
+    SELECT t1.q, t2.y FROM t1 JOIN t2 ON t1.q = t2.y;
+    SELECT t1.q, t4.x FROM t1 JOIN t4 ON t1.q = t4.x;
+    SELECT t2.y, t4.x FROM t2 JOIN t4 ON t4.x = t2.y ORDER BY 1;
+}
+expect {
+    1|0|0|HASH JOIN t2
+    2|0|0|SCAN t1
+    10|10.0
+    10|10
+    10.0|10
+    30.0|30
+}

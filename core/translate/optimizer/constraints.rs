@@ -1175,7 +1175,13 @@ pub fn constraints_from_where_clause(
 
                     match lhs_expr.as_ref() {
                         ast::Expr::Column { table, column, .. }
-                            if *table == table_reference.internal_id =>
+                            if *table == table_reference.internal_id
+                                && schema
+                                    .get_type_def(
+                                        &table_reference.table.columns()[*column].ty_str,
+                                        table_reference.table.is_strict(),
+                                    )
+                                    .is_none() =>
                         {
                             let is_rowid = rowid_alias_column == Some(*column);
                             cs.constraints.push(Constraint {
