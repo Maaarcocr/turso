@@ -82,6 +82,13 @@ pub(crate) fn time_micros_decode(value: &Value, fsp: &Value) -> Result<Value> {
     Ok(Value::build_text(format!("{sign}{clock}")))
 }
 
+pub(crate) fn datetime_micros_compare(lhs: &Value, rhs: &Value) -> Result<Ordering> {
+    let six = Value::from_i64(MAX_FSP);
+    let lhs = datetime_micros_encode(lhs, &six)?;
+    let rhs = datetime_micros_encode(rhs, &six)?;
+    Ok(lhs.cmp(&rhs))
+}
+
 pub(crate) fn time_micros_compare(lhs: &Value, rhs: &Value) -> Result<Ordering> {
     let six = Value::from_i64(MAX_FSP);
     let lhs = time_micros_encode(lhs, &six)?;

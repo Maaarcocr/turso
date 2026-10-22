@@ -154,6 +154,7 @@ pub(super) fn open_in_seek_source_cursor(
                         val_reg,
                         &[Some(value)],
                         0,
+                        1,
                         next_value,
                         resolver,
                     )?;

@@ -1037,6 +1037,12 @@ fn index_columns_order_consumed<'a>(
                 if schema
                     .column_type_def(col, table_ref.table.is_strict())
                     .is_some()
+                    && !(table_ref.table.is_strict()
+                        && crate::translate::expr::index_order_serves_sort(
+                            col,
+                            schema,
+                            order_target.is_extremum(),
+                        ))
                 {
                     break;
                 }

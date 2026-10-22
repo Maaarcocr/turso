@@ -112,6 +112,101 @@ pub(crate) fn column_named_type(
     })
 }
 
+pub(crate) fn typed_range_can_use_index(
+    column: &Column,
+    is_strict: bool,
+    bound: &ast::Expr,
+    tables: &TableReferences,
+    schema: &Schema,
+) -> bool {
+    let Some(column_named) = column_named_type(column, is_strict, schema) else {
+        return false;
+    };
+    let Some(storage) = column_storage(column, schema) else {
+        return false;
+    };
+    let env = TypeEnv::new(schema);
+    let owner = operator_type(&ExprType::Named(column_named.clone()), &env);
+    let column_type = ExprType::Named(column_named);
+    let bound_type = expr_type(bound, Some(tables), &env);
+    match resolve_typed_operator(
+        &ast::Operator::Less,
+        [(&column_type, None), (&bound_type, Some(bound))],
+        &env,
+    ) {
+        Ok(Some(resolved)) => {
+            let own_operator = matches!(
+                (&resolved.own_operator_of, &owner),
+                (Some(def), ExprType::Named(owner)) if def.name.eq_ignore_ascii_case(&owner.def.name)
+            );
+            (own_operator
+                || conversion_keeps_stored_value(&resolved.conversions[0], column, schema))
+                && storage.less_than_follows_index_order(resolved.function.as_deref())
+        }
+        Ok(None) => storage.stores_values_unchanged() && column_reads_stored_values(column, schema),
+        Err(_) => false,
+    }
+}
+
+pub(crate) fn index_order_serves_sort(column: &Column, schema: &Schema, extremum: bool) -> bool {
+    let (Some(storage), Some(named)) = (
+        column_storage(column, schema),
+        column_named_type(column, true, schema),
+    ) else {
+        return false;
+    };
+    let less_than = named
+        .def
+        .operators()
+        .iter()
+        .find(|operator| {
+            operator.op == "<"
+                && operator.operands.as_ref().is_none_or(|operands| {
+                    operands
+                        .iter()
+                        .all(|operand| operand.eq_ignore_ascii_case(&named.def.name))
+                })
+        })
+        .and_then(|operator| operator.func_name.as_deref());
+    if extremum {
+        storage.less_than_follows_index_order(less_than)
+    } else {
+        storage.index_order_serves_sort(less_than)
+    }
+}
+
+pub(crate) fn conversion_keeps_stored_value(
+    conversion: &Conversion,
+    column: &Column,
+    schema: &Schema,
+) -> bool {
+    match conversion {
+        Conversion::None => true,
+        Conversion::IntoClass(class) => column_storage(column, schema).is_some_and(|storage| {
+            storage.stores_values_unchanged() && storage.stored_class() == class_name(*class)
+        }),
+        _ => false,
+    }
+}
+
+fn column_storage(column: &Column, schema: &Schema) -> Option<crate::dialect::StorageType> {
+    schema
+        .column_resolved_type(column, true)
+        .ok()
+        .flatten()?
+        .chain
+        .iter()
+        .find_map(|def| def.storage)
+}
+
+fn column_reads_stored_values(column: &Column, schema: &Schema) -> bool {
+    schema
+        .column_resolved_type(column, true)
+        .ok()
+        .flatten()
+        .is_some_and(|resolved| resolved.reads_stored_values_unchanged())
+}
+
 pub(crate) fn main_type_def_of_column<'a>(
     schema: &'a Schema,
     column: &Column,

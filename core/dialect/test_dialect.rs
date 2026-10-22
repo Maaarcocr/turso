@@ -106,34 +106,39 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
             name: "date_days",
             storage: StorageType::DateDays,
             parameters: "",
-            behaviour: "OPERATOR '<' (date_days, date_days) OPERATOR '=' (date_days, date_days)",
+            behaviour: "CAST FROM text AS IMPLICIT \
+                OPERATOR '<' (date_days, date_days) OPERATOR '=' (date_days, date_days)",
         },
         DialectType {
             name: "datetime_micros",
             storage: StorageType::DatetimeMicros,
             parameters: "",
-            behaviour: "OPERATOR '<' (datetime_micros, datetime_micros) \
+            behaviour: "CAST FROM text AS IMPLICIT \
+                OPERATOR '<' (datetime_micros, datetime_micros) datetime_micros_lt \
                 OPERATOR '=' (datetime_micros, datetime_micros)",
         },
         DialectType {
             name: "time_micros",
             storage: StorageType::TimeMicros,
             parameters: "",
-            behaviour: "OPERATOR '<' (time_micros, time_micros) time_micros_lt \
+            behaviour: "CAST FROM text AS IMPLICIT \
+                OPERATOR '<' (time_micros, time_micros) time_micros_lt \
                 OPERATOR '=' (time_micros, time_micros)",
         },
         DialectType {
             name: "enumeration",
             storage: StorageType::Enumeration,
             parameters: "",
-            behaviour: "OPERATOR '<' (enumeration, enumeration) \
+            behaviour: "CAST FROM text AS IMPLICIT \
+                OPERATOR '<' (enumeration, enumeration) \
                 OPERATOR '=' (enumeration, enumeration)",
         },
         DialectType {
             name: "label_set",
             storage: StorageType::LabelSet,
             parameters: "",
-            behaviour: "OPERATOR '<' (label_set, label_set) OPERATOR '=' (label_set, label_set)",
+            behaviour: "CAST FROM text AS IMPLICIT \
+                OPERATOR '<' (label_set, label_set) OPERATOR '=' (label_set, label_set)",
         },
         DialectType {
             name: "text",

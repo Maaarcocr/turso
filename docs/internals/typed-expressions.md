@@ -1151,6 +1151,27 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Index ranges and ORDER BY (commit 26).** Only columns whose type is
+  built on a core storage type (`TypeDef::storage`) are affected; other typed
+  columns, including every PostgreSQL type, keep the old rules. A range term
+  uses an index when its `<` resolves to the column type's own `<`, or to a
+  class signature that converts the column only into the class its storage
+  type already stores, and when that `<` follows the order of the stored
+  values: no function for the integer, real, text and blob storages and for
+  `date_days` (its in-memory text is fixed width), and `datetime_micros_lt`,
+  `time_micros_lt` and `uint64_lt` for the other three. `datetime_micros_lt`
+  is a new core function and sort comparator, because comparing date-time
+  texts with different numbers of fraction digits is not time order. The
+  bound of a range seek is converted as the comparison converts it and then
+  goes through the type's KEY when it has one (the storage types whose KEY is
+  the stored value), or is used as converted (storages that store values
+  unchanged); no ENCODE runs, so a bound outside the column's range is not an
+  error and does not end the scan early. An index gives ORDER BY when the KEY
+  is the stored value or the type stores values unchanged and its `<` has no
+  function; for MIN and MAX the `<` must follow the stored order, so an
+  `enumeration` index serves ORDER BY and `=` but not ranges, MIN or MAX. An
+  equality on a column converted to the class it stores (`int_col = 5` through
+  the integer class signature) now uses the index too.
 - **Declared types and CREATE TABLE AS SELECT (commit 25).** Column metadata
   already reported the declared name and parameters of a typed result through
   views, subqueries, CTEs and compound selects (commit 21's typed results); a

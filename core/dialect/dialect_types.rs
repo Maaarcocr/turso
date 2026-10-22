@@ -56,7 +56,7 @@ impl StorageType {
         }
     }
 
-    fn stored_class(self) -> &'static str {
+    pub(crate) fn stored_class(self) -> &'static str {
         match self {
             StorageType::Integer
             | StorageType::RangedInteger { .. }
@@ -73,6 +73,45 @@ impl StorageType {
 
     pub(crate) fn takes_label_list(self) -> bool {
         matches!(self, StorageType::Enumeration | StorageType::LabelSet)
+    }
+
+    pub(crate) fn index_order_serves_sort(self, less_than_function: Option<&str>) -> bool {
+        self.key_is_stored_value()
+            || (self.stores_values_unchanged() && less_than_function.is_none())
+    }
+
+    pub(crate) fn less_than_follows_index_order(self, function: Option<&str>) -> bool {
+        let function_is = |name: &str| function.is_some_and(|f| f.eq_ignore_ascii_case(name));
+        match self {
+            StorageType::DateDays => function.is_none(),
+            StorageType::DatetimeMicros => function_is("datetime_micros_lt"),
+            StorageType::TimeMicros => function_is("time_micros_lt"),
+            StorageType::Uint64 => function_is("uint64_lt"),
+            _ => self.stores_values_unchanged() && function.is_none(),
+        }
+    }
+
+    pub(crate) fn key_is_stored_value(self) -> bool {
+        matches!(
+            self,
+            StorageType::DateDays
+                | StorageType::DatetimeMicros
+                | StorageType::TimeMicros
+                | StorageType::Uint64
+                | StorageType::Enumeration
+                | StorageType::LabelSet
+        )
+    }
+
+    pub(crate) fn stores_values_unchanged(self) -> bool {
+        matches!(
+            self,
+            StorageType::Integer
+                | StorageType::RangedInteger { .. }
+                | StorageType::Real
+                | StorageType::Text
+                | StorageType::Blob
+        )
     }
 
     pub(crate) fn largest_key(self) -> Option<i64> {
@@ -859,6 +898,109 @@ mod tests {
         let db = open_db(&io, "ctas.db", marking()).unwrap();
         let conn = db.connect(ConnectOpts::new()).unwrap();
         assert_eq!(query(&conn, "SELECT * FROM c"), expected_rows);
+    }
+
+    fn query_plan(conn: &Arc<crate::Connection>, sql: &str) -> String {
+        query(conn, &format!("EXPLAIN QUERY PLAN {sql}"))
+            .iter()
+            .map(|row| row[3].to_string())
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    #[test]
+    fn ordered_types_use_indexes_for_ranges_and_order_by() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "ordered-indexes.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "/* turso_dialect:marking rowid_alias */ CREATE TABLE t(id INTEGER PRIMARY KEY, i INT, \
+             dt DATETIME_MICROS(6), d DATE_DAYS, tm TIME_MICROS(6), u UBIGINT, \
+             e ENUMERATION('small','large','medium')) STRICT",
+        )
+        .unwrap();
+        for column in ["i", "dt", "d", "tm", "u", "e"] {
+            conn.execute(format!("CREATE INDEX t_{column} ON t({column})"))
+                .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO t VALUES \
+             (1, 5, '2024-01-01 10:00:00.000000', '2024-01-01', '10:00:00.000000', 7, 'large'), \
+             (2, 9, '2024-01-01 10:00:00.500000', '2023-12-31', '100:00:00.000000', \
+              '18446744073709551615', 'small'), \
+             (3, -3, '2024-01-01 10:00:01.000000', '2024-02-29', '-01:00:00.000000', \
+              '9223372036854775808', 'medium'), \
+             (4, 2147483647, '1999-12-31 23:59:59.999999', '1999-12-31', '20:00:00.250000', \
+              '9223372036854775807', 'large')",
+        )
+        .unwrap();
+
+        for (condition, searches_index) in [
+            ("i = 5", true),
+            ("i > 5", true),
+            ("i <= 5", true),
+            ("i < 3000000000", true),
+            ("i > 3000000000", true),
+            ("dt > '2024-01-01 10:00:00'", true),
+            ("dt >= '2024-01-01 10:00:00.5'", true),
+            ("dt < '2024-01-01 10:00:00.500000'", true),
+            ("d > '2023-12-31' AND d <= '2024-02-29'", true),
+            ("tm > '20:00:00'", true),
+            ("tm < '00:00:00'", true),
+            ("u > '9223372036854775807'", true),
+            ("u <= 9223372036854775807", true),
+            ("e = 'small'", true),
+            ("e < 'small'", false),
+            ("e > 'large'", false),
+        ] {
+            let indexed = format!("SELECT id FROM t WHERE {condition}");
+            let scanned = format!("SELECT id FROM t NOT INDEXED WHERE {condition}");
+            let plan = query_plan(&conn, &indexed);
+            assert_eq!(
+                plan.starts_with("SEARCH t USING"),
+                searches_index,
+                "{condition}: {plan}"
+            );
+            let sorted = |sql: &str| {
+                let mut ids: Vec<String> = query(&conn, sql)
+                    .iter()
+                    .map(|row| row[0].to_string())
+                    .collect();
+                ids.sort();
+                ids
+            };
+            assert_eq!(sorted(&indexed), sorted(&scanned), "{condition}");
+        }
+
+        for (order, uses_index) in [
+            ("dt", true),
+            ("d DESC", true),
+            ("tm", true),
+            ("u DESC", true),
+            ("e", true),
+            ("i", true),
+        ] {
+            let indexed = format!("SELECT id FROM t ORDER BY {order}");
+            let scanned = format!("SELECT id FROM t NOT INDEXED ORDER BY {order}");
+            let plan = query_plan(&conn, &indexed);
+            assert_eq!(
+                plan.contains("INDEX t_") && !plan.contains("SORTER"),
+                uses_index,
+                "{order}: {plan}"
+            );
+            assert_eq!(query(&conn, &indexed), query(&conn, &scanned), "{order}");
+        }
+        assert_eq!(
+            query(&conn, "SELECT min(e), max(e) FROM t"),
+            vec![vec![Value::build_text("large"), Value::build_text("small")]]
+        );
+        assert_eq!(
+            query(&conn, "SELECT min(tm), max(u) FROM t"),
+            vec![vec![
+                Value::build_text("-01:00:00.000000"),
+                Value::build_text("18446744073709551615")
+            ]]
+        );
     }
 
     #[test]

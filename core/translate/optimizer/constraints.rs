@@ -1,8 +1,9 @@
 use super::{cost_params::CostModelParams, AvailableIndexes};
 use crate::alloc::TursoIteratorExt;
 use crate::translate::expr::{
-    column_named_type, comparison_affinity, expr_type, in_subquery_comparison, operator_type,
-    plan_column_types, resolve_typed_operator, ExprType, InSubqueryComparison, TypeEnv,
+    column_named_type, comparison_affinity, conversion_keeps_stored_value, expr_type,
+    in_subquery_comparison, operator_type, plan_column_types, resolve_typed_operator,
+    typed_range_can_use_index, ExprType, InSubqueryComparison, TypeEnv,
 };
 use crate::{
     schema::{Column, Index, Schema},
@@ -2517,20 +2518,32 @@ fn typed_column_constraint_can_use_index(
     {
         return true;
     }
-    if constraint.operator != ast::Operator::Equals.into() {
-        return false;
-    }
     let constraining_expr = match &constraint.constraining_expr {
         Some((_, expr, _)) => expr,
         None => constraint.get_constraining_expr_ref(where_clause),
     };
-    typed_column_can_seek_equal_to(
-        column,
-        table_reference,
-        constraining_expr,
-        table_references,
-        schema,
-    )
+    match constraint.operator.as_ast_operator() {
+        Some(ast::Operator::Equals) => typed_column_can_seek_equal_to(
+            column,
+            table_reference,
+            constraining_expr,
+            table_references,
+            schema,
+        ),
+        Some(
+            ast::Operator::Less
+            | ast::Operator::LessEquals
+            | ast::Operator::Greater
+            | ast::Operator::GreaterEquals,
+        ) => typed_range_can_use_index(
+            column,
+            table_reference.table.is_strict(),
+            constraining_expr,
+            table_references,
+            schema,
+        ),
+        _ => false,
+    }
 }
 
 fn in_subquery_can_seek_column(
@@ -2599,7 +2612,7 @@ fn typed_column_can_seek_equal_to(
             Some(owner) => owner.name.eq_ignore_ascii_case(&def.name),
             None => {
                 resolved.function.is_none()
-                    && resolved.conversions[0].is_none()
+                    && conversion_keeps_stored_value(&resolved.conversions[0], column, schema)
                     && reads_stored_values_unchanged(column, schema)
             }
         },

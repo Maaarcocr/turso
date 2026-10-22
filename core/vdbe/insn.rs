@@ -70,6 +70,7 @@ impl Subprogram {
 pub enum SortComparatorType {
     NumericLt,
     Uint64Lt,
+    DatetimeMicrosLt,
     TimeMicrosLt,
     StringReverse,
     TestUintLt,

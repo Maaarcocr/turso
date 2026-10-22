@@ -1,7 +1,8 @@
 use super::*;
 use crate::translate::expr::{
-    column_named_type, emit_type_expr, emit_user_facing_column_value, emit_value_conversion,
-    expr_type, resolve_typed_operator, Conversion, DynamicClass, ExprType, NamedType, TypeEnv,
+    column_named_type, emit_type_expr, emit_type_key, emit_user_facing_column_value,
+    emit_value_conversion, emit_value_conversion_in_place, expr_type, resolve_typed_operator,
+    type_key, Conversion, DynamicClass, ExprType, NamedType, TypeEnv,
 };
 use crate::translate::plan::BitSet;
 use crate::vdbe::insn::NullMatchingMask;
@@ -172,6 +173,7 @@ impl<'a, 'plan> SeekEmitter<'a, 'plan> {
                 self.start_reg,
                 &key_exprs,
                 0,
+                self.seek_def.prefix.len(),
                 self.loop_end,
                 &self.t_ctx.resolver,
             )?;
@@ -300,6 +302,7 @@ impl<'a, 'plan> SeekEmitter<'a, 'plan> {
                         last_reg,
                         &[Some(expr)],
                         self.seek_def.prefix.len(),
+                        0,
                         self.loop_end,
                         &self.t_ctx.resolver,
                     )?;
@@ -430,6 +433,7 @@ pub(super) fn emit_typed_seek_keys(
     start_reg: usize,
     key_exprs: &[Option<&ast::Expr>],
     idx_col_offset: usize,
+    first_range_bound: usize,
     no_match: BranchOffset,
     resolver: &Resolver<'_>,
 ) -> crate::Result<()> {
@@ -454,6 +458,18 @@ pub(super) fn emit_typed_seek_keys(
         else {
             continue;
         };
+        if i >= first_range_bound {
+            emit_typed_range_bound(
+                program,
+                tables,
+                start_reg + i,
+                column_type,
+                *key_expr,
+                &env,
+                resolver,
+            )?;
+            continue;
+        }
         emit_typed_seek_key(
             program,
             tables,
@@ -465,6 +481,34 @@ pub(super) fn emit_typed_seek_keys(
             &env,
             resolver,
         )?;
+    }
+    Ok(())
+}
+
+fn emit_typed_range_bound(
+    program: &mut ProgramBuilder,
+    tables: &TableReferences,
+    key_reg: usize,
+    column_type: NamedType,
+    key_expr: Option<&ast::Expr>,
+    env: &TypeEnv,
+    resolver: &Resolver<'_>,
+) -> crate::Result<()> {
+    let key_type = match key_expr {
+        Some(expr) => expr_type(expr, Some(tables), env),
+        None => ExprType::Dynamic(DynamicClass::Unknown),
+    };
+    let key = type_key(&column_type, resolver.schema())?;
+    let conversion = resolve_typed_operator(
+        &ast::Operator::Less,
+        [(&ExprType::Named(column_type), None), (&key_type, key_expr)],
+        env,
+    )?
+    .map(|resolved| resolved.conversions[1].clone())
+    .unwrap_or(Conversion::None);
+    emit_value_conversion_in_place(program, key_reg, &conversion, resolver)?;
+    if let Some(key) = key {
+        emit_type_key(program, key_reg, &key, resolver)?;
     }
     Ok(())
 }

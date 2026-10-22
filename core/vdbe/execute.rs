@@ -328,6 +328,20 @@ fn make_sort_comparator(
                 })
             })
         }
+        SortComparatorType::DatetimeMicrosLt => {
+            std::sync::Arc::new(|a: &ValueRef, b: &ValueRef| -> Result<Ordering> {
+                Ok(match (a, b) {
+                    (ValueRef::Null, ValueRef::Null) => Ordering::Equal,
+                    (ValueRef::Null, _) => Ordering::Less,
+                    (_, ValueRef::Null) => Ordering::Greater,
+                    _ => crate::dialect::time_storage::datetime_micros_compare(
+                        &a.to_owned()?,
+                        &b.to_owned()?,
+                    )
+                    .unwrap_or_else(|_| a.partial_cmp(b).unwrap_or(Ordering::Equal)),
+                })
+            })
+        }
         SortComparatorType::TimeMicrosLt => {
             std::sync::Arc::new(|a: &ValueRef, b: &ValueRef| -> Result<Ordering> {
                 Ok(match (a, b) {

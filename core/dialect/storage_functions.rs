@@ -17,6 +17,7 @@ pub enum StorageFunc {
     DateDaysDecode,
     DatetimeMicrosEncode,
     DatetimeMicrosDecode,
+    DatetimeMicrosLt,
     TimeMicrosEncode,
     TimeMicrosDecode,
     TimeMicrosLt,
@@ -50,6 +51,7 @@ impl StorageFunc {
             StorageFunc::DateDaysDecode => "date_days_decode",
             StorageFunc::DatetimeMicrosEncode => "datetime_micros_encode",
             StorageFunc::DatetimeMicrosDecode => "datetime_micros_decode",
+            StorageFunc::DatetimeMicrosLt => "datetime_micros_lt",
             StorageFunc::TimeMicrosEncode => "time_micros_encode",
             StorageFunc::TimeMicrosDecode => "time_micros_decode",
             StorageFunc::TimeMicrosLt => "time_micros_lt",
@@ -79,6 +81,7 @@ impl StorageFunc {
             | StorageFunc::Uint64Mul
             | StorageFunc::DatetimeMicrosEncode
             | StorageFunc::DatetimeMicrosDecode
+            | StorageFunc::DatetimeMicrosLt
             | StorageFunc::TimeMicrosEncode
             | StorageFunc::TimeMicrosDecode
             | StorageFunc::TimeMicrosLt
@@ -140,6 +143,10 @@ impl StorageFunc {
             }
             StorageFunc::TimeMicrosEncode => time_storage::time_micros_encode(&args[0], &args[1]),
             StorageFunc::TimeMicrosDecode => time_storage::time_micros_decode(&args[0], &args[1]),
+            StorageFunc::DatetimeMicrosLt => Ok(Value::from_i64(
+                (time_storage::datetime_micros_compare(&args[0], &args[1])? == Ordering::Less)
+                    as i64,
+            )),
             StorageFunc::TimeMicrosLt => Ok(Value::from_i64(
                 (time_storage::time_micros_compare(&args[0], &args[1])? == Ordering::Less) as i64,
             )),
