@@ -220,8 +220,19 @@ pub(crate) fn expr_type(expr: &ast::Expr, tables: Option<&TableReferences>,
   references that UPDATE and UPSERT rewrite into registers (a `register_types`
   map like today's `register_affinities`), and subquery, CTE and view columns
   (the type of the inner result expression).
-- `CAST(x AS T)`: `Named(T)` when T is registered and its required
-  parameters are given (today's rule), else `Dynamic`.
+- `CAST(x AS T)`: `Named(T)` when T is registered and the CAST gives all of
+  T's required parameters. Otherwise it is SQLite's *affinity cast* (the type
+  name only chooses INTEGER, REAL, TEXT, NUMERIC or BLOB conversion) and the
+  result is `Dynamic`, in two cases:
+  - T is not registered. SQLite accepts any type name in a CAST:
+    `CAST(x AS SIGNED)`, `CAST(x AS VARCHAR(10))` and `CAST(x AS FOOBAR)` are
+    all legal. An error here would break SQLite compatibility; a frontend that
+    wants strict type names rejects unknown ones in its own parser.
+  - T is registered but parameters are missing: `CAST(x AS NUMERIC)` takes
+    the affinity cast today (the "fall through to regular CAST" branch of
+    `translate_cast_expr`, `core/translate/expr/translator.rs`), because
+    built-in names such as `numeric` are also names SQLite programs cast to.
+    See open question 9.
 - Operators: the result type of the operator chosen below.
 - Functions: a type-declared function or the dialect's return type.
   `coalesce`, `ifnull`, `nullif`, `iif`, `CASE`, scalar `min`/`max`: the
@@ -419,3 +430,12 @@ recorded).
    sorter call the type's `<` function?
 8. `smallint_col = 100000` errors because ENCODE validates the seek key, as
    today. Defer?
+9. CAST to a registered type without its parameters. Recommendation: make it
+   `Named(T)` with NULL ("no limit") parameters, the same rule as the implicit
+   conversions above. The clash with SQLite's `CAST(x AS NUMERIC)` is handled
+   by each dialect owning its registry: PostgreSQL and MySQL register their own
+   exact numeric/decimal, and the SQLite dialect keeps the affinity cast for
+   type names SQLite programs already use (such as NUMERIC and VARCHAR), so
+   existing SQLite SQL keeps its meaning. The clash is real today: with custom
+   types on, `CAST(12 AS VARCHAR(10))` returns the integer 12, where SQLite
+   returns the text '12'. Agreed?
