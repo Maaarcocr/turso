@@ -102,10 +102,10 @@ impl StorageFunc {
             return Ok(Value::Null);
         }
         match self {
-            StorageFunc::ConversionError => Err(conversion_error(&args[0], &args[1])),
+            StorageFunc::ConversionError => Err(conversion_error(args[0], args[1])),
             StorageFunc::Int64Add | StorageFunc::Int64Sub | StorageFunc::Int64Mul => {
-                let lhs = int64_operand(&args[0])?;
-                let rhs = int64_operand(&args[1])?;
+                let lhs = int64_operand(args[0])?;
+                let rhs = int64_operand(args[1])?;
                 let result = match self {
                     StorageFunc::Int64Add => lhs.checked_add(rhs),
                     StorageFunc::Int64Sub => lhs.checked_sub(rhs),
@@ -116,44 +116,43 @@ impl StorageFunc {
                     .ok_or_else(|| int64_out_of_range(&format!("{lhs} {} {rhs}", self.operator())))
             }
             StorageFunc::Int64Neg => {
-                let operand = int64_operand(&args[0])?;
+                let operand = int64_operand(args[0])?;
                 operand
                     .checked_neg()
                     .map(Value::from_i64)
                     .ok_or_else(|| int64_out_of_range(&format!("-({operand})")))
             }
-            StorageFunc::Uint64Encode => uint64_encode(&args[0]),
-            StorageFunc::EnumerationEncode => label_storage::enumeration_encode(&args[0], &args[1]),
-            StorageFunc::EnumerationDecode => label_storage::enumeration_decode(&args[0], &args[1]),
-            StorageFunc::LabelSetEncode => label_storage::label_set_encode(&args[0], &args[1]),
-            StorageFunc::LabelSetDecode => label_storage::label_set_decode(&args[0], &args[1]),
-            StorageFunc::DateDaysEncode => time_storage::date_days_encode(&args[0]),
-            StorageFunc::DateDaysDecode => time_storage::date_days_decode(&args[0]),
+            StorageFunc::Uint64Encode => uint64_encode(args[0]),
+            StorageFunc::EnumerationEncode => label_storage::enumeration_encode(args[0], args[1]),
+            StorageFunc::EnumerationDecode => label_storage::enumeration_decode(args[0], args[1]),
+            StorageFunc::LabelSetEncode => label_storage::label_set_encode(args[0], args[1]),
+            StorageFunc::LabelSetDecode => label_storage::label_set_decode(args[0], args[1]),
+            StorageFunc::DateDaysEncode => time_storage::date_days_encode(args[0]),
+            StorageFunc::DateDaysDecode => time_storage::date_days_decode(args[0]),
             StorageFunc::DatetimeMicrosEncode => {
-                time_storage::datetime_micros_encode(&args[0], &args[1])
+                time_storage::datetime_micros_encode(args[0], args[1])
             }
             StorageFunc::DatetimeMicrosDecode => {
-                time_storage::datetime_micros_decode(&args[0], &args[1])
+                time_storage::datetime_micros_decode(args[0], args[1])
             }
-            StorageFunc::TimeMicrosEncode => time_storage::time_micros_encode(&args[0], &args[1]),
-            StorageFunc::TimeMicrosDecode => time_storage::time_micros_decode(&args[0], &args[1]),
+            StorageFunc::TimeMicrosEncode => time_storage::time_micros_encode(args[0], args[1]),
+            StorageFunc::TimeMicrosDecode => time_storage::time_micros_decode(args[0], args[1]),
             StorageFunc::DatetimeMicrosLt => Ok(Value::from_i64(
-                (time_storage::datetime_micros_compare(&args[0], &args[1])? == Ordering::Less)
-                    as i64,
+                (time_storage::datetime_micros_compare(args[0], args[1])? == Ordering::Less) as i64,
             )),
             StorageFunc::TimeMicrosLt => Ok(Value::from_i64(
-                (time_storage::time_micros_compare(&args[0], &args[1])? == Ordering::Less) as i64,
+                (time_storage::time_micros_compare(args[0], args[1])? == Ordering::Less) as i64,
             )),
-            StorageFunc::Uint64Decode => uint64_decode(&args[0]),
+            StorageFunc::Uint64Decode => uint64_decode(args[0]),
             StorageFunc::Uint64Lt => Ok(Value::from_i64(
-                (uint64_compare(&args[0], &args[1])? == Ordering::Less) as i64,
+                (uint64_compare(args[0], args[1])? == Ordering::Less) as i64,
             )),
             StorageFunc::Uint64Eq => Ok(Value::from_i64(
-                (uint64_compare(&args[0], &args[1])? == Ordering::Equal) as i64,
+                (uint64_compare(args[0], args[1])? == Ordering::Equal) as i64,
             )),
             StorageFunc::Uint64Add | StorageFunc::Uint64Sub | StorageFunc::Uint64Mul => {
-                let lhs = uint64_operand(&args[0])?;
-                let rhs = uint64_operand(&args[1])?;
+                let lhs = uint64_operand(args[0])?;
+                let rhs = uint64_operand(args[1])?;
                 let result = match self {
                     StorageFunc::Uint64Add => lhs.checked_add(rhs),
                     StorageFunc::Uint64Sub => lhs.checked_sub(rhs),
