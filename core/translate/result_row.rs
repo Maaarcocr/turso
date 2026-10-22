@@ -14,7 +14,7 @@ use super::{
     emitter::{LimitCtx, Resolver},
     expr::{
         emit_array_decode, emit_type_key, emit_type_keys, emit_value_conversion_in_place,
-        expr_is_array, translate_expr, translate_expr_no_constant_opt, IndexRowKeys,
+        expr_is_array, translate_expr, translate_expr_no_constant_opt, IndexRowKey, IndexRowKeys,
         NoConstantOptReason,
     },
     plan::{Distinctness, QueryDestination, ResultSetColumn, SelectPlan, TableReferences},
@@ -171,12 +171,14 @@ pub fn emit_columns_to_destination(
             cursor_id,
             keys: Some(keys),
             is_delete,
+            affinity_str,
             ..
         } => {
             emit_keyed_index_row(
                 program,
                 *cursor_id,
                 keys,
+                affinity_str.as_deref().map(String::as_str),
                 *is_delete,
                 start_reg,
                 num_columns,
@@ -348,7 +350,34 @@ pub fn emit_columns_to_destination(
             index,
             sort_keys,
             seen_rows,
+            row_keys,
         } => {
+            let mut seen_row_start_reg = start_reg;
+            if let Some(row_keys) = row_keys {
+                for (i, column) in row_keys.columns.iter().enumerate() {
+                    if let Some(column) = column {
+                        emit_value_conversion_in_place(
+                            program,
+                            start_reg + i,
+                            &column.conversion,
+                            resolver,
+                        )?;
+                    }
+                }
+                if seen_rows.is_some() {
+                    seen_row_start_reg = program.alloc_registers(num_columns);
+                    for (i, column) in row_keys.columns.iter().enumerate() {
+                        program.emit_insn(Insn::Copy {
+                            src_reg: start_reg + i,
+                            dst_reg: seen_row_start_reg + i,
+                            extra_amount: 0,
+                        });
+                        if let Some(IndexRowKey { key: Some(key), .. }) = column {
+                            emit_type_key(program, seen_row_start_reg + i, key, resolver)?;
+                        }
+                    }
+                }
+            }
             let skip_seen_row = seen_rows.as_ref().map(|(cursor_id, index)| {
                 let skip_seen_row = program.allocate_label();
                 // Build the probe record once and reuse it for the insert.
@@ -357,7 +386,7 @@ pub fn emit_columns_to_destination(
                 // its own descent via USE_SEEK, as SQLite does.
                 let record_reg = program.alloc_register();
                 program.emit_insn(Insn::MakeRecord {
-                    start_reg: to_u32(start_reg),
+                    start_reg: to_u32(seen_row_start_reg),
                     count: to_u32(num_columns),
                     dest_reg: to_u32(record_reg),
                     index_name: Some(index.name.clone()),
@@ -372,7 +401,7 @@ pub fn emit_columns_to_destination(
                 program.emit_insn(Insn::IdxInsert {
                     cursor_id: *cursor_id,
                     record_reg,
-                    unpacked_start: Some(start_reg),
+                    unpacked_start: Some(seen_row_start_reg),
                     unpacked_count: Some(to_u32(num_columns)),
                     flags: IdxInsertFlags::new().no_op_duplicate().use_seek(true),
                 });
@@ -486,10 +515,12 @@ pub fn emit_columns_to_destination(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_keyed_index_row(
     program: &mut ProgramBuilder,
     cursor_id: usize,
     keys: &IndexRowKeys,
+    affinity_str: Option<&str>,
     is_delete: bool,
     start_reg: usize,
     num_columns: usize,
@@ -497,8 +528,21 @@ fn emit_keyed_index_row(
 ) -> Result<()> {
     turso_assert_eq!(num_columns, keys.columns.len());
     for (i, key) in keys.columns.iter().enumerate() {
-        if let Some(key) = key {
-            emit_value_conversion_in_place(program, start_reg + i, &key.conversion, resolver)?;
+        match key {
+            Some(key) => {
+                emit_value_conversion_in_place(program, start_reg + i, &key.conversion, resolver)?
+            }
+            None => {
+                if let Some(affinity) =
+                    affinity_str.and_then(|affinities| affinities.chars().nth(i))
+                {
+                    program.emit_insn(Insn::Affinity {
+                        start_reg: start_reg + i,
+                        count: std::num::NonZeroUsize::MIN,
+                        affinities: affinity.to_string(),
+                    });
+                }
+            }
         }
     }
     let row_reg = program.alloc_registers(keys.index_column_count());
@@ -508,8 +552,8 @@ fn emit_keyed_index_row(
             dst_reg: row_reg + i,
             extra_amount: 0,
         });
-        if let Some(key) = key {
-            emit_type_key(program, row_reg + i, &key.key, resolver)?;
+        if let Some(IndexRowKey { key: Some(key), .. }) = key {
+            emit_type_key(program, row_reg + i, key, resolver)?;
             program.emit_insn(Insn::Copy {
                 src_reg: start_reg + i,
                 dst_reg: row_reg + keys.value_index_column(i),

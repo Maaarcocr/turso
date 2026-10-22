@@ -333,10 +333,10 @@ fn translate_subquery_result_expr(
     resolver: &Resolver,
 ) -> Result<usize> {
     let ast::Expr::SubqueryResult {
+        subquery_id,
         lhs,
         not_in,
         query_type,
-        ..
     } = expr
     else {
         unreachable!("translate_subquery_result_expr expects Expr::SubqueryResult");
@@ -396,20 +396,27 @@ fn translate_subquery_result_expr(
                 });
             }
 
-            let typed_equality = match lhs_columns.as_slice() {
-                [lhs_column] => {
-                    let env = TypeEnv::from_resolver(resolver);
-                    let lhs_type = expr_type(lhs_column, referenced_tables, &env);
-                    resolve_typed_operator(
-                        &ast::Operator::Equals,
-                        [
-                            (&lhs_type, Some(*lhs_column)),
-                            (&ExprType::Dynamic(DynamicClass::Unknown), None),
-                        ],
-                        &env,
-                    )?
+            let comparison = resolver
+                .in_subquery_comparisons
+                .borrow()
+                .get(subquery_id)
+                .cloned();
+            let typed_equality = match comparison.as_deref() {
+                Some(InSubqueryComparison::Scan(resolved)) => Some(resolved.clone()),
+                Some(InSubqueryComparison::Converted(columns)) => {
+                    for (i, column) in columns.iter().enumerate() {
+                        let Some(column) = column else {
+                            continue;
+                        };
+                        let reg = lhs_column_regs_start + i;
+                        emit_value_conversion_in_place(program, reg, &column.lhs, resolver)?;
+                        if let Some(key) = &column.key {
+                            emit_type_key(program, reg, key, resolver)?;
+                        }
+                    }
+                    None
                 }
-                _ => None,
+                Some(InSubqueryComparison::Values) | None => None,
             };
 
             // For NOT IN: empty ephemeral or no all-NULL row means TRUE (include)

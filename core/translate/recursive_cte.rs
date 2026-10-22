@@ -11,6 +11,7 @@ use crate::translate::emitter::{
     Resolver, TranslateCtx,
 };
 use crate::translate::eqp::EqpDetail;
+use crate::translate::expr::{Conversion, IndexRowKey, IndexRowKeys};
 use crate::translate::plan::{Plan, QueryDestination, RecursiveCtePlan, RecursiveCteQueueKey};
 use crate::translate::result_row::{emit_columns_to_destination, emit_offset};
 use crate::vdbe::builder::{CursorKey, CursorType, ProgramBuilder};
@@ -112,10 +113,10 @@ pub(crate) fn emit_recursive_cte(
                 order: SortOrder::Asc,
                 nulls_order: None,
                 pos_in_table: result_column_index,
-                collation: recursive_cte_result_column_collation(
-                    recursive_cte,
-                    result_column_index,
-                )?,
+                collation: match recursive_cte.row_keys.get(result_column_index) {
+                    Some(Some(_)) => None,
+                    _ => recursive_cte_result_column_collation(recursive_cte, result_column_index)?,
+                },
                 default: None,
                 expr: None,
             })?;
@@ -140,15 +141,36 @@ pub(crate) fn emit_recursive_cte(
         Some((cursor_id, seen_row_index))
     };
     let seen_rows_cursor_id = seen_rows.as_ref().map(|(cursor_id, _)| *cursor_id);
-    let queue_destination = QueryDestination::RecursiveCteQueue {
+    let row_keys = |conversions: &[Conversion]| -> Option<Arc<IndexRowKeys>> {
+        let columns: Vec<Option<IndexRowKey>> = (0..num_result_columns)
+            .map(|column| {
+                let conversion = conversions.get(column).cloned().unwrap_or(Conversion::None);
+                let key = recursive_cte.row_keys.get(column).cloned().flatten();
+                (key.is_some() || !conversion.is_none()).then_some(IndexRowKey { key, conversion })
+            })
+            .collect();
+        columns
+            .iter()
+            .any(Option::is_some)
+            .then(|| Arc::new(IndexRowKeys { columns }))
+    };
+    let initial_destination = QueryDestination::RecursiveCteQueue {
+        cursor_id: queue_cursor_id,
+        index: queue_index.clone(),
+        sort_keys: queue_sort_keys.clone(),
+        seen_rows: seen_rows.clone(),
+        row_keys: row_keys(&[]),
+    };
+    let recursive_destination = QueryDestination::RecursiveCteQueue {
         cursor_id: queue_cursor_id,
         index: queue_index,
         sort_keys: queue_sort_keys,
         seen_rows,
+        row_keys: row_keys(&recursive_cte.recursive_conversions),
     };
 
-    set_select_plan_destination(&mut recursive_cte.initial_query, &queue_destination);
-    set_select_plan_destination(&mut recursive_cte.recursive_query, &queue_destination);
+    set_select_plan_destination(&mut recursive_cte.initial_query, &initial_destination);
+    set_select_plan_destination(&mut recursive_cte.recursive_query, &recursive_destination);
 
     let recursive_cte_end = program.allocate_label();
     let dequeue_next_row = program.allocate_label();

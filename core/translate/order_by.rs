@@ -23,8 +23,8 @@ use super::{
     emitter::Resolver,
     emitter::TranslateCtx,
     expr::{
-        emit_type_keys, emit_user_facing_column_value, expr_type, translate_expr, type_keys,
-        ExprType, TypeEnv,
+        emit_type_keys, emit_user_facing_column_value, expr_type, operator_type, translate_expr,
+        type_keys, ExprType, TypeEnv,
     },
     plan::{Distinctness, ResultSetColumn, SelectPlan, TableReferences},
     result_row::{emit_offset, emit_result_row_and_limit},
@@ -69,7 +69,8 @@ pub(crate) fn custom_type_comparator(
     } else if super::expr::expr_is_array(expr, Some(referenced_tables)) {
         return Some(SortComparatorType::ArrayLt);
     }
-    match expr_type(expr, Some(referenced_tables), &TypeEnv::new(schema)) {
+    let env = TypeEnv::new(schema);
+    match operator_type(&expr_type(expr, Some(referenced_tables), &env), &env) {
         ExprType::Named(named) => named
             .def
             .operators()

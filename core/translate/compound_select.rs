@@ -333,7 +333,7 @@ fn compound_type_keys(
             .iter()
             .map(|column| {
                 column.as_ref().map(|(key, _)| IndexRowKey {
-                    key: key.clone(),
+                    key: Some(key.clone()),
                     conversion: Conversion::None,
                 })
             })
@@ -350,7 +350,7 @@ fn arm_keys(keys: Option<&CompoundKeys>, arm: usize) -> Option<Arc<IndexRowKeys>
             .iter()
             .map(|column| {
                 column.as_ref().map(|(key, conversions)| IndexRowKey {
-                    key: key.clone(),
+                    key: Some(key.clone()),
                     conversion: conversions[arm].clone(),
                 })
             })

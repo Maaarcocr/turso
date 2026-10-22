@@ -26,9 +26,12 @@ pub(crate) enum DynamicClass {
     Unknown,
 }
 
+pub(crate) type SubqueryColumnTypes = HashMap<TableInternalId, Vec<Option<NamedType>>>;
+
 pub(crate) struct TypeEnv<'a> {
     schema: &'a Schema,
     self_table: Option<Arc<BTreeTable>>,
+    subquery_types: Option<&'a RefCell<SubqueryColumnTypes>>,
     computed: RefCell<HashMap<(usize, usize), ExprType>>,
     depth: Cell<usize>,
 }
@@ -38,6 +41,7 @@ impl<'a> TypeEnv<'a> {
         Self {
             schema,
             self_table: None,
+            subquery_types: None,
             computed: RefCell::new(HashMap::default()),
             depth: Cell::new(0),
         }
@@ -47,9 +51,22 @@ impl<'a> TypeEnv<'a> {
         Self {
             schema: resolver.schema(),
             self_table: resolver.self_table_with_custom_type_operators(),
+            subquery_types: Some(&resolver.subquery_types),
             computed: RefCell::new(HashMap::default()),
             depth: Cell::new(0),
         }
+    }
+
+    pub(crate) fn subquery_column_type(
+        &self,
+        subquery_id: TableInternalId,
+        column: usize,
+    ) -> Option<NamedType> {
+        self.subquery_types?
+            .borrow()
+            .get(&subquery_id)?
+            .get(column)?
+            .clone()
     }
 }
 
@@ -57,6 +74,46 @@ impl NamedType {
     fn is(&self, def: &TypeDef) -> bool {
         self.def.name.eq_ignore_ascii_case(&def.name)
     }
+}
+
+pub(crate) fn column_named_type(
+    column: &Column,
+    is_strict: bool,
+    schema: &Schema,
+) -> Option<NamedType> {
+    if column.is_array() {
+        return None;
+    }
+    let def = schema.get_type_def(&column.ty_str, is_strict)?;
+    Some(NamedType {
+        def: Arc::clone(def),
+        params: Some(
+            column
+                .ty_params
+                .iter()
+                .map(|param| (**param).clone())
+                .collect(),
+        ),
+    })
+}
+
+pub(crate) fn operator_type(expr_type: &ExprType, env: &TypeEnv) -> ExprType {
+    let ExprType::Named(named) = expr_type else {
+        return expr_type.clone();
+    };
+    if !named.def.is_domain {
+        return expr_type.clone();
+    }
+    let mut def = Arc::clone(&named.def);
+    while def.is_domain {
+        match env.schema.get_type_def_unchecked(def.base()) {
+            Some(base) => def = Arc::clone(base),
+            None => {
+                return ExprType::Dynamic(affinity_class(Affinity::of_written_type(def.base())));
+            }
+        }
+    }
+    ExprType::Named(NamedType { def, params: None })
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +193,15 @@ fn compute_expr_type(
             Some(resolved) => resolved.result,
             None => ExprType::Dynamic(DynamicClass::Unknown),
         },
+        ast::Expr::SubqueryResult {
+            subquery_id,
+            lhs: None,
+            query_type: ast::SubqueryType::RowValue { num_regs: 1, .. },
+            ..
+        } => match env.subquery_column_type(*subquery_id, 0) {
+            Some(named) => ExprType::Named(named),
+            None => ExprType::Dynamic(DynamicClass::Unknown),
+        },
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
 }
@@ -159,7 +225,7 @@ pub(crate) fn resolve_unary_operator(
         ast::UnaryOperator::Negative => "-",
         _ => return None,
     };
-    let ExprType::Named(named) = expr_type(operand, tables, env) else {
+    let ExprType::Named(named) = operator_type(&expr_type(operand, tables, env), env) else {
         return None;
     };
     named.def.operators().iter().find_map(|declared| {
@@ -209,7 +275,10 @@ fn resolve_type_function_for(
     ) {
         return Ok(None);
     }
-    let arg_types: Vec<ExprType> = arg_types.to_vec();
+    let arg_types: Vec<ExprType> = arg_types
+        .iter()
+        .map(|arg_type| operator_type(arg_type, env))
+        .collect();
     let mut owners: Vec<Arc<TypeDef>> = Vec::new();
     for arg_type in &arg_types {
         if let ExprType::Named(named) = arg_type {
@@ -441,6 +510,14 @@ pub(crate) fn resolve_typed_operator(
     let Some(symbol) = operator_symbol(op) else {
         return Ok(None);
     };
+    let operand_types = [
+        operator_type(operands[0].0, env),
+        operator_type(operands[1].0, env),
+    ];
+    let operands = [
+        (&operand_types[0], operands[0].1),
+        (&operand_types[1], operands[1].1),
+    ];
     let owners = named_owners(&operands);
     if owners.is_empty() {
         return Ok(None);
@@ -648,21 +725,129 @@ pub struct IndexRowKeys {
 
 #[derive(Debug, Clone)]
 pub(crate) struct IndexRowKey {
-    pub(crate) key: TypeKey,
+    pub(crate) key: Option<TypeKey>,
     pub(crate) conversion: Conversion,
 }
 
 impl IndexRowKeys {
     pub(crate) fn index_column_count(&self) -> usize {
-        self.columns.len() + self.columns.iter().flatten().count()
+        self.columns.len() + self.keyed_columns_before(self.columns.len())
     }
 
     pub(crate) fn value_index_column(&self, column: usize) -> usize {
-        match self.columns[column] {
-            Some(_) => self.columns.len() + self.columns[..column].iter().flatten().count(),
-            None => column,
+        match &self.columns[column] {
+            Some(IndexRowKey { key: Some(_), .. }) => {
+                self.columns.len() + self.keyed_columns_before(column)
+            }
+            _ => column,
         }
     }
+
+    fn keyed_columns_before(&self, column: usize) -> usize {
+        self.columns[..column]
+            .iter()
+            .flatten()
+            .filter(|entry| entry.key.is_some())
+            .count()
+    }
+}
+
+pub(crate) struct InColumnComparison {
+    pub(crate) lhs: Conversion,
+    pub(crate) rhs: Conversion,
+    pub(crate) key: Option<TypeKey>,
+}
+
+pub(crate) enum InSubqueryComparison {
+    Values,
+    Converted(Vec<Option<InColumnComparison>>),
+    Scan(ResolvedOperator),
+}
+
+impl InSubqueryComparison {
+    pub(crate) fn subquery_row_keys(&self) -> Option<IndexRowKeys> {
+        let InSubqueryComparison::Converted(columns) = self else {
+            return None;
+        };
+        Some(IndexRowKeys {
+            columns: columns
+                .iter()
+                .map(|column| {
+                    column.as_ref().map(|column| IndexRowKey {
+                        key: column.key.clone(),
+                        conversion: column.rhs.clone(),
+                    })
+                })
+                .collect(),
+        })
+    }
+
+    pub(crate) fn column_is_typed(&self, column: usize) -> bool {
+        match self {
+            InSubqueryComparison::Values => false,
+            InSubqueryComparison::Converted(columns) => {
+                columns.get(column).is_some_and(Option::is_some)
+            }
+            InSubqueryComparison::Scan(_) => true,
+        }
+    }
+}
+
+pub(crate) fn in_subquery_comparison(
+    lhs: &[&ast::Expr],
+    lhs_tables: Option<&TableReferences>,
+    subquery_types: &[Option<NamedType>],
+    rows_can_be_converted: bool,
+    env: &TypeEnv,
+) -> Result<InSubqueryComparison> {
+    let mut columns = Vec::with_capacity(lhs.len());
+    for (i, lhs_expr) in lhs.iter().enumerate() {
+        let lhs_type = expr_type(lhs_expr, lhs_tables, env);
+        let subquery_type = match subquery_types.get(i).cloned().flatten() {
+            Some(named) => ExprType::Named(named),
+            None => ExprType::Dynamic(DynamicClass::Unknown),
+        };
+        let Some(resolved) = resolve_typed_operator(
+            &ast::Operator::Equals,
+            [(&lhs_type, Some(*lhs_expr)), (&subquery_type, None)],
+            env,
+        )?
+        else {
+            columns.push(None);
+            continue;
+        };
+        if resolved.function.is_none() && resolved.conversions.iter().all(Conversion::is_none) {
+            columns.push(None);
+            continue;
+        }
+        let key = match &resolved.own_operator_of {
+            Some(owner) => type_key(
+                &NamedType {
+                    def: Arc::clone(owner),
+                    params: None,
+                },
+                env.schema,
+            )?,
+            None => None,
+        };
+        if !rows_can_be_converted || (resolved.function.is_some() && key.is_none()) {
+            return Ok(match lhs {
+                [_] => InSubqueryComparison::Scan(resolved),
+                _ => InSubqueryComparison::Values,
+            });
+        }
+        let [lhs_conversion, rhs_conversion] = resolved.conversions;
+        columns.push(Some(InColumnComparison {
+            lhs: lhs_conversion,
+            rhs: rhs_conversion,
+            key,
+        }));
+    }
+    Ok(if columns.iter().all(Option::is_none) {
+        InSubqueryComparison::Values
+    } else {
+        InSubqueryComparison::Converted(columns)
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -790,18 +975,9 @@ fn column_type(
 }
 
 fn stored_column_type(column: &Column, is_strict: bool, env: &TypeEnv) -> ExprType {
-    match env.schema.get_type_def(&column.ty_str, is_strict) {
-        Some(def) if !column.is_array() => ExprType::Named(NamedType {
-            def: Arc::clone(def),
-            params: Some(
-                column
-                    .ty_params
-                    .iter()
-                    .map(|param| (**param).clone())
-                    .collect(),
-            ),
-        }),
-        _ => ExprType::Dynamic(affinity_class(column.affinity())),
+    match column_named_type(column, is_strict, env.schema) {
+        Some(named) => ExprType::Named(named),
+        None => ExprType::Dynamic(affinity_class(column.affinity())),
     }
 }
 
@@ -837,7 +1013,7 @@ pub(crate) fn recursive_cte_column_types(
                     .map(|param| param.default.as_deref().cloned())
                     .collect::<Option<Vec<ast::Expr>>>()?,
             };
-            (params.len() <= 2).then(|| crate::schema::RecursiveCteColumnType {
+            Some(crate::schema::RecursiveCteColumnType {
                 type_name: named.def.name.clone(),
                 params,
             })
@@ -845,64 +1021,73 @@ pub(crate) fn recursive_cte_column_types(
         .collect()
 }
 
-pub(crate) fn convert_recursive_cte_results(
-    recursive: &mut Plan,
+pub(crate) fn recursive_cte_conversions(
+    recursive: &Plan,
     column_types: &[Option<crate::schema::RecursiveCteColumnType>],
     env: &TypeEnv,
-) {
-    let arms: Vec<&mut crate::translate::plan::SelectPlan> = match recursive {
+) -> Vec<Conversion> {
+    let arms: Vec<&crate::translate::plan::SelectPlan> = match recursive {
         Plan::Select(select) => vec![select],
         Plan::CompoundSelect {
             left, right_most, ..
         } => left
-            .iter_mut()
+            .iter()
             .map(|(arm, _)| arm)
-            .chain(std::iter::once(right_most.as_mut()))
+            .chain(std::iter::once(right_most.as_ref()))
             .collect(),
-        _ => return,
+        _ => Vec::new(),
     };
-    for arm in arms {
-        for (column, column_type) in column_types.iter().enumerate() {
-            let Some(column_type) = column_type else {
-                continue;
+    column_types
+        .iter()
+        .enumerate()
+        .map(|(column, column_type)| {
+            let Some(target) = recursive_cte_named_type(column_type.as_ref(), env) else {
+                return Conversion::None;
             };
-            let Some(result_column) = arm.result_columns.get_mut(column) else {
-                continue;
-            };
-            let already_typed =
-                match expr_type(&result_column.expr, Some(&arm.table_references), env) {
-                    ExprType::Named(named) => {
-                        named.def.name.eq_ignore_ascii_case(&column_type.type_name)
-                            && named.params.as_deref() == Some(column_type.params.as_slice())
+            let every_arm_has_the_type = arms.iter().all(|arm| {
+                arm.result_columns.get(column).is_some_and(|result_column| {
+                    match expr_type(&result_column.expr, Some(&arm.table_references), env) {
+                        ExprType::Named(named) => {
+                            named.is(&target.def) && named.params == target.params
+                        }
+                        ExprType::Dynamic(_) => false,
                     }
-                    ExprType::Dynamic(_) => false,
-                };
-            if already_typed {
-                continue;
+                })
+            });
+            if every_arm_has_the_type {
+                Conversion::None
+            } else {
+                Conversion::IntoType(target)
             }
-            let size = match column_type.params.as_slice() {
-                [] => None,
-                [max] => Some(ast::TypeSize::MaxSize(Box::new(max.clone()))),
-                [precision, scale] => Some(ast::TypeSize::TypeSize(
-                    Box::new(precision.clone()),
-                    Box::new(scale.clone()),
-                )),
-                _ => unreachable!("recursive CTE column types have at most two parameters"),
-            };
-            let value = std::mem::replace(
-                &mut result_column.expr,
-                ast::Expr::Literal(ast::Literal::Null),
-            );
-            result_column.expr = ast::Expr::Cast {
-                expr: Box::new(value),
-                type_name: Some(ast::Type {
-                    name: column_type.type_name.clone(),
-                    size,
-                    array_dimensions: 0,
-                }),
-            };
-        }
-    }
+        })
+        .collect()
+}
+
+pub(crate) fn recursive_cte_row_keys(
+    column_types: &[Option<crate::schema::RecursiveCteColumnType>],
+    env: &TypeEnv,
+) -> Result<Vec<Option<TypeKey>>> {
+    column_types
+        .iter()
+        .map(
+            |column_type| match recursive_cte_named_type(column_type.as_ref(), env) {
+                Some(named) => type_key(&named, env.schema),
+                None => Ok(None),
+            },
+        )
+        .collect()
+}
+
+fn recursive_cte_named_type(
+    column_type: Option<&crate::schema::RecursiveCteColumnType>,
+    env: &TypeEnv,
+) -> Option<NamedType> {
+    let column_type = column_type?;
+    let def = env.schema.get_type_def_unchecked(&column_type.type_name)?;
+    Some(NamedType {
+        def: Arc::clone(def),
+        params: Some(column_type.params.clone()),
+    })
 }
 
 pub(crate) fn plan_column_types(plan: &Plan, env: &TypeEnv) -> Vec<Option<NamedType>> {
@@ -916,15 +1101,30 @@ pub(crate) fn plan_column_types(plan: &Plan, env: &TypeEnv) -> Vec<Option<NamedT
         .collect()
 }
 
+pub(crate) fn select_column_types(
+    select: &crate::translate::plan::SelectPlan,
+    env: &TypeEnv,
+) -> Vec<Option<NamedType>> {
+    (0..select.result_columns.len())
+        .map(|column| select_column_type(select, column, env))
+        .collect()
+}
+
+fn select_column_type(
+    select: &crate::translate::plan::SelectPlan,
+    column: usize,
+    env: &TypeEnv,
+) -> Option<NamedType> {
+    let result_column = select.result_columns.get(column)?;
+    match expr_type(&result_column.expr, Some(&select.table_references), env) {
+        ExprType::Named(named) => Some(named),
+        ExprType::Dynamic(_) => None,
+    }
+}
+
 fn plan_column_type(plan: &Plan, column: usize, env: &TypeEnv) -> Option<NamedType> {
     match plan {
-        Plan::Select(select) => {
-            let result_column = select.result_columns.get(column)?;
-            match expr_type(&result_column.expr, Some(&select.table_references), env) {
-                ExprType::Named(named) => Some(named),
-                ExprType::Dynamic(_) => None,
-            }
-        }
+        Plan::Select(select) => select_column_type(select, column, env),
         Plan::CompoundSelect {
             left, right_most, ..
         } => {
@@ -1069,7 +1269,7 @@ fn function_call_type(
     tables: Option<&TableReferences>,
     env: &TypeEnv,
 ) -> ExprType {
-    use crate::function::{Func, ScalarFunc};
+    use crate::function::{AggFunc, Func, ScalarFunc};
     let arg_types: Vec<ExprType> = args.iter().map(|arg| expr_type(arg, tables, env)).collect();
     if let Ok(Some(resolved)) = resolve_type_function_for(name.as_str(), args, &arg_types, env) {
         return resolved.result;
@@ -1092,6 +1292,9 @@ fn function_call_type(
         ))) => common_of(&mut (0..args.len())),
         Ok(Some(Func::Scalar(ScalarFunc::Iif))) => common_of(&mut iif_branch_indexes(args.len())),
         Ok(Some(Func::Scalar(ScalarFunc::Nullif))) => arg_types[0].clone(),
+        Ok(Some(Func::Agg(AggFunc::Max | AggFunc::Min))) if arg_types.len() == 1 => {
+            arg_types[0].clone()
+        }
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
 }

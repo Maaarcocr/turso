@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::alloc::TursoSliceExt;
+use crate::alloc::{TursoSliceExt, TursoVecExt};
 
 use rustc_hash::FxHashMap as HashMap;
 use turso_parser::ast::{self, SortOrder, SubqueryType, TableInternalId};
@@ -27,7 +27,10 @@ use crate::{
             eqp_detail_for_rowid_search, eqp_detail_for_table_op, eqp_details_for_right_join,
             EqpDetail, EqpJoin, EqpSubquery, EqpSubqueryExec,
         },
-        expr::{get_expr_affinity, unwrap_parens, walk_expr, walk_expr_mut, WalkControl},
+        expr::{
+            get_expr_affinity, in_subquery_comparison, plan_column_types, select_column_types,
+            unwrap_parens, walk_expr, walk_expr_mut, IndexRowKey, TypeEnv, WalkControl,
+        },
         optimizer::optimize_select_plan,
         plan::{
             plan_has_outer_scope_dependency, plan_is_correlated,
@@ -866,6 +869,13 @@ fn get_subquery_parser<'a>(
                             .insert(subquery_id, affinity);
                     }
                 }
+                let column_types = select_column_types(&plan, &TypeEnv::from_resolver(resolver));
+                if column_types.iter().any(Option::is_some) {
+                    resolver
+                        .subquery_types
+                        .borrow_mut()
+                        .insert(subquery_id, column_types);
+                }
 
                 plan.query_destination = QueryDestination::RowValueSubqueryResult {
                     result_reg_start: reg_start,
@@ -987,6 +997,7 @@ fn get_subquery_parser<'a>(
                     }
                     expr => either::Right(core::iter::once(expr)),
                 };
+                let lhs_columns: Vec<&ast::Expr> = lhs_columns.collect();
                 let lhs_column_count = lhs_columns.len();
                 if lhs_column_count != result_columns.len() {
                     crate::bail_parse_error!(
@@ -994,6 +1005,16 @@ fn get_subquery_parser<'a>(
                         result_columns.len()
                     );
                 }
+                let comparison = {
+                    let env = TypeEnv::from_resolver(resolver);
+                    in_subquery_comparison(
+                        &lhs_columns,
+                        Some(referenced_tables),
+                        &plan_column_types(&plan, &env),
+                        matches!(plan, Plan::Select(_)),
+                        &env,
+                    )?
+                };
                 // Collect affinity and LHS collation in a single pass over lhs_columns.
                 // "x IN (SELECT y ...)" uses the collation of x
                 // (https://www.sqlite.org/datatype3.html#collation §7.1),
@@ -1001,22 +1022,33 @@ fn get_subquery_parser<'a>(
                 // NotFound/Found probe comparisons.
                 let mut affinity_chars = String::with_capacity(lhs_column_count);
                 let mut lhs_collations = Vec::with_capacity(lhs_column_count);
-                for (i, lhs_expr) in lhs_columns.enumerate() {
+                for (i, lhs_expr) in lhs_columns.iter().enumerate() {
                     let lhs_affinity = get_expr_affinity(lhs_expr, Some(referenced_tables), None);
-                    affinity_chars.push(
+                    affinity_chars.push(if comparison.column_is_typed(i) {
+                        crate::vdbe::affinity::Affinity::Blob.aff_mask()
+                    } else {
                         comparison_affinity(
                             &result_columns[i].expr,
                             lhs_affinity,
                             Some(table_references),
                             None,
                         )
-                        .aff_mask(),
-                    );
+                        .aff_mask()
+                    });
                     lhs_collations.push(in_subquery_side_collation(lhs_expr, referenced_tables)?);
                 }
                 let in_affinity_str: Arc<String> = Arc::new(affinity_chars);
 
-                let columns = result_columns
+                let row_keys = comparison.subquery_row_keys();
+                let is_key_column = |column: usize| {
+                    row_keys.as_ref().is_some_and(|keys| {
+                        matches!(
+                            keys.columns.get(column),
+                            Some(Some(IndexRowKey { key: Some(_), .. }))
+                        )
+                    })
+                };
+                let mut columns = result_columns
                     .iter()
                     .enumerate()
                     .map(|(i, c)| {
@@ -1026,12 +1058,36 @@ fn get_subquery_parser<'a>(
                             order: SortOrder::Asc,
                             nulls_order: None,
                             pos_in_table: i,
-                            collation: lhs_collations[i].or(rhs_collation),
+                            collation: if is_key_column(i) {
+                                None
+                            } else {
+                                lhs_collations[i].or(rhs_collation)
+                            },
                             default: None,
                             expr: None,
                         })
                     })
                     .try_collect::<Result<crate::alloc::Vec<_>>>()??;
+                let value_columns: Vec<IndexColumn> = (0..result_columns.len())
+                    .filter(|column| is_key_column(*column))
+                    .enumerate()
+                    .map(|(n, _)| IndexColumn {
+                        name: String::new(),
+                        order: SortOrder::Asc,
+                        nulls_order: None,
+                        pos_in_table: result_columns.len() + n,
+                        collation: None,
+                        default: None,
+                        expr: None,
+                    })
+                    .collect();
+                for column in value_columns {
+                    columns.try_push(column)?;
+                }
+                resolver
+                    .in_subquery_comparisons
+                    .borrow_mut()
+                    .insert(subquery_id, Arc::new(comparison));
 
                 let ephemeral_index = Arc::new(Index {
                     columns,
@@ -1054,7 +1110,7 @@ fn get_subquery_parser<'a>(
                     index: ephemeral_index,
                     affinity_str: Some(in_affinity_str.clone()),
                     is_delete: false,
-                    keys: None,
+                    keys: row_keys.map(Arc::new),
                 };
                 *expr = ast::Expr::SubqueryResult {
                     subquery_id,

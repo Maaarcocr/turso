@@ -17,9 +17,9 @@ use crate::translate::plan::BitSet;
 use crate::translate::{
     emitter::Resolver,
     expr::{
-        convert_recursive_cte_results, expr_contains_nondeterministic_scalar_function,
-        expr_vector_size, recursive_cte_column_types, unwrap_parens, BindingBehavior, TypeEnv,
-        WalkControl,
+        expr_contains_nondeterministic_scalar_function, expr_vector_size,
+        recursive_cte_column_types, recursive_cte_conversions, recursive_cte_row_keys,
+        unwrap_parens, BindingBehavior, TypeEnv, WalkControl,
     },
     plan::{NonFromClauseSubquery, SubqueryState},
     subquery::outer_query_refs_for_correlated_subquery,
@@ -1455,7 +1455,7 @@ fn prepare_recursive_cte_plan(
         scope_depth: 0,
     });
 
-    let mut recursive_query = prepare_select_plan_from_arms(
+    let recursive_query = prepare_select_plan_from_arms(
         select.body.compounds[first_recursive_query_index - 1]
             .select
             .clone(),
@@ -1483,7 +1483,9 @@ fn prepare_recursive_cte_plan(
         );
     }
     reject_aggregates_and_windows_in_recursive_query(&recursive_query)?;
-    convert_recursive_cte_results(&mut recursive_query, &column_types, &type_env);
+    let recursive_conversions =
+        recursive_cte_conversions(&recursive_query, &column_types, &type_env);
+    let row_keys = recursive_cte_row_keys(&column_types, &type_env)?;
 
     let queue_order = super::select::resolve_recursive_cte_queue_order(
         &select.order_by,
@@ -1506,6 +1508,8 @@ fn prepare_recursive_cte_plan(
             limit,
             offset,
             queue_order,
+            recursive_conversions,
+            row_keys,
             query_destination: QueryDestination::placeholder_for_subquery(),
         },
     )))

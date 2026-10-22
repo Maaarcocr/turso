@@ -162,6 +162,9 @@ pub struct Resolver<'a> {
     /// This lets comparison affinity follow SQLite rules for expressions like
     /// `(SELECT text_col FROM ...) > some_numeric_expr`.
     pub(crate) subquery_affinities: RefCell<HashMap<TableInternalId, Affinity>>,
+    pub(crate) subquery_types: RefCell<crate::translate::expr::SubqueryColumnTypes>,
+    pub(crate) in_subquery_comparisons:
+        RefCell<HashMap<TableInternalId, Arc<crate::translate::expr::InSubqueryComparison>>>,
     /// Context and metadata for resolving Expr::Column values that use
     /// [TableInternalId::SELF_TABLE] as a placeholder.
     self_table_scope: RefCell<Option<SelfTableScope>>,
@@ -315,6 +318,8 @@ impl<'a> Resolver<'a> {
             register_affinities: HashMap::default(),
             register_collations: HashMap::default(),
             subquery_affinities: RefCell::new(HashMap::default()),
+            subquery_types: RefCell::new(Default::default()),
+            in_subquery_comparisons: RefCell::new(Default::default()),
             self_table_scope: RefCell::new(None),
             enclosing_query_aggregates: RefCell::new(Vec::new()),
             enable_custom_types,
@@ -361,6 +366,8 @@ impl<'a> Resolver<'a> {
             register_affinities: HashMap::default(),
             register_collations: HashMap::default(),
             subquery_affinities: RefCell::new(self.subquery_affinities.borrow().clone()),
+            subquery_types: RefCell::new(self.subquery_types.borrow().clone()),
+            in_subquery_comparisons: RefCell::new(self.in_subquery_comparisons.borrow().clone()),
             self_table_scope: RefCell::new(self.self_table_scope.borrow().clone()),
             enclosing_query_aggregates: RefCell::new(Vec::new()),
             enable_custom_types: self.enable_custom_types,
@@ -389,6 +396,8 @@ impl<'a> Resolver<'a> {
             register_affinities: self.register_affinities.clone(),
             register_collations: self.register_collations.clone(),
             subquery_affinities: RefCell::new(self.subquery_affinities.borrow().clone()),
+            subquery_types: RefCell::new(self.subquery_types.borrow().clone()),
+            in_subquery_comparisons: RefCell::new(self.in_subquery_comparisons.borrow().clone()),
             self_table_scope: RefCell::new(self.self_table_scope.borrow().clone()),
             enclosing_query_aggregates: RefCell::new(Vec::new()),
             enable_custom_types: self.enable_custom_types,

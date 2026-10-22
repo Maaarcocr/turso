@@ -1,7 +1,8 @@
 use super::{cost_params::CostModelParams, AvailableIndexes};
 use crate::alloc::TursoIteratorExt;
 use crate::translate::expr::{
-    comparison_affinity, expr_type, resolve_typed_operator, ExprType, NamedType, TypeEnv,
+    column_named_type, comparison_affinity, expr_type, in_subquery_comparison, operator_type,
+    plan_column_types, resolve_typed_operator, ExprType, InSubqueryComparison, TypeEnv,
 };
 use crate::{
     schema::{Column, Index, Schema},
@@ -1176,12 +1177,14 @@ pub fn constraints_from_where_clause(
                     match lhs_expr.as_ref() {
                         ast::Expr::Column { table, column, .. }
                             if *table == table_reference.internal_id
-                                && schema
-                                    .get_type_def(
-                                        &table_reference.table.columns()[*column].ty_str,
-                                        table_reference.table.is_strict(),
-                                    )
-                                    .is_none() =>
+                                && in_subquery_can_seek_column(
+                                    lhs_expr,
+                                    *column,
+                                    table_reference,
+                                    table_references,
+                                    &subquery.state,
+                                    schema,
+                                ) =>
                         {
                             let is_rowid = rowid_alias_column == Some(*column);
                             cs.constraints.push(Constraint {
@@ -2530,6 +2533,40 @@ fn typed_column_constraint_can_use_index(
     )
 }
 
+fn in_subquery_can_seek_column(
+    lhs_expr: &ast::Expr,
+    column: usize,
+    table_reference: &JoinedTable,
+    table_references: &TableReferences,
+    subquery_state: &SubqueryState,
+    schema: &Schema,
+) -> bool {
+    let column = &table_reference.table.columns()[column];
+    if column_named_type(column, table_reference.table.is_strict(), schema).is_none() {
+        return true;
+    }
+    if !reads_stored_values_unchanged(column, schema) {
+        return false;
+    }
+    let SubqueryState::Unevaluated {
+        plan: Some(inner_plan),
+    } = subquery_state
+    else {
+        return false;
+    };
+    let env = TypeEnv::new(schema);
+    matches!(
+        in_subquery_comparison(
+            &[lhs_expr],
+            Some(table_references),
+            &plan_column_types(inner_plan, &env),
+            matches!(inner_plan.as_ref(), Plan::Select(_)),
+            &env,
+        ),
+        Ok(InSubqueryComparison::Values)
+    )
+}
+
 fn typed_column_can_seek_equal_to(
     column: &crate::schema::Column,
     table_reference: &JoinedTable,
@@ -2537,14 +2574,18 @@ fn typed_column_can_seek_equal_to(
     table_references: &TableReferences,
     schema: &Schema,
 ) -> bool {
-    let Some(def) = schema.get_type_def(&column.ty_str, table_reference.table.is_strict()) else {
+    let Some(column_named) = column_named_type(column, table_reference.table.is_strict(), schema)
+    else {
         return true;
     };
     let env = TypeEnv::new(schema);
-    let column_type = ExprType::Named(NamedType {
-        def: Arc::clone(def),
-        params: Some(column.ty_params.iter().map(|p| (**p).clone()).collect()),
-    });
+    let ExprType::Named(column_operator_type) =
+        operator_type(&ExprType::Named(column_named.clone()), &env)
+    else {
+        return false;
+    };
+    let def = &column_operator_type.def;
+    let column_type = ExprType::Named(column_named);
     let constraining_type = expr_type(constraining_expr, Some(table_references), &env);
     match resolve_typed_operator(
         &ast::Operator::Equals,

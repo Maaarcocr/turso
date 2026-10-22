@@ -474,6 +474,8 @@ pub struct RecursiveCtePlan {
     pub limit: Option<Box<Expr>>,
     pub offset: Option<Box<Expr>>,
     pub queue_order: Option<Vec<CompoundOrderByKey>>,
+    pub(crate) recursive_conversions: Vec<crate::translate::expr::Conversion>,
+    pub(crate) row_keys: Vec<Option<crate::translate::expr::TypeKey>>,
     pub query_destination: QueryDestination,
 }
 
@@ -683,6 +685,7 @@ pub enum QueryDestination {
         sort_keys: alloc::Vec<RecursiveCteQueueKey>,
         /// Index of rows already produced by a recursive `UNION`.
         seen_rows: Option<(CursorID, Arc<Index>)>,
+        row_keys: Option<Arc<IndexRowKeys>>,
     },
     /// The result of an EXISTS subquery are stored in a single register.
     ExistsSubqueryResult {

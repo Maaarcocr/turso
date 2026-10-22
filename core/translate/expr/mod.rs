@@ -107,11 +107,13 @@ pub use translator::{
     resolve_expr, translate_expr, translate_expr_no_constant_opt, NoConstantOptReason,
 };
 pub(crate) use types::{
-    branch_type, common_branch_type, convert_recursive_cte_results, emit_type_key, emit_type_keys,
+    branch_type, column_named_type, common_branch_type, emit_type_key, emit_type_keys,
     emit_value_conversion, emit_value_conversion_in_place, expr_type, hash_join_can_compare_values,
-    hash_join_key_form, recursive_cte_column_types, resolve_operator, resolve_typed_operator,
-    type_key, type_keys, Conversion, DynamicClass, ExprType, HashKeyForm, IndexRowKey,
-    IndexRowKeys, NamedType, ResolvedOperator, TypeEnv, TypeKey,
+    hash_join_key_form, in_subquery_comparison, operator_type, plan_column_types,
+    recursive_cte_column_types, recursive_cte_conversions, recursive_cte_row_keys,
+    resolve_operator, resolve_typed_operator, select_column_types, type_key, type_keys, Conversion,
+    DynamicClass, ExprType, HashKeyForm, InSubqueryComparison, IndexRowKey, IndexRowKeys,
+    NamedType, ResolvedOperator, SubqueryColumnTypes, TypeEnv, TypeKey,
 };
 pub use utils::{
     as_binary_components, maybe_apply_affinity, sanitize_string, truth_test_rhs, unwrap_parens,

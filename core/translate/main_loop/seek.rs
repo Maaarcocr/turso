@@ -1,7 +1,7 @@
 use super::*;
 use crate::translate::expr::{
-    emit_type_expr, emit_user_facing_column_value, emit_value_conversion, expr_type,
-    resolve_typed_operator, Conversion, DynamicClass, ExprType, NamedType, TypeEnv,
+    column_named_type, emit_type_expr, emit_user_facing_column_value, emit_value_conversion,
+    expr_type, resolve_typed_operator, Conversion, DynamicClass, ExprType, NamedType, TypeEnv,
 };
 use crate::translate::plan::BitSet;
 use crate::vdbe::insn::NullMatchingMask;
@@ -450,15 +450,9 @@ pub(super) fn emit_typed_seek_keys(
         let Some(column) = table.columns().get(idx_col.pos_in_table) else {
             continue;
         };
-        let Some(def) = resolver
-            .schema()
-            .get_type_def(&column.ty_str, table.is_strict())
+        let Some(column_type) = column_named_type(column, table.is_strict(), resolver.schema())
         else {
             continue;
-        };
-        let column_type = NamedType {
-            def: Arc::clone(def),
-            params: Some(column.ty_params.iter().map(|p| (**p).clone()).collect()),
         };
         emit_typed_seek_key(
             program,
