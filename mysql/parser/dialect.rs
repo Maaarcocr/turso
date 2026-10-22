@@ -122,7 +122,7 @@ fn starts_with_zero_x(sql: &str, start: sqlparser::tokenizer::Location) -> bool 
         .eq("0x".chars())
 }
 
-pub(crate) fn unescape_string(raw: &str, quote: char) -> String {
+fn unescape_string(raw: &str, quote: char) -> String {
     let mut value = String::with_capacity(raw.len());
     let mut chars = raw.chars().peekable();
     while let Some(ch) = chars.next() {
@@ -154,80 +154,6 @@ pub(crate) fn unescape_string(raw: &str, quote: char) -> String {
         }
     }
     value
-}
-
-fn parse_interval_function_or_interval(
-    parser: &mut Parser,
-    name: Ident,
-) -> Result<Expr, ParserError> {
-    if parser.peek_token_ref().token == Token::LParen {
-        let function = parser.maybe_parse(|parser| {
-            let function = parser.parse_function(ObjectName::from(vec![name.clone()]))?;
-            let Expr::Function(Function {
-                args: FunctionArguments::List(list),
-                ..
-            }) = &function
-            else {
-                return parser.expected("INTERVAL(N, N1, ...)", parser.peek_token());
-            };
-            if list.args.len() < 2 || is_temporal_unit(&parser.peek_token_ref().token) {
-                return parser.expected("INTERVAL(N, N1, ...)", parser.peek_token());
-            }
-            Ok(function)
-        })?;
-        if let Some(function) = function {
-            return Ok(function);
-        }
-    }
-    parse_interval(parser)
-}
-
-fn is_temporal_unit(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Word(word)
-            if word.quote_style.is_none()
-                && TEMPORAL_UNITS.contains(&word.value.to_ascii_uppercase().as_str())
-    )
-}
-
-fn parse_interval(parser: &mut Parser) -> Result<Expr, ParserError> {
-    let value = parser.parse_expr()?;
-    let unit = parse_temporal_unit(parser)?;
-    Ok(Expr::Interval(Interval {
-        value: Box::new(value),
-        leading_field: Some(unit),
-        leading_precision: None,
-        last_field: None,
-        fractional_seconds_precision: None,
-    }))
-}
-
-fn parse_extract(parser: &mut Parser) -> Result<Expr, ParserError> {
-    parser.expect_token(&Token::LParen)?;
-    let field = parse_temporal_unit(parser)?;
-    parser.expect_keyword_is(Keyword::FROM)?;
-    let expr = parser.parse_expr()?;
-    parser.expect_token(&Token::RParen)?;
-    Ok(Expr::Extract {
-        field,
-        syntax: ExtractSyntax::From,
-        expr: Box::new(expr),
-    })
-}
-
-fn parse_temporal_unit(parser: &mut Parser) -> Result<DateTimeField, ParserError> {
-    let token = parser.next_token();
-    match &token.token {
-        Token::Word(word) if word.quote_style.is_none() => {
-            let unit = word.value.to_ascii_uppercase();
-            if TEMPORAL_UNITS.contains(&unit.as_str()) {
-                return Ok(DateTimeField::Custom(Ident::new(unit)));
-            }
-            parser.expected("a MySQL temporal unit", token)
-        }
-        _ => parser.expected("a MySQL temporal unit", token),
-    }
 }
 
 impl Dialect for MySql {
@@ -486,5 +412,79 @@ impl Dialect for MySql {
 
     fn supports_key_column_option(&self) -> bool {
         self.inner.supports_key_column_option()
+    }
+}
+
+fn parse_interval_function_or_interval(
+    parser: &mut Parser,
+    name: Ident,
+) -> Result<Expr, ParserError> {
+    if parser.peek_token_ref().token == Token::LParen {
+        let function = parser.maybe_parse(|parser| {
+            let function = parser.parse_function(ObjectName::from(vec![name.clone()]))?;
+            let Expr::Function(Function {
+                args: FunctionArguments::List(list),
+                ..
+            }) = &function
+            else {
+                return parser.expected("INTERVAL(N, N1, ...)", parser.peek_token());
+            };
+            if list.args.len() < 2 || is_temporal_unit(&parser.peek_token_ref().token) {
+                return parser.expected("INTERVAL(N, N1, ...)", parser.peek_token());
+            }
+            Ok(function)
+        })?;
+        if let Some(function) = function {
+            return Ok(function);
+        }
+    }
+    parse_interval(parser)
+}
+
+fn is_temporal_unit(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Word(word)
+            if word.quote_style.is_none()
+                && TEMPORAL_UNITS.contains(&word.value.to_ascii_uppercase().as_str())
+    )
+}
+
+fn parse_interval(parser: &mut Parser) -> Result<Expr, ParserError> {
+    let value = parser.parse_expr()?;
+    let unit = parse_temporal_unit(parser)?;
+    Ok(Expr::Interval(Interval {
+        value: Box::new(value),
+        leading_field: Some(unit),
+        leading_precision: None,
+        last_field: None,
+        fractional_seconds_precision: None,
+    }))
+}
+
+fn parse_extract(parser: &mut Parser) -> Result<Expr, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let field = parse_temporal_unit(parser)?;
+    parser.expect_keyword_is(Keyword::FROM)?;
+    let expr = parser.parse_expr()?;
+    parser.expect_token(&Token::RParen)?;
+    Ok(Expr::Extract {
+        field,
+        syntax: ExtractSyntax::From,
+        expr: Box::new(expr),
+    })
+}
+
+fn parse_temporal_unit(parser: &mut Parser) -> Result<DateTimeField, ParserError> {
+    let token = parser.next_token();
+    match &token.token {
+        Token::Word(word) if word.quote_style.is_none() => {
+            let unit = word.value.to_ascii_uppercase();
+            if TEMPORAL_UNITS.contains(&unit.as_str()) {
+                return Ok(DateTimeField::Custom(Ident::new(unit)));
+            }
+            parser.expected("a MySQL temporal unit", token)
+        }
+        _ => parser.expected("a MySQL temporal unit", token),
     }
 }
