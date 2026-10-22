@@ -725,6 +725,24 @@ pub fn insn_to_row(
                     cursor_id, column, target_pc.as_debug_int()
                 ),
             ),
+            Insn::ErrorTarget { target_pc } => (
+                "ErrorTarget",
+                0,
+                target_pc.as_debug_int() as i64,
+                0,
+                Value::build_text(""),
+                0,
+                format!("on a value error goto {}", target_pc.as_debug_int()),
+            ),
+            Insn::ClearErrorTarget => (
+                "ClearErrorTarget",
+                0,
+                0,
+                0,
+                Value::build_text(""),
+                0,
+                String::new(),
+            ),
             Insn::IsType { reg, target_pc, value_type } => (
                 "IsType",
                 *reg as i64,

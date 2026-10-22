@@ -1,0 +1,50 @@
+# numeric arithmetic and comparisons through the PostgreSQL frontend.
+#
+# Every expected value matches PostgreSQL itself.
+
+@database :memory:
+
+test numeric-arithmetic-on-typed-subexpressions {
+    CREATE TABLE t (p numeric(20,2), i integer);
+    INSERT INTO t VALUES ('12345678901234567.89', 3);
+    SELECT (p + 1) + 2, p + i FROM t;
+}
+expect {
+    12345678901234570.89|12345678901234570.89
+}
+
+test numeric-plus-double-precision-is-double-precision {
+    CREATE TABLE t (p numeric(10,2), r double precision);
+    INSERT INTO t VALUES ('0.10', 0.2);
+    SELECT CASE WHEN p + r = 0.3 THEN 'numeric' ELSE 'double precision' END FROM t;
+}
+expect {
+    double precision
+}
+
+test numeric-compared-with-literals {
+    CREATE TABLE t (p numeric(5,2), q numeric(5,0));
+    INSERT INTO t VALUES ('1.55', '2');
+    SELECT q * 1.5 FROM t;
+    SELECT count(*) FROM t WHERE p < 1.555;
+    SELECT count(*) FROM t WHERE p = 1.555;
+    SELECT count(*) FROM t WHERE p < 100000;
+}
+expect {
+    3.0
+    1
+    0
+    1
+}
+
+test numeric-equality-index-and-scan-agree {
+    CREATE TABLE t (p numeric(5,2));
+    CREATE INDEX t_p ON t (p);
+    INSERT INTO t VALUES ('1.55'), ('1.56');
+    SELECT count(*) FROM t WHERE p = 1.555;
+    SELECT count(*) FROM t WHERE p = 1.56;
+}
+expect {
+    0
+    1
+}

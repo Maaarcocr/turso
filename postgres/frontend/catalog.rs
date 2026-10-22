@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use turso_core::{
-    dialect::POSTGRES_TABLE_SQL_PREFIX,
+    dialect::{TypeRules, POSTGRES_TABLE_SQL_PREFIX},
     native_ext::{VirtualTable, VirtualTableCursor, VirtualTableModule},
     schema::{BTreeTable, Index, Schema, Table},
     Connection, Dialect, Func, IOResult, LimboError, OpenOptions, Result, Statement, Value,
@@ -173,7 +173,24 @@ impl Dialect for PostgresDialect {
     fn binds_names_at_create(&self) -> bool {
         true
     }
+
+    fn type_rules(&self) -> &'static TypeRules {
+        &POSTGRES_TYPE_RULES
+    }
 }
+
+static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
+    builtin_behaviour_overrides: &[(
+        "numeric",
+        "CAST FROM integer AS IMPLICIT CAST TO real AS IMPLICIT \
+         OPERATOR '+' (numeric, numeric) RETURNS numeric numeric_add \
+         OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub \
+         OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul \
+         OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div \
+         OPERATOR '<' (numeric, numeric) numeric_lt \
+         OPERATOR '=' (numeric, numeric) numeric_eq",
+    )],
+};
 
 pub fn encode_pg_schema_sql(sql: &str) -> String {
     format!("{POSTGRES_TABLE_SQL_PREFIX}{sql}")

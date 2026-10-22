@@ -185,6 +185,27 @@ pub trait Dialect: Send + Sync + 'static {
     fn binds_names_at_create(&self) -> bool {
         false
     }
+
+    fn type_rules(&self) -> &'static TypeRules {
+        &TypeRules::SQLITE
+    }
+}
+
+pub struct TypeRules {
+    pub builtin_behaviour_overrides: &'static [(&'static str, &'static str)],
+}
+
+impl TypeRules {
+    pub const SQLITE: TypeRules = TypeRules {
+        builtin_behaviour_overrides: &[],
+    };
+
+    pub(crate) fn behaviour_override(&self, type_name: &str) -> Option<&'static str> {
+        self.builtin_behaviour_overrides
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(type_name))
+            .map(|(_, behaviour)| *behaviour)
+    }
 }
 
 #[cfg(test)]

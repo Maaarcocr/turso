@@ -1,6 +1,11 @@
 use super::*;
+use crate::translate::expr::{
+    emit_type_expr, emit_user_facing_column_value, emit_value_conversion, expr_type,
+    resolve_typed_operator, Conversion, DynamicClass, ExprType, NamedType, TypeEnv,
+};
 use crate::translate::plan::BitSet;
 use crate::vdbe::insn::NullMatchingMask;
+use turso_parser::ast;
 use turso_parser::ast::NullsOrder;
 
 fn index_seek_affinities(seek_def: &SeekDef, seek_key: &SeekKey) -> String {
@@ -16,66 +21,6 @@ fn index_seek_affinities(seek_def: &SeekDef, seek_key: &SeekKey) -> String {
             _ => aff.aff_mask(),
         })
         .collect()
-}
-
-fn encode_seek_keys_for_custom_types(
-    program: &mut ProgramBuilder,
-    tables: &TableReferences,
-    seek_index: &Arc<Index>,
-    start_reg: usize,
-    num_keys: usize,
-    idx_col_offset: usize,
-    resolver: &Resolver<'_>,
-) -> crate::Result<()> {
-    let table = tables
-        .find_table_by_identifier(&seek_index.table_name)
-        .or_else(|| tables.find_table_by_table_name(&seek_index.table_name));
-    let table = match table {
-        Some(t) => t,
-        None => return Ok(()),
-    };
-    let columns = table.columns();
-    for i in 0..num_keys {
-        let idx_col_pos = idx_col_offset + i;
-        if idx_col_pos >= seek_index.columns.len() {
-            break;
-        }
-        let idx_col = &seek_index.columns[idx_col_pos];
-        let table_col = match columns.get(idx_col.pos_in_table) {
-            Some(c) => c,
-            None => continue,
-        };
-        let Ok(Some(resolved)) = resolver
-            .schema()
-            .resolve_type(&table_col.ty_str, table.is_strict())
-        else {
-            continue;
-        };
-        if resolved.chain.iter().all(|td| td.encode().is_none()) {
-            continue;
-        }
-        let reg = start_reg + i;
-        let skip_label = program.allocate_label();
-        program.emit_insn(Insn::IsNull {
-            reg,
-            target_pc: skip_label,
-        });
-        for td in &resolved.chain {
-            if let Some(encode_expr) = td.encode() {
-                crate::translate::expr::emit_type_expr(
-                    program,
-                    encode_expr,
-                    reg,
-                    reg,
-                    table_col,
-                    td,
-                    resolver,
-                )?;
-            }
-        }
-        program.preassign_label_to_next_insn(skip_label);
-    }
-    Ok(())
 }
 
 /// Seek-based loop setup.
@@ -212,13 +157,22 @@ impl<'a, 'plan> SeekEmitter<'a, 'plan> {
         let null_matching_mask = NullMatchingMask::from(null_matching_bits);
 
         if let Some(idx) = self.seek_index {
-            encode_seek_keys_for_custom_types(
+            let key_exprs: Vec<Option<&ast::Expr>> = self
+                .seek_def
+                .iter(&self.seek_def.start)
+                .map(|key| match key {
+                    SeekKeyComponent::Expr(expr) => Some(expr),
+                    SeekKeyComponent::Null | SeekKeyComponent::None => None,
+                })
+                .collect();
+            emit_typed_seek_keys(
                 self.program,
                 self.tables,
                 idx,
                 self.start_reg,
-                num_regs,
+                &key_exprs,
                 0,
+                self.loop_end,
                 &self.t_ctx.resolver,
             )?;
             let affinities = index_seek_affinities(self.seek_def, &self.seek_def.start);
@@ -339,13 +293,14 @@ impl<'a, 'plan> SeekEmitter<'a, 'plan> {
                     NoConstantOptReason::RegisterReuse,
                 )?;
                 if let Some(idx) = self.seek_index {
-                    encode_seek_keys_for_custom_types(
+                    emit_typed_seek_keys(
                         self.program,
                         self.tables,
                         idx,
                         last_reg,
-                        1,
+                        &[Some(expr)],
                         self.seek_def.prefix.len(),
+                        self.loop_end,
                         &self.t_ctx.resolver,
                     )?;
                     let affinities = index_seek_affinities(self.seek_def, &self.seek_def.end);
@@ -465,4 +420,206 @@ impl<'a, 'plan> SeekEmitter<'a, 'plan> {
         self.emit_start_bound(use_bloom_filter)?;
         self.emit_termination(loop_start)
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_typed_seek_keys(
+    program: &mut ProgramBuilder,
+    tables: &TableReferences,
+    seek_index: &Arc<Index>,
+    start_reg: usize,
+    key_exprs: &[Option<&ast::Expr>],
+    idx_col_offset: usize,
+    no_match: BranchOffset,
+    resolver: &Resolver<'_>,
+) -> crate::Result<()> {
+    let Some(table) = tables
+        .find_table_by_identifier(&seek_index.table_name)
+        .or_else(|| tables.find_table_by_table_name(&seek_index.table_name))
+    else {
+        return Ok(());
+    };
+    let env = TypeEnv::from_resolver(resolver);
+    for (i, key_expr) in key_exprs.iter().enumerate() {
+        let Some(idx_col) = seek_index.columns.get(idx_col_offset + i) else {
+            break;
+        };
+        if idx_col.expr.is_some() {
+            continue;
+        }
+        let Some(column) = table.columns().get(idx_col.pos_in_table) else {
+            continue;
+        };
+        let Some(def) = resolver
+            .schema()
+            .get_type_def(&column.ty_str, table.is_strict())
+        else {
+            continue;
+        };
+        let column_type = NamedType {
+            def: Arc::clone(def),
+            params: Some(column.ty_params.iter().map(|p| (**p).clone()).collect()),
+        };
+        emit_typed_seek_key(
+            program,
+            tables,
+            start_reg + i,
+            column,
+            column_type,
+            *key_expr,
+            no_match,
+            &env,
+            resolver,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_typed_seek_key(
+    program: &mut ProgramBuilder,
+    tables: &TableReferences,
+    key_reg: usize,
+    column: &crate::schema::Column,
+    column_type: NamedType,
+    key_expr: Option<&ast::Expr>,
+    no_match: BranchOffset,
+    env: &TypeEnv,
+    resolver: &Resolver<'_>,
+) -> crate::Result<()> {
+    let key_type = match key_expr {
+        Some(expr) => expr_type(expr, Some(tables), env),
+        None => ExprType::Dynamic(DynamicClass::Unknown),
+    };
+    let column_type = ExprType::Named(column_type);
+    let conversion = resolve_typed_operator(
+        &ast::Operator::Equals,
+        [(&column_type, None), (&key_type, key_expr)],
+        env,
+    )?
+    .map(|resolved| resolved.conversions[1].clone())
+    .unwrap_or(Conversion::None);
+    let converted_reg = emit_value_conversion(program, key_reg, &conversion, resolver)?;
+    let Some(resolved_type) = resolver.schema().resolve_type(&column.ty_str, true)? else {
+        return Err(crate::LimboError::InternalError(format!(
+            "column type {} is not registered",
+            column.ty_str
+        )));
+    };
+    if resolved_type.chain.iter().all(|def| def.encode().is_none()) {
+        if converted_reg != key_reg {
+            program.emit_insn(Insn::Copy {
+                src_reg: converted_reg,
+                dst_reg: key_reg,
+                extra_amount: 0,
+            });
+        }
+        return Ok(());
+    }
+    let value_reg = program.alloc_register();
+    program.emit_insn(Insn::Copy {
+        src_reg: converted_reg,
+        dst_reg: value_reg,
+        extra_amount: 0,
+    });
+    if converted_reg != key_reg {
+        program.emit_insn(Insn::Copy {
+            src_reg: converted_reg,
+            dst_reg: key_reg,
+            extra_amount: 0,
+        });
+    }
+    let done = program.allocate_label();
+    let mismatch = program.allocate_label();
+    program.emit_insn(Insn::IsNull {
+        reg: key_reg,
+        target_pc: done,
+    });
+    program.emit_insn(Insn::ErrorTarget {
+        target_pc: mismatch,
+    });
+    let previous_raise_target = program.raise_target.replace(mismatch);
+    let encoded = resolved_type
+        .chain
+        .iter()
+        .try_for_each(|def| match def.encode() {
+            Some(encode) => {
+                emit_type_expr(program, encode, key_reg, key_reg, column, def, resolver).map(|_| ())
+            }
+            None => Ok(()),
+        });
+    program.raise_target = previous_raise_target;
+    encoded?;
+    program.emit_insn(Insn::ClearErrorTarget);
+    let decoded_reg = program.alloc_register();
+    emit_user_facing_column_value(program, key_reg, decoded_reg, column, true, resolver)?;
+    emit_jump_if_type_equal(
+        program,
+        &column_type,
+        decoded_reg,
+        value_reg,
+        done,
+        env,
+        resolver,
+    )?;
+    program.preassign_label_to_next_insn(mismatch);
+    program.emit_insn(Insn::ClearErrorTarget);
+    program.emit_insn(Insn::Goto {
+        target_pc: no_match,
+    });
+    program.preassign_label_to_next_insn(done);
+    Ok(())
+}
+
+fn emit_jump_if_type_equal(
+    program: &mut ProgramBuilder,
+    value_type: &ExprType,
+    lhs: usize,
+    rhs: usize,
+    target_pc: BranchOffset,
+    env: &TypeEnv,
+    resolver: &Resolver<'_>,
+) -> crate::Result<()> {
+    let equality = resolve_typed_operator(
+        &ast::Operator::Equals,
+        [(value_type, None), (value_type, None)],
+        env,
+    )?;
+    let Some(func_name) = equality.and_then(|resolved| resolved.function) else {
+        program.emit_insn(Insn::Eq {
+            lhs,
+            rhs,
+            target_pc,
+            flags: CmpInsFlags::default(),
+            collation: None,
+        });
+        return Ok(());
+    };
+    let func = resolver
+        .resolve_function(&func_name, 2)?
+        .ok_or_else(|| crate::LimboError::ParseError(format!("no such function: {func_name}")))?;
+    let args = program.alloc_registers(2);
+    program.emit_insn(Insn::Copy {
+        src_reg: lhs,
+        dst_reg: args,
+        extra_amount: 0,
+    });
+    program.emit_insn(Insn::Copy {
+        src_reg: rhs,
+        dst_reg: args + 1,
+        extra_amount: 0,
+    });
+    let result = program.alloc_register();
+    program.emit_insn(Insn::Function {
+        constant_mask: 0,
+        start_reg: args,
+        dest: result,
+        func: crate::function::FuncCtx { func, arg_count: 2 },
+    });
+    program.emit_insn(Insn::If {
+        reg: result,
+        target_pc,
+        jump_if_null: false,
+    });
+    Ok(())
 }
