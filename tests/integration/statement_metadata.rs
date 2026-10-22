@@ -225,6 +225,33 @@ mod tests {
         assert_eq!(rowid_col.kind, ColumnTypeKind::Builtin);
     }
 
+    #[test]
+    fn type_info_for_expressions_of_custom_types() {
+        let db = fresh_db_with_custom_types("type_info_custom_type_exprs.db");
+        let conn = db.connect_limbo();
+        conn.execute("CREATE TABLE t(d date, p numeric(10,2)) STRICT")
+            .unwrap();
+
+        let cases: &[(&str, &str, &str)] = &[
+            ("SELECT CAST(? AS date)", "date", "TEXT"),
+            ("SELECT CAST(? AS numeric(10,2))", "numeric", "BLOB"),
+            ("SELECT coalesce(d, NULL) FROM t", "date", "TEXT"),
+            (
+                "SELECT CASE WHEN p > 0 THEN p END FROM t",
+                "numeric",
+                "BLOB",
+            ),
+            ("SELECT x FROM (SELECT p AS x FROM t)", "numeric", "BLOB"),
+        ];
+        for (sql, declared_name, base_type) in cases {
+            let stmt = conn.prepare(*sql).unwrap();
+            let info = expect_info(&stmt, 0);
+            assert_eq!(info.declared_name, *declared_name, "{sql}");
+            assert_eq!(info.base_type.as_deref(), Some(*base_type), "{sql}");
+            assert_eq!(info.kind, ColumnTypeKind::Custom, "{sql}");
+        }
+    }
+
     /// Bare literals carry a concrete primitive that the wire-protocol layer
     /// must report (a PostgreSQL client running `SELECT 42` expects INT4,
     /// not TEXT). The API deliberately departs from SQLite's "literals have

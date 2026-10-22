@@ -44,6 +44,7 @@ mod custom_types;
 mod emission;
 pub(crate) mod functions;
 mod translator;
+mod types;
 mod utils;
 mod vectors;
 mod walk;
@@ -70,6 +71,8 @@ use functions::*;
 use metadata::*;
 #[allow(unused_imports)]
 use translator::*;
+#[allow(unused_imports)]
+use types::*;
 #[allow(unused_imports)]
 use utils::*;
 #[allow(unused_imports)]
@@ -103,6 +106,7 @@ pub use metadata::ConditionMetadata;
 pub use translator::{
     resolve_expr, translate_expr, translate_expr_no_constant_opt, NoConstantOptReason,
 };
+pub(crate) use types::{expr_type, ExprType, TypeEnv};
 pub use utils::{
     as_binary_components, maybe_apply_affinity, sanitize_string, truth_test_rhs, unwrap_parens,
     unwrap_parens_owned,
