@@ -221,80 +221,28 @@ are not in the index.
 
 ## Overview
 
+Custom types and `tursopg` are experimental, so this design changes their
+behaviour where needed and asks users to rebuild data written by older builds
+(see [Upgrading](#upgrading)) instead of adding compatibility machinery. Plain
+SQLite behaviour, and databases used with custom types off, do not change at
+all.
+
 Four proposals, each reviewed and merged on its own:
 
-1. **Expression rules version and rounding.** Detect indexes and views whose
-   stored entries were computed with older rules, then round numeric values.
-2. **Typed expressions.** The compiler works out the type of every expression
-   and uses it for operators, comparisons, keys, index use and CAST. Column
-   values are stored as today.
-3. **PostgreSQL frontend.** Emit exact numeric literals and casts (a separate
+1. **Typed expressions.** The compiler works out the type of every expression
+   and uses it for operators, comparisons, keys, index use and CAST; numeric
+   values are rounded instead of cut off.
+2. **Dialect-defined types.** What a frontend such as MySQL needs to put its
+   own types on STRICT tables: type names mapped onto core storage types,
+   assignment conversions, and integer rowid aliases.
+3. **PostgreSQL frontend.** Exact numeric literals and casts (a separate
    PostgreSQL PR).
 4. **Typed aggregates and ordered numeric storage.** SUM/AVG for types, and a
-   numeric storage format whose bytes sort like the numbers (a file format
-   change with its own compatibility review).
+   numeric storage format whose bytes sort like the numbers.
 
 Not proposed: custom types on non-STRICT tables, until a frontend needs them.
-Such tables will need a marker in their stored SQL, like
-`POSTGRES_TABLE_SQL_PREFIX`, so that the SQLite dialect refuses them.
 
-## Proposal 1: expression rules version and rounding
-
-### Objects whose stored entries depend on expression rules
-
-Four kinds of objects store the result of an expression and must compute
-exactly the same result again on every UPDATE and DELETE: expression indexes,
-partial indexes (their WHERE decides whether a row has an entry), indexes on
-virtual generated columns (which deliberately use plain SQLite operators today,
-`SelfTableContext::ForDML` in `core/vdbe/builder.rs`), and materialized views.
-If the rules change between the INSERT and the DELETE, the DELETE looks for a
-key that is not there (example 10) and the index no longer matches the table.
-Every proposal here changes such results, starting with the rounding fix.
-
-Each database records the version of the expression rules its objects were
-built with, in a row of `__turso_internal_types` named `turso_format`. The
-row's value is not SQL, so older versions that read that table (custom types
-on) report the schema as malformed instead of misreading it. Proposal 4 adds the
-numeric storage format to the same row. When a database is loaded:
-
-- If the recorded version is older than the binary's (a missing row counts as
-  version 0), every object of the four kinds whose expressions contain a Named
-  sub-expression (worked out with the current rules) is *stale*: the planner
-  does not use it, and writes to its table fail with `index ix was built with
-  older expression rules; run REINDEX ix` (a materialized view must be dropped
-  and created again).
-- When no stale object is left, after REINDEX or at once, the next write
-  transaction records the current version. Creating a typed object of the four
-  kinds also records it; while stale objects exist, that fails with the same
-  message.
-
-Objects that only compute values (CHECK constraints, DEFAULT, stored generated
-columns, views, triggers) are not rebuilt: they now give the corrected results,
-and a stored generated value changes only when its row is updated. The same
-applies to PostgreSQL table SQL, which is translated again at every load.
-
-Why REINDEX rather than a rules version stored per object: per-object versions
-would keep today's shape-based operator choice as a second compiler forever,
-every typed feature would need both, and the planner would have to stop a
-query compiled with new rules from using an index built with old ones. The
-affected objects need custom types (experimental) and a typed expression in an
-index or view, so they are rare, found at load, and fixed by an existing
-statement.
-
-A binary with custom types off skips `__turso_internal_types`, so it can write
-plain SQLite values into such a database (a REAL next to numeric blobs). New
-binaries read the `turso_format` row even with custom types off and refuse
-writes when it exists. Older binaries cannot be changed.
-
-### Rounding
-
-`validate_precision_scale` (`core/numeric/decimal.rs`) calls `with_scale`,
-which cuts off digits (example 1). It will call
-`with_scale_round(scale, RoundingMode::HalfUp)`, which rounds half away from
-zero as PostgreSQL and MySQL do (`-1.505` becomes `-1.51`). Values already
-stored are not changed.
-
-## Proposal 2: typed expressions
+## Proposal 1: typed expressions
 
 ### Types
 
@@ -303,8 +251,7 @@ Turso's bytecode machine) contains an ordinary SQLite value; for an expression
 of a custom type, it is the type's *in-memory form*: what DECODE returns
 (numeric: text such as `'1.50'`). ENCODE runs only when a row or index entry is
 written and when a *seek key* (the value looked up in an index, e.g. 1.555 in
-`WHERE p = 1.555`) is built. No new kinds of runtime values, no B-tree change,
-no change to how column values are stored.
+`WHERE p = 1.555`) is built. No new kinds of runtime values, no B-tree change.
 
 Every expression gets a type: **Named** (a registered type: built-in or made
 with CREATE TYPE) or **Dynamic** (SQLite's rules: each value's storage class
@@ -331,19 +278,7 @@ PostgreSQL division, whose scale depends on the values).
   references that UPDATE and UPSERT rewrite into registers (a `register_types`
   map like today's `register_affinities`), and subquery, CTE and view columns
   (the type of the inner result expression).
-- `CAST(x AS T)`: `Named(T)` when T is registered and the CAST gives all of
-  T's parameters, or (outside the SQLite dialect) T declares defaults for the
-  missing ones. Otherwise it is SQLite's *affinity cast* (the type name only
-  chooses INTEGER, REAL, TEXT, NUMERIC or BLOB conversion) and the result is
-  `Dynamic`, in two cases:
-  - T is not registered. SQLite accepts any type name in a CAST:
-    `CAST(x AS SIGNED)`, `CAST(x AS VARCHAR(10))` and `CAST(x AS FOOBAR)` are
-    all legal. An error here would break SQLite compatibility; a frontend that
-    wants strict type names rejects unknown ones in its own parser.
-  - In the SQLite dialect, T is registered but parameters are missing:
-    `CAST(x AS NUMERIC)` keeps today's affinity cast (the "fall through to
-    regular CAST" branch of `translate_cast_expr`,
-    `core/translate/expr/translator.rs`). See decision 9.
+- `CAST(x AS T)`: see [CAST](#cast).
 - Operators and functions: the result type of the chosen signature (below).
 - `coalesce`, `ifnull`, `nullif`, `iif`, `CASE`, scalar `min`/`max`, and the
   columns of UNION, INTERSECT and EXCEPT: the type that all non-NULL branches
@@ -353,12 +288,12 @@ PostgreSQL division, whose scale depends on the values).
   take the other operand's type).
 - Otherwise `Dynamic`, with `infer_expression_primitive`'s classes.
 
-A type has two parts. Its *storage* (BASE, parameters, ENCODE, DECODE) is
-defined once in core for built-in types and is the same in every dialect,
-because a file written through one dialect may be read through another. Its
-*behaviour* (operators, implicit casts, functions, parameter defaults, KEY)
-comes from the dialect's type rules for built-in types, and from the
-definition itself for types made with CREATE TYPE.
+A type has two parts. Its *storage* is BASE, parameters, ENCODE, DECODE and
+KEY (below): it decides what is written to the file, so it is defined once in
+core for built-in types and is the same in every dialect. Its *behaviour* is
+operators, implicit casts, functions and parameter defaults: it comes from the
+dialect's type rules for built-in types, and from the definition itself for
+types made with CREATE TYPE.
 
 ### Declarations
 
@@ -376,11 +311,13 @@ KEY expr
 A type in a signature is a registered type, `integer`, `real`, `text`, `blob`,
 or `any` (accepts any value as it is). One type in parentheses is a prefix
 operator. Comparisons return a Dynamic integer. A parameter `DEFAULT` is used
-when a conversion or CAST omits that parameter; `DEFAULT NULL` means "no
-limit" only for types whose ENCODE handles NULL that way (`numeric_encode`
-skips rounding and the precision check). `KEY expr` gives the *canonical key*
-of an in-memory value: bytes that are equal exactly when the values are equal
-under the type's `=`, and that sort like the type's `<`.
+when a conversion or CAST omits that parameter. `DEFAULT NULL` means "no
+limit", so the type's ENCODE must accept NULL there: `numeric_encode` skips
+rounding and the precision check, and varchar's ENCODE changes from
+`length(value) <= maxlen` (which raises an error when maxlen is NULL) to
+`maxlen IS NULL OR length(value) <= maxlen`. `KEY expr` gives the *canonical
+key* of an in-memory value: bytes that are equal exactly when the values are
+equal under the type's `=`, and that sort like the type's `<`.
 
 Stored user types (canonical SQL in `__turso_internal_types`) keep their
 meaning: a clause without a signature (`OPERATOR '+' f`, `OPERATOR '<'`, the
@@ -404,11 +341,21 @@ rules. They contain:
 - *result-parameter rules*: functions that compute the result's parameters
   from the operands' (MySQL `/`: scale + 4; PostgreSQL `+`: the larger scale;
   PostgreSQL `/`: not known statically), used for column metadata and keys;
-- the class of each kind of literal.
+- the class of each kind of literal;
+- the type names of Proposal 2.
 
 The SQLite rules have no Dynamic-class signatures, so an expression without a
 Named operand compiles exactly as today. The MySQL frontend must be expressible
 with these rules alone, with no MySQL code in core.
+
+A table records the dialect that created it with today's table-SQL markers:
+unmarked SQL is the SQLite dialect, `POSTGRES_TABLE_SQL_PREFIX` is PostgreSQL,
+and the MySQL frontend will add its own. The SQLite dialect refuses tables of
+other dialects; `tursopg` opens unmarked tables. Expressions stored with a
+table (index expressions, partial-index WHERE, generated columns, CHECK,
+DEFAULT) compile with the rules of the dialect that opened the database, so
+writing typed expressions into one database with both `tursodb` and `tursopg`
+is not supported (they can compute different index keys).
 
 Built-in numeric under the SQLite rules, written in clause syntax. The
 PostgreSQL rules differ in `CAST TO real` instead of `CAST FROM real` (so
@@ -419,6 +366,7 @@ the parameter defaults to CAST as well:
 -- storage (core, all dialects)
 CREATE TYPE numeric(value any, precision integer, scale integer) BASE blob
   ENCODE numeric_encode(value, precision, scale) DECODE numeric_decode(value)
+  KEY numeric_key(value)
 -- behaviour (SQLite rules)
   -- parameter defaults precision NULL, scale NULL (conversions only)
   CAST FROM integer, real AS IMPLICIT
@@ -427,12 +375,12 @@ CREATE TYPE numeric(value any, precision integer, scale integer) BASE blob
   OPERATOR '<' (numeric, numeric) numeric_lt
   OPERATOR '=' (numeric, numeric) numeric_eq
   FUNCTION abs(numeric) RETURNS numeric numeric_abs
-  KEY numeric_key(value)
 ```
 
-`numeric_div` uses PostgreSQL's scale rule (at least 16 significant digits)
-instead of 100 digits; the rule is part of the type's `/` (MySQL's rules will
-choose a function with scale + 4).
+The varchar-like built-ins (varchar, and the types with a length or range
+parameter) get `DEFAULT NULL` parameters the same way. Built-in types with a
+plain `OPERATOR '<'` also get a plain `(T, T)` `=`, so `uuid_col = 'A0EE...'`
+converts the literal to a uuid first.
 
 ### Operator resolution
 
@@ -457,73 +405,112 @@ is one declared `(left, right)` pair. For `a OP b` (or `OP a`):
    convert them and use SQLite's operator.
 5. Otherwise SQLite's operator on the in-memory values (today's fallback).
 
-Converting into T is `CAST` to T (below). Conversions of constants are emitted
-once, before the loop. Resolution of WHERE and join terms runs during
-constraint analysis and is stored with each term, so the optimizer and code
-generation use the same choice. `emit_typed_operator` replaces
-`emit_custom_type_operator` in `translate_binary_expr` and `condition.rs`.
+Converting into T is [CAST](#cast) to T, so an operand that is not a valid T
+is an error, as in PostgreSQL: `date_col = 'garbage'` now fails with `invalid
+date value` (today it is false). Conversions of constants are emitted once,
+before the loop. Resolution of WHERE and join terms runs during constraint
+analysis and is stored with each term, so the optimizer and code generation
+use the same choice. `emit_typed_operator` replaces `emit_custom_type_operator`
+in `translate_binary_expr` and `condition.rs`.
 
 ### Every comparison uses the resolved operator
 
-IN lists and IN subqueries, `CASE x WHEN`, `IS` and `IS NOT`, `nullif`, scalar
-`min`/`max`, BETWEEN (already rewritten into `<=` and `>=`), and join
-conditions including USING and NATURAL resolve `=` and `<` like binary
-operators. Example 9 then gives PostgreSQL's results.
+IN lists, `x IN (SELECT ...)` and `(a, b) IN (SELECT ...)`, row-value
+comparisons such as `(a, b) < (c, d)`, `CASE x WHEN`, `IS` and `IS NOT`,
+`nullif`, scalar `min`/`max`, BETWEEN (already rewritten into `<=` and `>=`),
+and join conditions including USING and NATURAL resolve `=` and `<` like
+binary operators. Example 9 then gives PostgreSQL's results.
 
 ### Keys for hashing, sorting and removing duplicates
 
 Hash joins, Bloom filters, IN with an ephemeral index, DISTINCT, GROUP BY,
 `count(DISTINCT)`, PARTITION BY, UNION, INTERSECT, EXCEPT, ORDER BY and
-MIN/MAX on a Named value use the type's canonical key (`KEY`), not the
-in-memory form. The site stores the key in front of the value and compares
-only the key (duplicate checks use `NoConflict` on the key columns), so the
-output keeps the value as computed. Numeric's key is the order-preserving
-encoding described in Proposal 4. In Proposal 2 it is computed in memory and
-stored only in indexes on Named expressions (below); column values keep the
-v1 format.
+MIN/MAX on a Named value use the type's canonical key, not the in-memory form.
+The site stores the key in front of the value and compares only the key, so
+the output keeps the value as computed. Duplicate checks use `Found` on a
+record of the key columns, as DISTINCT does today (`result_row.rs`), not
+`NoConflict`, which never reports a duplicate when a key is NULL and would
+emit several NULL rows. Numeric's key is the ordered encoding described in
+Proposal 4; here it is only computed in memory and stored in indexes on Named
+expressions.
 
-A type without `KEY`: sorts use a comparator that calls the type's `<`
-function (replacing the fixed name table in `core/translate/order_by.rs`; only
-functions that need no connection state); hashing and duplicate checks use the
-in-memory form as today. All built-in types except numeric already have a
-canonical in-memory form, and keeping today's behaviour for user types avoids
-breaking their existing queries.
+A type without `KEY`:
+
+- sorts use a comparator that calls the type's `<` function, replacing the
+  fixed name table in `core/translate/order_by.rs`. CREATE TYPE (and prepare,
+  for built-ins) rejects a `<` function that is not deterministic or needs
+  the connection, so sorting never fails halfway;
+- if the type declares its own `=`, the planner does not choose plans that
+  hash or probe by bytes when another plan exists: no hash join (nested loop
+  instead), no Bloom filter, no ephemeral index for IN (each value compared
+  with `=`);
+- DISTINCT, UNION and GROUP BY compare the in-memory form, as today. Every
+  built-in type except numeric already has a canonical in-memory form, and
+  rejecting these statements would break existing queries on user types.
 
 ### Indexes and seek keys
 
 - An index on a typed column c is used for a term `c OP e` only if OP resolved
   to c's type's own operator, or to SQLite's operator (steps 4 and 5) when c's
-  DECODE returns stored values unchanged (smallint, date, varchar). Built-in
-  types with a plain `OPERATOR '<'` also get a plain `(T, T)` `=`, so
-  `uuid_col = 'A0EE...'` converts the literal to a uuid and still uses the
-  index. Ranges and ORDER BY still need an ordered storage format (Proposal
-  4); until then only `=`.
+  DECODE returns stored values unchanged (smallint, date, varchar). Ranges and
+  ORDER BY need an ordered storage format (Proposal 4); until then only `=`.
 - The seek key is e converted to c's type exactly as a table scan converts it,
-  then ENCODEd with c's parameters, with any RAISE inside ENCODE jumping to a
-  fallback label instead of failing. If ENCODE fails or changes the value
-  (`1.555` into `numeric(5,2)` gives 1.56; `100000` does not fit), an equality
-  seek matches no row, as the scan does; a range seek (Proposal 4) drops or
-  widens that bound and keeps the term as a filter. An index lookup and a scan
-  always return the same rows.
-- An index on a Named expression stores its canonical key, not the in-memory
-  form, so `=`, ranges and ORDER BY work on it. Such indexes are stale after
-  the upgrade anyway (Proposal 1), and the `turso_format` row stops older
-  versions with custom types on from reading them. Code generation never reads
-  the expression's value back from such an index when the key loses
-  information (numeric keys drop the display scale: 1.5 and 1.50), so output
-  does not depend on the plan.
+  then ENCODEd with c's parameters in an *error-to-label* mode: a RAISE inside
+  ENCODE, and an error returned by a function it calls (`numeric_encode` out
+  of range, `validate_ipaddr`), jump to a fallback label instead of failing the
+  statement. This needs an optional error target on the `Function`
+  instruction. If ENCODE fails or changes the value (`1.555` into
+  `numeric(5,2)` gives 1.56; `100000` does not fit), an equality seek matches
+  no row, as the scan does; a range seek drops or widens that bound and keeps
+  the term as a filter. An index lookup and a scan always return the same rows.
+- An index on a Named expression stores the expression's canonical key, so
+  `=`, ranges and ORDER BY work on it. Code generation never reads the
+  expression's value back from such an index when the key loses information
+  (numeric keys drop the display scale: 1.5 and 1.50), so output does not
+  depend on the plan.
 
 ### CAST
 
-`CAST(x AS T(params))` gives what storing x in a STRICT column of type
-`T(params)` and reading it back gives: ENCODE, the STRICT conversion to BASE
-(an error when it would lose data, as for INSERT), then DECODE. Domains run
-today's checks between ENCODE and DECODE. So `CAST('1.50' AS numeric(10,2))`
-is `1.50`, `CAST('12' AS bigint)` the integer 12 (today the text `'12'`), and
-`CAST(1 AS varchar(10))` the text `'1'` (today the integer 1), as in SQLite.
+`CAST(x AS T(params))` is `Named(T)` when T is registered and every parameter
+is given, or (outside the SQLite dialect) has a declared default. It gives what
+storing x in a STRICT column of type `T(params)` and reading it back gives:
+ENCODE, the STRICT conversion to BASE (an error when it would lose data, as
+for INSERT), then DECODE (Proposal 2 lets a dialect run its assignment
+conversion first). Domains run today's checks between ENCODE and DECODE.
+So `CAST('1.50' AS numeric(10,2))` is `1.50`, `CAST('12' AS bigint)` the
+integer 12 (today the text `'12'`), `CAST(1 AS varchar(10))` the text `'1'`
+(today the integer 1), and `CAST('12abc' AS bigint)` an error (SQLite's affinity
+cast gives 12).
+
+Otherwise the CAST is SQLite's *affinity cast* (the type name only chooses
+INTEGER, REAL, TEXT, NUMERIC or BLOB conversion) and the result is `Dynamic`:
+
+- T is not registered. SQLite accepts any type name in a CAST:
+  `CAST(x AS SIGNED)` and `CAST(x AS FOOBAR)` are legal. An error here would
+  break SQLite compatibility; a frontend that wants strict type names rejects
+  unknown ones in its own parser.
+- In the SQLite dialect, T is registered but a parameter is missing:
+  `CAST(x AS NUMERIC)` and `CAST(x AS VARCHAR)` keep today's affinity cast (the
+  "fall through to regular CAST" branch of `translate_cast_expr`), so this SQL
+  keeps its SQLite meaning.
+
+So in the SQLite dialect with custom types on, a CAST to a registered type
+without parameters (`bigint`, `date`, `boolean`, `uuid`) or with all of them
+(`varchar(10)`, `numeric(10,2)`) is typed, as it is today, and its result
+differs from SQLite's affinity cast. With custom types off nothing changes.
 INSERT and UPDATE still encode; column reads still decode
 (`emit_user_facing_column_value`). The CAST section of `create-type.mdx`
 changes.
+
+### Rounding and division
+
+`validate_precision_scale` (`core/numeric/decimal.rs`) calls `with_scale`,
+which cuts off digits (example 1). It will call
+`with_scale_round(scale, RoundingMode::HalfUp)`, which rounds half away from
+zero as PostgreSQL and MySQL do (`-1.505` becomes `-1.51`). `numeric_div` uses
+PostgreSQL's scale rule (at least 16 significant digits) instead of 100
+digits; the rule belongs to the type's `/`, so MySQL's rules can choose a
+function with scale + 4.
 
 ### Other query shapes
 
@@ -571,32 +558,73 @@ Turso-specific. Verification, recorded in the PR:
 Each commit adds a test that fails before and passes after (both runs
 recorded).
 
-- `sqlite/conformance/turso-sqltests/typed_expressions.sqltest`: examples 2 to
+- `sqlite/conformance/turso-sqltests/typed_expressions.sqltest`: examples 1 to
   9, user types with signatures, old syntax, CAST to BASE.
 - Index and scan agree: every typed comparison runs with `NOT INDEXED` and with
   `INDEXED BY` and must return the same rows (`p = 1.555`, `p < 100000`,
   `smallint_col = 100000`, an upper-case uuid literal, expression indexes).
+- Duplicates and NULL: DISTINCT, UNION and GROUP BY over a typed key with
+  several NULLs return one NULL row.
 - Rust unit tests: resolution (`date_col + ?`, `t + t`, ties), numeric keys
   (byte order equals numeric order; quickcheck).
-- `tests/integration/`: a database file written by today's `main` with an
-  expression index on a CAST, a typed partial index and a materialized view:
-  stale detection, refused writes, REINDEX; an attached database with its own
-  types; close and reopen.
+- `tests/integration/`: an attached database with its own types; close and
+  reopen.
 - `postgres/conformance/pg-sqltests/numeric.sqltest`, values checked with
   `make -C postgres/conformance run-postgres`.
+
+## Proposal 2: dialect-defined types
+
+The MySQL frontend will create STRICT tables and needs three things that are
+not MySQL-specific. All three apply only to tables marked by a dialect other
+than SQLite, so SQLite-dialect tables are unchanged.
+
+**Type names mapped onto core storage types.** The dialect's type rules map
+its type names onto neutral storage types in core, for example a ranged
+integer (`INT` is `ranged_integer(-2147483648, 2147483647)`), an unsigned
+64-bit integer, numeric (`DECIMAL(p,s)`), and an ordered time or interval
+form. The column keeps the declared name (`INT`) for column metadata, while
+storage, KEY and behaviour come from the mapped type. The table has the
+dialect's table-SQL marker, so the SQLite dialect refuses it.
+
+**Assignment conversion is behaviour.** Converting a value into a column
+(INSERT, UPDATE, and CAST in that dialect) is part of a type's behaviour, run
+before the storage ENCODE: a type may declare `ASSIGN function`; without it,
+today's path applies (ENCODE, then the STRICT check). This matters because
+the dialects disagree. Checked with Turso STRICT tables and MySQL 8.4.10 in its
+default strict mode:
+
+| Value into column | Turso STRICT | MySQL 8.4 |
+|---|---|---|
+| `'12'` into INT | 12 | 12 |
+| `'abc'`, `'12abc'` into INT | error | error |
+| `1.5`, `'1.5'` into INT | error | 2 |
+| `99999999999` into INT, `100000` into SMALLINT | accepted (INTEGER only checks the 64-bit range) | error: out of range |
+| `12`, `1.5` into VARCHAR | `'12'`, `'1.5'` | `'12'`, `'1.5'` |
+| `1e20` into VARCHAR | `'1.0e+20'` | `'1e20'` |
+
+**Integer rowid aliases.** Today only a column declared exactly `INTEGER
+PRIMARY KEY` is the rowid (`is_rowid_alias_type`). A primary key whose mapped
+storage type is a ranged integer is a rowid alias too, so `INT AUTO_INCREMENT
+PRIMARY KEY` keeps the fast rowid path; the range check is the assignment
+conversion's.
+
+Not blocking: type functions return structured error kinds (out of range,
+invalid input, too long) instead of only a message, so a frontend can map them
+to its own codes (MySQL 1264, 1366, 1406; PostgreSQL 22003, 22P02, 22001).
+Out of scope: unique constraints under case-insensitive collations.
+
+Tests use a test dialect in core (as `core/dialect/mod.rs` does today), since
+the MySQL frontend is not in this repository.
 
 ## Proposal 3: PostgreSQL frontend
 
 A separate PostgreSQL PR. `postgres/parser/translator.rs` emits
 `CAST('1.555' AS numeric)` for decimal literals (`translate_const`) and typed
 casts for `x::numeric` and `x::numeric(p,s)`. PostgreSQL's numeric parameters
-default to NULL (unconstrained). Bare `NUMERIC` columns stay REAL: changing that
-mapping would reinterpret existing tables. PostgreSQL table SQL is translated
-again at every load, so this raises the expression rules version (Proposal 1).
+default to NULL (unconstrained). Bare `NUMERIC` columns stay REAL, so existing
+tables keep their storage.
 
 ## Proposal 4: typed aggregates and ordered numeric storage
-
-Needs its own compatibility review.
 
 **Aggregates.** Only type-declared aggregates: `FUNCTION sum(numeric) RETURNS
 numeric numeric_sum` and `avg`, with native exact accumulators. A type without
@@ -606,7 +634,7 @@ REAL. `sum(...) OVER` uses the same functions.
 **Ordered numeric storage (v2).** Today's format (v1) is a version byte 0x01,
 a sign byte, the scale, and the digits as little-endian 32-bit words, so
 comparing two stored blobs byte by byte does not compare the numbers. v2 is
-the numeric key of Proposal 2:
+the numeric key of Proposal 1:
 
 - byte 0: 0x08 −Infinity, 0x10 negative, 0x20 zero, 0x30 positive,
   0x38 +Infinity, 0x40 NaN (infinities and NaN reserved; never 0x01);
@@ -616,77 +644,106 @@ the numeric key of Proposal 2:
 - negative values invert the exponent bytes, use byte = 100 − pair, and end
   with 0xFF.
 
-Byte order equals numeric order and equal values have equal bytes. DECODE
-becomes `numeric_decode(value, scale)`; unconstrained values lose their
+Byte order equals numeric order and equal values have equal bytes. All new
+numeric values are written in v2; there is no per-database format flag.
+Reading still accepts v1 (the decoder already exists and the first byte tells
+the formats apart), but indexes need rebuilding (see [Upgrading](#upgrading)).
+DECODE becomes `numeric_decode(value, scale)`; unconstrained values lose their
 display scale (decision 2). `ORDERED` declares that the stored form is the
 canonical key, so the optimizer (`optimizer/constraints.rs`,
 `optimizer/order.rs`) allows ranges and ORDER BY on the index, and seek keys
-follow the rule of Proposal 2.
+follow the rule of Proposal 1.
 
-**Format flag.** Decoding accepts v1 and v2 forever, but one column must not
-mix them. The `turso_format` row records `numeric 2` when the first numeric
-column is created in a database without v1 numeric columns; each attached
-database is checked on its own. Databases with v1 numeric columns keep v1 and
-`=`-only index use. No flag in the SQLite file header (its reserved bytes stay
-zero). A migration pragma can come later.
+## Upgrading
+
+Release note for databases written by older builds with custom types on (or
+by `tursopg`); databases used with custom types off are not affected:
+
+> After upgrading, run `REINDEX` on every expression index, partial index and
+> index on a virtual generated column whose expression uses a custom type, and
+> drop and create again materialized views that use custom types: their
+> stored keys were computed with the old rules, so lookups can miss rows and
+> UPDATE or DELETE can fail to find the old entry (example 10). Numeric values
+> written by older builds are still read correctly, but indexes on numeric
+> columns sort them in the old format: dump and reload the database to rewrite
+> them. Writing typed expressions into one database with both `tursodb` and
+> `tursopg` is not supported.
+
+### Trade-off to raise in the PR description
+
+The change does not detect objects built by older builds; it relies on the
+release note. Detection would need all of: a version row in
+`__turso_internal_types`, finding stale indexes and views at load, making the
+planner ignore them and refusing writes to their tables until REINDEX (design
+v2 of this document, commit 86915929). We left it out because the case needs
+an experimental feature, a typed expression in a stored index or view, and a
+database written by an older build, and because the detection is a lot of
+core code. If maintainers want it, it can be added before the typing commits
+without changing the rest of the design.
 
 ## Commit plan
 
-Proposal 1:
-1. `core/schema: record the expression rules version and require REINDEX of
-   stale indexes`
-2. `core/numeric: round half away from zero when applying a scale`
+Each commit has its own test that fails before it and passes after it.
 
-Proposal 2:
+Proposal 1:
+1. `core/numeric: round half away from zero when applying a scale`
+2. `core/schema: look up column types in the database that owns the table`
 3. `core/types: compute expression types and report them in column metadata`
 4. `parser: parse operator signatures, implicit casts, type functions, keys and
    parameter defaults`
-5. `core/types: resolve operators with dialect type rules` (storage and
-   behaviour split; SQLite and PostgreSQL rules; numeric signatures and
-   division scale)
-6. `core/types: use resolved operators in IN, CASE, IS, nullif, min/max and
-   joins`
-7. `core/types: canonical keys and comparators for hash, sort and duplicate
+5. `core/types: resolve operators with dialect type rules and choose seek keys
+   from the result` (storage and behaviour split; SQLite and PostgreSQL rules;
+   error-to-label seek keys; index and scan agreement tests)
+6. `core/numeric: use PostgreSQL's scale rule for division`
+7. `core/types: use resolved operators in IN, row values, CASE, IS, nullif,
+   min/max and joins`
+8. `core/types: canonical keys and comparators for hash, sort and duplicate
    checks` (adds the numeric key function)
-8. `core/optimizer: decide index use and seek keys from resolved operators`
 9. `core/types: unary operators and type functions`
 10. `core/types: CAST returns the value read back from a STRICT column`
 11. `core/types: types for recursive CTEs, windows and materialized views`
-12. `core/schema: look up column types in the database that owns the table`
 
-Proposal 3: 13. `postgres: exact numeric literals and casts`
+Proposal 2:
+12. `core/types: map dialect type names onto core storage types`
+13. `core/types: dialect assignment conversions`
+14. `core/schema: ranged-integer primary keys are rowid aliases in dialect
+    tables`
+15. `core/types: structured error kinds from type functions`
+
+Proposal 3: 16. `postgres: exact numeric literals and casts`
 
 Proposal 4:
-14. `core/types: type-declared SUM and AVG`
-15. `core/numeric: store numeric column values in the ordered format`
-16. `core/schema: record the numeric storage format per database`
-17. `core/optimizer: index ranges and ORDER BY for ORDERED types`
+17. `core/types: type-declared SUM and AVG`
+18. `core/numeric: store numeric values in the ordered format`
+19. `core/optimizer: index ranges and ORDER BY for ORDERED types`
 
 ## Decisions
 
-1. Numeric format: a per-database `turso_format` row, not a type definition,
-   unreadable by older versions, checked per attached database. No header flag.
-   A migration pragma later.
+1. Numeric storage: new values are always written in v2; no per-database
+   flag; v1 stays readable; users dump and reload old numeric data.
 2. v2 drops the display scale of unconstrained numeric values; values are
    never read back from expression indexes whose keys lose it.
 3. Division: PostgreSQL's scale rule, part of the type's `/` (MySQL: scale + 4).
 4. Aggregates: type-declared only.
-5. Objects built with older rules: REINDEX detection (Proposal 1), for the
-   reasons given there.
+5. Objects built with older rules: no detection; release note and the PR
+   trade-off section above.
 6. REAL and numeric: each dialect's `CAST FROM`/`CAST TO` declarations.
 7. Sorting: by canonical key; types without a key use a comparator that calls
-   their `<`; the fixed name table goes.
-8. `smallint_col = 100000`: fixed by the seek-key rule.
+   their `<`, checked when the type is created; the fixed name table goes.
+8. `smallint_col = 100000`: fixed by the error-to-label seek-key rule.
 9. Missing CAST parameters: declared parameter DEFAULTs (PostgreSQL numeric
-   NULL, MySQL DECIMAL (10,0)). The SQLite dialect keeps the affinity cast
-   (SQLite matches type names by substring, so `bigint`, `varchar(10)` and
-   `date` are ordinary SQLite casts, and persisted `CAST(x AS NUMERIC)` in
-   views and indexes must keep its meaning). Other dialects: a missing
-   parameter without a default is an error.
+   NULL, MySQL DECIMAL (10,0)). The SQLite dialect keeps the affinity cast when
+   a registered type's parameter is missing; other dialects report an error
+   for a missing parameter without a default.
+10. A database written with typed expressions by two dialects is unsupported;
+    no mechanism compiles stored expressions with the creating dialect's rules.
+11. Types without `KEY`: no hash join, Bloom filter or IN ephemeral index when
+    they declare `=`; DISTINCT, UNION and GROUP BY keep comparing the in-memory
+    form.
 
 ## Open questions
 
-1. Hashing and duplicate checks on a user type without `KEY` use the in-memory
-   form, as today, instead of rejecting the plan. Agreed?
-2. The comparator for types without `KEY` can call only functions that need no
-   connection state. Is an error for the others acceptable?
+1. The in-memory form of an unsigned 64-bit integer above 2^63 − 1 (SQLite
+   integers are signed): text, or a REAL that loses precision?
+2. The ordered time and interval storage: canonical text, or integer
+   microseconds?
