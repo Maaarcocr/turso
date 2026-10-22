@@ -560,6 +560,8 @@ pub fn resolve_builtin_function(name: &str, arg_count: usize) -> crate::Result<O
         "numeric_lt" => Ok(Some(Func::Scalar(ScalarFunc::NumericLt))),
         "numeric_eq" => Ok(Some(Func::Scalar(ScalarFunc::NumericEq))),
         "numeric_key" => Ok(Some(Func::Scalar(ScalarFunc::NumericKey))),
+        "numeric_neg" => Ok(Some(Func::Scalar(ScalarFunc::NumericNeg))),
+        "numeric_abs" => Ok(Some(Func::Scalar(ScalarFunc::NumericAbs))),
         "date_plus" => Ok(Some(Func::Scalar(ScalarFunc::DatePlus))),
         "date_minus" => Ok(Some(Func::Scalar(ScalarFunc::DateMinus))),
         // Array construction / element access (desugared from syntax)

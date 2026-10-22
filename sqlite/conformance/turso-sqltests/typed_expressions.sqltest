@@ -454,3 +454,26 @@ expect {
     3
     3
 }
+
+@requires strict "uses STRICT tables"
+test unary-minus-and-abs-use-type-functions {
+    CREATE TABLE t1(p numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES ('1.50'), ('-2.25'), ('0.00'), (NULL);
+    SELECT -p, abs(p), -(p * 1) + 1, abs(-p) < 2 FROM t1;
+}
+expect {
+    -1.50|1.50|-0.50|1
+    2.25|2.25|3.25|0
+    0.00|0.00|1.00|1
+    |||
+}
+
+test create-type-function-clause-is-called-for-typed-arguments {
+    CREATE TYPE money(value any) BASE text ENCODE value DECODE value OPERATOR '-' (money) RETURNS money numeric_neg FUNCTION abs(money) RETURNS money numeric_abs FUNCTION length(money) RETURNS integer numeric_key;
+    CREATE TABLE t1(m money) STRICT;
+    INSERT INTO t1 VALUES ('-1.50');
+    SELECT abs(m), -m, typeof(length(m)), abs(-3) FROM t1;
+}
+expect {
+    1.50|1.50|blob|3
+}

@@ -11583,6 +11583,23 @@ pub fn op_function(
                 };
                 state.registers[*dest].set_value(result);
             }
+            ScalarFunc::NumericNeg | ScalarFunc::NumericAbs => {
+                check_arg_count!(arg_count, 1);
+                let value = state.registers[*start_reg].get_value().clone();
+                let result = match value {
+                    Value::Null => Value::Null,
+                    _ => {
+                        let decimal = value_to_bigdecimal(&value)?;
+                        let result = match scalar_func {
+                            ScalarFunc::NumericNeg => -decimal,
+                            ScalarFunc::NumericAbs => decimal.abs(),
+                            _ => unreachable!(),
+                        };
+                        Value::build_text(crate::numeric::decimal::format_numeric(&result))
+                    }
+                };
+                state.registers[*dest].set_value(result);
+            }
             ScalarFunc::NumericKey => {
                 check_arg_count!(arg_count, 1);
                 let value = state.registers[*start_reg].get_value().clone();

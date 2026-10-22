@@ -100,7 +100,139 @@ pub(crate) fn expr_type(
             env,
         ),
         ast::Expr::FunctionCall { name, args, .. } => function_call_type(name, args, tables, env),
+        ast::Expr::Unary(op, operand) => match resolve_unary_operator(op, operand, tables, env) {
+            Some(resolved) => resolved.result,
+            None => ExprType::Dynamic(DynamicClass::Unknown),
+        },
         _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+pub(crate) struct ResolvedFunction {
+    pub(crate) function: String,
+    pub(crate) conversions: Vec<Conversion>,
+    pub(crate) result: ExprType,
+}
+
+pub(crate) fn resolve_unary_operator(
+    op: &ast::UnaryOperator,
+    operand: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> Option<ResolvedFunction> {
+    if env.schema.type_registry.is_empty() {
+        return None;
+    }
+    let symbol = match op {
+        ast::UnaryOperator::Negative => "-",
+        _ => return None,
+    };
+    let ExprType::Named(named) = expr_type(operand, tables, env) else {
+        return None;
+    };
+    named.def.operators().iter().find_map(|declared| {
+        let operands = declared.operands.as_ref()?;
+        let [operand_type] = operands.as_slice() else {
+            return None;
+        };
+        if declared.op != symbol || !operand_type.eq_ignore_ascii_case(&named.def.name) {
+            return None;
+        }
+        let function = declared.func_name.clone()?;
+        Some(ResolvedFunction {
+            function,
+            conversions: vec![Conversion::None],
+            result: declared
+                .returns
+                .as_deref()
+                .map_or(ExprType::Dynamic(DynamicClass::Unknown), |returns| {
+                    slot_type(returns, env)
+                }),
+        })
+    })
+}
+
+pub(crate) fn resolve_type_function(
+    name: &str,
+    args: &[Box<ast::Expr>],
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> Result<Option<ResolvedFunction>> {
+    if env.schema.type_registry.is_empty() {
+        return Ok(None);
+    }
+    if matches!(
+        crate::function::Func::resolve_function(name, args.len()),
+        Ok(Some(crate::function::Func::Agg(_)))
+    ) {
+        return Ok(None);
+    }
+    let arg_types: Vec<ExprType> = args.iter().map(|arg| expr_type(arg, tables, env)).collect();
+    let mut owners: Vec<Arc<TypeDef>> = Vec::new();
+    for arg_type in &arg_types {
+        if let ExprType::Named(named) = arg_type {
+            if !owners.iter().any(|owner| named.is(owner)) {
+                owners.push(Arc::clone(&named.def));
+            }
+        }
+    }
+    let mut best: Option<(usize, ResolvedFunction)> = None;
+    let mut tied = false;
+    for owner in &owners {
+        for declared in owner.functions() {
+            if !declared.name.eq_ignore_ascii_case(name) || declared.args.len() != args.len() {
+                continue;
+            }
+            let Some(slots) = declared
+                .args
+                .iter()
+                .map(|arg| slot_named(arg, env))
+                .collect::<Option<Vec<Slot>>>()
+            else {
+                continue;
+            };
+            let Some(fits) = slots
+                .iter()
+                .zip(arg_types.iter().zip(args))
+                .map(|(slot, (arg_type, arg))| fit_operand(arg_type, Some(arg), slot, false, None))
+                .collect::<Option<Vec<Fit>>>()
+            else {
+                continue;
+            };
+            let exact = fits.iter().filter(|fit| matches!(fit, Fit::Exact)).count();
+            let conversions = fits
+                .into_iter()
+                .map(|fit| match fit {
+                    Fit::Convert(conversion) => conversion,
+                    Fit::Exact | Fit::Any => Conversion::None,
+                })
+                .collect();
+            let candidate = ResolvedFunction {
+                function: declared.func_name.clone(),
+                conversions,
+                result: slot_type(&declared.returns, env),
+            };
+            match &best {
+                Some((best_exact, _)) if *best_exact > exact => {}
+                Some((best_exact, _)) if *best_exact == exact => tied = true,
+                _ => {
+                    tied = false;
+                    best = Some((exact, candidate));
+                }
+            }
+        }
+    }
+    if tied {
+        crate::bail_parse_error!("function {name}() is not unique for these argument types");
+    }
+    Ok(best.map(|(_, resolved)| resolved))
+}
+
+fn slot_type(name: &str, env: &TypeEnv) -> ExprType {
+    match slot_named(name, env) {
+        Some(Slot::Named(def)) => ExprType::Named(NamedType { def, params: None }),
+        Some(Slot::Class(class)) => ExprType::Dynamic(class),
+        Some(Slot::Any) | None => ExprType::Dynamic(DynamicClass::Unknown),
     }
 }
 
@@ -693,6 +825,9 @@ fn function_call_type(
     env: &TypeEnv,
 ) -> ExprType {
     use crate::function::ScalarFunc;
+    if let Ok(Some(resolved)) = resolve_type_function(name.as_str(), args, tables, env) {
+        return resolved.result;
+    }
     match crate::function::Func::resolve_function(name.as_str(), args.len()) {
         Ok(Some(crate::function::Func::Scalar(
             ScalarFunc::Coalesce | ScalarFunc::IfNull | ScalarFunc::Max | ScalarFunc::Min,

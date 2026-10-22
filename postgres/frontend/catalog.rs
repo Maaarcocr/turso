@@ -187,8 +187,10 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
          OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub \
          OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul \
          OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div \
+         OPERATOR '-' (numeric) RETURNS numeric numeric_neg \
          OPERATOR '<' (numeric, numeric) numeric_lt \
-         OPERATOR '=' (numeric, numeric) numeric_eq",
+         OPERATOR '=' (numeric, numeric) numeric_eq \
+         FUNCTION abs(numeric) RETURNS numeric numeric_abs",
     )],
 };
 
