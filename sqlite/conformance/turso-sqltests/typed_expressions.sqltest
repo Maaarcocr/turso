@@ -566,3 +566,38 @@ test window-range-offset-on-typed-order-by-is-an-error {
 expect error {
     RANGE frames with an offset are not supported
 }
+
+@requires strict "uses STRICT tables"
+@requires materialized_views "uses materialized views"
+test materialized-view-computes-typed-expressions {
+    CREATE TABLE t1(p numeric(10,2), g INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('1.50', 1), ('2.25', 1);
+    CREATE MATERIALIZED VIEW v AS SELECT g, p * 2 AS x FROM t1;
+    INSERT INTO t1 VALUES ('0.25', 2);
+    SELECT g, x FROM v ORDER BY g, x;
+}
+expect {
+    1|3.00
+    1|4.50
+    2|0.50
+}
+
+@requires strict "uses STRICT tables"
+@requires materialized_views "uses materialized views"
+test materialized-view-rejects-aggregates-over-typed-values {
+    CREATE TABLE t1(p numeric(10,2), g INTEGER) STRICT;
+    CREATE MATERIALIZED VIEW w AS SELECT g, sum(p) AS s FROM t1 GROUP BY g;
+}
+expect error {
+    aggregates over values of type numeric are not yet supported
+}
+
+@requires strict "uses STRICT tables"
+@requires materialized_views "uses materialized views"
+test materialized-view-rejects-grouping-by-keyed-values {
+    CREATE TABLE t1(p numeric, g INTEGER) STRICT;
+    CREATE MATERIALIZED VIEW w AS SELECT p, count(*) AS c FROM t1 GROUP BY p;
+}
+expect error {
+    GROUP BY on values compared by a type key are not yet supported
+}
