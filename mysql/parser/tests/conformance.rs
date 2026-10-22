@@ -533,6 +533,45 @@ fn reports_ddl_that_mysql_rejects() {
 }
 
 #[test]
+fn reports_decimal_casts_that_mysql_rejects() {
+    let cases = [
+        SqlCase {
+            name: "more decimals than digits",
+            sql: "SELECT CAST(1 AS DECIMAL(2, 4))",
+        },
+        SqlCase {
+            name: "more than 65 digits",
+            sql: "SELECT CAST(1 AS DECIMAL(66))",
+        },
+        SqlCase {
+            name: "more than 30 decimals",
+            sql: "SELECT CONVERT(1, DECIMAL(65, 31))",
+        },
+        SqlCase {
+            name: "beside syntax that is not lowered",
+            sql: "SELECT 0x41 + CAST(1 AS DECIMAL(0, 4))",
+        },
+        SqlCase {
+            name: "in a statement that is not lowered",
+            sql: "INSERT INTO t VALUES (CAST(1 AS DEC(66)))",
+        },
+    ];
+
+    for case in cases {
+        let error = match parse_and_translate(case.sql) {
+            Ok(_) => panic!("{} unexpectedly lowered\nSQL: {}", case.name, case.sql),
+            Err(error) => error,
+        };
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "{}: SQL: {}\nerror: {error}",
+            case.name,
+            case.sql
+        );
+    }
+}
+
+#[test]
 fn lowers_anonymous_parameters_in_projection_order() {
     let statement =
         parse_and_translate("SELECT ?, ? AS named").expect("anonymous parameters must lower");
@@ -862,10 +901,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "bit operation on a fraction",
             sql: "SELECT 5 & 1.5",
-        },
-        SqlCase {
-            name: "invalid decimal type",
-            sql: "SELECT CAST(1 AS DECIMAL(2, 4))",
         },
         SqlCase {
             name: "temporal compared with a number",

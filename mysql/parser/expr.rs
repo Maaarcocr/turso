@@ -910,7 +910,7 @@ fn translate_cast(
         DataType::Double(ExactNumberInfo::None) => (type_name("DOUBLE"), Context::Number),
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
-        DataType::Decimal(precision) => (decimal_type(precision)?, Context::Number),
+        DataType::Decimal(precision) => (decimal_type(precision), Context::Number),
         DataType::Char(None) | DataType::Character(None) => (type_name("CHAR"), Context::Value),
         DataType::JSON => return translate_cast_as_json(expr, literal_context, context),
         other => {
@@ -948,33 +948,22 @@ fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
     ))
 }
 
-fn decimal_type(precision: &ExactNumberInfo) -> Result<ast::Type, MysqlParserError> {
+fn decimal_type(precision: &ExactNumberInfo) -> ast::Type {
     let size = match *precision {
         ExactNumberInfo::None => None,
-        ExactNumberInfo::Precision(digits) if (1..=65).contains(&digits) => {
+        ExactNumberInfo::Precision(digits) => {
             Some(ast::TypeSize::MaxSize(Box::new(number(digits))))
         }
-        ExactNumberInfo::PrecisionAndScale(digits, scale)
-            if (1..=65).contains(&digits)
-                && (0..=30).contains(&scale)
-                && scale.unsigned_abs() <= digits =>
-        {
-            Some(ast::TypeSize::TypeSize(
-                Box::new(number(digits)),
-                Box::new(number(scale.unsigned_abs())),
-            ))
-        }
-        _ => {
-            return Err(MysqlParserError::Unsupported(format!(
-                "DECIMAL{precision}, which MySQL rejects, is not lowered yet"
-            )))
-        }
+        ExactNumberInfo::PrecisionAndScale(digits, scale) => Some(ast::TypeSize::TypeSize(
+            Box::new(number(digits)),
+            Box::new(number(scale.unsigned_abs())),
+        )),
     };
-    Ok(ast::Type {
+    ast::Type {
         name: "DECIMAL".to_string(),
         size,
         array_dimensions: 0,
-    })
+    }
 }
 
 fn number(value: u64) -> ast::Expr {
