@@ -213,6 +213,85 @@ fn converted_operand_expr(
     Ok(ast::Expr::Register(reg))
 }
 
+pub(super) struct TypedInTargets {
+    pub(super) found: BranchOffset,
+    pub(super) not_found: BranchOffset,
+    pub(super) unknown: BranchOffset,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn emit_typed_in_subquery_probe(
+    program: &mut ProgramBuilder,
+    referenced_tables: Option<&TableReferences>,
+    cursor_id: CursorID,
+    lhs: (usize, &ast::Expr),
+    resolved: &ResolvedOperator,
+    targets: TypedInTargets,
+    resolver: &Resolver,
+) -> Result<()> {
+    let saw_unknown = program.alloc_register();
+    program.emit_insn(Insn::Integer {
+        value: 0,
+        dest: saw_unknown,
+    });
+    let no_match = program.allocate_label();
+    program.emit_insn(Insn::Rewind {
+        cursor_id,
+        pc_if_empty: no_match,
+    });
+    let loop_start = program.allocate_label();
+    program.preassign_label_to_next_insn(loop_start);
+    let value_reg = program.alloc_register();
+    program.emit_insn(Insn::Column {
+        cursor_id,
+        column: 0,
+        dest: value_reg,
+        default: None,
+    });
+    let equal_reg = program.alloc_register();
+    emit_typed_comparison(
+        program,
+        referenced_tables,
+        &ast::Operator::Equals,
+        resolved,
+        [(lhs.0, Some(lhs.1)), (value_reg, None)],
+        equal_reg,
+        resolver,
+    )?;
+    program.emit_insn(Insn::If {
+        reg: equal_reg,
+        target_pc: targets.found,
+        jump_if_null: false,
+    });
+    let next = program.allocate_label();
+    program.emit_insn(Insn::IfNot {
+        reg: equal_reg,
+        target_pc: next,
+        jump_if_null: false,
+    });
+    program.emit_insn(Insn::Integer {
+        value: 1,
+        dest: saw_unknown,
+    });
+    program.preassign_label_to_next_insn(next);
+    program.emit_insn(Insn::Next {
+        cursor_id,
+        pc_if_next: loop_start,
+        fullscan: false,
+        is_index: false,
+    });
+    program.preassign_label_to_next_insn(no_match);
+    program.emit_insn(Insn::If {
+        reg: saw_unknown,
+        target_pc: targets.unknown,
+        jump_if_null: false,
+    });
+    program.emit_insn(Insn::Goto {
+        target_pc: targets.not_found,
+    });
+    Ok(())
+}
+
 pub(super) fn translate_typed_nullif(
     program: &mut ProgramBuilder,
     referenced_tables: Option<&TableReferences>,

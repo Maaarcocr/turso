@@ -107,9 +107,10 @@ pub use translator::{
     resolve_expr, translate_expr, translate_expr_no_constant_opt, NoConstantOptReason,
 };
 pub(crate) use types::{
-    emit_type_keys, emit_value_conversion, expr_type, hash_join_can_compare_values,
-    resolve_operator, resolve_typed_operator, type_keys, Conversion, DynamicClass, ExprType,
-    NamedType, ResolvedOperator, TypeEnv,
+    emit_type_key, emit_type_keys, emit_value_conversion, emit_value_conversion_in_place,
+    expr_type, hash_join_can_compare_values, hash_join_key_form, resolve_operator,
+    resolve_typed_operator, type_keys, Conversion, DynamicClass, ExprType, HashKeyForm, NamedType,
+    ResolvedOperator, TypeEnv,
 };
 pub use utils::{
     as_binary_components, maybe_apply_affinity, sanitize_string, truth_test_rhs, unwrap_parens,

@@ -141,12 +141,44 @@ pub(crate) fn hash_join_can_compare_values(
     tables: Option<&TableReferences>,
     env: &TypeEnv,
 ) -> bool {
+    hash_join_key_form(lhs, rhs, tables, env).is_some()
+}
+
+pub(crate) enum HashKeyForm {
+    Values,
+    Keys {
+        conversions: [Conversion; 2],
+        key: Box<TypeKey>,
+    },
+}
+
+pub(crate) fn hash_join_key_form(
+    lhs: &ast::Expr,
+    rhs: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> Option<HashKeyForm> {
     match resolve_operator(&ast::Operator::Equals, lhs, rhs, tables, env) {
-        Ok(None) => true,
-        Ok(Some(resolved)) => {
-            resolved.function.is_none() && resolved.conversions.iter().all(Conversion::is_none)
+        Ok(None) => Some(HashKeyForm::Values),
+        Ok(Some(resolved))
+            if resolved.function.is_none()
+                && resolved.conversions.iter().all(Conversion::is_none) =>
+        {
+            Some(HashKeyForm::Values)
         }
-        Err(_) => false,
+        Ok(Some(resolved)) => {
+            let owner = resolved.own_operator_of?;
+            let named = NamedType {
+                def: owner,
+                params: None,
+            };
+            let key = type_key(&named, env.schema).ok()??;
+            Some(HashKeyForm::Keys {
+                conversions: resolved.conversions,
+                key: Box::new(key),
+            })
+        }
+        Err(_) => None,
     }
 }
 
@@ -390,7 +422,7 @@ pub(crate) fn type_keys(
     exprs
         .iter()
         .map(|expr| match expr_type(expr, tables, &env) {
-            ExprType::Named(named) => type_key(&named, resolver),
+            ExprType::Named(named) => type_key(&named, resolver.schema()),
             ExprType::Dynamic(_) => Ok(None),
         })
         .collect()
@@ -402,8 +434,8 @@ pub(crate) struct TypeKey {
     column: Column,
 }
 
-pub(crate) fn type_key(named: &NamedType, resolver: &Resolver) -> Result<Option<TypeKey>> {
-    let Some(resolved) = resolver.schema().resolve_type_unchecked(&named.def.name)? else {
+pub(crate) fn type_key(named: &NamedType, schema: &Schema) -> Result<Option<TypeKey>> {
+    let Some(resolved) = schema.resolve_type_unchecked(&named.def.name)? else {
         return Ok(None);
     };
     Ok(resolved.chain.iter().find_map(|def| {

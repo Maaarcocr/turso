@@ -396,21 +396,21 @@ fn translate_subquery_result_expr(
                 });
             }
 
-            // Only emit Affinity instruction if there's meaningful affinity to apply
-            // (i.e., not all BLOB/NONE affinity)
-            if affinity_str
-                .chars()
-                .map(Affinity::from_char)
-                .any(|a| a != Affinity::Blob)
-            {
-                if let Ok(count) = std::num::NonZeroUsize::try_from(lhs_column_count) {
-                    program.emit_insn(Insn::Affinity {
-                        start_reg: lhs_column_regs_start,
-                        count,
-                        affinities: affinity_str.as_ref().clone(),
-                    });
+            let typed_equality = match lhs_columns.as_slice() {
+                [lhs_column] => {
+                    let env = TypeEnv::from_resolver(resolver);
+                    let lhs_type = expr_type(lhs_column, referenced_tables, &env);
+                    resolve_typed_operator(
+                        &ast::Operator::Equals,
+                        [
+                            (&lhs_type, Some(*lhs_column)),
+                            (&ExprType::Dynamic(DynamicClass::Unknown), None),
+                        ],
+                        &env,
+                    )?
                 }
-            }
+                _ => None,
+            };
 
             // For NOT IN: empty ephemeral or no all-NULL row means TRUE (include)
             // For IN: empty ephemeral or no all-NULL row means FALSE (skip)
@@ -420,25 +420,61 @@ fn translate_subquery_result_expr(
                 label_skip_row
             };
 
-            if *not_in {
-                // NOT IN: skip row if value is found
-                program.emit_insn(Insn::Found {
-                    cursor_id: *cursor_id,
-                    target_pc: label_skip_row,
-                    record_reg: lhs_column_regs_start,
-                    num_regs: lhs_column_count,
-                });
+            if let Some(resolved) = typed_equality {
+                emit_typed_in_subquery_probe(
+                    program,
+                    referenced_tables,
+                    *cursor_id,
+                    (lhs_column_regs_start, lhs_columns[0]),
+                    &resolved,
+                    TypedInTargets {
+                        found: if *not_in {
+                            label_skip_row
+                        } else {
+                            label_include_row
+                        },
+                        not_found: label_on_no_null,
+                        unknown: label_null_result,
+                    },
+                    resolver,
+                )?;
             } else {
-                // IN: if value found, include row; otherwise check for NULLs
-                program.emit_insn(Insn::NotFound {
-                    cursor_id: *cursor_id,
-                    target_pc: label_null_rewind,
-                    record_reg: lhs_column_regs_start,
-                    num_regs: lhs_column_count,
-                });
-                program.emit_insn(Insn::Goto {
-                    target_pc: label_include_row,
-                });
+                // Only emit Affinity instruction if there's meaningful affinity to apply
+                // (i.e., not all BLOB/NONE affinity)
+                if affinity_str
+                    .chars()
+                    .map(Affinity::from_char)
+                    .any(|a| a != Affinity::Blob)
+                {
+                    if let Ok(count) = std::num::NonZeroUsize::try_from(lhs_column_count) {
+                        program.emit_insn(Insn::Affinity {
+                            start_reg: lhs_column_regs_start,
+                            count,
+                            affinities: affinity_str.as_ref().clone(),
+                        });
+                    }
+                }
+
+                if *not_in {
+                    // NOT IN: skip row if value is found
+                    program.emit_insn(Insn::Found {
+                        cursor_id: *cursor_id,
+                        target_pc: label_skip_row,
+                        record_reg: lhs_column_regs_start,
+                        num_regs: lhs_column_count,
+                    });
+                } else {
+                    // IN: if value found, include row; otherwise check for NULLs
+                    program.emit_insn(Insn::NotFound {
+                        cursor_id: *cursor_id,
+                        target_pc: label_null_rewind,
+                        record_reg: lhs_column_regs_start,
+                        num_regs: lhs_column_count,
+                    });
+                    program.emit_insn(Insn::Goto {
+                        target_pc: label_include_row,
+                    });
+                }
             }
 
             // Null checking loop: scan ephemeral for any all-NULL tuples.
