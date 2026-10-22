@@ -101,7 +101,7 @@ Lowered:
 | `MOD`, `%`, `XOR`, `&&`, `\|\|`, `!`, `^`, `<=>` | `%`; `(NOT a) <> (NOT b)`; `AND`; `OR`; `NOT`; `(a \| b) - (a & b)` (only when neither side calls a function or has a subquery, since both sides appear twice); `IS` |
 | `a LIKE p [ESCAPE c]`, `REGEXP`, `RLIKE` | `LIKE` with `ESCAPE '\'` unless the pattern is a string without backslashes (MySQL's default escape character); a dangling escape at the end of a literal pattern matches itself, as in MySQL; `REGEXP` operator |
 | Function calls | Passed through by name, so SQLite built-ins and the MySQL functions in `mysql/frontend/functions` both resolve; `COUNT(*)`, `DISTINCT` arguments and `OVER` are kept. Arguments of the numeric functions (`ABS`, `ACOS`, `ASIN`, `ATAN`, `ATAN2`, `CEIL`, `CEILING`, `CHAR`, `COS`, `COT`, `DEGREES`, `EXP`, `FLOOR`, `LN`, `LOG`, `LOG10`, `LOG2`, `MOD`, `POW`, `POWER`, `RADIANS`, `ROUND`, `SIGN`, `SIN`, `SQRT`, `TAN`, `TRUNCATE`) and the condition of `IF` are a numeric context for literals; the separator of `CONCAT_WS` is text |
-| `CAST(x AS JSON)` used as a value (a selected column, a `CASE`/`IF` result, or a function argument), a boolean expression (`TRUE`, `a = b`, `NOT a`, `IN`, `LIKE`, ...) used as a value of `JSON_ARRAY`, `JSON_OBJECT`, `JSON_SET`, `JSON_INSERT`, `JSON_REPLACE`, `JSON_ARRAY_APPEND`, `JSON_ARRAY_INSERT` or `CAST(... AS JSON)`, and `x MEMBER OF (y)` | `__mysql_cast_as_json(x)`, `__mysql_cast_boolean_as_json(x)`, `__mysql_member_of(x, y)` (see JSON functions) |
+| `CAST(x AS JSON)` used as a value (a selected column, a `CASE`/`IF` result, a `JSON_*` argument, or an argument of another function whose other arguments are non-NULL literals), a boolean expression (`TRUE`, `a = b`, `NOT a`, `IN`, `LIKE`, ...) used as a value of `JSON_ARRAY`, `JSON_OBJECT`, `JSON_SET`, `JSON_INSERT`, `JSON_REPLACE`, `JSON_ARRAY_APPEND`, `JSON_ARRAY_INSERT` or `CAST(... AS JSON)`, and `x MEMBER OF (y)` | `__mysql_cast_as_json(x)`, `__mysql_cast_boolean_as_json(x)`, `__mysql_member_of(x, y)` (see JSON functions) |
 | `GET_FORMAT(DATE \| TIME \| DATETIME \| TIMESTAMP, f)` | `GET_FORMAT('DATE', f)` |
 | `GROUP_CONCAT(a, b, ... [ORDER BY ...] [SEPARATOR s])` | `group_concat(a \|\| b \|\| ..., s)` (Turso does not support `ORDER BY` inside aggregates yet and reports an error) |
 | `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms) |
@@ -136,11 +136,14 @@ yet:
   `DIV` with a literal outside the BIGINT range, bit operations on fractional
   or out-of-range number literals, and `_binary` strings in numeric contexts.
 - Binary strings that are not NUL-free UTF-8 outside numeric contexts.
-- `CAST(x AS JSON)` in a comparison, arithmetic, a condition, or an argument
-  of `CONCAT_WS`, `ELT` or `MAKE_SET`: MySQL compares and computes JSON values
-  by JSON rules, while the lowered value is JSON text, and MySQL does not
-  evaluate every argument of those functions (`CONCAT_WS(NULL, ...)` never
-  casts), while Turso does.
+- `CAST(x AS JSON)` in a comparison, arithmetic or a condition: MySQL
+  compares and computes JSON values by JSON rules, while the lowered value is
+  JSON text.
+- `CAST(x AS JSON)` as an argument of a function other than `JSON_*` when the
+  function is `CONCAT_WS`, `ELT` or `MAKE_SET`, or when another argument is
+  not a non-NULL literal: MySQL stops evaluating arguments at the first NULL
+  (`MAKEDATE(CAST('x' AS JSON), NULL)` is NULL) or never evaluates unused
+  ones, while Turso evaluates every argument and reports the invalid JSON.
 - Temporal literals compared with a number, or with a string that is not a
   valid value of their type; `DATETIME '..'`; invalid temporal literals; odd
   `X'...'` digits; character set introducers other than the ones above.
