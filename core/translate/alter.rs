@@ -753,7 +753,7 @@ fn emit_add_column_check_validation(
 
     if let Ok(Some(resolved)) = resolver
         .schema()
-        .resolve_type(&column.ty_str, btree.is_strict)
+        .column_resolved_type(column, btree.is_strict)
     {
         if resolved.is_domain() {
             for td in &resolved.chain {
@@ -1335,7 +1335,7 @@ pub fn translate_alter_table(
             if column.default.is_none() {
                 if let Ok(Some(resolved)) = resolver
                     .schema()
-                    .resolve_type(&column.ty_str, btree.is_strict)
+                    .column_resolved_type(&column, btree.is_strict)
                 {
                     if let Some(type_default) = resolved.default_expr() {
                         column.default = Some(Box::new(type_default.clone()));
@@ -1474,7 +1474,7 @@ pub fn translate_alter_table(
                 // Check if we need to verify the table is empty at runtime.
                 let type_default = resolver
                     .schema()
-                    .resolve_type(&column.ty_str, btree.is_strict)
+                    .column_resolved_type(&column, btree.is_strict)
                     .ok()
                     .flatten()
                     .and_then(|r| r.default_expr().cloned());
@@ -2591,8 +2591,8 @@ fn strict_column_type_changed(old: &Column, new: &Column, schema: &Schema) -> bo
         return true;
     }
     match (
-        schema.get_type_def(&old.ty_str, true),
-        schema.get_type_def(&new.ty_str, true),
+        schema.column_type_def(old, true),
+        schema.column_type_def(new, true),
     ) {
         (None, None) => old.strict_value_type() != new.strict_value_type(),
         (Some(_), Some(_)) => {

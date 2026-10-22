@@ -310,7 +310,7 @@ pub(super) fn automatic_index_terms(
             .table_col_pos
             .expect("a term that can drive an index seek has a column")];
         let has_custom_type = schema
-            .get_type_def(&column.ty_str, table.table.is_strict())
+            .column_type_def(column, table.table.is_strict())
             .is_some();
         !has_custom_type || term.operator == ast::Operator::Equals.into()
     };
@@ -2512,7 +2512,7 @@ fn typed_column_constraint_can_use_index(
     schema: &Schema,
 ) -> bool {
     if schema
-        .get_type_def(&column.ty_str, table_reference.table.is_strict())
+        .column_type_def(column, table_reference.table.is_strict())
         .is_none()
     {
         return true;
@@ -2610,7 +2610,7 @@ fn typed_column_can_seek_equal_to(
 
 fn reads_stored_values_unchanged(column: &crate::schema::Column, schema: &Schema) -> bool {
     schema
-        .resolve_type_unchecked(&column.ty_str)
+        .column_resolved_type(column, true)
         .ok()
         .flatten()
         .is_some_and(|resolved| resolved.reads_stored_values_unchanged())

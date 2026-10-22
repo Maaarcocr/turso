@@ -1080,6 +1080,19 @@ types) are tested after closing and reopening the database, after ALTER TABLE
 and after VACUUM. For each commit, `EXPLAIN` of every statement in
 `sqlite-sqltests` is compared with custom types off, as for Proposal 1.
 
+### Implementation notes (Proposal 2)
+
+- **Types of attached databases (commit 13).** Each column keeps the type that
+  its own database resolved when the schema was loaded, and INSERT, UPDATE,
+  SELECT, indexes and ALTER TABLE encode and decode with it. Typed expressions
+  (operators, keys and conversions) still look types up by name in the main
+  database, because operator signatures and type functions name their types.
+  So a column of an attached database is typed in expressions only when the
+  main database defines a type of the same name the same way (the same CREATE
+  TYPE text, also for each base type of a domain). Otherwise the column is
+  untyped in expressions: its decoded values are compared and sorted with
+  SQLite's rules, and a main type of the same name is never used for it.
+
 ## Proposal 3: PostgreSQL frontend
 
 A separate PostgreSQL PR. `postgres/parser/translator.rs` emits

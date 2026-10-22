@@ -898,9 +898,8 @@ fn emit_update_column_values<'a>(
                             let union_td = t_ctx
                                 .resolver
                                 .schema
-                                .get_type_def_unchecked(&table_column.ty_str)
-                                .filter(|td| td.is_union())
-                                .cloned();
+                                .column_type_def(table_column, true)
+                                .filter(|td| td.is_union());
                             let prev_union = program.target_union_type.take();
                             program.target_union_type = union_td;
 
@@ -910,7 +909,7 @@ fn emit_update_column_values<'a>(
                             let has_custom_encode = t_ctx
                                 .resolver
                                 .schema
-                                .resolve_type_unchecked(&table_column.ty_str)
+                                .column_resolved_type(table_column, true)
                                 .ok()
                                 .flatten()
                                 .is_some_and(|r| r.chain.iter().any(|td| td.encode().is_some()));

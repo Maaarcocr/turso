@@ -2755,7 +2755,7 @@ fn translate_column_expr(
                 if !(virtual_already_applied
                     || resolver
                         .schema()
-                        .get_type_def(&column.ty_str, table.is_strict())
+                        .column_type_def(column, table.is_strict())
                         .is_some())
                 {
                     maybe_apply_affinity(column.ty(), target_register, program);

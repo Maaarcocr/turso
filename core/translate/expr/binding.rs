@@ -455,8 +455,7 @@ pub fn bind_and_rewrite_expr<'a>(
                             });
                             if let Some(col_idx) = col_idx {
                                 let col = &tbl.columns()[col_idx];
-                                let type_def =
-                                    resolver.schema().get_type_def_unchecked(&col.ty_str);
+                                let type_def = main_type_def_of_column(resolver.schema(), col);
                                 let is_struct_or_union = type_def
                                     .map(|td| td.is_struct() || td.is_union())
                                     .unwrap_or(false);
@@ -1050,7 +1049,9 @@ pub(super) fn resolve_column_type_str(
 ) -> Option<String> {
     if let Some(rt) = referenced_tables {
         if let Some((_, tbl)) = rt.find_table_by_internal_id(table) {
-            return Some(tbl.columns().get(column)?.ty_str.clone());
+            let column = tbl.columns().get(column)?;
+            return main_type_def_of_column(resolver.schema(), column)
+                .map(|_| column.ty_str.clone());
         }
     }
     if table.is_self_table() {
@@ -1085,7 +1086,7 @@ pub(super) fn find_custom_type_column<'a>(
                 .is_some_and(|n| n.eq_ignore_ascii_case(col_name))
         }) {
             let col = &cols[col_idx];
-            let type_def = resolver.schema().get_type_def_unchecked(&col.ty_str);
+            let type_def = main_type_def_of_column(resolver.schema(), col);
             let is_struct_or_union = type_def
                 .map(|td| td.is_struct() || td.is_union())
                 .unwrap_or(false);
@@ -1220,7 +1221,7 @@ pub(super) fn resolve_expr_output_type<'a>(
                 crate::bail_parse_error!("cannot resolve type: table not found");
             };
             let col = &tbl.columns()[*column];
-            let Some(td) = resolver.schema().get_type_def_unchecked(&col.ty_str) else {
+            let Some(td) = main_type_def_of_column(resolver.schema(), col) else {
                 crate::bail_parse_error!(
                     "column '{}' has type '{}' which is not a known struct or union type",
                     col.name.as_deref().unwrap_or("?"),

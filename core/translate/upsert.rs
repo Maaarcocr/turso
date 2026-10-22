@@ -696,9 +696,8 @@ pub fn emit_upsert(
         let col = &table.columns()[*col_idx];
         let union_td = resolver
             .schema()
-            .get_type_def_unchecked(&col.ty_str)
-            .filter(|td| td.is_union())
-            .cloned();
+            .column_type_def(col, true)
+            .filter(|td| td.is_union());
         let prev_union = program.target_union_type.take();
         program.target_union_type = union_td;
         let translate_result = translate_expr_no_constant_opt(

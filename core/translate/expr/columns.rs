@@ -99,7 +99,7 @@ pub fn emit_stored_column(
         let default_expr = column.default.as_ref()?;
         let resolved = resolver
             .schema()
-            .resolve_type(&column.ty_str, table.is_strict)
+            .column_resolved_type(column, table.is_strict)
             .ok()??;
         resolved
             .chain

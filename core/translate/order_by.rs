@@ -100,7 +100,7 @@ fn result_column_custom_type_info<'a>(
     {
         let (_, table) = referenced_tables.find_table_by_internal_id(*table_ref_id)?;
         let col = table.get_column_at(*column)?;
-        let type_def = schema.get_type_def(&col.ty_str, table.is_strict())?.clone();
+        let type_def = schema.column_type_def(col, table.is_strict())?;
         Some((col, type_def))
     } else {
         None
@@ -124,7 +124,7 @@ fn is_custom_type_without_lt(
     {
         if let Some((_, table)) = referenced_tables.find_table_by_internal_id(*table_ref_id) {
             if let Some(col) = table.get_column_at(*column) {
-                if let Some(type_def) = schema.get_type_def(&col.ty_str, table.is_strict()) {
+                if let Some(type_def) = schema.column_type_def(col, table.is_strict()) {
                     if type_def.decode().is_some() {
                         // No `<` operator at all (naked or with function)
                         return !type_def.operators().iter().any(|op| op.op == "<");

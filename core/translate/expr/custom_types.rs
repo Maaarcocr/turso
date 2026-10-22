@@ -494,7 +494,7 @@ pub(crate) fn emit_dml_expr_index_value(
         if col.is_rowid_alias() {
             continue;
         }
-        if let Ok(Some(resolved)) = resolver.schema().resolve_type(&col.ty_str, is_strict) {
+        if let Ok(Some(resolved)) = resolver.schema().column_resolved_type(col, is_strict) {
             if resolved.chain.iter().any(|td| td.decode().is_some()) {
                 let src_reg = column_regs[i];
                 let tmp = program.alloc_register();
@@ -548,7 +548,7 @@ pub(crate) fn emit_user_facing_column_value(
     if column.is_array() {
         return Ok(());
     }
-    if let Ok(Some(resolved)) = resolver.schema().resolve_type(&column.ty_str, is_strict) {
+    if let Ok(Some(resolved)) = resolver.schema().column_resolved_type(column, is_strict) {
         if resolved.chain.iter().all(|td| td.decode().is_none()) {
             return Ok(());
         }
@@ -732,7 +732,7 @@ pub(crate) fn emit_trigger_decode_registers(
         .iter()
         .enumerate()
         .map(|(i, col)| -> Result<usize> {
-            if let Ok(Some(resolved)) = resolver.schema().resolve_type(&col.ty_str, is_strict) {
+            if let Ok(Some(resolved)) = resolver.schema().column_resolved_type(col, is_strict) {
                 if resolved.chain.iter().any(|td| td.decode().is_some()) {
                     let decoded_reg = program.alloc_register();
                     emit_user_facing_column_value(

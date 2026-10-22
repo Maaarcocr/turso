@@ -1833,7 +1833,7 @@ fn emit_notnulls(
         // ENCODE produces a non-NULL value but DECODE returns NULL.
         let has_decode = resolver
             .schema()
-            .resolve_type(&column_mapping.column.ty_str, ctx.table.is_strict)
+            .column_resolved_type(column_mapping.column, ctx.table.is_strict)
             .ok()
             .flatten()
             .is_some_and(|resolved| resolved.chain.iter().any(|td| td.decode().is_some()));
@@ -1941,7 +1941,7 @@ fn resolve_defaults_in_row(
         };
         *expr = match col {
             Some(col) => col.default.clone().unwrap_or_else(|| {
-                if let Ok(Some(resolved)) = resolver.schema().resolve_type(&col.ty_str, is_strict) {
+                if let Ok(Some(resolved)) = resolver.schema().column_resolved_type(col, is_strict) {
                     if let Some(default_expr) = resolved.default_expr() {
                         return Box::new(default_expr.clone());
                     }
@@ -1979,7 +1979,7 @@ fn bind_insert(
                 .map(|c| {
                     c.default.clone().unwrap_or_else(|| {
                         if let Ok(Some(resolved)) =
-                            resolver.schema().resolve_type(&c.ty_str, is_strict)
+                            resolver.schema().column_resolved_type(c, is_strict)
                         {
                             if let Some(default_expr) = resolved.default_expr() {
                                 return Box::new(default_expr.clone());
@@ -2349,7 +2349,7 @@ fn init_source_emission<'a>(
             let is_strict = table.is_strict();
             values.extend(storable_columns.iter().map(|c| {
                 c.default.clone().unwrap_or_else(|| {
-                    if let Ok(Some(resolved)) = resolver.schema().resolve_type(&c.ty_str, is_strict)
+                    if let Ok(Some(resolved)) = resolver.schema().column_resolved_type(c, is_strict)
                     {
                         if let Some(default_expr) = resolved.default_expr() {
                             return Box::new(default_expr.clone());
@@ -2778,9 +2778,8 @@ fn translate_column(
         // against this column's union type. See ProgramBuilder::target_union_type.
         let union_td = resolver
             .schema()
-            .get_type_def_unchecked(&column.ty_str)
-            .filter(|td| td.is_union())
-            .cloned();
+            .column_type_def(column, true)
+            .filter(|td| td.is_union());
         let prev = program.target_union_type.take();
         program.target_union_type = union_td;
         let result = translate_value_fn(program, value_index, column_register);
@@ -2802,7 +2801,7 @@ fn translate_column(
     } else {
         let resolved = resolver
             .schema()
-            .resolve_type(&column.ty_str, is_strict)
+            .column_resolved_type(column, is_strict)
             .ok()
             .flatten();
         let default_expr = column

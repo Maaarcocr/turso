@@ -421,7 +421,7 @@ impl<'a, 'plan> PreparedHashBuild<'a, 'plan> {
                             .t_ctx
                             .resolver
                             .schema()
-                            .get_type_def(&column.ty_str, build_table.table.is_strict())
+                            .column_type_def(column, build_table.table.is_strict())
                             .is_none()
                         {
                             maybe_apply_affinity(column.ty(), payload_reg + i, planner.program);

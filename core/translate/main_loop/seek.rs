@@ -494,7 +494,7 @@ fn emit_typed_seek_key(
     .map(|resolved| resolved.conversions[1].clone())
     .unwrap_or(Conversion::None);
     let converted_reg = emit_value_conversion(program, key_reg, &conversion, resolver)?;
-    let Some(resolved_type) = resolver.schema().resolve_type(&column.ty_str, true)? else {
+    let Some(resolved_type) = resolver.schema().column_resolved_type(column, true)? else {
         return Err(crate::LimboError::InternalError(format!(
             "column type {} is not registered",
             column.ty_str

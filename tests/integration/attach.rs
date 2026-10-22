@@ -927,3 +927,109 @@ fn test_attached_write_txn_rolled_back_after_io_error() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_attached_database_encodes_with_its_own_types() -> anyhow::Result<()> {
+    let dir = TempDir::new()?;
+    let other_path = dir.path().join("prices.db");
+    let opts = || {
+        DatabaseOpts::new()
+            .with_custom_types(true)
+            .with_attach(true)
+    };
+    {
+        let other = TempDatabase::builder()
+            .with_db_path(&other_path)
+            .with_opts(opts())
+            .build();
+        let conn = other.connect_limbo();
+        conn.execute("CREATE TYPE cents BASE integer ENCODE value * 100 DECODE value / 100")?;
+        conn.execute("CREATE TABLE prices(id INTEGER PRIMARY KEY, amount cents) STRICT")?;
+        conn.close()?;
+    }
+    {
+        let main = TempDatabase::builder().with_opts(opts()).build();
+        let conn = main.connect_limbo();
+        conn.execute(format!("ATTACH '{}' AS other", other_path.display()))?;
+        conn.execute("INSERT INTO other.prices VALUES (1, 12)")?;
+        let rows: Vec<(i64,)> = conn.exec_rows("SELECT amount FROM other.prices");
+        assert_eq!(rows, vec![(12,)]);
+        let rows: Vec<(i64,)> = conn.exec_rows("SELECT id FROM other.prices WHERE amount = 12");
+        assert_eq!(rows, vec![(1,)]);
+        conn.close()?;
+    }
+    let other = TempDatabase::builder()
+        .with_db_path(&other_path)
+        .with_opts(opts())
+        .build();
+    let conn = other.connect_limbo();
+    let rows: Vec<(i64,)> = conn.exec_rows("SELECT amount FROM prices");
+    assert_eq!(rows, vec![(12,)]);
+    Ok(())
+}
+
+#[test]
+fn test_expressions_on_an_attached_type_ignore_a_main_type_of_the_same_name() -> anyhow::Result<()>
+{
+    let dir = TempDir::new()?;
+    let other_path = dir.path().join("codes.db");
+    let opts = || {
+        DatabaseOpts::new()
+            .with_custom_types(true)
+            .with_attach(true)
+    };
+    {
+        let other = TempDatabase::builder()
+            .with_db_path(&other_path)
+            .with_opts(opts())
+            .build();
+        let conn = other.connect_limbo();
+        conn.execute("CREATE TYPE code BASE text ENCODE value DECODE value")?;
+        conn.execute("CREATE TABLE codes(id INTEGER PRIMARY KEY, c code) STRICT")?;
+        conn.execute("INSERT INTO codes VALUES (1, 'ABC')")?;
+        conn.close()?;
+    }
+    let main = TempDatabase::builder().with_opts(opts()).build();
+    let conn = main.connect_limbo();
+    conn.execute("CREATE TYPE code BASE text ENCODE lower(value) DECODE value")?;
+    conn.execute(format!("ATTACH '{}' AS other", other_path.display()))?;
+    let rows: Vec<(i64,)> = conn.exec_rows("SELECT id FROM other.codes WHERE c = 'ABC'");
+    assert_eq!(rows, vec![(1,)]);
+    Ok(())
+}
+
+#[test]
+fn test_attached_struct_fields_never_use_a_different_main_layout() -> anyhow::Result<()> {
+    let dir = TempDir::new()?;
+    let other_path = dir.path().join("points.db");
+    let opts = || {
+        DatabaseOpts::new()
+            .with_custom_types(true)
+            .with_attach(true)
+    };
+    {
+        let other = TempDatabase::builder()
+            .with_db_path(&other_path)
+            .with_opts(opts())
+            .build();
+        let conn = other.connect_limbo();
+        conn.execute("CREATE TYPE point AS STRUCT(x INT, y INT)")?;
+        conn.execute("CREATE TABLE points(id INT, pos point) STRICT")?;
+        conn.execute("INSERT INTO points VALUES (1, struct_pack(10, 20))")?;
+        conn.close()?;
+    }
+    let same = TempDatabase::builder().with_opts(opts()).build();
+    let conn = same.connect_limbo();
+    conn.execute("CREATE TYPE point AS STRUCT(x INT, y INT)")?;
+    conn.execute(format!("ATTACH '{}' AS other", other_path.display()))?;
+    let rows: Vec<(i64,)> = conn.exec_rows("SELECT pos.x FROM other.points");
+    assert_eq!(rows, vec![(10,)]);
+    conn.close()?;
+
+    let swapped = TempDatabase::builder().with_opts(opts()).build();
+    let conn = swapped.connect_limbo();
+    conn.execute("CREATE TYPE point AS STRUCT(y INT, x INT)")?;
+    conn.execute(format!("ATTACH '{}' AS other", other_path.display()))?;
+    assert!(conn.prepare("SELECT pos.x FROM other.points").is_err());
+    Ok(())
+}

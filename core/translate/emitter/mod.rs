@@ -2564,7 +2564,7 @@ fn column_has_decode(column: &Column, table: &JoinedTable, resolver: &Resolver) 
     !column.is_array()
         && resolver
             .schema()
-            .resolve_type(&column.ty_str, table.table.is_strict())
+            .column_resolved_type(column, table.table.is_strict())
             .ok()
             .flatten()
             .is_some_and(|resolved| resolved.chain.iter().any(|def| def.decode().is_some()))

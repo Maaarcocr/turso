@@ -84,9 +84,12 @@ pub(crate) fn column_named_type(
     if column.is_array() {
         return None;
     }
-    let def = schema.get_type_def(&column.ty_str, is_strict)?;
+    let def = schema.column_type_def(column, is_strict)?;
+    if !defined_the_same_way_in(schema, column) {
+        return None;
+    }
     Some(NamedType {
-        def: Arc::clone(def),
+        def,
         params: Some(
             column
                 .ty_params
@@ -95,6 +98,31 @@ pub(crate) fn column_named_type(
                 .collect(),
         ),
     })
+}
+
+pub(crate) fn main_type_def_of_column<'a>(
+    schema: &'a Schema,
+    column: &Column,
+) -> Option<&'a Arc<TypeDef>> {
+    if !defined_the_same_way_in(schema, column) {
+        return None;
+    }
+    schema.get_type_def_unchecked(&column.ty_str)
+}
+
+fn defined_the_same_way_in(schema: &Schema, column: &Column) -> bool {
+    let Some(own) = column.resolved_type() else {
+        return true;
+    };
+    let Ok(Some(found)) = schema.resolve_type_unchecked(&own.leaf().name) else {
+        return false;
+    };
+    own.chain.len() == found.chain.len()
+        && own
+            .chain
+            .iter()
+            .zip(&found.chain)
+            .all(|(own, found)| Arc::ptr_eq(own, found) || own.to_sql() == found.to_sql())
 }
 
 pub(crate) fn operator_type(expr_type: &ExprType, env: &TypeEnv) -> ExprType {
