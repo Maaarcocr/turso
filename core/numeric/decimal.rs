@@ -7,6 +7,8 @@ use crate::{LimboError, ValueBlob};
 const NUMERIC_BLOB_VERSION: u8 = 0x01;
 const FLAG_NEGATIVE: u8 = 0x01;
 const MAX_SCALE_MAGNITUDE: i64 = 1_000_000;
+const MAX_INTEGER_DIGITS: i64 = 131_072;
+const MAX_FRACTION_DIGITS: i64 = 16_383;
 const DIVISION_MIN_SIGNIFICANT_DIGITS: i64 = 16;
 const DIVISION_MAX_SCALE: i64 = 1000;
 const DECIMAL_DIGITS_PER_BASE_10000_DIGIT: i64 = 4;
@@ -173,6 +175,31 @@ pub fn format_numeric(bd: &BigDecimal) -> String {
     }
 }
 
+pub fn parse_decimal(text: &str) -> crate::Result<BigDecimal> {
+    use std::str::FromStr;
+
+    let value = BigDecimal::from_str(text).map_err(|_| {
+        LimboError::Constraint(format!("invalid input for type numeric: \"{text}\""))
+    })?;
+    check_numeric_range(value)
+}
+
+pub fn check_numeric_range(value: BigDecimal) -> crate::Result<BigDecimal> {
+    use bigdecimal::Zero;
+
+    if value.is_zero() {
+        return Ok(value);
+    }
+    let (_, scale) = value.as_bigint_and_exponent();
+    let integer_digits = (value.digits() as i64).saturating_sub(scale);
+    if scale > MAX_FRACTION_DIGITS || integer_digits > MAX_INTEGER_DIGITS {
+        return Err(LimboError::Constraint(format!(
+            "numeric value out of range: at most {MAX_INTEGER_DIGITS} digits before the decimal point and {MAX_FRACTION_DIGITS} after it"
+        )));
+    }
+    Ok(value)
+}
+
 pub fn numeric_key(value: &BigDecimal) -> crate::Result<Vec<u8>> {
     use bigdecimal::Zero;
 
@@ -215,14 +242,14 @@ pub fn divide(dividend: &BigDecimal, divisor: &BigDecimal) -> crate::Result<BigD
     if divisor.is_zero() {
         return Err(LimboError::Constraint("division by zero".to_string()));
     }
-    let result_scale = division_scale(dividend, divisor);
+    let result_scale = division_scale(dividend, divisor)?;
     let (dividend_digits, dividend_scale) = dividend.as_bigint_and_exponent();
     let (divisor_digits, divisor_scale) = divisor.as_bigint_and_exponent();
     let shift = divisor_scale - dividend_scale + result_scale;
     let (numerator, denominator) = if shift >= 0 {
-        (dividend_digits * power_of_ten(shift), divisor_digits)
+        (dividend_digits * power_of_ten(shift)?, divisor_digits)
     } else {
-        (dividend_digits, divisor_digits * power_of_ten(-shift))
+        (dividend_digits, divisor_digits * power_of_ten(-shift)?)
     };
     let quotient = &numerator / &denominator;
     let remainder = &numerator % &denominator;
@@ -234,29 +261,29 @@ pub fn divide(dividend: &BigDecimal, divisor: &BigDecimal) -> crate::Result<BigD
     } else {
         quotient - 1
     };
-    Ok(BigDecimal::new(quotient, result_scale))
+    check_numeric_range(BigDecimal::new(quotient, result_scale))
 }
 
-fn division_scale(dividend: &BigDecimal, divisor: &BigDecimal) -> i64 {
-    let (dividend_weight, dividend_leading_digit) = leading_base_10000_digit(dividend);
-    let (divisor_weight, divisor_leading_digit) = leading_base_10000_digit(divisor);
+fn division_scale(dividend: &BigDecimal, divisor: &BigDecimal) -> crate::Result<i64> {
+    let (dividend_weight, dividend_leading_digit) = leading_base_10000_digit(dividend)?;
+    let (divisor_weight, divisor_leading_digit) = leading_base_10000_digit(divisor)?;
     let mut quotient_weight = dividend_weight - divisor_weight;
     if dividend_leading_digit <= divisor_leading_digit {
         quotient_weight -= 1;
     }
     let scale =
         DIVISION_MIN_SIGNIFICANT_DIGITS - quotient_weight * DECIMAL_DIGITS_PER_BASE_10000_DIGIT;
-    scale
+    Ok(scale
         .max(dividend.fractional_digit_count())
         .max(divisor.fractional_digit_count())
-        .clamp(0, DIVISION_MAX_SCALE)
+        .clamp(0, DIVISION_MAX_SCALE))
 }
 
-fn leading_base_10000_digit(value: &BigDecimal) -> (i64, u32) {
+fn leading_base_10000_digit(value: &BigDecimal) -> crate::Result<(i64, u32)> {
     use bigdecimal::Zero;
 
     if value.is_zero() {
-        return (0, 0);
+        return Ok((0, 0));
     }
     let (digits, scale) = value.as_bigint_and_exponent();
     let magnitude = BigInt::from_biguint(Sign::Plus, digits.magnitude().clone());
@@ -264,22 +291,29 @@ fn leading_base_10000_digit(value: &BigDecimal) -> (i64, u32) {
     let weight = leading_power_of_ten.div_euclid(DECIMAL_DIGITS_PER_BASE_10000_DIGIT);
     let shift = -scale - weight * DECIMAL_DIGITS_PER_BASE_10000_DIGIT;
     let leading_digit = if shift >= 0 {
-        magnitude * power_of_ten(shift)
+        magnitude * power_of_ten(shift)?
     } else {
-        magnitude / power_of_ten(-shift)
+        magnitude / power_of_ten(-shift)?
     };
-    let leading_digit =
-        u32::try_from(&leading_digit).expect("leading base-10000 digit fits in u32");
-    assert!(
-        (1..10000).contains(&leading_digit),
-        "leading base-10000 digit out of range: {leading_digit}"
-    );
-    (weight, leading_digit)
+    let leading_digit = u32::try_from(&leading_digit)
+        .ok()
+        .filter(|digit| (1..10000).contains(digit));
+    let Some(leading_digit) = leading_digit else {
+        return Err(LimboError::InternalError(format!(
+            "leading base-10000 digit of {value} is out of range"
+        )));
+    };
+    Ok((weight, leading_digit))
 }
 
-fn power_of_ten(exponent: i64) -> BigInt {
-    let exponent = u32::try_from(exponent).expect("power of ten exponent fits in u32");
-    BigInt::from(10).pow(exponent)
+fn power_of_ten(exponent: i64) -> crate::Result<BigInt> {
+    let limit = 2 * (MAX_INTEGER_DIGITS + MAX_FRACTION_DIGITS) + DIVISION_MAX_SCALE;
+    if !(0..=limit).contains(&exponent) {
+        return Err(LimboError::Constraint(
+            "numeric value out of range".to_string(),
+        ));
+    }
+    Ok(BigInt::from(10).pow(exponent as u32))
 }
 
 /// Validate that a BigDecimal fits within the given precision and scale.
@@ -386,6 +420,26 @@ mod tests {
                 "{dividend} / {divisor}"
             );
         }
+    }
+
+    #[test]
+    fn test_parse_decimal_refuses_values_outside_the_numeric_range() {
+        for text in ["1e-5000000000", "1e-16384", "1e131072", "1e5000000000"] {
+            assert!(parse_decimal(text).is_err(), "{text}");
+        }
+        for text in ["1e-16383", "1e131071", "-12.5"] {
+            assert!(parse_decimal(text).is_ok(), "{text}");
+        }
+    }
+
+    #[test]
+    fn test_divide_returns_an_error_for_huge_exponents() {
+        let one = BigDecimal::from_str("1").unwrap();
+        let tiny = BigDecimal::new(BigInt::from(1), 5_000_000_000);
+        let huge = BigDecimal::new(BigInt::from(1), -5_000_000_000);
+        assert!(divide(&one, &tiny).is_err());
+        assert!(divide(&one, &huge).is_err());
+        assert!(divide(&tiny, &one).is_err());
     }
 
     #[test]

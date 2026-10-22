@@ -6,6 +6,29 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    fn test_numeric_functions_report_huge_exponents_as_out_of_range() {
+        let db = TempDatabase::new_empty();
+        let conn = db.connect_limbo();
+        for sql in [
+            "SELECT numeric_div('1', '1e-5000000000')",
+            "SELECT numeric_div('1', '1e-10000000')",
+            "SELECT numeric_mul('1e100000', '1e100000')",
+            "SELECT numeric_decode(numeric_encode('1e-20000', NULL, NULL))",
+        ] {
+            let started = std::time::Instant::now();
+            assert_that!(conn.execute(sql))
+                .err()
+                .display_string()
+                .contains("out of range");
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(5),
+                "{sql} took {:?}",
+                started.elapsed()
+            );
+        }
+    }
+
+    #[test]
     fn test_uuid_invalid_update_and_upsert_preserve_rows() {
         for mvcc in [false, true] {
             let opts = turso_core::DatabaseOpts::new()

@@ -276,15 +276,13 @@ impl<T> OrOverflow<T> for Option<T> {
 
 /// Parse a Value (text, int, float, or blob) into a BigDecimal.
 fn value_to_bigdecimal(val: &Value) -> Result<bigdecimal::BigDecimal> {
+    use crate::numeric::decimal::{blob_to_bigdecimal, check_numeric_range, parse_decimal};
     use bigdecimal::BigDecimal;
-    use std::str::FromStr;
     match val {
         Value::Numeric(Numeric::Integer(i)) => Ok(BigDecimal::from(*i)),
-        Value::Numeric(Numeric::Float(f)) => BigDecimal::from_str(&f.to_string())
-            .map_err(|_| LimboError::Constraint(format!("invalid numeric value: {f}"))),
-        Value::Text(t) => BigDecimal::from_str(&t.value)
-            .map_err(|_| LimboError::Constraint(format!("invalid numeric value: \"{}\"", t.value))),
-        Value::Blob(b) => crate::numeric::decimal::blob_to_bigdecimal(b),
+        Value::Numeric(Numeric::Float(f)) => parse_decimal(&f.to_string()),
+        Value::Text(t) => parse_decimal(&t.value),
+        Value::Blob(b) => check_numeric_range(blob_to_bigdecimal(b)?),
         _ => Err(LimboError::Constraint(format!(
             "cannot convert to numeric: \"{val}\""
         ))),
@@ -11491,10 +11489,8 @@ pub fn op_function(
                     Value::Null => Value::Null,
                     other => {
                         use crate::numeric::decimal::{
-                            bigdecimal_to_blob, validate_precision_scale,
+                            bigdecimal_to_blob, parse_decimal, validate_precision_scale,
                         };
-                        use bigdecimal::BigDecimal;
-                        use std::str::FromStr;
 
                         let precision = match precision_reg.get_value() {
                             Value::Numeric(Numeric::Integer(i)) => Some(*i),
@@ -11527,11 +11523,7 @@ pub fn op_function(
                                 .into());
                             }
                         };
-                        let bd = BigDecimal::from_str(&text).map_err(|_| {
-                            LimboError::Constraint(format!(
-                                "invalid input for type numeric: \"{text}\""
-                            ))
-                        })?;
+                        let bd = parse_decimal(&text)?;
                         let validated = match precision {
                             Some(precision) => validate_precision_scale(&bd, precision, scale)?,
                             None => bd,
@@ -11571,13 +11563,14 @@ pub fn op_function(
                     _ => {
                         let a = value_to_bigdecimal(&lhs_val)?;
                         let b = value_to_bigdecimal(&rhs_val)?;
-                        let res = match scalar_func {
-                            ScalarFunc::NumericAdd => a + b,
-                            ScalarFunc::NumericSub => a - b,
-                            ScalarFunc::NumericMul => a * b,
-                            ScalarFunc::NumericDiv => crate::numeric::decimal::divide(&a, &b)?,
-                            _ => unreachable!(),
-                        };
+                        let res =
+                            crate::numeric::decimal::check_numeric_range(match scalar_func {
+                                ScalarFunc::NumericAdd => a + b,
+                                ScalarFunc::NumericSub => a - b,
+                                ScalarFunc::NumericMul => a * b,
+                                ScalarFunc::NumericDiv => crate::numeric::decimal::divide(&a, &b)?,
+                                _ => unreachable!(),
+                            })?;
                         Value::build_text(crate::numeric::decimal::format_numeric(&res))
                     }
                 };
