@@ -500,10 +500,9 @@ pub fn translate_insert(
     // This must happen before BEFORE triggers (matching SQLite's order) so that
     // trigger bodies see affinity-applied values. Affinity is idempotent, so
     // applying it here means we can skip the per-trigger Copy+Affinity in fire_trigger.
-    let row_number_reg = ctx
-        .table
-        .dialect_marker
-        .is_some()
+    let row_number_reg = resolver
+        .schema()
+        .uses_name_table(ctx.table)
         .then(|| crate::translate::expr::emit_row_number_counter(program));
     if ctx.table.is_strict {
         emit_custom_type_assign(program, resolver, &insertion, row_number_reg)?;
@@ -661,7 +660,7 @@ pub fn translate_insert(
         }
     }
 
-    if ctx.table.dialect_marker.is_some() && ctx.table.has_rowid {
+    if resolver.schema().uses_name_table(ctx.table) && ctx.table.has_rowid {
         emit_marked_table_key(
             program,
             resolver,

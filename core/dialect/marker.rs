@@ -122,10 +122,45 @@ pub(crate) fn format_rewritten_table_sql(
     stmt: &ast::Stmt,
     marker: Option<&TableMarker>,
 ) -> Result<String> {
+    let marker = match marker {
+        Some(marker) => Some(marker.clone()),
+        None => marker_of_rewritten_statement(dialect, stmt)?,
+    };
     match marker {
         Some(marker) => Ok(marker.write(&SqliteDialect.format_rewritten_table_sql(stmt)?)),
         None => dialect.format_rewritten_table_sql(stmt),
     }
+}
+
+pub(crate) fn mark_rewritten_table(dialect: &dyn Dialect, table: &mut BTreeTable) {
+    if table.dialect_marker.is_none() && marks_rewritten_table(dialect, &table.name) {
+        table.dialect_marker = Some(TableMarker::new(
+            dialect.name(),
+            table.get_rowid_alias_column().is_some(),
+        ));
+    }
+}
+
+fn marker_of_rewritten_statement(
+    dialect: &dyn Dialect,
+    stmt: &ast::Stmt,
+) -> Result<Option<TableMarker>> {
+    let ast::Stmt::CreateTable { tbl_name, body, .. } = stmt else {
+        return Ok(None);
+    };
+    if !marks_rewritten_table(dialect, tbl_name.name.as_str()) {
+        return Ok(None);
+    }
+    let table = crate::schema::create_table(tbl_name.name.as_str(), body, 0)?;
+    Ok(Some(TableMarker::new(
+        dialect.name(),
+        table.get_rowid_alias_column().is_some(),
+    )))
+}
+
+fn marks_rewritten_table(dialect: &dyn Dialect, table_name: &str) -> bool {
+    dialect.marks_rewritten_tables()
+        && !crate::schema::is_system_table(&crate::util::normalize_ident(table_name))
 }
 
 fn stored_table_marker<'a>(
@@ -169,7 +204,7 @@ fn parse_marked_table_sql(table_sql: &str) -> Result<(Option<ast::Stmt>, usize)>
 }
 
 fn dialect_writes_marker(dialect: &dyn Dialect, marker: &TableMarker) -> bool {
-    dialect.marks_tables() && marker.dialect == dialect.name()
+    dialect.marks_rewritten_tables() && marker.dialect == dialect.name()
 }
 
 #[cfg(test)]
@@ -336,6 +371,57 @@ mod tests {
         assert_eq!(query(&conn, "SELECT rowid, key FROM t2"), ints(&[&[5, 5]]));
         assert_eq!(rowid_and_id(&conn, "v"), ints(&[&[5, 5]]));
         conn.close().unwrap();
+    }
+
+    #[test]
+    fn alter_table_keeps_declared_types_and_strict() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        {
+            let db = open_db(&io, "marker-alter-types.db", marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "/* turso_dialect:marking rowid_alias */ CREATE TABLE t(id INT PRIMARY KEY, \
+                 flag TINYINT(1), price DECIMAL(10,2), size ENUMERATION('small','large'), \
+                 big UBIGINT) STRICT",
+            )
+            .unwrap();
+            for statement in [
+                "ALTER TABLE t ADD COLUMN note TEXT",
+                "ALTER TABLE t RENAME COLUMN note TO remark",
+                "ALTER TABLE t DROP COLUMN remark",
+                "ALTER TABLE t ALTER COLUMN flag TO flags TINYINT(3)",
+                "ALTER TABLE t RENAME TO items",
+            ] {
+                conn.execute(statement).unwrap();
+            }
+            assert_eq!(
+                stored_sql(&conn, "items"),
+                "/* turso_dialect:marking rowid_alias */ CREATE TABLE items (id INT PRIMARY KEY, \
+                 flags TINYINT (3), price DECIMAL (10, 2), size ENUMERATION ('small', 'large'), \
+                 big UBIGINT) STRICT"
+            );
+            conn.close().unwrap();
+        }
+        let db = open_db(&io, "marker-alter-types.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("INSERT INTO items VALUES (1, 100, 2.345, 'large', '18446744073709551615')")
+            .unwrap();
+        assert!(conn
+            .execute("INSERT INTO items VALUES (2, 1, 1, 'medium', 1)")
+            .is_err());
+        assert!(conn
+            .execute("INSERT INTO items VALUES (3, 1000, 1, 'small', 1)")
+            .is_err());
+        assert_eq!(
+            query(&conn, "SELECT rowid, id, price, size, big FROM items"),
+            vec![vec![
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::build_text("2.35"),
+                Value::build_text("large"),
+                Value::build_text("18446744073709551615"),
+            ]]
+        );
     }
 
     #[test]

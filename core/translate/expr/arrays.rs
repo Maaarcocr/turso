@@ -206,7 +206,7 @@ pub(crate) fn emit_key_conversion(
     table: &BTreeTable,
     key_reg: usize,
 ) -> Result<()> {
-    let Some(column) = marked_key_column(table) else {
+    let Some(column) = marked_key_column(table, resolver) else {
         return Ok(());
     };
     if column.notnull() {
@@ -228,7 +228,7 @@ pub(crate) fn emit_key_assign(
     key_reg: usize,
     row_number_reg: Option<usize>,
 ) -> Result<()> {
-    let Some(column) = marked_key_column(table) else {
+    let Some(column) = marked_key_column(table, resolver) else {
         return Ok(());
     };
     emit_custom_type_assign_columns(
@@ -249,7 +249,7 @@ pub(crate) fn emit_key_encode(
     key_reg: usize,
     row_number_reg: Option<usize>,
 ) -> Result<()> {
-    let Some(column) = marked_key_column(table) else {
+    let Some(column) = marked_key_column(table, resolver) else {
         return Ok(());
     };
     emit_custom_type_encode_columns(
@@ -289,7 +289,7 @@ pub(crate) fn emit_generated_key_range_check(
     key_reg: usize,
     row_number_reg: Option<usize>,
 ) -> Result<()> {
-    let Some(column) = marked_key_column(table) else {
+    let Some(column) = marked_key_column(table, resolver) else {
         return Ok(());
     };
     let largest = resolver
@@ -328,8 +328,10 @@ pub(crate) fn emit_generated_key_range_check(
     Ok(())
 }
 
-fn marked_key_column(table: &BTreeTable) -> Option<&Column> {
-    table.dialect_marker.as_ref()?;
+fn marked_key_column<'a>(table: &'a BTreeTable, resolver: &Resolver) -> Option<&'a Column> {
+    if !resolver.schema().uses_name_table(table) {
+        return None;
+    }
     table.get_rowid_alias_column().map(|(_, column)| column)
 }
 

@@ -873,7 +873,8 @@ fn validate(
         for c in columns {
             if let Some(ref col_type) = c.col_type {
                 let type_name = &column_declared_type(&col_type.name);
-                let is_builtin = table_marker.is_none() && is_builtin_strict_type(&col_type.name);
+                let is_builtin = !(table_marker.is_some() && resolver.schema().has_name_table())
+                    && is_builtin_strict_type(&col_type.name);
 
                 // Array columns require STRICT tables because the encode/decode
                 // pipeline is only emitted for STRICT tables.
@@ -1571,9 +1572,9 @@ pub fn translate_create_table(
     } else if let Some(ref info) = ctas_info {
         info.schema_sql.clone()
     } else if bound_sequence_names {
-        connection
-            .dialect()
-            .format_rewritten_table_sql(&ast::Stmt::CreateTable {
+        crate::dialect::marker::format_rewritten_table_sql(
+            connection.dialect().as_ref(),
+            &ast::Stmt::CreateTable {
                 temporary,
                 if_not_exists,
                 tbl_name: ast::QualifiedName {
@@ -1582,7 +1583,9 @@ pub fn translate_create_table(
                     alias: None,
                 },
                 body: body.clone(),
-            })?
+            },
+            None,
+        )?
     } else {
         connection
             .dialect()
@@ -1783,7 +1786,13 @@ fn new_table_marker(
     input: &str,
 ) -> Result<Option<TableMarker>> {
     let dialect = resolver.dialect.as_ref();
-    if !dialect.marks_tables() || is_system_table(table_name) {
+    if is_system_table(table_name) {
+        return Ok(None);
+    }
+    let statement_marker = TableMarker::read(input.trim_start())?.map(|(marker, _)| marker);
+    let marks_this_table =
+        dialect.marks_tables() || (statement_marker.is_some() && dialect.marks_rewritten_tables());
+    if !marks_this_table {
         return Ok(None);
     }
     let ast::CreateTableBody::ColumnsAndConstraints { options, .. } = body else {
@@ -1795,9 +1804,9 @@ fn new_table_marker(
     if !options.contains_strict() {
         bail_parse_error!("tables in the {} dialect must be STRICT", dialect.name());
     }
-    let rowid_alias_of_statement = match TableMarker::read(input.trim_start())? {
-        Some((marker, _)) if marker.dialect == dialect.name() => Some(marker.rowid_alias),
-        Some((marker, _)) => bail_parse_error!(
+    let rowid_alias_of_statement = match statement_marker {
+        Some(marker) if marker.dialect == dialect.name() => Some(marker.rowid_alias),
+        Some(marker) => bail_parse_error!(
             "a table marked for the {} dialect cannot be created in the {} dialect",
             marker.dialect,
             dialect.name()
@@ -1811,12 +1820,7 @@ fn new_table_marker(
         RowidDecision::AnyDeclaredType,
     )?
     .get_rowid_alias_column()
-    .is_some_and(|(_, column)| {
-        resolver
-            .schema()
-            .largest_key_of_type(&column.ty_str)
-            .is_some()
-    });
+    .is_some_and(|(_, column)| resolver.schema().is_integer_key_type(&column.ty_str));
     let rowid_alias = match rowid_alias_of_statement {
         Some(true) if !integer_key => bail_parse_error!(
             "table {table_name} is marked rowid_alias but its primary key is not of an integer type"

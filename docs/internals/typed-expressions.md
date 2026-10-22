@@ -1328,6 +1328,33 @@ afterwards. Rewritten tables will use the marker of Proposal 2
 (`/* turso_dialect:postgres */` with canonical SQLite text and today's rowid
 rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
 
+### Implementation notes (Proposal 3)
+
+- **Literals and casts (commit 27).** Decimal literals and integer
+  literals too large for bigint become `CAST('<text>' AS numeric)`;
+  integer literals that fit bigint stay integers, because pg_query
+  reports every integer outside int4 as a float constant. `::numeric(p)`
+  has scale 0. The fraction of `percentile_cont` and `percentile_disc`
+  WITHIN GROUP is cast to double precision, the type of that parameter in
+  PostgreSQL.
+- **Marker of rewritten tables (commit 28).** `Dialect::marks_rewritten_tables`
+  (by default `marks_tables`) lets a dialect mark only the tables that core
+  rewrites. PostgreSQL turns it on: ALTER TABLE (ADD, DROP and RENAME
+  COLUMN, ALTER COLUMN, RENAME TABLE and the foreign keys that a rename
+  changes) and CREATE TABLE with bound sequence names store
+  `/* turso_dialect:postgres [rowid_alias] */` with canonical SQLite text,
+  where `rowid_alias` is SQLite's rule applied to the rewritten table.
+  Statements carrying that marker (VACUUM, dump) are accepted again with
+  the same decision. The behaviours that exist for dialects with a name
+  table (every type name looked up in it, ASSIGN of DEFAULTs in ADD
+  COLUMN, conversion of keys, key generation, the column and row of
+  conversion errors) depend on the dialect having one
+  (`Schema::uses_name_table`), not on the marker alone, so PostgreSQL
+  tables behave the same before and after a rewrite. In a dialect without
+  a name table the key of a `rowid_alias` table must be declared exactly
+  INTEGER, as in SQLite. ALTER COLUMN of the key of a marked table is
+  refused in every dialect.
+
 ## Proposal 4: typed aggregates and ordered numeric storage
 
 **Aggregates.** Only type-declared aggregates: `FUNCTION sum(numeric) RETURNS

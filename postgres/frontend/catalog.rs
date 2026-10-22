@@ -177,6 +177,10 @@ impl Dialect for PostgresDialect {
     fn type_rules(&self) -> &'static TypeRules {
         &POSTGRES_TYPE_RULES
     }
+
+    fn marks_rewritten_tables(&self) -> bool {
+        true
+    }
 }
 
 static POSTGRES_TYPE_RULES: TypeRules = TypeRules {

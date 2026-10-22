@@ -1390,7 +1390,7 @@ fn emit_update_insns<'a>(
     let row_number_reg = target_table
         .table
         .btree()
-        .filter(|btree_table| btree_table.dialect_marker.is_some())
+        .filter(|btree_table| t_ctx.resolver.schema().uses_name_table(btree_table))
         .map(|_| crate::translate::expr::emit_row_number_counter(program));
     if let Some(btree_table) = target_table.table.btree() {
         if btree_table.is_strict {
