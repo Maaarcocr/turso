@@ -572,6 +572,61 @@ recorded).
 - `postgres/conformance/pg-sqltests/numeric.sqltest`, values checked with
   `make -C postgres/conformance run-postgres`.
 
+### Implementation notes (Proposal 1)
+
+Where the implementation differs from the text above:
+
+- **Types of attached databases (commit 2) are deferred** to Proposal 2. It
+  needs the database id at about 40 call sites, and its main reason left with
+  the per-database numeric format flag. Until then an attached database's own
+  types are ignored and an INSERT through ATTACH stores values without ENCODE,
+  as before.
+- **Custom types without `=`** (and not domains) compare with SQLite's `=` on
+  the decoded values, after converting a literal or parameter to the type.
+- **Conversions are emitted where the value is used**, not hoisted before the
+  loop; hoisting constant conversions is a possible later optimization.
+- **Column type metadata** is computed on demand in
+  `Statement::get_column_type_info`, not stored in `Program`.
+- **No per-expression type cache.** Each operator computes its operand types
+  once (the first version computed them twice per level, which made long
+  `a + b + ...` chains exponential); translation is quadratic in the depth of
+  a chain, which the parser limits to 100.
+- **CASE, coalesce, ifnull, iif, min and max** convert a branch to the common
+  type only when it is a `?` parameter or its class has a declared `CAST FROM`;
+  a text literal or a value of unknown type is not converted and the result
+  is Dynamic, so `coalesce(p, 'none')` keeps working.
+- **Sorting** takes the comparator from the expression's type but still uses
+  the fixed table of known `<` functions in `order_by.rs`; the generic
+  comparator and the CREATE TYPE check of decision 7 are not done.
+- **IN (SELECT ...)** with a typed left value scans the subquery's rows and
+  compares each with the type's `=`, instead of probing keys stored in the
+  ephemeral index; on a typed column it is not used as an index seek. Row
+  values on the left, and an untyped left value with a typed subquery column,
+  keep the byte lookup.
+- **Hash joins** on a typed `=` hash the keys of both sides (converted as the
+  operator requires); a typed `=` without a KEY is not hashed. Bloom filters
+  are only used on encoded seek keys, which are already canonical.
+- **UNION, INTERSECT and EXCEPT** store keys followed by the keyed values in
+  the dedupe index and check duplicates with `Found` on the key prefix. VALUES
+  branches get keys without a conversion; a compound that writes into an
+  IN (SELECT ...) index keeps the byte comparison.
+- **Expression indexes do not store keys yet.** The planner does not use an
+  index on an expression with a named type (commit 5), so results stay
+  correct.
+- **CHECK constraints** now see decoded column values, consistent with CAST
+  returning the read-back value; before they saw the stored form.
+- **Windows**: a `RANGE` frame with an offset on a typed ORDER BY value is an
+  error. **Materialized views** reject aggregates over typed values and
+  GROUP BY on types with a KEY.
+- **Recursive CTEs** convert the recursive part with a CAST to the anchor's
+  type, so a type with more than two parameters (not expressible as a CAST)
+  leaves the column untyped.
+- **Tests**: operator resolution is tested through
+  `turso-sqltests/typed_expressions.sqltest` (and PostgreSQL's
+  `pg-sqltests/numeric.sqltest`) rather than Rust unit tests; numeric keys
+  have unit tests and a quickcheck property. The attached-database test waits
+  for the deferred commit 2.
+
 ## Proposal 2: dialect-defined types
 
 The MySQL frontend will create STRICT tables and needs three things that are
@@ -584,7 +639,17 @@ integer (`INT` is `ranged_integer(-2147483648, 2147483647)`), an unsigned
 64-bit integer, numeric (`DECIMAL(p,s)`), and an ordered time or interval
 form. The column keeps the declared name (`INT`) for column metadata, while
 storage, KEY and behaviour come from the mapped type. The table has the
-dialect's table-SQL marker, so the SQLite dialect refuses it.
+dialect's table-SQL marker, so the SQLite dialect refuses it. Unsigned 64-bit
+values are always exact, never REAL: the in-memory form is an INTEGER when
+the value fits in an i64 and canonical TEXT otherwise, with an ordered KEY
+(the storage format is chosen when the type is added). Time and interval
+values are stored as integer microseconds; their in-memory form is canonical
+text.
+
+The type rules also gain the parts of Proposal 1's rules that only a
+dialect with its own types uses: signatures over Dynamic classes (MySQL
+`integer / integer` returns DECIMAL) and result-parameter rules (MySQL `/`
+has scale + 4), consumed first by the test dialect and later by MySQL.
 
 **Assignment conversion is behaviour.** Converting a value into a column
 (INSERT, UPDATE, and CAST in that dialect) is part of a type's behaviour, run
@@ -685,26 +750,42 @@ without changing the rest of the design.
 
 Each commit has its own test that fails before it and passes after it.
 
-Proposal 1:
+Proposal 1, as implemented (commit 2 is deferred, commits 8 and 11 were
+split, and one fix was added; see [Implementation notes](#implementation-notes-proposal-1)):
 1. `core/numeric: round half away from zero when applying a scale`
-2. `core/schema: look up column types in the database that owns the table`
+2. (deferred) `core/schema: look up column types in the database that owns the
+   table`
 3. `core/types: compute expression types and report them in column metadata`
 4. `parser: parse operator signatures, implicit casts, type functions, keys and
    parameter defaults`
 5. `core/types: resolve operators with dialect type rules and choose seek keys
-   from the result` (storage and behaviour split; SQLite and PostgreSQL rules;
-   error-to-label seek keys; index and scan agreement tests)
+   from the result`
 6. `core/numeric: use PostgreSQL's scale rule for division`
 7. `core/types: use resolved operators in IN, row values, CASE, IS, nullif,
    min/max and joins`
-8. `core/types: canonical keys and comparators for hash, sort and duplicate
-   checks` (adds the numeric key function)
+   - `core/types: compute operand types once per operator`
+8. keys and comparators, in five commits:
+   - `core/types: sort typed expressions by their type's order`
+   - `core/types: compare DISTINCT values by the type's key` (adds
+     `numeric_key`)
+   - `core/types: group typed values by the type's key`
+   - `core/types: hash joins and IN (SELECT ...) compare typed values with the
+     type's '='`
+   - `core/types: remove duplicates in UNION, INTERSECT and EXCEPT by the
+     type's key`
 9. `core/types: unary operators and type functions`
 10. `core/types: CAST returns the value read back from a STRICT column`
-11. `core/types: types for recursive CTEs, windows and materialized views`
+11. in three commits:
+    - `core/types: recursive CTE columns have the anchor's type`
+    - `core/types: window partitions and peer groups compare typed values by
+      key`
+    - `core/incremental: reject materialized views that aggregate typed values`
 
 Proposal 2:
-12. `core/types: map dialect type names onto core storage types`
+12. `core/types: map dialect type names onto core storage types` (also the
+    Dynamic-class signatures and result-parameter rules moved from
+    Proposal 1, and column type lookup in the database that owns the table,
+    deferred from commit 2)
 13. `core/types: dialect assignment conversions`
 14. `core/schema: ranged-integer primary keys are rowid aliases in dialect
     tables`
@@ -740,10 +821,8 @@ Proposal 4:
 11. Types without `KEY`: no hash join, Bloom filter or IN ephemeral index when
     they declare `=`; DISTINCT, UNION and GROUP BY keep comparing the in-memory
     form.
-
-## Open questions
-
-1. The in-memory form of an unsigned 64-bit integer above 2^63 − 1 (SQLite
-   integers are signed): text, or a REAL that loses precision?
-2. The ordered time and interval storage: canonical text, or integer
-   microseconds?
+12. Unsigned 64-bit values are always exact, never REAL: the in-memory form is
+    an INTEGER when the value fits in an i64, otherwise canonical TEXT; the
+    storage format is chosen with the type, with an ordered KEY.
+13. Time and interval storage is integer microseconds; the in-memory form is
+    canonical text.
