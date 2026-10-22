@@ -11652,11 +11652,10 @@ pub fn op_function(
                 state.registers[*dest].set_value(result);
             }
             ScalarFunc::Storage(func) => {
-                let args = state.registers[*start_reg..*start_reg + arg_count]
-                    .iter()
-                    .map(|register| register.get_value().clone())
-                    .collect::<Vec<_>>();
-                state.registers[*dest].set_value(func.execute(&args)?);
+                let first = state.registers[*start_reg].get_value();
+                let last = state.registers[*start_reg + arg_count - 1].get_value();
+                let result = func.execute(&[first, last][..arg_count])?;
+                state.registers[*dest].set_value(result);
             }
             ScalarFunc::NumericKey => {
                 check_arg_count!(arg_count, 1);

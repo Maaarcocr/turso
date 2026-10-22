@@ -96,13 +96,7 @@ impl StorageFunc {
         }
     }
 
-    pub fn execute(self, args: &[Value]) -> Result<Value> {
-        if args.len() != self.arity() {
-            return Err(LimboError::ParseError(format!(
-                "wrong number of arguments to function {}()",
-                self.name()
-            )));
-        }
+    pub fn execute(self, args: &[&Value]) -> Result<Value> {
         if self != StorageFunc::ConversionError && args.iter().any(|arg| matches!(arg, Value::Null))
         {
             return Ok(Value::Null);
@@ -323,7 +317,8 @@ mod tests {
     use std::sync::Arc;
 
     fn run(func: StorageFunc, args: &[Value]) -> Result<Value> {
-        func.execute(args)
+        let args: Vec<&Value> = args.iter().collect();
+        func.execute(&args)
     }
 
     fn text(value: &str) -> Value {
