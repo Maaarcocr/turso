@@ -47,6 +47,8 @@ Column types keep the MySQL name as the Turso declared type (so affinity follows
 
 `CREATE TABLE` keys are validated like InnoDB does: a `BLOB`/`TEXT` key part needs a prefix length, `JSON` columns cannot be key parts, a prefix must fit the column and be on a string, a key is at most 3072 bytes, key names are distinct, and key columns must exist.
 
+DDL that MySQL itself rejects fails with an error instead of falling back to the SQLite parser (which would often accept it): invalid defaults, invalid keys, a second primary key, an `AUTO_INCREMENT` column outside every key, `NULL` primary key columns, out-of-range type parameters (`VARCHAR(16384)`, `CHAR(256)`, `DECIMAL(5,6)`, `DATETIME(7)`, `BIT(65)`), duplicate `ENUM` members, a collation on a binary string, an index named `PRIMARY`, and identifiers longer than 64 characters. Other DDL MySQL rejects is not detected yet when its SQLite reading is valid, for example foreign keys whose parent table or column types do not match.
+
 Compatibility no-ops (accepted, with no effect in Turso):
 
 - `ENGINE=InnoDB` (other engines are not lowered), `DEFAULT CHARSET`/`CHARACTER SET` `utf8mb4`, `ROW_FORMAT` `DEFAULT`/`DYNAMIC`/`COMPACT`/`REDUNDANT`, `STATS_PERSISTENT`/`STATS_AUTO_RECALC`/`STATS_SAMPLE_PAGES`, `AUTO_INCREMENT=1`, and table `COMMENT`.
@@ -67,7 +69,6 @@ Known gaps:
 - Inserting `0` into an `AUTO_INCREMENT` column fails instead of taking the next value, and updating such a column to `0` fails; unlike InnoDB, a failed insert does not use up a value.
 - `FOREIGN KEY` constraints are stored but Turso does not enforce them unless `PRAGMA foreign_keys` is on.
 - Generated columns are lowered, but Turso only creates them with the experimental generated-columns option, which the MySQL frontend does not enable.
-- MySQL rejects some DDL that SQLite accepts (for example `INT DEFAULT 'abc'` or `TEXT DEFAULT 'x'`). The lowering refuses such statements, but the frontend then parses them as SQLite, which can accept them.
 - Not lowered: `TEMPORARY` tables, `CREATE TABLE ... LIKE`/`AS SELECT`, qualified `db.table` names, `ZEROFILL`, `BINARY(n)`, spatial types, `FULLTEXT`/`SPATIAL` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
 ## JSON functions

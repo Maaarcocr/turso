@@ -5,7 +5,7 @@ use crate::ddl_index::{
     index_options_have_no_effect, is_btree_or_hash, translate_key_parts, KeyPart,
 };
 use crate::ddl_type::ensure_key_length;
-use crate::names::{translate_identifier, translate_unqualified_name};
+use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     CreateTable, CreateTableOptions, Expr, ForeignKeyConstraint, HiveDistributionStyle, Ident,
@@ -148,7 +148,7 @@ pub(crate) fn translate_create_table(
     }
     translate_table_options(table_options)?;
 
-    let table_name = translate_unqualified_name(name)?;
+    let table_name = translate_ddl_name(name)?;
     let columns = columns
         .iter()
         .map(Column::from_mysql)
@@ -276,8 +276,18 @@ impl Table {
             .filter(|column| column.primary_key)
             .count();
         if inline_primary_keys > 1 {
-            return Err(MysqlParserError::Unsupported(
+            return Err(MysqlParserError::Rejected(
                 "a table can have only one PRIMARY KEY".to_string(),
+            ));
+        }
+        let auto_increment_columns = self
+            .columns
+            .iter()
+            .filter(|column| column.auto_increment)
+            .count();
+        if auto_increment_columns > 1 {
+            return Err(MysqlParserError::Rejected(
+                "a table can have only one AUTO_INCREMENT column".to_string(),
             ));
         }
         self.has_primary_key = inline_primary_keys == 1;
@@ -292,7 +302,11 @@ impl Table {
             TableConstraint::Check(check) => {
                 if let Some(expr) = translate_check(check)? {
                     self.constraints.push(ast::NamedTableConstraint {
-                        name: check.name.as_ref().map(translate_identifier).transpose()?,
+                        name: check
+                            .name
+                            .as_ref()
+                            .map(translate_ddl_identifier)
+                            .transpose()?,
                         constraint: ast::TableConstraint::Check {
                             expr: Box::new(expr),
                             source: None,
@@ -320,9 +334,14 @@ impl Table {
             index_options,
             characteristics,
         } = primary_key;
-        if self.has_primary_key || characteristics.is_some() {
+        if self.has_primary_key {
+            return Err(MysqlParserError::Rejected(
+                "a table can have only one PRIMARY KEY".to_string(),
+            ));
+        }
+        if characteristics.is_some() {
             return Err(MysqlParserError::Unsupported(
-                "a table can have only one plain PRIMARY KEY".to_string(),
+                "PRIMARY KEY constraint characteristics are not MySQL syntax".to_string(),
             ));
         }
         self.has_primary_key = true;
@@ -370,7 +389,7 @@ impl Table {
         self.claim_key_name(name)?;
         let key_parts = self.whole_column_key(key_columns)?;
         self.constraints.push(ast::NamedTableConstraint {
-            name: name.map(translate_identifier).transpose()?,
+            name: name.map(translate_ddl_identifier).transpose()?,
             constraint: ast::TableConstraint::Unique {
                 columns: key_parts.iter().map(KeyPart::sorted_column).collect(),
                 conflict_clause: None,
@@ -418,13 +437,13 @@ impl Table {
         }
         let mut columns = Vec::new();
         for column in child_columns {
-            let name = translate_identifier(column)?;
+            let name = translate_ddl_identifier(column)?;
             self.column_named(&name)?;
             columns.push(indexed_column(name));
         }
         let referred_columns = referred_columns
             .iter()
-            .map(|column| translate_identifier(column).map(indexed_column))
+            .map(|column| translate_ddl_identifier(column).map(indexed_column))
             .collect::<Result<Vec<_>, _>>()?;
         let mut args = Vec::new();
         if let Some(action) = on_delete {
@@ -434,11 +453,11 @@ impl Table {
             args.push(ast::RefArg::OnUpdate(translate_referential_action(action)?));
         }
         self.constraints.push(ast::NamedTableConstraint {
-            name: name.as_ref().map(translate_identifier).transpose()?,
+            name: name.as_ref().map(translate_ddl_identifier).transpose()?,
             constraint: ast::TableConstraint::ForeignKey {
                 columns,
                 clause: ast::ForeignKeyClause {
-                    tbl_name: translate_unqualified_name(foreign_table)?,
+                    tbl_name: translate_ddl_name(foreign_table)?,
                     columns: referred_columns,
                     args,
                 },
@@ -466,6 +485,7 @@ impl Table {
         let mut total_bytes = 0;
         for part in &key_parts {
             let column = self.column_named(&part.name)?;
+            column.in_key = true;
             total_bytes += column
                 .column_type
                 .key_part_bytes(part.name.as_str(), part.prefix)?;
@@ -480,7 +500,7 @@ impl Table {
         };
         let name = name.value.to_lowercase();
         if self.key_names.contains(&name) {
-            return Err(MysqlParserError::Unsupported(format!(
+            return Err(MysqlParserError::Rejected(format!(
                 "duplicate key name `{name}`"
             )));
         }
@@ -493,7 +513,7 @@ impl Table {
             .iter_mut()
             .find(|column| column.has_name(name))
             .ok_or_else(|| {
-                MysqlParserError::Unsupported(format!(
+                MysqlParserError::Rejected(format!(
                     "key column `{}` does not exist in the table",
                     name.as_str()
                 ))

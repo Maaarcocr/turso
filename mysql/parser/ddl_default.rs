@@ -10,119 +10,128 @@ const MAX_TIME_HOURS: u32 = 838;
 
 /// Lowers a column DEFAULT the way MySQL stores it: the value is checked
 /// against the column type and written in the form MySQL would return, so
-/// rows that take the default read back like MySQL rows.
+/// rows that take the default read back like MySQL rows. A default MySQL
+/// refuses is `Rejected`; one MySQL accepts but converts in a way this
+/// lowering does not reproduce is `Unsupported`.
 pub(crate) fn resolve_default(
     column_type: &ColumnType,
     value: DefaultValue,
     nullable: bool,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let resolved = match value {
-        DefaultValue::Null if nullable => Some(ast::Expr::Literal(ast::Literal::Null)),
-        DefaultValue::Null => None,
-        DefaultValue::Expression(expr) => Some(expr),
+    match value {
+        DefaultValue::Null if nullable => Ok(ast::Expr::Literal(ast::Literal::Null)),
+        DefaultValue::Null => Err(rejected()),
+        DefaultValue::Expression(expr) => Ok(expr),
         DefaultValue::CurrentTimestamp => match column_type.family {
             Family::Datetime { precision: 0 } | Family::Timestamp { precision: 0 } => {
-                Some(ast::Expr::Literal(ast::Literal::CurrentTimestamp))
+                Ok(ast::Expr::Literal(ast::Literal::CurrentTimestamp))
             }
-            _ => None,
+            _ => Err(rejected()),
         },
         DefaultValue::Number(text) => number_default(&column_type.family, &text),
         DefaultValue::Text(text) => text_default(&column_type.family, &text),
-    };
-    resolved.ok_or_else(|| {
-        MysqlParserError::Unsupported(
-            "MySQL rejects this DEFAULT value for the column type".to_string(),
-        )
-    })
+    }
 }
 
-fn number_default(family: &Family, text: &str) -> Option<ast::Expr> {
-    let decimal = Decimal::parse(text)?;
+fn number_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserError> {
+    let decimal = Decimal::parse(text).ok_or_else(unsupported)?;
     match family {
         Family::Integer { min, max } => integer_in_range(&decimal, *min, *max),
         Family::Bit { width } => {
-            let value = decimal.exact_integer()?;
-            (0..1_i128 << width).contains(&value).then(|| number(value))
+            let value = decimal.exact_integer().ok_or_else(unsupported)?;
+            accept_if((0..1_i128 << width).contains(&value), || number(value))
         }
         Family::Decimal {
             precision,
             scale,
             unsigned,
-        } => decimal_in_range(&decimal, *precision, *scale, *unsigned),
-        Family::Float {
+        }
+        | Family::Float {
             unsigned,
             digits: Some((precision, scale)),
         } => decimal_in_range(&decimal, *precision, *scale, *unsigned),
         Family::Float {
             unsigned,
             digits: None,
-        } => (!*unsigned || !decimal.negative).then(|| numeric(decimal.to_text())),
-        Family::Char { length } | Family::Varchar { length } => {
-            fit_characters(&decimal.to_text(), *length, family).map(|text| string(&text))
+        } => accept_if(!*unsigned || !decimal.is_negative(), || {
+            numeric(decimal.to_text())
+        }),
+        Family::Char { .. } | Family::Varchar { .. } | Family::Varbinary { .. } => {
+            string_default(family, &decimal.to_text())
         }
-        Family::Varbinary { length } => {
-            let text = decimal.to_text();
-            (text.len() as u64 <= *length).then(|| string(&text))
+        Family::Year => year(decimal.exact_integer().ok_or_else(unsupported)?),
+        Family::Enum(_) | Family::Text { .. } | Family::Blob { .. } | Family::Json => {
+            Err(rejected())
         }
-        Family::Year => year(decimal.exact_integer()?),
-        _ => None,
+        Family::Set(_)
+        | Family::Date
+        | Family::Datetime { .. }
+        | Family::Timestamp { .. }
+        | Family::Time { .. } => Err(unsupported()),
     }
 }
 
-fn text_default(family: &Family, text: &str) -> Option<ast::Expr> {
+fn text_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserError> {
     match family {
-        Family::Integer { min, max } => integer_in_range(&Decimal::parse(text)?, *min, *max),
-        Family::Decimal {
-            precision,
-            scale,
-            unsigned,
-        } => decimal_in_range(&Decimal::parse(text)?, *precision, *scale, *unsigned),
-        Family::Float { .. } => number_default(family, text),
-        Family::Char { length } | Family::Varchar { length } => {
-            fit_characters(text, *length, family).map(|text| string(&text))
+        Family::Integer { .. } | Family::Decimal { .. } | Family::Float { .. } => {
+            match Decimal::parse(text) {
+                Some(_) => number_default(family, text),
+                None if looks_like_a_number(text) => Err(unsupported()),
+                None => Err(rejected()),
+            }
         }
-        Family::Varbinary { length } => (text.len() as u64 <= *length).then(|| string(text)),
+        Family::Char { .. } | Family::Varchar { .. } | Family::Varbinary { .. } => {
+            string_default(family, text)
+        }
         Family::Enum(members) => members
             .iter()
             .find(|member| member.to_lowercase() == text.to_lowercase())
-            .map(|member| string(member)),
-        Family::Set(members) => set_default(members, text).map(|value| string(&value)),
+            .map(|member| string(member))
+            .ok_or_else(rejected),
+        Family::Set(members) => set_default(members, text)
+            .map(|value| string(&value))
+            .ok_or_else(rejected),
         Family::Date => {
             let (date, time) = parse_datetime(text)?;
-            time.is_none().then(|| string(&date.to_text()))
+            if time.is_some() {
+                return Err(unsupported());
+            }
+            Ok(string(&date.to_text()))
         }
         Family::Datetime { precision } => {
             let (date, time) = parse_datetime(text)?;
-            let time = time.unwrap_or_default();
-            Some(string(&format!(
-                "{} {}",
-                date.to_text(),
-                time.to_text(*precision)?
-            )))
+            let time = time.unwrap_or_default().to_text(*precision)?;
+            Ok(string(&format!("{} {time}", date.to_text())))
         }
         Family::Timestamp { precision } => {
             let (date, time) = parse_datetime(text)?;
-            let value = format!(
-                "{} {}",
-                date.to_text(),
-                time.unwrap_or_default().to_text(*precision)?
-            );
-            (TIMESTAMP_MIN..=TIMESTAMP_MAX)
-                .contains(&value.as_str())
-                .then(|| string(&value))
+            let time = time.unwrap_or_default().to_text(*precision)?;
+            let value = format!("{} {time}", date.to_text());
+            accept_if(
+                (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value.as_str()),
+                || string(&value),
+            )
         }
         Family::Time { precision } => {
             let time = parse_time(text, MAX_TIME_HOURS)?;
-            Some(string(&time.to_text(*precision)?))
+            Ok(string(&time.to_text(*precision)?))
         }
-        Family::Year => year(text.parse::<i128>().ok().filter(|_| text.len() == 4)?),
-        Family::Bit { .. } | Family::Text { .. } | Family::Blob { .. } | Family::Json => None,
+        Family::Year => match text.parse::<i128>() {
+            Ok(value) if text.len() == 4 => year(value),
+            _ => Err(unsupported()),
+        },
+        Family::Bit { .. } => Err(unsupported()),
+        Family::Text { .. } | Family::Blob { .. } | Family::Json => Err(rejected()),
     }
 }
 
-fn integer_in_range(decimal: &Decimal, min: i128, max: i128) -> Option<ast::Expr> {
-    let value = decimal.rounded_integer()?;
-    (min..=max).contains(&value).then(|| number(value))
+fn integer_in_range(
+    decimal: &Decimal,
+    min: i128,
+    max: i128,
+) -> Result<ast::Expr, MysqlParserError> {
+    let value = decimal.rounded_integer().ok_or_else(rejected)?;
+    accept_if((min..=max).contains(&value), || number(value))
 }
 
 fn decimal_in_range(
@@ -130,17 +139,29 @@ fn decimal_in_range(
     precision: u64,
     scale: u64,
     unsigned: bool,
-) -> Option<ast::Expr> {
-    let rounded = decimal.rounded(scale)?;
+) -> Result<ast::Expr, MysqlParserError> {
+    let rounded = decimal.rounded(scale).ok_or_else(unsupported)?;
     let whole_digits = rounded.whole.trim_start_matches('0').len() as u64;
-    if whole_digits > precision - scale || (unsigned && rounded.negative && !rounded.is_zero()) {
-        return None;
-    }
-    Some(numeric(rounded.to_text()))
+    let fits = whole_digits <= precision - scale && !(unsigned && rounded.is_negative());
+    accept_if(fits, || numeric(rounded.to_text()))
 }
 
-fn year(value: i128) -> Option<ast::Expr> {
-    (1901..=2155).contains(&value).then(|| number(value))
+fn string_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserError> {
+    let fitted = match family {
+        Family::Char { length } | Family::Varchar { length } => {
+            fit_characters(text, *length, family)
+        }
+        Family::Varbinary { length } => (text.len() as u64 <= *length).then(|| text.to_string()),
+        _ => None,
+    };
+    fitted.map(|text| string(&text)).ok_or_else(rejected)
+}
+
+fn year(value: i128) -> Result<ast::Expr, MysqlParserError> {
+    if (1901..=2155).contains(&value) {
+        return Ok(number(value));
+    }
+    Err(unsupported())
 }
 
 fn set_default(members: &[String], text: &str) -> Option<String> {
@@ -158,9 +179,8 @@ fn set_default(members: &[String], text: &str) -> Option<String> {
     set_values(members)
         .zip(0_u32..)
         .find(|(_, mask)| {
-            chosen.iter().all(|position| mask & (1 << position) != 0)
-                && (0..members.len())
-                    .all(|position| mask & (1 << position) == 0 || chosen.contains(&position))
+            (0..members.len())
+                .all(|position| (mask & (1 << position) != 0) == chosen.contains(&position))
         })
         .map(|(value, _)| value)
 }
@@ -177,6 +197,21 @@ fn fit_characters(text: &str, length: u64, family: &Family) -> Option<String> {
     Some(text.chars().take(length).collect())
 }
 
+fn looks_like_a_number(text: &str) -> bool {
+    text.trim().parse::<f64>().is_ok()
+}
+
+fn accept_if(
+    valid: bool,
+    value: impl FnOnce() -> ast::Expr,
+) -> Result<ast::Expr, MysqlParserError> {
+    if valid {
+        Ok(value())
+    } else {
+        Err(rejected())
+    }
+}
+
 fn string(text: &str) -> ast::Expr {
     ast::Expr::Literal(ast::Literal::String(quote_string(text)))
 }
@@ -191,6 +226,16 @@ fn numeric(text: String) -> ast::Expr {
         ),
         None => ast::Expr::Literal(ast::Literal::Numeric(text)),
     }
+}
+
+fn rejected() -> MysqlParserError {
+    MysqlParserError::Rejected("invalid default value for the column type".to_string())
+}
+
+fn unsupported() -> MysqlParserError {
+    MysqlParserError::Unsupported(
+        "the DEFAULT value needs a MySQL conversion that is not available".to_string(),
+    )
 }
 
 /// A plain decimal number as MySQL writes it: an optional sign, whole digits
@@ -219,6 +264,10 @@ impl Decimal {
             whole: if whole.is_empty() { "0" } else { whole }.to_string(),
             fraction: fraction.to_string(),
         })
+    }
+
+    fn is_negative(&self) -> bool {
+        self.negative && !self.is_zero()
     }
 
     fn is_zero(&self) -> bool {
@@ -267,11 +316,7 @@ impl Decimal {
     }
 
     fn to_text(&self) -> String {
-        let sign = if self.negative && !self.is_zero() {
-            "-"
-        } else {
-            ""
-        };
+        let sign = if self.is_negative() { "-" } else { "" };
         if self.fraction.is_empty() {
             format!("{sign}{}", self.whole)
         } else {
@@ -315,10 +360,10 @@ impl Date {
 }
 
 impl Time {
-    fn to_text(&self, precision: u64) -> Option<String> {
-        let precision = usize::try_from(precision).ok()?;
+    fn to_text(&self, precision: u64) -> Result<String, MysqlParserError> {
+        let precision = usize::try_from(precision).map_err(|_| unsupported())?;
         if self.fraction.len() > precision {
-            return None;
+            return Err(unsupported());
         }
         let sign = if self.negative { "-" } else { "" };
         let mut text = format!(
@@ -330,54 +375,62 @@ impl Time {
             text.push_str(&self.fraction);
             text.extend(std::iter::repeat_n('0', precision - self.fraction.len()));
         }
-        Some(text)
+        Ok(text)
     }
 }
 
-fn parse_datetime(text: &str) -> Option<(Date, Option<Time>)> {
+/// Reads `YYYY-M-D` with an optional `H:M[:S][.fraction]` time. Text in that
+/// shape with an impossible date or time is `Rejected`; any other shape is
+/// `Unsupported`, because MySQL accepts more formats than this reads.
+fn parse_datetime(text: &str) -> Result<(Date, Option<Time>), MysqlParserError> {
     let (date, time) = match text.split_once([' ', 'T']) {
         Some((date, time)) => (date, Some(parse_time(time, 23)?)),
         None => (text, None),
     };
     if time.as_ref().is_some_and(|time| time.negative) {
-        return None;
+        return Err(unsupported());
     }
-    let mut parts = date.split('-');
-    let year = parts.next().filter(|part| part.len() == 4)?.parse().ok()?;
-    let month = small_number(parts.next()?)?;
-    let day = small_number(parts.next()?)?;
-    if parts.next().is_some() || year == 0 || !(1..=12).contains(&month) {
-        return None;
+    let [year, month, day] = date.split('-').collect::<Vec<_>>()[..] else {
+        return Err(unsupported());
+    };
+    if year.len() != 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(unsupported());
     }
-    (1..=days_in_month(year, month))
-        .contains(&day)
-        .then_some((Date { year, month, day }, time))
+    let year = year.parse().map_err(|_| unsupported())?;
+    let month = small_number(month)?;
+    let day = small_number(day)?;
+    let valid =
+        year != 0 && (1..=12).contains(&month) && (1..=days_in_month(year, month)).contains(&day);
+    if !valid {
+        return Err(rejected());
+    }
+    Ok((Date { year, month, day }, time))
 }
 
-fn parse_time(text: &str, max_hours: u32) -> Option<Time> {
+fn parse_time(text: &str, max_hours: u32) -> Result<Time, MysqlParserError> {
     let (negative, text) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, text),
     };
     let (clock, fraction) = text.split_once('.').unwrap_or((text, ""));
     if !fraction.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
+        return Err(unsupported());
     }
-    let mut parts = clock.split(':');
-    let hours = parts
-        .next()
-        .filter(|part| (1..=3).contains(&part.len()))?
-        .parse::<u32>()
-        .ok()?;
-    let minutes = small_number(parts.next()?)?;
-    let seconds = match parts.next() {
-        Some(part) => small_number(part)?,
-        None => 0,
+    let (hours, minutes, seconds) = match clock.split(':').collect::<Vec<_>>()[..] {
+        [hours, minutes] => (hours, minutes, "0"),
+        [hours, minutes, seconds] => (hours, minutes, seconds),
+        _ => return Err(unsupported()),
     };
-    if parts.next().is_some() || hours > max_hours || minutes > 59 || seconds > 59 {
-        return None;
+    if !(1..=3).contains(&hours.len()) || !hours.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(unsupported());
     }
-    Some(Time {
+    let hours = hours.parse::<u32>().map_err(|_| unsupported())?;
+    let minutes = small_number(minutes)?;
+    let seconds = small_number(seconds)?;
+    if hours > max_hours || minutes > 59 || seconds > 59 {
+        return Err(rejected());
+    }
+    Ok(Time {
         negative,
         hours,
         minutes,
@@ -386,11 +439,11 @@ fn parse_time(text: &str, max_hours: u32) -> Option<Time> {
     })
 }
 
-fn small_number(part: &str) -> Option<u32> {
+fn small_number(part: &str) -> Result<u32, MysqlParserError> {
     if !(1..=2).contains(&part.len()) || !part.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
+        return Err(unsupported());
     }
-    part.parse().ok()
+    part.parse().map_err(|_| unsupported())
 }
 
 fn days_in_month(year: u32, month: u32) -> u32 {

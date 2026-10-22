@@ -1,7 +1,7 @@
 use crate::ddl_default::resolve_default;
 use crate::ddl_expr::{translate_default, translate_expr, DefaultValue};
 use crate::ddl_type::{number, simple_type, translate_column_type, ColumnType, Family};
-use crate::names::translate_identifier;
+use crate::names::translate_ddl_identifier;
 use crate::MysqlParserError;
 use sqlparser::ast::{
     CheckConstraint, ColumnDef, ColumnOption, ColumnOptionDef, DataType, GeneratedAs,
@@ -20,6 +20,7 @@ pub(crate) struct Column {
     pub(crate) auto_increment: bool,
     pub(crate) primary_key: bool,
     pub(crate) unique: bool,
+    pub(crate) in_key: bool,
     default: Option<DefaultValue>,
     checks: Vec<(Option<ast::Name>, ast::Expr)>,
     generated: Option<(ast::Expr, ast::GeneratedColumnType)>,
@@ -33,13 +34,14 @@ impl Column {
             options,
         } = column;
         let mut lowered = Column {
-            name: translate_identifier(name)?,
+            name: translate_ddl_identifier(name)?,
             column_type: translate_column_type(data_type)?,
             not_null: false,
             explicit_null: false,
             auto_increment: false,
             primary_key: false,
             unique: false,
+            in_key: false,
             default: None,
             checks: Vec::new(),
             generated: None,
@@ -47,13 +49,19 @@ impl Column {
         for option in options {
             lowered.apply_option(option, data_type)?;
         }
-        let conflicting = (lowered.explicit_null && (lowered.not_null || lowered.primary_key))
+        let rejected = (lowered.explicit_null && lowered.primary_key)
             || (lowered.auto_increment
                 && (lowered.default.is_some() || lowered.generated.is_some()))
             || (lowered.generated.is_some() && lowered.default.is_some());
-        if conflicting {
-            return Err(MysqlParserError::Unsupported(format!(
+        if rejected {
+            return Err(MysqlParserError::Rejected(format!(
                 "column `{}` combines options that MySQL rejects",
+                lowered.name.as_str()
+            )));
+        }
+        if lowered.explicit_null && lowered.not_null {
+            return Err(MysqlParserError::Unsupported(format!(
+                "column `{}` is declared both NULL and NOT NULL",
                 lowered.name.as_str()
             )));
         }
@@ -66,7 +74,7 @@ impl Column {
 
     pub(crate) fn mark_primary_key_member(&mut self) -> Result<(), MysqlParserError> {
         if self.explicit_null {
-            return Err(MysqlParserError::Unsupported(format!(
+            return Err(MysqlParserError::Rejected(format!(
                 "primary key column `{}` cannot be declared NULL",
                 self.name.as_str()
             )));
@@ -84,10 +92,17 @@ impl Column {
             auto_increment,
             primary_key,
             unique,
+            in_key,
             default,
             checks,
             generated,
         } = self;
+        if auto_increment && !primary_key && !unique && !in_key {
+            return Err(MysqlParserError::Rejected(format!(
+                "AUTO_INCREMENT column `{}` must be part of a key",
+                name.as_str()
+            )));
+        }
         if auto_increment && !primary_key {
             return Err(MysqlParserError::Unsupported(format!(
                 "AUTO_INCREMENT column `{}` must be the whole primary key",
@@ -188,7 +203,7 @@ impl Column {
             ColumnOption::ForeignKey(_) => {}
             ColumnOption::Check(check) => {
                 if let Some(check) = translate_check(check)? {
-                    let name = name.as_ref().map(translate_identifier).transpose()?;
+                    let name = name.as_ref().map(translate_ddl_identifier).transpose()?;
                     self.checks.push((name, check));
                 }
             }
@@ -205,6 +220,11 @@ impl Column {
             }
             ColumnOption::Collation(collation) if !self.column_type.is_binary() => {
                 ensure_supported_collation(collation)?;
+            }
+            ColumnOption::Collation(collation) => {
+                return Err(MysqlParserError::Rejected(format!(
+                    "collation `{collation}` is not valid for a binary string column"
+                )));
             }
             ColumnOption::Comment(_) => {}
             ColumnOption::Generated {

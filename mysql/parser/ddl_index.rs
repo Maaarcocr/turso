@@ -1,4 +1,4 @@
-use crate::names::{translate_identifier, translate_unqualified_name};
+use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     AlterTableOperation, CreateIndex, Expr, Function, FunctionArg, FunctionArgExpr,
@@ -66,6 +66,12 @@ pub(crate) fn translate_create_index(
             "CREATE INDEX `{create_index}` contains a clause that is not available"
         )));
     }
+    let index_name = translate_ddl_name(name)?;
+    if index_name.as_str().eq_ignore_ascii_case("PRIMARY") {
+        return Err(MysqlParserError::Rejected(
+            "an index cannot be named PRIMARY".to_string(),
+        ));
+    }
     let key_parts = translate_key_parts(columns)?;
     if key_parts.iter().any(|part| part.prefix.is_some()) {
         return Err(MysqlParserError::Unsupported(
@@ -75,8 +81,8 @@ pub(crate) fn translate_create_index(
     Ok(ast::Stmt::CreateIndex {
         unique: *unique,
         if_not_exists: false,
-        idx_name: ast::QualifiedName::single(translate_unqualified_name(name)?),
-        tbl_name: translate_unqualified_name(table_name)?,
+        idx_name: ast::QualifiedName::single(index_name),
+        tbl_name: translate_ddl_name(table_name)?,
         using: None,
         columns: key_parts.iter().map(KeyPart::sorted_column).collect(),
         with_clause: Vec::new(),
@@ -106,7 +112,7 @@ pub(crate) fn translate_key_parts(
                 )));
             }
             let (name, prefix) = match expr {
-                Expr::Identifier(identifier) => (translate_identifier(identifier)?, None),
+                Expr::Identifier(identifier) => (translate_ddl_identifier(identifier)?, None),
                 Expr::Function(function) => prefix_key_part(function)?,
                 _ => {
                     return Err(MysqlParserError::Unsupported(format!(
@@ -136,7 +142,7 @@ pub(crate) fn translate_drop_index(names: &[ObjectName]) -> Result<ast::Stmt, My
             "DROP INDEX is available for one index at a time".to_string(),
         ));
     };
-    drop_index_statement(translate_unqualified_name(name)?)
+    drop_index_statement(translate_ddl_name(name)?)
 }
 
 pub(crate) fn drop_index_statement(name: ast::Name) -> Result<ast::Stmt, MysqlParserError> {
@@ -183,7 +189,7 @@ fn prefix_key_part(function: &Function) -> Result<(ast::Name, Option<u64>), Mysq
     if length == 0 || list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
         return Err(unsupported());
     }
-    Ok((translate_identifier(identifier)?, Some(length)))
+    Ok((translate_ddl_identifier(identifier)?, Some(length)))
 }
 
 fn is_online_ddl_hint(operation: &AlterTableOperation) -> bool {

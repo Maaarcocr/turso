@@ -465,3 +465,82 @@ expect {
     10|1
 }
 
+# MySQL: ERROR 1067: Invalid default value for 'a'
+test invalid-integer-default-is-rejected {
+    CREATE TABLE t (a INT DEFAULT 'abc');
+}
+expect error {
+}
+
+# MySQL: ERROR 1067: Invalid default value for 'a'
+test out-of-range-default-is-rejected {
+    CREATE TABLE t (a TINYINT UNSIGNED DEFAULT 256);
+}
+expect error {
+}
+
+# MySQL: ERROR 1101: BLOB, TEXT, GEOMETRY or JSON column 'a' can't have a default value
+test text-literal-default-is-rejected {
+    CREATE TABLE t (a TEXT DEFAULT 'x');
+}
+expect error {
+}
+
+# MySQL: ERROR 1067: Invalid default value for 'a'
+test current-timestamp-default-on-int-is-rejected {
+    CREATE TABLE t (a INT DEFAULT CURRENT_TIMESTAMP);
+}
+expect error {
+}
+
+# MySQL: ERROR 1067: Invalid default value for 'a'
+test null-default-on-not-null-column-is-rejected {
+    CREATE TABLE t (a INT NOT NULL DEFAULT NULL);
+}
+expect error {
+}
+
+# MySQL: ERROR 1067: Invalid default value for 'a'
+test invalid-date-default-is-rejected {
+    CREATE TABLE t (a DATE DEFAULT '2020-02-30');
+}
+expect error {
+}
+
+# MySQL: ERROR 1075: Incorrect table definition; there can be only one auto column and it must be defined as a key
+test auto-increment-outside-a-key-is-rejected {
+    CREATE TABLE t (id INT AUTO_INCREMENT, v INT);
+}
+expect error {
+}
+
+# MySQL: ERROR 1280: Incorrect index name 'PRIMARY'
+test index-named-primary-is-rejected {
+    CREATE TABLE t (id INT);
+    CREATE INDEX `PRIMARY` ON t (id);
+}
+expect error {
+}
+
+# MySQL: ERROR 1059: Identifier name 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm' is too long
+test identifier-longer-than-64-characters-is-rejected {
+    CREATE TABLE t (id INT);
+    ALTER TABLE t RENAME TO abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm;
+}
+expect error {
+}
+
+# MySQL: ERROR 1427: For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column 'a').
+test decimal-scale-beyond-precision-is-rejected {
+    CREATE TABLE t (a DECIMAL(5,6));
+}
+expect error {
+}
+
+# MySQL: ERROR 1074: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+test varchar-longer-than-utf8mb4-allows-is-rejected {
+    CREATE TABLE t (a VARCHAR(16384));
+}
+expect error {
+}
+

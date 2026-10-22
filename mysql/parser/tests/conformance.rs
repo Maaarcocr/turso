@@ -307,10 +307,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(id INTEGER ZEROFILL)",
         },
         SqlCase {
-            name: "auto increment outside the primary key",
-            sql: "CREATE TABLE users(id INTEGER AUTO_INCREMENT)",
-        },
-        SqlCase {
             name: "auto increment in a composite primary key",
             sql: "CREATE TABLE users(a INT AUTO_INCREMENT, b INT, PRIMARY KEY (a, b))",
         },
@@ -331,32 +327,12 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(name VARCHAR(1.5))",
         },
         SqlCase {
-            name: "varchar longer than a utf8mb4 row allows",
-            sql: "CREATE TABLE users(name VARCHAR(16384))",
-        },
-        SqlCase {
             name: "binary pads values",
             sql: "CREATE TABLE users(code BINARY(4))",
         },
         SqlCase {
             name: "geometry",
             sql: "CREATE TABLE users(location POINT)",
-        },
-        SqlCase {
-            name: "float precision beyond double",
-            sql: "CREATE TABLE users(ratio FLOAT(54))",
-        },
-        SqlCase {
-            name: "invalid decimal",
-            sql: "CREATE TABLE users(price DECIMAL(5,6))",
-        },
-        SqlCase {
-            name: "fractional seconds beyond microseconds",
-            sql: "CREATE TABLE users(created DATETIME(7))",
-        },
-        SqlCase {
-            name: "enum with duplicate members",
-            sql: "CREATE TABLE users(state ENUM('a', 'A'))",
         },
         SqlCase {
             name: "set with too many members to enumerate",
@@ -371,10 +347,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(name VARCHAR(10) COLLATE utf8mb4_0900_as_cs)",
         },
         SqlCase {
-            name: "collation on a binary string",
-            sql: "CREATE TABLE users(code VARBINARY(10) COLLATE utf8mb4_0900_bin)",
-        },
-        SqlCase {
             name: "on update current timestamp",
             sql: "CREATE TABLE users(updated TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
         },
@@ -387,34 +359,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6))",
         },
         SqlCase {
-            name: "current timestamp on an integer",
-            sql: "CREATE TABLE users(created INT DEFAULT CURRENT_TIMESTAMP)",
-        },
-        SqlCase {
-            name: "non-numeric integer default",
-            sql: "CREATE TABLE users(id INT DEFAULT 'abc')",
-        },
-        SqlCase {
-            name: "out of range default",
-            sql: "CREATE TABLE users(id TINYINT DEFAULT 300)",
-        },
-        SqlCase {
-            name: "literal text default",
-            sql: "CREATE TABLE users(bio TEXT DEFAULT 'none')",
-        },
-        SqlCase {
-            name: "null default on a not null column",
-            sql: "CREATE TABLE users(id INT NOT NULL DEFAULT NULL)",
-        },
-        SqlCase {
-            name: "enum default outside the members",
-            sql: "CREATE TABLE users(state ENUM('a') DEFAULT 'b')",
-        },
-        SqlCase {
-            name: "invalid date default",
-            sql: "CREATE TABLE users(born DATE DEFAULT '2020-02-30')",
-        },
-        SqlCase {
             name: "datetime default that needs rounding",
             sql: "CREATE TABLE users(seen DATETIME DEFAULT '2020-01-01 00:00:00.5')",
         },
@@ -423,40 +367,8 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(id INTEGER CONSTRAINT users_pk PRIMARY KEY)",
         },
         SqlCase {
-            name: "two primary keys",
-            sql: "CREATE TABLE users(id INTEGER PRIMARY KEY, other INTEGER PRIMARY KEY)",
-        },
-        SqlCase {
-            name: "text primary key without a length",
-            sql: "CREATE TABLE users(name TEXT PRIMARY KEY)",
-        },
-        SqlCase {
-            name: "json key",
-            sql: "CREATE TABLE users(doc JSON, KEY doc_key (doc))",
-        },
-        SqlCase {
-            name: "key longer than 3072 bytes",
-            sql: "CREATE TABLE users(name VARCHAR(1000), KEY name_key (name))",
-        },
-        SqlCase {
-            name: "prefix key on an integer",
-            sql: "CREATE TABLE users(id INT, KEY id_key (id(4)))",
-        },
-        SqlCase {
-            name: "prefix longer than the column",
-            sql: "CREATE TABLE users(name VARCHAR(10), KEY name_key (name(11)))",
-        },
-        SqlCase {
             name: "unique prefix key",
             sql: "CREATE TABLE users(name VARCHAR(10), UNIQUE KEY name_key (name(3)))",
-        },
-        SqlCase {
-            name: "duplicate key names",
-            sql: "CREATE TABLE users(a INT, b INT, KEY k (a), KEY k (b))",
-        },
-        SqlCase {
-            name: "key on a missing column",
-            sql: "CREATE TABLE users(a INT, KEY k (b))",
         },
         SqlCase {
             name: "functional key part",
@@ -500,6 +412,121 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
                 MysqlParserError::Parse(_) | MysqlParserError::Unsupported(_)
             ),
             "SQL: {}\nerror: {error}",
+            case.sql
+        );
+    }
+}
+
+#[test]
+fn reports_ddl_that_mysql_rejects() {
+    let cases = [
+        SqlCase {
+            name: "auto increment outside any key",
+            sql: "CREATE TABLE users(id INTEGER AUTO_INCREMENT)",
+        },
+        SqlCase {
+            name: "varchar longer than a utf8mb4 row allows",
+            sql: "CREATE TABLE users(name VARCHAR(16384))",
+        },
+        SqlCase {
+            name: "float precision beyond double",
+            sql: "CREATE TABLE users(ratio FLOAT(54))",
+        },
+        SqlCase {
+            name: "invalid decimal",
+            sql: "CREATE TABLE users(price DECIMAL(5,6))",
+        },
+        SqlCase {
+            name: "fractional seconds beyond microseconds",
+            sql: "CREATE TABLE users(created DATETIME(7))",
+        },
+        SqlCase {
+            name: "enum with duplicate members",
+            sql: "CREATE TABLE users(state ENUM('a', 'A'))",
+        },
+        SqlCase {
+            name: "collation on a binary string",
+            sql: "CREATE TABLE users(code VARBINARY(10) COLLATE utf8mb4_0900_bin)",
+        },
+        SqlCase {
+            name: "current timestamp on an integer",
+            sql: "CREATE TABLE users(created INT DEFAULT CURRENT_TIMESTAMP)",
+        },
+        SqlCase {
+            name: "non-numeric integer default",
+            sql: "CREATE TABLE users(id INT DEFAULT 'abc')",
+        },
+        SqlCase {
+            name: "out of range default",
+            sql: "CREATE TABLE users(id TINYINT DEFAULT 300)",
+        },
+        SqlCase {
+            name: "literal text default",
+            sql: "CREATE TABLE users(bio TEXT DEFAULT 'none')",
+        },
+        SqlCase {
+            name: "null default on a not null column",
+            sql: "CREATE TABLE users(id INT NOT NULL DEFAULT NULL)",
+        },
+        SqlCase {
+            name: "enum default outside the members",
+            sql: "CREATE TABLE users(state ENUM('a') DEFAULT 'b')",
+        },
+        SqlCase {
+            name: "invalid date default",
+            sql: "CREATE TABLE users(born DATE DEFAULT '2020-02-30')",
+        },
+        SqlCase {
+            name: "two primary keys",
+            sql: "CREATE TABLE users(id INTEGER PRIMARY KEY, other INTEGER PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "text primary key without a length",
+            sql: "CREATE TABLE users(name TEXT PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "json key",
+            sql: "CREATE TABLE users(doc JSON, KEY doc_key (doc))",
+        },
+        SqlCase {
+            name: "key longer than 3072 bytes",
+            sql: "CREATE TABLE users(name VARCHAR(1000), KEY name_key (name))",
+        },
+        SqlCase {
+            name: "prefix key on an integer",
+            sql: "CREATE TABLE users(id INT, KEY id_key (id(4)))",
+        },
+        SqlCase {
+            name: "prefix longer than the column",
+            sql: "CREATE TABLE users(name VARCHAR(10), KEY name_key (name(11)))",
+        },
+        SqlCase {
+            name: "duplicate key names",
+            sql: "CREATE TABLE users(a INT, b INT, KEY k (a), KEY k (b))",
+        },
+        SqlCase {
+            name: "key on a missing column",
+            sql: "CREATE TABLE users(a INT, KEY k (b))",
+        },
+        SqlCase {
+            name: "index named primary",
+            sql: "CREATE INDEX `PRIMARY` ON users (id)",
+        },
+        SqlCase {
+            name: "identifier longer than 64 characters",
+            sql: "CREATE TABLE abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (id INT)",
+        },
+    ];
+
+    for case in cases {
+        let error = match parse_and_translate(case.sql) {
+            Ok(_) => panic!("{} unexpectedly lowered\nSQL: {}", case.name, case.sql),
+            Err(error) => error,
+        };
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "{}: SQL: {}\nerror: {error}",
+            case.name,
             case.sql
         );
     }

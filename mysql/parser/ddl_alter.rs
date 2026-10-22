@@ -1,6 +1,6 @@
 use crate::ddl_column::Column;
 use crate::ddl_index::{drop_index_statement, translate_drop_index};
-use crate::names::{translate_identifier, translate_unqualified_name};
+use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     AlterTable, AlterTableOperation, ObjectType, RenameTable, RenameTableNameKind, Statement,
@@ -30,7 +30,7 @@ pub(crate) fn translate_alter_table(
             "ALTER TABLE `{alter_table}` is not MySQL syntax"
         )));
     }
-    let table_name = translate_unqualified_name(name)?;
+    let table_name = translate_ddl_name(name)?;
     let body = match operation {
         AlterTableOperation::AddColumn {
             column_keyword: _,
@@ -47,20 +47,20 @@ pub(crate) fn translate_alter_table(
             let [column_name] = column_names.as_slice() else {
                 return Err(unsupported_operation(operation));
             };
-            ast::AlterTableBody::DropColumn(translate_identifier(column_name)?)
+            ast::AlterTableBody::DropColumn(translate_ddl_identifier(column_name)?)
         }
         AlterTableOperation::RenameColumn {
             old_column_name,
             new_column_name,
         } => ast::AlterTableBody::RenameColumn {
-            old: translate_identifier(old_column_name)?,
-            new: translate_identifier(new_column_name)?,
+            old: translate_ddl_identifier(old_column_name)?,
+            new: translate_ddl_identifier(new_column_name)?,
         },
         AlterTableOperation::RenameTable {
             table_name: RenameTableNameKind::To(new_name) | RenameTableNameKind::As(new_name),
-        } => ast::AlterTableBody::RenameTo(translate_unqualified_name(new_name)?),
+        } => ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
         AlterTableOperation::DropIndex { name } => {
-            return drop_index_statement(translate_identifier(name)?);
+            return drop_index_statement(translate_ddl_identifier(name)?);
         }
         _ => return Err(unsupported_operation(operation)),
     };
@@ -79,8 +79,8 @@ pub(crate) fn translate_rename_table(
         ));
     };
     Ok(ast::Stmt::AlterTable(ast::AlterTable {
-        name: ast::QualifiedName::single(translate_unqualified_name(old_name)?),
-        body: ast::AlterTableBody::RenameTo(translate_unqualified_name(new_name)?),
+        name: ast::QualifiedName::single(translate_ddl_name(old_name)?),
+        body: ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
     }))
 }
 
@@ -114,7 +114,7 @@ pub(crate) fn translate_drop(statement: &Statement) -> Result<ast::Stmt, MysqlPa
             };
             Ok(ast::Stmt::DropTable {
                 if_exists: *if_exists,
-                tbl_name: ast::QualifiedName::single(translate_unqualified_name(name)?),
+                tbl_name: ast::QualifiedName::single(translate_ddl_name(name)?),
             })
         }
         (ObjectType::Index, Some(_)) if !*if_exists => translate_drop_index(names),
