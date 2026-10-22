@@ -122,10 +122,45 @@ pub(crate) fn format_rewritten_table_sql(
     stmt: &ast::Stmt,
     marker: Option<&TableMarker>,
 ) -> Result<String> {
+    let marker = match marker {
+        Some(marker) => Some(marker.clone()),
+        None => marker_of_rewritten_statement(dialect, stmt)?,
+    };
     match marker {
         Some(marker) => Ok(marker.write(&SqliteDialect.format_rewritten_table_sql(stmt)?)),
         None => dialect.format_rewritten_table_sql(stmt),
     }
+}
+
+pub(crate) fn mark_rewritten_table(dialect: &dyn Dialect, table: &mut BTreeTable) {
+    if table.dialect_marker.is_none() && marks_rewritten_table(dialect, &table.name) {
+        table.dialect_marker = Some(TableMarker::new(
+            dialect.name(),
+            table.get_rowid_alias_column().is_some(),
+        ));
+    }
+}
+
+fn marker_of_rewritten_statement(
+    dialect: &dyn Dialect,
+    stmt: &ast::Stmt,
+) -> Result<Option<TableMarker>> {
+    let ast::Stmt::CreateTable { tbl_name, body, .. } = stmt else {
+        return Ok(None);
+    };
+    if !marks_rewritten_table(dialect, tbl_name.name.as_str()) {
+        return Ok(None);
+    }
+    let table = crate::schema::create_table(tbl_name.name.as_str(), body, 0)?;
+    Ok(Some(TableMarker::new(
+        dialect.name(),
+        table.get_rowid_alias_column().is_some(),
+    )))
+}
+
+fn marks_rewritten_table(dialect: &dyn Dialect, table_name: &str) -> bool {
+    dialect.marks_rewritten_tables()
+        && !crate::schema::is_system_table(&crate::util::normalize_ident(table_name))
 }
 
 fn stored_table_marker<'a>(
@@ -169,7 +204,7 @@ fn parse_marked_table_sql(table_sql: &str) -> Result<(Option<ast::Stmt>, usize)>
 }
 
 fn dialect_writes_marker(dialect: &dyn Dialect, marker: &TableMarker) -> bool {
-    dialect.marks_tables() && marker.dialect == dialect.name()
+    dialect.marks_rewritten_tables() && marker.dialect == dialect.name()
 }
 
 #[cfg(test)]
@@ -336,6 +371,57 @@ mod tests {
         assert_eq!(query(&conn, "SELECT rowid, key FROM t2"), ints(&[&[5, 5]]));
         assert_eq!(rowid_and_id(&conn, "v"), ints(&[&[5, 5]]));
         conn.close().unwrap();
+    }
+
+    #[test]
+    fn alter_table_keeps_declared_types_and_strict() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        {
+            let db = open_db(&io, "marker-alter-types.db", marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "/* turso_dialect:marking rowid_alias */ CREATE TABLE t(id INT PRIMARY KEY, \
+                 flag TINYINT(1), price DECIMAL(10,2), size ENUMERATION('small','large'), \
+                 big UBIGINT) STRICT",
+            )
+            .unwrap();
+            for statement in [
+                "ALTER TABLE t ADD COLUMN note TEXT",
+                "ALTER TABLE t RENAME COLUMN note TO remark",
+                "ALTER TABLE t DROP COLUMN remark",
+                "ALTER TABLE t ALTER COLUMN flag TO flags TINYINT(3)",
+                "ALTER TABLE t RENAME TO items",
+            ] {
+                conn.execute(statement).unwrap();
+            }
+            assert_eq!(
+                stored_sql(&conn, "items"),
+                "/* turso_dialect:marking rowid_alias */ CREATE TABLE items (id INT PRIMARY KEY, \
+                 flags TINYINT (3), price DECIMAL (10, 2), size ENUMERATION ('small', 'large'), \
+                 big UBIGINT) STRICT"
+            );
+            conn.close().unwrap();
+        }
+        let db = open_db(&io, "marker-alter-types.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("INSERT INTO items VALUES (1, 100, 2.345, 'large', '18446744073709551615')")
+            .unwrap();
+        assert!(conn
+            .execute("INSERT INTO items VALUES (2, 1, 1, 'medium', 1)")
+            .is_err());
+        assert!(conn
+            .execute("INSERT INTO items VALUES (3, 1000, 1, 'small', 1)")
+            .is_err());
+        assert_eq!(
+            query(&conn, "SELECT rowid, id, price, size, big FROM items"),
+            vec![vec![
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::build_text("2.35"),
+                Value::build_text("large"),
+                Value::build_text("18446744073709551615"),
+            ]]
+        );
     }
 
     #[test]
@@ -550,6 +636,23 @@ mod tests {
     }
 
     #[test]
+    fn integer_keys_accept_integer_text_as_sqlite_keys_do() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "keys-text.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES ('5', 'x')").unwrap();
+        conn.execute("UPDATE t SET id = '6' WHERE id = 5").unwrap();
+        conn.execute("INSERT INTO t VALUES (8.0, 'z')").unwrap();
+        assert_eq!(rowid_and_id(&conn, "t"), ints(&[&[6, 6], &[8, 8]]));
+        let error = conn
+            .execute("INSERT INTO t VALUES ('seven', 'y')")
+            .unwrap_err();
+        assert!(error.to_string().contains("datatype mismatch"), "{error}");
+    }
+
+    #[test]
     fn keys_are_generated_only_with_autoincrement_or_for_nullable_keys() {
         use crate::ConversionErrorKind;
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
@@ -645,6 +748,39 @@ mod tests {
             matches!(error, LimboError::Corrupt(_))
                 && error.to_string().contains("not an integer type"),
             "{error}"
+        );
+    }
+
+    #[cfg(all(feature = "fs", not(target_family = "wasm")))]
+    #[test]
+    fn vacuum_keeps_a_zero_key_of_an_autoincrement_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("zero-key.db");
+        let io: Arc<dyn IO> = Arc::new(crate::io::PlatformIO::new().unwrap());
+        let db = Database::open_file_with_flags(
+            io.clone(),
+            path.to_str().unwrap(),
+            OpenFlags::Create,
+            crate::DatabaseOpts::new().with_vacuum(true),
+            None,
+            marking(),
+        )
+        .unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INT NOT NULL PRIMARY KEY AUTOINCREMENT, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t(v) VALUES ('a'), ('b')")
+            .unwrap();
+        conn.execute("UPDATE t SET id = 0 WHERE v = 'a'").unwrap();
+        conn.execute("INSERT INTO t(rowid, v) VALUES (0, 'c')")
+            .expect_err("rowid 0 is taken");
+        conn.execute("VACUUM").unwrap();
+        assert_eq!(
+            query(&conn, "SELECT id, v FROM t ORDER BY id"),
+            vec![
+                vec![Value::from_i64(0), Value::build_text("a")],
+                vec![Value::from_i64(2), Value::build_text("b")],
+            ]
         );
     }
 

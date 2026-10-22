@@ -218,7 +218,8 @@ fn translate_expr_by_kind(
             translate_like_expr(program, referenced_tables, expr, target_register, resolver)
         }
         ast::Expr::Literal(ast::Literal::Numeric(digits))
-            if decimal_literal_type(digits, &TypeEnv::from_resolver(resolver)).is_some() =>
+            if resolver.dialect.type_rules().decimal_literal_type.is_some()
+                && decimal_literal_type(digits, &TypeEnv::from_resolver(resolver)).is_some() =>
         {
             program.emit_insn(Insn::String8 {
                 value: digits.clone(),

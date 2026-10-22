@@ -1228,6 +1228,22 @@ impl Schema {
         self.type_registry.get(&type_registry_key(type_name))
     }
 
+    pub(crate) fn uses_name_table(&self, table: &BTreeTable) -> bool {
+        table.dialect_marker.is_some() && self.has_name_table()
+    }
+
+    pub(crate) fn is_integer_key_type(&self, type_name: &str) -> bool {
+        if self.has_name_table() {
+            self.largest_key_of_type(type_name).is_some()
+        } else {
+            crate::util::is_rowid_alias_type(type_name)
+        }
+    }
+
+    pub(crate) fn has_name_table(&self) -> bool {
+        !self.type_rules.dialect_types.is_empty()
+    }
+
     pub(crate) fn largest_key_of_type(&self, type_name: &str) -> Option<i64> {
         self.get_type_def_unchecked(type_name)?
             .storage?
@@ -4204,7 +4220,7 @@ impl BTreeTable {
         let (_, column) = self
             .get_rowid_alias_column()
             .expect("a table marked rowid_alias has a rowid column");
-        if schema.largest_key_of_type(&column.ty_str).is_none() {
+        if !schema.is_integer_key_type(&column.ty_str) {
             return Err(LimboError::Corrupt(format!(
                 "malformed database schema: table {} is marked rowid_alias but the type {} of its key is not an integer type",
                 self.name, column.ty_str

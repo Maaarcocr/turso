@@ -940,6 +940,8 @@ mod tests {
             ("i > 5", true),
             ("i <= 5", true),
             ("i < 3000000000", true),
+            ("i = 3000000000", true),
+            ("i IN (5, 3000000000)", true),
             ("i > 3000000000", true),
             ("dt > '2024-01-01 10:00:00'", true),
             ("dt >= '2024-01-01 10:00:00.5'", true),
@@ -972,6 +974,30 @@ mod tests {
             assert_eq!(sorted(&indexed), sorted(&scanned), "{condition}");
         }
 
+        conn.execute("CREATE TABLE small(id INTEGER PRIMARY KEY, tiny TINYINT) STRICT")
+            .unwrap();
+        conn.execute("CREATE INDEX small_tiny ON small(tiny)")
+            .unwrap();
+        conn.execute("INSERT INTO small VALUES (1, 5), (2, 9)")
+            .unwrap();
+        for condition in ["tiny = 1000", "tiny IN (9, 1000)"] {
+            let indexed = format!("SELECT id FROM small WHERE {condition}");
+            let plan = query_plan(&conn, &indexed);
+            assert!(plan.contains("INDEX small_tiny"), "{condition}: {plan}");
+            assert_eq!(
+                query(&conn, &indexed),
+                query(
+                    &conn,
+                    &format!("SELECT id FROM small NOT INDEXED WHERE {condition}")
+                ),
+                "{condition}"
+            );
+        }
+        let join = "SELECT small.id, t.id FROM t CROSS JOIN small ON small.tiny = t.i";
+        let join_plan = query_plan(&conn, join);
+        assert!(join_plan.contains("INDEX small_tiny"), "{join_plan}");
+        assert_eq!(query(&conn, join), ints(&[&[1, 1], &[2, 2]]));
+
         for (order, uses_index) in [
             ("dt", true),
             ("d DESC", true),
@@ -1001,6 +1027,23 @@ mod tests {
                 Value::build_text("18446744073709551615")
             ]]
         );
+    }
+
+    #[test]
+    fn only_converted_columns_name_themselves_for_errors() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "conversion-context.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, a TEXT, b DOUBLE, tiny TINYINT) STRICT",
+        )
+        .unwrap();
+        let contexts: Vec<String> = query(&conn, "EXPLAIN INSERT INTO t VALUES (1, 'x', 1.5, 2)")
+            .iter()
+            .filter(|row| row[1].to_string() == "TypeConversionContext")
+            .map(|row| row[5].to_string())
+            .collect();
+        assert_eq!(contexts, vec!["id", "tiny", ""]);
     }
 
     #[test]

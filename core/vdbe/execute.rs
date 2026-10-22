@@ -10178,27 +10178,6 @@ fn parse_schema_sql_for_alter(
     dialect.parse(sql).map(|(cmd, _)| (cmd, None))
 }
 
-pub fn op_function(
-    program: &Program,
-    state: &mut ProgramState,
-    insn: &Insn,
-    pager: &Arc<Pager>,
-) -> InsnResult {
-    run_function(program, state, insn, pager).map_err(|error| match *error {
-        LimboError::TypeConversion(mut conversion) => {
-            if let Some((column, row_reg)) = &state.type_conversion_context {
-                conversion.column = Some(column.to_string());
-                conversion.row = match state.registers[*row_reg].get_value() {
-                    Value::Numeric(Numeric::Integer(row)) => Some(*row),
-                    _ => None,
-                };
-            }
-            Box::new(LimboError::TypeConversion(conversion))
-        }
-        other => Box::new(other),
-    })
-}
-
 pub fn op_type_conversion_context(
     _program: &Program,
     state: &mut ProgramState,
@@ -10213,7 +10192,7 @@ pub fn op_type_conversion_context(
     Ok(InsnFunctionStepResult::Step)
 }
 
-fn run_function(
+pub fn op_function(
     program: &Program,
     state: &mut ProgramState,
     insn: &Insn,
@@ -11673,11 +11652,10 @@ fn run_function(
                 state.registers[*dest].set_value(result);
             }
             ScalarFunc::Storage(func) => {
-                let args = state.registers[*start_reg..*start_reg + arg_count]
-                    .iter()
-                    .map(|register| register.get_value().clone())
-                    .collect::<Vec<_>>();
-                state.registers[*dest].set_value(func.execute(&args)?);
+                let first = state.registers[*start_reg].get_value();
+                let last = state.registers[*start_reg + arg_count - 1].get_value();
+                let result = func.execute(&[first, last][..arg_count])?;
+                state.registers[*dest].set_value(result);
             }
             ScalarFunc::NumericKey => {
                 check_arg_count!(arg_count, 1);

@@ -729,6 +729,112 @@ fn test_postgres_alter_table_keeps_non_literal_defaults_readable_after_reopen(db
     );
 }
 
+fn reopen_postgres(
+    path: &std::path::Path,
+    io: std::sync::Arc<dyn turso_core::IO + Send>,
+) -> turso_pg::Connection {
+    let db = turso_pg::open_database_with_io(
+        io,
+        path.to_str().unwrap(),
+        turso_core::OpenFlags::default(),
+        turso_core::DatabaseOpts::new(),
+    )
+    .unwrap();
+    turso_pg::Connection::connect(&db).unwrap()
+}
+
+fn sqlite_dialect_error(
+    path: &std::path::Path,
+    io: std::sync::Arc<dyn turso_core::IO + Send>,
+) -> String {
+    turso_core::Database::open_file(
+        io,
+        path.to_str().unwrap(),
+        std::sync::Arc::new(turso_core::SqliteDialect),
+    )
+    .and_then(|db| db.connect(turso_core::ConnectOpts::new()))
+    .and_then(|conn| conn.prepare("SELECT 1 FROM t"))
+    .map(|_| ())
+    .expect_err("the SQLite dialect must refuse a PostgreSQL table")
+    .to_string()
+}
+
+fn rowid_and_id(conn: &turso_pg::Connection) -> (String, String) {
+    let mut rows = conn.query("SELECT rowid, id FROM t").unwrap().unwrap();
+    let StepResult::Row = rows.step().unwrap() else {
+        panic!("expected row");
+    };
+    let row = rows.row().unwrap();
+    (row.get_value(0).to_string(), row.get_value(1).to_string())
+}
+
+#[turso_macros::test]
+fn test_postgres_rewritten_table_keeps_a_marker_with_its_rowid_decision(db: TempDatabase) {
+    let conn = db.connect_postgres();
+    conn.execute("CREATE TABLE t (id integer PRIMARY KEY, v text)")
+        .unwrap();
+    conn.execute("INSERT INTO t VALUES (5, 'a')").unwrap();
+    conn.execute("ALTER TABLE t ADD COLUMN w int").unwrap();
+    conn.execute("ALTER TABLE t RENAME COLUMN v TO vv").unwrap();
+    let (path, io) = (db.path.clone(), db.io.clone());
+    drop(conn);
+    drop(db);
+
+    let error = sqlite_dialect_error(&path, io.clone());
+    assert!(
+        error.contains(
+            "/* turso_dialect:postgres rowid_alias */ CREATE TABLE t (id INTEGER PRIMARY KEY, vv TEXT, w INTEGER) STRICT"
+        ),
+        "{error}"
+    );
+    let conn = reopen_postgres(&path, io);
+    assert_eq!(rowid_and_id(&conn), ("5".to_string(), "5".to_string()));
+    conn.execute("INSERT INTO t (vv) VALUES ('b')").unwrap();
+    conn.execute("ALTER TABLE t DROP COLUMN w").unwrap();
+}
+
+#[turso_macros::test]
+fn test_postgres_rewritten_table_without_a_rowid_key_is_marked_without_it(db: TempDatabase) {
+    let conn = db.connect_postgres();
+    conn.execute("CREATE TABLE t (id bigint PRIMARY KEY, v text)")
+        .unwrap();
+    conn.execute("INSERT INTO t VALUES (5, 'a')").unwrap();
+    conn.execute("ALTER TABLE t DROP COLUMN v").unwrap();
+    let (path, io) = (db.path.clone(), db.io.clone());
+    drop(conn);
+    drop(db);
+
+    let error = sqlite_dialect_error(&path, io.clone());
+    assert!(
+        error
+            .contains("/* turso_dialect:postgres */ CREATE TABLE t (id bigint PRIMARY KEY) STRICT"),
+        "{error}"
+    );
+    let conn = reopen_postgres(&path, io);
+    assert_eq!(rowid_and_id(&conn), ("1".to_string(), "5".to_string()));
+}
+
+#[turso_macros::test]
+fn test_postgres_table_that_is_never_rewritten_keeps_its_postgres_text(db: TempDatabase) {
+    let conn = db.connect_postgres();
+    conn.execute("CREATE TABLE t (id serial PRIMARY KEY, v text)")
+        .unwrap();
+    conn.execute("INSERT INTO t (v) VALUES ('a')").unwrap();
+    let (path, io) = (db.path.clone(), db.io.clone());
+    drop(conn);
+    drop(db);
+
+    let error = sqlite_dialect_error(&path, io.clone());
+    assert!(
+        error.contains(
+            "/* turso_frontend:postgres */ CREATE TABLE t (id serial PRIMARY KEY, v text)"
+        ),
+        "{error}"
+    );
+    let conn = reopen_postgres(&path, io);
+    assert_eq!(rowid_and_id(&conn), ("1".to_string(), "1".to_string()));
+}
+
 #[turso_macros::test(mvcc)]
 fn test_postgres_alter_table_rename_column(db: TempDatabase) {
     let conn = db.connect_postgres();
