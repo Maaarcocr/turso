@@ -529,3 +529,40 @@ expect {
     1.50
     2.00
 }
+
+@requires strict "uses STRICT tables"
+test window-partitions-and-peers-compare-typed-values-by-key {
+    CREATE TABLE t1(p numeric, g INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('2', 1), ('2.00', 2), ('10', 3), ('9', 4);
+    SELECT g, count(*) OVER (PARTITION BY p) FROM t1 ORDER BY g;
+    SELECT g, rank() OVER (ORDER BY p) FROM t1 ORDER BY g;
+    SELECT g, sum(g) OVER (ORDER BY p RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t1 ORDER BY g;
+    SELECT g, count(*) OVER (ORDER BY p ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE TIES) FROM t1 ORDER BY g;
+}
+expect {
+    1|2
+    2|2
+    3|1
+    4|1
+    1|1
+    2|1
+    3|4
+    4|3
+    1|3
+    2|3
+    3|10
+    4|7
+    1|1
+    2|2
+    3|2
+    4|3
+}
+
+@requires strict "uses STRICT tables"
+test window-range-offset-on-typed-order-by-is-an-error {
+    CREATE TABLE t1(p numeric, g INTEGER) STRICT;
+    SELECT g, sum(g) OVER (ORDER BY p RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t1;
+}
+expect error {
+    RANGE frames with an offset are not supported
+}

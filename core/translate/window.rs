@@ -6,8 +6,9 @@ use crate::translate::aggregation::{translate_aggregation_step, AggArgumentSourc
 use crate::translate::collate::{get_collseq_from_expr, CollationSeq};
 use crate::translate::emitter::{Resolver, TranslateCtx};
 use crate::translate::expr::{
-    expr_contains_nondeterministic_scalar_function, translate_expr, translate_expr_no_constant_opt,
-    walk_expr, walk_expr_mut, NoConstantOptReason, WalkControl,
+    emit_type_keys, expr_contains_nondeterministic_scalar_function, expr_type, translate_expr,
+    translate_expr_no_constant_opt, walk_expr, walk_expr_mut, ExprType, NoConstantOptReason,
+    TypeEnv, WalkControl,
 };
 use crate::translate::order_by::EmitOrderBy;
 use crate::translate::plan::{
@@ -1090,6 +1091,7 @@ impl EmitWindow {
     ) -> crate::Result<()> {
         let joined_tables = &plan.joined_tables();
         turso_assert_eq!(joined_tables.len(), 1, "expected only one joined table");
+        reject_range_offsets_on_typed_order_by(window, plan, &t_ctx.resolver)?;
 
         let src_table = &joined_tables[0];
         let reg_src_columns_start =
@@ -1395,7 +1397,14 @@ impl EmitWindow {
         let minmax = meta.minmax.clone();
 
         emit_load_order_by_columns(program, window, &registers);
-        emit_flush_buffer_if_new_partition(program, &labels, &registers, window, plan)?;
+        emit_flush_buffer_if_new_partition(
+            program,
+            &labels,
+            &registers,
+            window,
+            plan,
+            &t_ctx.resolver,
+        )?;
 
         // `rowid_reg` was NULL'd at partition entry; it stays NULL until the
         // first Insert of this partition. That tells the two branches apart:
@@ -1423,8 +1432,15 @@ impl EmitWindow {
                 "initialize peer-reference registers for new partition",
             );
             let n = window.order_by.len() - 1;
+            let new_ob_keys = emit_window_order_keys(
+                program,
+                window,
+                &plan.table_references,
+                new_ob,
+                &t_ctx.resolver,
+            )?;
             program.emit_insn(Insn::Copy {
-                src_reg: new_ob,
+                src_reg: new_ob_keys,
                 dst_reg: source_peer_values,
                 extra_amount: n,
             });
@@ -1658,6 +1674,7 @@ impl EmitWindow {
                 registers.new_order_by_columns_start,
                 registers.source_peer_values,
                 label_step_end,
+                &t_ctx.resolver,
             )?;
         }
 
@@ -1861,6 +1878,7 @@ fn emit_if_new_peer(
     reg_new: Option<usize>,
     reg_old: Option<usize>,
     target_if_peer: BranchOffset,
+    resolver: &Resolver,
 ) -> Result<()> {
     let order_by_len = window.order_by.len();
     if order_by_len == 0 {
@@ -1871,6 +1889,7 @@ fn emit_if_new_peer(
     }
     let reg_new = reg_new.expect("new_order_by_columns_start must exist when ORDER BY is present");
     let reg_old = reg_old.expect("peer reference register must exist when ORDER BY is present");
+    let reg_new = emit_window_order_keys(program, window, table_references, reg_new, resolver)?;
     let label_new_peer = program.allocate_label();
     // `Insn::Compare` requires `start_reg_a < start_reg_b`; the Jump
     // targets are symmetric on lt/gt so operand order doesn't change
@@ -1893,6 +1912,47 @@ fn emit_if_new_peer(
         dst_reg: reg_old,
         extra_amount: order_by_len - 1,
     });
+    Ok(())
+}
+
+fn emit_window_order_keys(
+    program: &mut ProgramBuilder,
+    window: &Window,
+    table_references: &TableReferences,
+    values_start: usize,
+    resolver: &Resolver,
+) -> Result<usize> {
+    let order_exprs: Vec<&Expr> = window.order_by.iter().map(|(expr, _, _)| expr).collect();
+    emit_type_keys(
+        program,
+        &order_exprs,
+        Some(table_references),
+        values_start,
+        resolver,
+    )
+}
+
+fn reject_range_offsets_on_typed_order_by(
+    window: &Window,
+    plan: &SelectPlan,
+    resolver: &Resolver,
+) -> Result<()> {
+    let has_offset =
+        |bound: &FrameBound| matches!(bound, FrameBound::Preceding(_) | FrameBound::Following(_));
+    if window.frame.mode != turso_parser::ast::FrameMode::Range
+        || !(has_offset(&window.frame.start) || has_offset(&window.frame.end))
+    {
+        return Ok(());
+    }
+    let env = TypeEnv::from_resolver(resolver);
+    for (expr, _, _) in &window.order_by {
+        if let ExprType::Named(named) = expr_type(expr, Some(&plan.table_references), &env) {
+            crate::bail_parse_error!(
+                "RANGE frames with an offset are not supported when ORDER BY has a value of type {}",
+                named.def.name
+            );
+        }
+    }
     Ok(())
 }
 
@@ -1955,6 +2015,7 @@ fn emit_flush_buffer_if_new_partition(
     registers: &WindowRegisters,
     window: &Window,
     plan: &SelectPlan,
+    resolver: &Resolver,
 ) -> Result<()> {
     if let Some(reg_partition_start) = registers.partition_start {
         let same_partition_label = program.allocate_label();
@@ -1994,9 +2055,33 @@ fn emit_flush_buffer_if_new_partition(
             let maybe_collation = get_collseq_from_expr(expr, &plan.table_references)?;
             c.collation = maybe_collation.unwrap_or_default();
         }
+        let partition_exprs: Vec<&Expr> = (0..partition_by_len)
+            .map(|i| {
+                window
+                    .partition_by
+                    .iter()
+                    .find(|e| matches!(e, Expr::Column { column, .. } if *column == i))
+                    .unwrap_or(&window.partition_by[i])
+            })
+            .collect();
+        let partition_keys_start = emit_type_keys(
+            program,
+            &partition_exprs,
+            Some(&plan.table_references),
+            registers.src_columns_start,
+            resolver,
+        )?;
+        let (reg_a, reg_b) = if partition_keys_start == registers.src_columns_start {
+            (registers.src_columns_start, reg_partition_start)
+        } else {
+            (
+                partition_keys_start.min(reg_partition_start),
+                partition_keys_start.max(reg_partition_start),
+            )
+        };
         program.emit_insn(Insn::Compare {
-            start_reg_a: registers.src_columns_start,
-            start_reg_b: reg_partition_start,
+            start_reg_a: reg_a,
+            start_reg_b: reg_b,
             count: partition_by_len,
             key_info: compare_key_info,
         });
@@ -2018,7 +2103,7 @@ fn emit_flush_buffer_if_new_partition(
             dest_end: None,
         });
         program.emit_insn(Insn::Copy {
-            src_reg: registers.src_columns_start,
+            src_reg: partition_keys_start,
             dst_reg: reg_partition_start,
             extra_amount: partition_by_len - 1,
         });
@@ -2393,7 +2478,21 @@ fn emit_window_full_scan(
                         default: None,
                     });
                 }
-                let (reg_a, reg_b) = (current_peer.min(scan_peer), current_peer.max(scan_peer));
+                let current_keys = emit_window_order_keys(
+                    program,
+                    window,
+                    &plan.table_references,
+                    current_peer,
+                    &t_ctx.resolver,
+                )?;
+                let scan_keys = emit_window_order_keys(
+                    program,
+                    window,
+                    &plan.table_references,
+                    scan_peer,
+                    &t_ctx.resolver,
+                )?;
+                let (reg_a, reg_b) = (current_keys.min(scan_keys), current_keys.max(scan_keys));
                 program.emit_insn(Insn::Compare {
                     start_reg_a: reg_a,
                     start_reg_b: reg_b,
@@ -2948,6 +3047,7 @@ fn emit_window_op(
             temp_start,
             peer_ref_reg,
             label_continue,
+            &t_ctx.resolver,
         )?;
     }
 

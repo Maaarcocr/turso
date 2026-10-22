@@ -208,7 +208,7 @@ CREATE TYPE money(value any) BASE text
 
 ### KEY
 
-`KEY key-expr` gives a key for a value of the type: an expression of `value` (the value as DECODE returns it) whose result is equal for two values exactly when the type's `=` says they are equal. `SELECT DISTINCT`, aggregates with `DISTINCT` such as `count(DISTINCT x)`, `GROUP BY`, `UNION`, `INTERSECT`, `EXCEPT` and hash joins compare these keys instead of the values, and output one of the values they compared equal. The columns of a compound SELECT have the type of their branches when every branch has it or is converted to it, as for `CASE`. Without `KEY`, they compare the values, and a join on a type whose `=` is a function is not run as a hash join.
+`KEY key-expr` gives a key for a value of the type: an expression of `value` (the value as DECODE returns it) whose result is equal for two values exactly when the type's `=` says they are equal. `SELECT DISTINCT`, aggregates with `DISTINCT` such as `count(DISTINCT x)`, `GROUP BY`, `UNION`, `INTERSECT`, `EXCEPT`, hash joins, and the partitions and peer groups of window functions compare these keys instead of the values, and output one of the values they compared equal. The columns of a compound SELECT have the type of their branches when every branch has it or is converted to it, as for `CASE`. A window frame `RANGE` with an offset (`RANGE BETWEEN 1 PRECEDING AND CURRENT ROW`) is an error when the window's ORDER BY value has a custom type. Without `KEY`, they compare the values, and a join on a type whose `=` is a function is not run as a hash join.
 
 The built-in `numeric` type has `KEY numeric_key(value)`, so `2`, `2.0` and `2.00` count as one value. `numeric_key(x)` returns a blob that sorts like the numbers.
 
