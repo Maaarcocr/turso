@@ -1,4 +1,7 @@
-use super::{sqlite, ClassConversion, Dialect, DialectType, SqliteDialect, StorageType, TypeRules};
+use super::{
+    sqlite, ArgumentType, ClassConversion, Dialect, DialectType, SqliteDialect, StorageType,
+    TypeRules,
+};
 use crate::schema::BTreeTable;
 use crate::storage::database::DatabaseFile;
 use crate::{Connection, Database, OpenFlags, Result, Value, IO};
@@ -205,6 +208,11 @@ impl Dialect for MarkingDialect {
                 "test_text_length".to_string(),
             )));
         }
+        if name.eq_ignore_ascii_case("test_argument_types") {
+            return Ok(Some(crate::function::Func::Dialect(
+                "test_argument_types".to_string(),
+            )));
+        }
         sqlite::resolve_builtin_function(name, arg_count)
     }
 
@@ -219,6 +227,29 @@ impl Dialect for MarkingDialect {
             Value::Text(text) => Ok(Value::from_f64(text.as_str().chars().count() as f64)),
             other => Ok(other.clone()),
         }
+    }
+
+    fn exec_typed_scalar_function(
+        &self,
+        conn: &Connection,
+        name: &str,
+        args: &[Value],
+        arg_types: &[ArgumentType],
+    ) -> Result<Value> {
+        if name != "test_argument_types" {
+            return self.exec_scalar_function(conn, name, args);
+        }
+        let described: Vec<String> = arg_types
+            .iter()
+            .map(|arg_type| match arg_type {
+                ArgumentType::Named { name, parameters } if parameters.is_empty() => name.clone(),
+                ArgumentType::Named { name, parameters } => {
+                    format!("{name}({})", parameters.join(","))
+                }
+                other => format!("{other:?}").to_lowercase(),
+            })
+            .collect();
+        Ok(Value::build_text(described.join(" ")))
     }
 
     fn requires_custom_types(&self) -> bool {

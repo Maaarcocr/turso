@@ -1502,6 +1502,26 @@ fn is_null_literal(expr: &ast::Expr) -> bool {
     matches!(expr, ast::Expr::Literal(ast::Literal::Null))
 }
 
+pub(crate) fn argument_type(expr_type: &ExprType) -> crate::dialect::ArgumentType {
+    use crate::dialect::ArgumentType;
+    match expr_type {
+        ExprType::Named(named) => ArgumentType::Named {
+            name: named.def.name.clone(),
+            parameters: named
+                .params
+                .iter()
+                .flatten()
+                .map(|param| param.to_string())
+                .collect(),
+        },
+        ExprType::Dynamic(DynamicClass::Integer) => ArgumentType::Integer,
+        ExprType::Dynamic(DynamicClass::Real) => ArgumentType::Real,
+        ExprType::Dynamic(DynamicClass::Text) => ArgumentType::Text,
+        ExprType::Dynamic(DynamicClass::Blob) => ArgumentType::Blob,
+        ExprType::Dynamic(DynamicClass::Unknown) => ArgumentType::Unknown,
+    }
+}
+
 fn literal_type(literal: &ast::Literal, env: &TypeEnv) -> ExprType {
     match literal {
         ast::Literal::Numeric(digits) => match decimal_literal_type(digits, env) {

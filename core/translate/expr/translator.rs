@@ -969,13 +969,29 @@ fn translate_function_call_expr(
         Func::Window(_) => {
             crate::bail_parse_error!("misuse of window function {}()", name.as_str())
         }
-        Func::External(_) | Func::Dialect(_) => {
+        Func::External(_) | Func::Dialect(_) | Func::TypedDialect(_) => {
             let regs = program.alloc_registers(args_count);
             for (i, arg_expr) in args.iter().enumerate() {
                 translate_expr(program, referenced_tables, arg_expr, regs + i, resolver)?;
             }
+            let func_ctx = match func_ctx.func {
+                Func::Dialect(name) => {
+                    let env = TypeEnv::from_resolver(resolver);
+                    let arg_types = args
+                        .iter()
+                        .map(|arg| argument_type(&expr_type(arg, referenced_tables, &env)))
+                        .collect();
+                    FuncCtx {
+                        func: Func::TypedDialect(Arc::new(crate::function::TypedDialectCall {
+                            name,
+                            arg_types,
+                        })),
+                        arg_count: func_ctx.arg_count,
+                    }
+                }
+                _ => func_ctx,
+            };
 
-            // Use shared function call helper
             let arg_registers: Vec<usize> = (regs..regs + args_count).collect();
             emit_function_call(program, func_ctx, &arg_registers, target_register)?;
 

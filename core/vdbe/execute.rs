@@ -11915,6 +11915,19 @@ pub fn op_function(
             )?;
             state.registers[*dest].set_value(result);
         }
+        crate::function::Func::TypedDialect(call) => {
+            let args: Vec<Value> = state.registers[*start_reg..*start_reg + arg_count]
+                .iter()
+                .map(|r| r.get_value().clone())
+                .collect();
+            let result = program.connection.dialect().exec_typed_scalar_function(
+                &program.connection,
+                &call.name,
+                &args,
+                &call.arg_types,
+            )?;
+            state.registers[*dest].set_value(result);
+        }
         crate::function::Func::AlterTable(alter_func) => {
             let r#type = &state.registers[*start_reg].get_value().clone();
             let Value::Text(entry_type) = r#type else {

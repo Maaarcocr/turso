@@ -168,6 +168,16 @@ pub trait Dialect: Send + Sync + 'static {
         )))
     }
 
+    fn exec_typed_scalar_function(
+        &self,
+        conn: &crate::Connection,
+        name: &str,
+        args: &[crate::Value],
+        _arg_types: &[ArgumentType],
+    ) -> crate::Result<crate::Value> {
+        self.exec_scalar_function(conn, name, args)
+    }
+
     /// Whether this dialect needs the custom-type machinery (DECODE/ENCODE,
     /// affinity metadata) regardless of the experimental database flag.
     /// A dialect whose type system leans on custom types (e.g. PostgreSQL)
@@ -215,6 +225,19 @@ pub struct TypeRules {
     pub decimal_literal_type: Option<&'static str>,
     pub string_literals_are_text: bool,
     pub result_parameters: Option<ResultParameters>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArgumentType {
+    Unknown,
+    Integer,
+    Real,
+    Text,
+    Blob,
+    Named {
+        name: String,
+        parameters: Vec<String>,
+    },
 }
 
 #[derive(Debug)]

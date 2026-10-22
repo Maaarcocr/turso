@@ -1612,6 +1612,13 @@ pub enum Func {
     /// PostgreSQL catalog function). Resolved and executed through
     /// [`crate::dialect::Dialect`]; the engine only carries the name.
     Dialect(String),
+    TypedDialect(Arc<TypedDialectCall>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypedDialectCall {
+    pub name: String,
+    pub arg_types: Vec<crate::dialect::ArgumentType>,
 }
 
 impl Display for Func {
@@ -1629,6 +1636,7 @@ impl Display for Func {
             Self::External(generic_func) => write!(f, "{generic_func}"),
             Self::AlterTable(alter_func) => write!(f, "{alter_func}"),
             Self::Dialect(name) => write!(f, "{name}"),
+            Self::TypedDialect(call) => write!(f, "{}", call.name),
         }
     }
 }
@@ -1656,7 +1664,7 @@ impl Deterministic for Func {
             // Dialect scalars are catalog readers (stable within a
             // statement); a dialect that adds a nondeterministic function
             // should register it as an extension function instead.
-            Self::Dialect(_) => true,
+            Self::Dialect(_) | Self::TypedDialect(_) => true,
         }
     }
 }

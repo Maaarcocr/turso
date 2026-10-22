@@ -1152,6 +1152,12 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Argument types of dialect functions (after commit 21).** When core
+  compiles a call to a `Func::Dialect` function it records each argument's
+  static type (`ArgumentType`: a class, or a type name with its parameters as
+  SQL text) in a `Func::TypedDialect` call, and runs it through
+  `Dialect::exec_typed_scalar_function`, which by default calls
+  `exec_scalar_function`, so existing dialects do not change.
 - **Class signatures, literal types and result parameters (commit 21).**
   `TypeRules` gains `class_operators` (OPERATOR clauses over classes and
   types, in CREATE TYPE clause syntax, parsed once per schema),

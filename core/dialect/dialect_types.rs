@@ -547,6 +547,28 @@ mod tests {
     }
 
     #[test]
+    fn dialect_functions_receive_the_static_types_of_their_arguments() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "argument-types.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, tiny TINYINT(1), d DECIMAL(10,2)) STRICT",
+        )
+        .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 1, 2.5)").unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT test_argument_types(1.5, 3, 'x', tiny, d, NULL, 7 / 2) FROM t"
+            ),
+            vec![vec![Value::build_text(
+                "decimal(2,1) integer text tinyint(1) decimal(10,2) unknown decimal(23,4)"
+                    .to_string()
+            )]]
+        );
+    }
+
+    #[test]
     fn affinity_comes_from_the_storage_type() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let db = open_db(&io, "types-affinity.db", marking()).unwrap();
