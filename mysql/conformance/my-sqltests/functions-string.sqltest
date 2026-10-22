@@ -377,6 +377,41 @@ expect {
     NULL|NULL|abc
 }
 
+test trim-removes-whole-strings {
+    SELECT TRIM('ab' FROM 'ababcab'), TRIM(LEADING 'ab' FROM 'ababcab'), TRIM(TRAILING 'ab' FROM 'ababcab'), TRIM('aa' FROM 'aaaaa'), TRIM('' FROM 'xax'), TRIM('A' FROM 'aXa');
+}
+expect {
+    c|cab|ababc|a|xax|aXa
+}
+
+test trim-without-a-string-removes-spaces {
+    SELECT CONCAT('[', TRIM(LEADING FROM '  a  '), ']', TRIM(TRAILING FROM '  a  '), ']', TRIM(BOTH FROM '  a  '), ']', LTRIM('  a  '), ']', RTRIM('  a  '), ']', TRIM('  a  '), ']');
+}
+expect {
+    [a  ]  a]a]a  ]  a]a]
+}
+
+test trim-null-and-numbers {
+    SELECT TRIM(NULL FROM 'a'), TRIM('a' FROM NULL), TRIM(1 FROM 121), TRIM(1e2), LTRIM(1e2), RTRIM(2.5e0), TRIM('é' FROM 'éaé');
+}
+expect {
+    NULL|NULL|2|100|100|2.5|a
+}
+
+test trim-of-binary-strings {
+    SELECT HEX(TRIM('a' FROM _binary 'abca')), TRIM(0x61 FROM 'abca');
+}
+expect {
+    6263|bc
+}
+
+# mysql-error: 1064 You have an error in your SQL syntax; ... near ')'
+test trim-with-a-side-needs-from {
+    SELECT TRIM(LEADING 'a');
+}
+expect error {
+}
+
 test char-builds-bytes {
     SELECT CHAR(77, 121, 83, 81, 76), HEX(CHAR(1, 256)), HEX(CHAR(65536)), CHAR(77, NULL, 121);
 }

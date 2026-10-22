@@ -329,6 +329,51 @@ pub(super) fn replace(args: &[Value]) -> Result<Value> {
     bytes_value(bytes, binary)
 }
 
+pub(super) fn trim(args: &[Value]) -> Result<Value> {
+    trim_ends(args, Ends::Both)
+}
+
+pub(super) fn ltrim(args: &[Value]) -> Result<Value> {
+    trim_ends(args, Ends::Leading)
+}
+
+pub(super) fn rtrim(args: &[Value]) -> Result<Value> {
+    trim_ends(args, Ends::Trailing)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Ends {
+    Both,
+    Leading,
+    Trailing,
+}
+
+fn trim_ends(args: &[Value], ends: Ends) -> Result<Value> {
+    let Some(text) = string(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    let Some(removed) = string_converted_to_text(&args[1], !text.is_binary())? else {
+        return Ok(Value::Null);
+    };
+    let removed = removed.as_bytes();
+    if removed.is_empty() {
+        return text.into_value();
+    }
+    let bytes = text.as_bytes();
+    let (mut start, mut end) = (0, bytes.len());
+    if ends != Ends::Trailing {
+        while bytes[start..end].starts_with(removed) {
+            start += removed.len();
+        }
+    }
+    if ends != Ends::Leading {
+        while bytes[start..end].ends_with(removed) {
+            end -= removed.len();
+        }
+    }
+    text.slice(start, end).into_value()
+}
+
 pub(super) fn char(args: &[Value]) -> Result<Value> {
     let mut bytes = Vec::new();
     for code in args.iter().filter_map(integer) {

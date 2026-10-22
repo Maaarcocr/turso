@@ -72,6 +72,7 @@ fn malformed_sql_returns_parse_errors() {
         "SELECT 'unterminated",
         "SELECT (1",
         "INSERT INTO",
+        "SELECT TRIM(LEADING 'a')",
     ];
 
     for sql in cases {
@@ -735,6 +736,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD (7, 255), \"IF\" (1, 'yes', 'no'), CONCAT (x'41')",
         ),
         (
+            "SELECT TRIM(LEADING 'ab' FROM s), TRIM(BOTH FROM s), TRIM(s), RTRIM(s)",
+            "SELECT __mysql_ltrim (s, 'ab'), __mysql_trim (s, ' '), __mysql_trim (s, ' '), __mysql_rtrim (s, ' ')",
+        ),
+        (
             "SELECT ELT(0x2, 0x41), FIELD(0x61, 97), FIELD(0x61, 'a'), BIN(0x5), CONV(0xFF, 7, 0x10)",
             "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
         ),
@@ -849,10 +854,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "caret over a function",
             sql: "SELECT a ^ RAND() FROM t",
-        },
-        SqlCase {
-            name: "multi-character trim",
-            sql: "SELECT TRIM(LEADING 'ab' FROM 'abab')",
         },
         SqlCase {
             name: "full-text search",

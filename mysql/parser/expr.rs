@@ -1029,35 +1029,16 @@ fn translate_trim(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let Some(removed) = trim_what else {
-        let name = match trim_where {
-            None | Some(TrimWhereField::Both) => "TRIM",
-            Some(TrimWhereField::Leading) => "LTRIM",
-            Some(TrimWhereField::Trailing) => "RTRIM",
-        };
-        return Ok(function_call(name, vec![translate_expr(expr, context)?]));
-    };
-    let single_character = matches!(
-        removed,
-        Expr::Value(value) if matches!(
-            &value.value,
-            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)
-                if text.chars().count() <= 1
-        )
-    );
-    if !single_character {
-        return Err(MysqlParserError::Unsupported(
-            "TRIM of a string longer than one character is not lowered yet".to_string(),
-        ));
-    }
-    let removed = translate_expr(removed, context)?;
+    let removed = trim_what
+        .map(|removed| translate_expr(removed, context))
+        .transpose()?;
     let text = translate_expr(expr, context)?;
-    let name = match trim_where {
-        None | Some(TrimWhereField::Both) => "TRIM",
-        Some(TrimWhereField::Leading) => "LTRIM",
-        Some(TrimWhereField::Trailing) => "RTRIM",
+    let ends = match trim_where {
+        None | Some(TrimWhereField::Both) => TrimEnds::Both,
+        Some(TrimWhereField::Leading) => TrimEnds::Leading,
+        Some(TrimWhereField::Trailing) => TrimEnds::Trailing,
     };
-    Ok(function_call(name, vec![text, removed]))
+    Ok(trim_call(ends, text, removed))
 }
 
 fn translate_interval_arithmetic(
@@ -1262,6 +1243,14 @@ fn translate_special_function(
             let to = translate_in(to, argument_context(upper_name, 2, &args), context)?;
             Ok(Some(translate_conv_of_literal(literal, from, to)?))
         }
+        ("LTRIM" | "RTRIM", [text]) => {
+            let ends = if upper_name == "LTRIM" {
+                TrimEnds::Leading
+            } else {
+                TrimEnds::Trailing
+            };
+            Ok(Some(trim_call(ends, translate_expr(text, context)?, None)))
+        }
         ("BIN" | "OCT", [value]) => {
             let Some(literal) = hex_or_bit_literal(value) else {
                 return Ok(None);
@@ -1276,6 +1265,23 @@ fn translate_special_function(
         (_, []) => Ok(current_time_literal(upper_name)),
         _ => Ok(None),
     }
+}
+
+#[derive(Clone, Copy)]
+enum TrimEnds {
+    Both,
+    Leading,
+    Trailing,
+}
+
+fn trim_call(ends: TrimEnds, text: ast::Expr, removed: Option<ast::Expr>) -> ast::Expr {
+    let name = match ends {
+        TrimEnds::Both => "__mysql_trim",
+        TrimEnds::Leading => "__mysql_ltrim",
+        TrimEnds::Trailing => "__mysql_rtrim",
+    };
+    let removed = removed.unwrap_or_else(|| string_expr(" "));
+    function_call(name, vec![text, removed])
 }
 
 fn translate_conv_of_literal(

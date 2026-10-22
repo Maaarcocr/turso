@@ -2,7 +2,8 @@ use crate::ddl_type::{MAX_DECIMAL_PRECISION, MAX_DECIMAL_SCALE};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     BinaryOperator, CastKind, DataType, DateTimeField, ExactNumberInfo, Expr, ExtractSyntax,
-    Function, FunctionArguments, Ident, Interval, ObjectName, Statement, UnaryOperator,
+    Function, FunctionArguments, Ident, Interval, ObjectName, Statement, TrimWhereField,
+    UnaryOperator,
 };
 use sqlparser::dialect::{Dialect, MySqlDialect, Precedence};
 use sqlparser::keywords::Keyword;
@@ -263,6 +264,14 @@ impl Dialect for MySql {
             {
                 parser.advance_token();
                 return Some(parse_extract(parser));
+            }
+            Token::Word(word)
+                if word.quote_style.is_none()
+                    && word.keyword == Keyword::TRIM
+                    && parser.peek_nth_token_ref(1).token == Token::LParen =>
+            {
+                parser.advance_token();
+                return Some(parse_trim(parser));
             }
             Token::Word(word)
                 if word.quote_style.is_none()
@@ -551,4 +560,34 @@ fn parse_temporal_unit(parser: &mut Parser) -> Result<DateTimeField, ParserError
         }
         _ => parser.expected("a MySQL temporal unit", token),
     }
+}
+
+fn parse_trim(parser: &mut Parser) -> Result<Expr, ParserError> {
+    parser.expect_token(&Token::LParen)?;
+    let trim_where =
+        match parser.parse_one_of_keywords(&[Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]) {
+            Some(Keyword::BOTH) => Some(TrimWhereField::Both),
+            Some(Keyword::LEADING) => Some(TrimWhereField::Leading),
+            Some(Keyword::TRAILING) => Some(TrimWhereField::Trailing),
+            _ => None,
+        };
+    let (trim_what, expr) = if trim_where.is_some() && parser.parse_keyword(Keyword::FROM) {
+        (None, parser.parse_expr()?)
+    } else {
+        let first = parser.parse_expr()?;
+        if parser.parse_keyword(Keyword::FROM) {
+            (Some(Box::new(first)), parser.parse_expr()?)
+        } else if trim_where.is_some() {
+            return parser.expected("FROM", parser.peek_token());
+        } else {
+            (None, first)
+        }
+    };
+    parser.expect_token(&Token::RParen)?;
+    Ok(Expr::Trim {
+        expr: Box::new(expr),
+        trim_where,
+        trim_what,
+        trim_characters: None,
+    })
 }

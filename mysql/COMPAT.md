@@ -107,7 +107,8 @@ Lowered:
 | `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms) |
 | `x->'path'`, `x->>'path'` | `JSON_EXTRACT(x, path)`, `JSON_UNQUOTE(JSON_EXTRACT(x, path))` |
 | `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`, `LOCALTIME`, `LOCALTIMESTAMP` (with or without `()`) | SQLite's current-time literals, which are UTC like the target time zone |
-| `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)`, `TRIM([LEADING \| TRAILING \| BOTH] [c] FROM s)` with `c` one character | `LOCATE(a, b)`, `SUBSTRING(s, a, b)`, `LTRIM/RTRIM/TRIM(s, c)` |
+| `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)` | `LOCATE(a, b)`, `SUBSTRING(s, a, b)` |
+| `TRIM([[LEADING \| TRAILING \| BOTH] [r] FROM] s)`, `LTRIM(s)`, `RTRIM(s)` | `__mysql_trim(s, r)`, `__mysql_ltrim(s, r)`, `__mysql_rtrim(s, r)` with `r` a space when it is left out (see string functions); `TRIM(LEADING r)` without `FROM` is a syntax error, as in MySQL |
 | `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The same SQLite type name the fallback used, so the result is unchanged: no rounding to an integer or to `d` decimals, and no unsigned wrap-around. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement falls back or is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(x AS TEXT)`, `CAST(x AS BLOB)` |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
@@ -160,8 +161,8 @@ yet:
 - User and system variables (`@a`, `@@x`), `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
   collation, `CAST` to `DATE`, `DATETIME`, `TIME`, `YEAR`, `CHAR(n)` or with a
-  character set, `CONVERT(... USING ...)` with any other character set, `TRIM`
-  of a longer string, and `^` over function calls or subqueries.
+  character set, `CONVERT(... USING ...)` with any other character set, and
+  `^` over function calls or subqueries.
 
 Known differences that remain on the lowered path, as on the fallback: `/`
 is SQLite division (integer division for two integers) rather than MySQL's
@@ -327,7 +328,9 @@ back to SQLite parsing. Owned specs: `conformance/my-sqltests/functions-string.s
   `INSTR`, `LCASE`/`LOWER`, `LEFT`, `LENGTH`/`OCTET_LENGTH`, `LOCATE`,
   `POSITION`, `LPAD`, `RPAD`, `MAKE_SET`, `MID`, `ORD`, `REPEAT`, `REPLACE`,
   `RIGHT`, `SPACE`, `SUBSTR`/`SUBSTRING`, `SUBSTRING_INDEX`, `UCASE`/`UPPER`,
-  `UNHEX`.
+  `UNHEX`, and `TRIM`/`LTRIM`/`RTRIM` as `__mysql_trim`, `__mysql_ltrim` and
+  `__mysql_rtrim(s, r)`, which remove whole repeats of `r` byte by byte (case
+  matters, an empty `r` removes nothing).
 - Hashing and encoding: `CRC32`, `MD5`, `SHA`/`SHA1`, `SHA2`, `TO_BASE64`,
   `FROM_BASE64`.
 - Network and UUID: `INET_ATON`, `INET_NTOA`, `INET6_ATON`, `INET6_NTOA`,
@@ -347,7 +350,7 @@ as integers). Numbers used as strings print as MySQL prints them. Strings
 compare with `utf8mb4_0900_ai_ci` (ICU root collation at primary strength: no
 case or accent differences, trailing spaces count). Binary strings compare
 byte by byte in `STRCMP`, `GREATEST`, `LEAST` and `FIND_IN_SET`; `LOCATE`,
-`INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD` and `SUBSTRING_INDEX`
+`INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD`, `SUBSTRING_INDEX` and `TRIM`
 convert a binary argument used with a text string to `utf8mb4`, failing on
 invalid UTF-8 as MySQL does.
 Results above the signed BIGINT range are returned as text, and functions
