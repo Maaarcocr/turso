@@ -108,6 +108,158 @@ fn item_row(id: i64, code: &'static str, size: &'static str) -> Vec<Value> {
 }
 
 #[test]
+fn typed_tables_keep_their_marker_column_types_and_integer_keys_after_reopen(
+) -> turso_core::Result<()> {
+    let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+    let path = "mysql-typed-table-persistence.db";
+
+    {
+        let connection = open_with_io(io.clone(), path)?;
+        connection.execute(
+            "CREATE TABLE t (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                n TINYINT,
+                c CHAR(3),
+                b BINARY(2)
+            )",
+        )?;
+        connection.execute("INSERT INTO t (n, c, b) VALUES ('5', 'ab  ', 'x'), (-1.5, 'c', '')")?;
+        connection.execute("ALTER TABLE t ADD COLUMN v VARCHAR(2)")?;
+        connection.close()?;
+    }
+
+    {
+        let connection = open_with_io(io, path)?;
+        let stored = query(
+            &connection,
+            "SELECT sql FROM sqlite_schema WHERE name = 't'",
+        )?;
+        let [stored] = stored.as_slice() else {
+            panic!("one schema row for t, got {stored:?}");
+        };
+        assert_eq!(
+            stored,
+            &vec![Value::build_text(
+                "/* turso_dialect:mysql rowid_alias */ CREATE TABLE t (id BIGINT UNSIGNED NOT NULL \
+                 PRIMARY KEY AUTOINCREMENT, n TINYINT, c CHAR(3), b BINARY(2), v VARCHAR(2)) STRICT"
+            )]
+        );
+        connection.execute("INSERT INTO t (n, c, b, v) VALUES (7, 'd', 'yz', 'ok')")?;
+        connection.execute("INSERT INTO t VALUES (0, 8, 'e', NULL, NULL)")?;
+        assert_eq!(
+            query(&connection, "SELECT rowid, id, n, c, hex(b), v FROM t")?,
+            vec![
+                typed_row(1, 5, "ab", "7800", None),
+                typed_row(2, -2, "c", "0000", None),
+                typed_row(3, 7, "d", "797A", Some("ok")),
+                vec![
+                    Value::from_i64(4),
+                    Value::from_i64(4),
+                    Value::from_i64(8),
+                    Value::build_text("e"),
+                    Value::Null,
+                    Value::Null,
+                ],
+            ]
+        );
+        for rejected in [
+            "INSERT INTO t (n) VALUES (128)",
+            "INSERT INTO t (n) VALUES ('1x')",
+            "INSERT INTO t (c) VALUES ('abcd')",
+            "INSERT INTO t (b) VALUES ('xyz')",
+            "INSERT INTO t (v) VALUES ('abc')",
+            "INSERT INTO t (id) VALUES (-1)",
+        ] {
+            connection
+                .execute(rejected)
+                .expect_err("the reopened table must keep its MySQL column types");
+        }
+        connection.close()?;
+    }
+    Ok(())
+}
+
+fn query(
+    connection: &Arc<turso_core::Connection>,
+    sql: &str,
+) -> turso_core::Result<Vec<Vec<Value>>> {
+    connection.prepare(sql)?.run_collect_rows()
+}
+
+fn typed_row(
+    key: i64,
+    n: i64,
+    c: &'static str,
+    b: &'static str,
+    v: Option<&'static str>,
+) -> Vec<Value> {
+    vec![
+        Value::from_i64(key),
+        Value::from_i64(key),
+        Value::from_i64(n),
+        Value::build_text(c),
+        Value::build_text(b),
+        v.map_or(Value::Null, Value::build_text),
+    ]
+}
+
+#[test]
+fn storing_errors_map_to_mysql_error_codes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (i INT, d DOUBLE, v VARCHAR(2), p POINT)")?;
+    for (sql, code, message) in [
+        (
+            "INSERT INTO t (i) VALUES (1), (2147483648)",
+            1264,
+            "Out of range value for column 'i' at row 2",
+        ),
+        (
+            "INSERT INTO t (i) VALUES ('abc')",
+            1366,
+            "Incorrect integer value: 'abc' for column 'i' at row 1",
+        ),
+        (
+            "INSERT INTO t (i) VALUES ('12abc')",
+            1265,
+            "Data truncated for column 'i' at row 1",
+        ),
+        (
+            "INSERT INTO t (d) VALUES ('abc')",
+            1265,
+            "Data truncated for column 'd' at row 1",
+        ),
+        (
+            "INSERT INTO t (v) VALUES ('abc')",
+            1406,
+            "Data too long for column 'v' at row 1",
+        ),
+        (
+            "INSERT INTO t (p) VALUES ('abc')",
+            1416,
+            "Cannot get geometry object from data you send to the GEOMETRY field",
+        ),
+    ] {
+        let error = connection.execute(sql).expect_err(sql);
+        let mysql = turso_mysql::mysql_error(&error).unwrap_or_else(|| panic!("{sql}: {error}"));
+        assert_eq!(
+            (mysql.code, mysql.message.as_str()),
+            (code, message),
+            "{sql}"
+        );
+    }
+    connection.execute("CREATE TABLE k (id TINYINT AUTO_INCREMENT PRIMARY KEY)")?;
+    connection.execute("INSERT INTO k VALUES (127)")?;
+    let error = connection
+        .execute("INSERT INTO k VALUES (NULL)")
+        .expect_err("no key is left after 127");
+    assert_eq!(
+        turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
+        Some(1062)
+    );
+    Ok(())
+}
+
+#[test]
 fn reports_projection_metadata() -> turso_core::Result<()> {
     let connection = open_memory()?;
     let statement =

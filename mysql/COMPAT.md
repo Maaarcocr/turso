@@ -23,25 +23,30 @@ The detailed dependency graph is in [`conformance/curriculum.toml`](conformance/
 
 The matrix row above predates this section: DDL is now partly lowered and executed as described here.
 
-`CREATE TABLE`, `CREATE [UNIQUE] INDEX`, `DROP INDEX ... ON`, `DROP TABLE [IF EXISTS]` (one table), `RENAME TABLE` (one table), and single-operation `ALTER TABLE` (`ADD [COLUMN]` without `FIRST`/`AFTER`, `DROP [COLUMN]`, `RENAME COLUMN`, `RENAME [TO|AS]`, `DROP {INDEX|KEY}`) are lowered to Turso DDL. The lowered table is stored as canonical SQLite text in `sqlite_schema`, so it reloads after reopen with the same rules. Anything else falls back to the SQLite parser like any other statement the frontend does not lower.
+`CREATE [TEMPORARY] TABLE`, `CREATE TABLE ... [AS] SELECT`, `CREATE [UNIQUE] INDEX`, `DROP INDEX ... ON`, `DROP TABLE [IF EXISTS]` (one table), `RENAME TABLE` (one table), and single-operation `ALTER TABLE` (`ADD [COLUMN]` without `FIRST`/`AFTER`, `DROP [COLUMN]`, `RENAME COLUMN`, `RENAME [TO|AS]`, `DROP {INDEX|KEY}`) are lowered to Turso DDL. Other statements fall back to the SQLite parser, but a `CREATE TABLE` that is not lowered fails: every table of the MySQL dialect is a typed table.
 
-Column types keep the MySQL name as the Turso declared type (so affinity follows the usual SQLite rules: integers get INTEGER affinity, strings TEXT, `FLOAT`/`DOUBLE` REAL, decimal and temporal types NUMERIC), and the MySQL value rules are enforced with `CHECK` constraints, so an insert or update that MySQL's strict mode rejects fails instead of storing a different value:
+Typed tables are STRICT tables that core marks with `/* turso_dialect:mysql */` in `sqlite_schema` and keeps marked through `ALTER TABLE`, reopen and `RENAME TABLE`. Each column has a MySQL type from the frontend's type table (`mysql/frontend/types/`), which maps it onto a core storage type and says how a value is converted when it is stored (strict mode: a value MySQL rejects makes the statement fail, see `mysql_error` for the MySQL error codes):
 
-| MySQL type | Stored rule |
-|---|---|
-| `TINYINT`/`SMALLINT`/`MEDIUMINT`/`INT`/`BIGINT` (`SIGNED` or `UNSIGNED`), `BOOL` | the type's exact range; display widths are ignored, as MySQL 8.4 does without `ZEROFILL` |
-| `BIGINT UNSIGNED`, `BIT(64)` | not negative (see gaps) |
-| `BIT(n)` | `0 .. 2^n - 1` |
-| `DECIMAL`/`FLOAT`/`DOUBLE` `UNSIGNED` | not negative |
-| `FLOAT(M,D)`/`DOUBLE(M,D)` | at most `D` decimals and fewer than `M - D` integer digits; a value MySQL would round is rejected |
-| `CHAR(n)`/`VARCHAR(n)` | at most `n` characters, not counting trailing spaces |
-| `TINYTEXT`/`TEXT`/`MEDIUMTEXT`, `VARBINARY(n)`, `TINYBLOB`/`BLOB`/`MEDIUMBLOB` | the type's byte limit |
-| `JSON` | `json_valid`; the declared type is `JSON TEXT`, so documents keep TEXT affinity and stay text |
-| `ENUM(...)` | one of the members (stored as `TEXT`) |
-| `SET(...)` (at most 6 members) | one of the member combinations written in definition order (stored as `TEXT`) |
-| `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)`, `YEAR`, `LONGTEXT`, `LONGBLOB`, `DECIMAL(p,s)` | none |
+| MySQL type | Stored as | Converting a stored value |
+|---|---|---|
+| `TINYINT`/`SMALLINT`/`MEDIUMINT`/`INT`/`BIGINT` (`SIGNED` or `UNSIGNED`), `BOOL` (`TINYINT(1)`) | integer within the type's range | text is read as a number (`'12'`, `' 7 '`, `'1e1'`); decimals and text round half away from zero (`2.5` → 3, `'-3.5'` → -4); text with other characters fails (1265), text without digits fails (1366), values outside the range fail (1264); display widths are kept in the declared type |
+| `BIGINT UNSIGNED` | unsigned 64-bit integer (exact up to 18446744073709551615) | as above |
+| `FLOAT`/`DOUBLE` [`UNSIGNED`] [`(M,D)`] | double | text is read as a number; other text fails (1265); out of range or negative `UNSIGNED` fails (1264); `(M,D)` rounds to `D` decimals as MySQL does and fails above `M` digits |
+| `CHAR(n)`/`VARCHAR(n)` | text | at most `n` characters; extra trailing spaces are cut, other extra characters fail (1406); `CHAR` drops trailing spaces; numbers become MySQL's text (`1e20`); bytes that are not UTF-8 fail (1366) |
+| `TINYTEXT`/`TEXT`/`MEDIUMTEXT`/`LONGTEXT` | text | as `VARCHAR`, with the type's limit in bytes |
+| `BINARY(n)`/`VARBINARY(n)`, `TINYBLOB`/`BLOB`/`MEDIUMBLOB`/`LONGBLOB` | blob | at most the type's length in bytes, else 1406; `BINARY(n)` pads with zero bytes; text and numbers are stored as their bytes. Binary columns compare with text literals byte by byte |
+| `GEOMETRY`, `POINT`, `LINESTRING`, `POLYGON`, `MULTI*`, `GEOMETRYCOLLECTION` | blob | only `NULL`: every other value fails (1416) |
+| `DECIMAL(p,s)` [`UNSIGNED`] | double (until exact decimals) | text is read as a number; negative `UNSIGNED` fails |
+| `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)` | text, as given (until temporal storage) | numbers become text |
+| `YEAR` | integer from 0 to 2155 | as the integer types |
+| `BIT(n)` | integer, `CHECK` against `0 .. 2^n - 1` | as the integer types |
+| `JSON` | `LONGTEXT` with `CHECK (json_valid(...))` (until a JSON type) | as `LONGTEXT` |
+| `ENUM(...)` | text, `CHECK` against the members | numbers become text |
+| `SET(...)` (at most 6 members) | text, `CHECK` against the member combinations in definition order | numbers become text |
 
-`AUTO_INCREMENT` is available on an integer column that is the whole primary key; it becomes a rowid alias with `AUTOINCREMENT`, so `NULL` or an omitted value takes the next value and a deleted maximum is never reused. A MySQL integer primary key without `AUTO_INCREMENT` is not a rowid alias: it rejects `NULL` like MySQL. Primary key columns are `NOT NULL`. A `NOT NULL` `ENUM` without a default takes its first member, as in MySQL.
+The conversion also applies to `UPDATE`, `INSERT ... SELECT`, defaults, generated columns and rows copied by `ALTER TABLE`. `CAST` to these type names keeps SQLite's conversion for now.
+
+A single integer primary key column is the table's rowid, so rows are read in primary key order, as InnoDB returns them. `AUTO_INCREMENT` is available on that column: `NULL`, `0` or an omitted value takes the next value, a deleted maximum is never reused, and when the next value does not fit the type the insert fails (MySQL reports a duplicate key, 1062). `UPDATE` stores `0` and rejects `NULL` (1048). A primary key without `AUTO_INCREMENT` rejects `NULL` like MySQL. Primary key columns are `NOT NULL`. A `NOT NULL` `ENUM` without a default takes its first member, as in MySQL.
 
 `DEFAULT` literals are checked against the column type the way MySQL checks them and stored in the form MySQL stores them (integers rounded, `DECIMAL(p,s)` and `FLOAT(M,D)` rounded to their scale, numbers in string columns kept as written, dates and times normalized to `YYYY-MM-DD HH:MM:SS[.fraction]`, `ENUM`/`SET` members spelled as declared, trailing spaces removed for `CHAR`). `CURRENT_TIMESTAMP`/`NOW()` defaults are available for `DATETIME` and `TIMESTAMP` without fractional seconds, and parenthesized expression defaults are lowered as expressions. A default MySQL rejects, or one that needs rounding of fractional seconds, is not lowered.
 
@@ -62,14 +67,17 @@ Compatibility no-ops (accepted, with no effect in Turso):
 Known gaps:
 
 - Collations: Turso compares strings byte by byte, so columns declared (or defaulting to) a case- or accent-insensitive collation compare, sort, group and enforce uniqueness case-sensitively. Only the `_bin` collations match exactly (`utf8mb4_bin` also ignores trailing spaces in MySQL).
-- `BIGINT UNSIGNED` and `BIT(64)` values above 9223372036854775807 are stored as approximate floating-point values.
-- `DECIMAL(p,s)` is not exact: values are not rounded to the scale and are shown without trailing zeros; `FLOAT` is double precision; `FLOAT(M,D)` values are shown without trailing zeros.
-- Temporal values are stored as given, without MySQL's validation, normalization, or `TIMESTAMP` time-zone conversion (only defaults are normalized). `CHAR` values keep trailing spaces.
+- Decimal literals reach a column as doubles until exact decimals exist, so `1.50` is stored in a `VARCHAR` as `1.5`, a double literal such as `2.5e0` rounds half away from zero into an integer column (MySQL rounds it to even), and `DECIMAL(p,s)` values are neither rounded to the scale nor checked against the precision and are shown without trailing zeros. `FLOAT` is double precision; `FLOAT(M,D)`/`DOUBLE(M,D)` values are shown without trailing zeros.
+- A double stored in a `CHAR`/`VARCHAR` whose shortest MySQL text is longer than the column fails (1406), where MySQL rounds it to fit.
+- An integer literal above 9223372036854775807 in `INSERT` is read as a double, so `18446744073709551615` cannot be stored from a literal (as text it can), and a `BIGINT UNSIGNED` primary key, being the rowid, holds at most 9223372036854775807.
+- Comparing an integer column with a text literal written on the left (`'5' = col`) compares text with a number and is false; `col = '5'` works.
+- Temporal values are stored as given, without MySQL's validation, normalization, or `TIMESTAMP` time-zone conversion (only defaults are normalized).
 - `ENUM` sorts and compares by text, not by member position; numeric `ENUM` and `SET` values (member indexes and bitmasks) and member names in another letter case are rejected instead of converted; `SET` values must list members in definition order.
-- Inserting `0` into an `AUTO_INCREMENT` column fails instead of taking the next value, and updating such a column to `0` fails; unlike InnoDB, a failed insert does not use up a value.
+- Unlike InnoDB, a failed insert does not use up an `AUTO_INCREMENT` value.
 - `FOREIGN KEY` constraints are stored but Turso does not enforce them unless `PRAGMA foreign_keys` is on.
-- Generated columns are lowered, but Turso only creates them with the experimental generated-columns option, which the MySQL frontend does not enable.
-- Not lowered: `TEMPORARY` tables, `CREATE TABLE ... LIKE`/`AS SELECT`, qualified `db.table` names, `ZEROFILL`, `BINARY(n)`, spatial types, `FULLTEXT`/`SPATIAL` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
+- Generated columns can only call functions that core also knows by name, so `->>` (`JSON_UNQUOTE`) in a generated column fails.
+- `CREATE TABLE ... AS SELECT` needs a type for each result column; a function result such as `SUM(...)` or `CONCAT(...)` has none yet and fails.
+- Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, spatial `SRID` and `SPATIAL` keys, `FULLTEXT` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
 ## SELECT statements and expressions
 

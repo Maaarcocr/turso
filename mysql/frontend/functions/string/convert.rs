@@ -292,7 +292,7 @@ pub(super) fn bytes_value(bytes: Vec<u8>, binary: bool) -> Result<Value> {
     }
 }
 
-pub(super) fn format_double(value: f64) -> String {
+pub(crate) fn format_double(value: f64) -> String {
     let sign = if value.is_sign_negative() { "-" } else { "" };
     if value == 0.0 {
         return format!("{sign}0");

@@ -4,6 +4,8 @@ mod datetime;
 mod json;
 mod string;
 
+pub(crate) use string::format_double;
+
 pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
     let name = name.to_ascii_uppercase();
     let accepted = datetime::accepts(&name, arg_count)

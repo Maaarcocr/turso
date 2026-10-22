@@ -9,6 +9,8 @@ mod numeric;
 mod regexp;
 mod text;
 
+pub(crate) use convert::format_double;
+
 type Function = fn(&[Value]) -> Result<Value>;
 
 pub(super) fn accepts(name: &str, arg_count: usize) -> bool {

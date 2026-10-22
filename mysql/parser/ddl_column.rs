@@ -1,6 +1,6 @@
 use crate::ddl_default::resolve_default;
 use crate::ddl_expr::{translate_default, translate_expr, DefaultValue};
-use crate::ddl_type::{number, simple_type, translate_column_type, ColumnType, Family};
+use crate::ddl_type::{translate_column_type, ColumnType, Family};
 use crate::names::translate_ddl_identifier;
 use crate::MysqlParserError;
 use sqlparser::ast::{
@@ -135,13 +135,6 @@ impl Column {
                 default,
             ))));
         }
-        if auto_increment {
-            constraints.push(check(ast::Expr::Binary(
-                Box::new(ast::Expr::Id(name.clone())),
-                ast::Operator::NotEquals,
-                Box::new(number(0)),
-            )));
-        }
         if let Some(value_check) = column_type.value_check(&name) {
             constraints.push(check(value_check));
         }
@@ -161,14 +154,9 @@ impl Column {
                 typ: Some(typ),
             }));
         }
-        let declared = if auto_increment {
-            simple_type("INTEGER")
-        } else {
-            column_type.declared
-        };
         Ok(ast::ColumnDefinition {
             col_name: name,
-            col_type: Some(declared),
+            col_type: Some(column_type.declared),
             constraints,
         })
     }

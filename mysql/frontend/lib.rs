@@ -1,11 +1,17 @@
 use std::sync::Arc;
+use turso_core::dialect::TypeRules;
 use turso_core::schema::{BTreeTable, Schema};
 use turso_core::{
     Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, Value, IO,
 };
 use turso_parser::ast;
+use turso_parser::token::TokenType;
 
+mod errors;
 mod functions;
+mod types;
+
+pub use errors::{mysql_error, MysqlError};
 
 #[derive(Debug)]
 pub struct MySqlDialect;
@@ -38,6 +44,11 @@ impl Dialect for MySqlDialect {
         // SQLite must see the same single statement: if it ended earlier
         // (its lexer disagrees about a quote or comment), resuming after its
         // end could run text that MySQL treats as part of a string.
+        if uses_array_operators(text) {
+            return Err(LimboError::ParseError(format!(
+                "SQLite reads `&&` and `@>` as array operators, which MySQL does not have: {text}"
+            )));
+        }
         let (cmd, consumed) = turso_core::dialect::sqlite::parse(text)?;
         let Some(cmd) = cmd else {
             return Err(LimboError::ParseError(format!(
@@ -78,6 +89,9 @@ impl Dialect for MySqlDialect {
     }
 
     fn resolve_function(&self, name: &str, arg_count: usize) -> Result<Option<Func>> {
+        if let Some(conversion) = types::resolve(name, arg_count) {
+            return Ok(Some(conversion));
+        }
         if let Some(function) = functions::resolve(name, arg_count) {
             return Ok(Some(function));
         }
@@ -90,9 +104,33 @@ impl Dialect for MySqlDialect {
         name: &str,
         args: &[Value],
     ) -> Result<Value> {
-        functions::execute(name, args)
+        types::execute(name, args)
+            .or_else(|| functions::execute(name, args))
             .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
     }
+
+    fn requires_custom_types(&self) -> bool {
+        true
+    }
+
+    fn type_rules(&self) -> &'static TypeRules {
+        types::rules()
+    }
+
+    fn marks_tables(&self) -> bool {
+        true
+    }
+}
+
+fn uses_array_operators(sql: &str) -> bool {
+    turso_parser::lexer::Lexer::new(sql.as_bytes())
+        .map_while(std::result::Result::ok)
+        .any(|token| {
+            matches!(
+                token.token_type,
+                TokenType::TK_ARRAY_OVERLAP | TokenType::TK_ARRAY_CONTAINS
+            )
+        })
 }
 
 /// Opens the database at `path` on `io` with the MySQL dialect and returns a
@@ -162,6 +200,23 @@ mod tests {
         let sql = "SELECT SQL_NO_CACHE x FROM t WHERE y = 'a\\'; DROP TABLE t; -- '";
         let error = MySqlDialect.parse(sql).expect_err("lexers disagree");
         assert!(error.to_string().contains("disagree"), "{error}");
+    }
+
+    #[test]
+    fn sqlite_fallback_refuses_array_operators() {
+        for sql in [
+            "SELECT CAST('x' AS JSON) && 1",
+            "SELECT CAST('x' AS JSON) @> 1",
+        ] {
+            let error = MySqlDialect.parse(sql).expect_err(sql);
+            assert!(error.to_string().contains("array operators"), "{error}");
+        }
+    }
+
+    #[test]
+    fn sqlite_fallback_stops_reading_tokens_at_a_lexer_error() {
+        let sql = "SELECT CAST('x' AS JSON) = 'a\\'b'";
+        assert!(MySqlDialect.parse(sql).is_err(), "{sql}");
     }
 
     #[test]

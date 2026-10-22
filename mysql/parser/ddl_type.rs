@@ -48,15 +48,14 @@ pub(crate) enum Family {
     Varchar {
         length: u64,
     },
-    Text {
-        max_bytes: Option<u64>,
+    Text,
+    Binary {
+        length: u64,
     },
     Varbinary {
         length: u64,
     },
-    Blob {
-        max_bytes: Option<u64>,
-    },
+    Blob,
     Json,
     Date,
     Datetime {
@@ -71,23 +70,26 @@ pub(crate) enum Family {
     Year,
     Enum(Vec<String>),
     Set(Vec<String>),
+    Spatial,
 }
 
 pub(crate) fn translate_column_type(data_type: &DataType) -> Result<ColumnType, MysqlParserError> {
     let column_type = match data_type {
-        DataType::TinyInt(_) => integer("TINYINT", -128, 127),
-        DataType::TinyIntUnsigned(_) => integer("TINYINT UNSIGNED", 0, 255),
-        DataType::SmallInt(_) => integer("SMALLINT", -32_768, 32_767),
-        DataType::SmallIntUnsigned(_) => integer("SMALLINT UNSIGNED", 0, 65_535),
-        DataType::MediumInt(_) => integer("MEDIUMINT", -8_388_608, 8_388_607),
-        DataType::MediumIntUnsigned(_) => integer("MEDIUMINT UNSIGNED", 0, 16_777_215),
-        DataType::Int(_) | DataType::Integer(_) => integer("INT", i32::MIN.into(), i32::MAX.into()),
-        DataType::IntUnsigned(_) | DataType::IntegerUnsigned(_) => {
-            integer("INT UNSIGNED", 0, u32::MAX.into())
+        DataType::TinyInt(width) => integer("TINYINT", *width, -128, 127),
+        DataType::TinyIntUnsigned(width) => integer("TINYINT UNSIGNED", *width, 0, 255),
+        DataType::SmallInt(width) => integer("SMALLINT", *width, -32_768, 32_767),
+        DataType::SmallIntUnsigned(width) => integer("SMALLINT UNSIGNED", *width, 0, 65_535),
+        DataType::MediumInt(width) => integer("MEDIUMINT", *width, -8_388_608, 8_388_607),
+        DataType::MediumIntUnsigned(width) => integer("MEDIUMINT UNSIGNED", *width, 0, 16_777_215),
+        DataType::Int(width) | DataType::Integer(width) => {
+            integer("INT", *width, i32::MIN.into(), i32::MAX.into())
         }
-        DataType::BigInt(_) => integer("BIGINT", i64::MIN.into(), i64::MAX.into()),
-        DataType::BigIntUnsigned(_) => integer("BIGINT UNSIGNED", 0, u64::MAX.into()),
-        DataType::Bool | DataType::Boolean => integer("TINYINT", -128, 127),
+        DataType::IntUnsigned(width) | DataType::IntegerUnsigned(width) => {
+            integer("INT UNSIGNED", *width, 0, u32::MAX.into())
+        }
+        DataType::BigInt(width) => integer("BIGINT", *width, i64::MIN.into(), i64::MAX.into()),
+        DataType::BigIntUnsigned(width) => integer("BIGINT UNSIGNED", *width, 0, u64::MAX.into()),
+        DataType::Bool | DataType::Boolean => integer("TINYINT", Some(1), -128, 127),
         DataType::Bit(width) => bit(width.unwrap_or(1))?,
         DataType::Decimal(info) | DataType::Dec(info) | DataType::Numeric(info) => {
             decimal(info, false)?
@@ -123,10 +125,10 @@ pub(crate) fn translate_column_type(data_type: &DataType) -> Result<ColumnType, 
                 family: Family::Varchar { length },
             }
         }
-        DataType::TinyText => text("TINYTEXT", Some(TINY_LENGTH)),
-        DataType::Text => text("TEXT", Some(REGULAR_LENGTH)),
-        DataType::MediumText => text("MEDIUMTEXT", Some(MEDIUM_LENGTH)),
-        DataType::LongText => text("LONGTEXT", None),
+        DataType::TinyText => text("TINYTEXT"),
+        DataType::Text => text("TEXT"),
+        DataType::MediumText => text("MEDIUMTEXT"),
+        DataType::LongText => text("LONGTEXT"),
         DataType::Custom(name, modifiers) => custom(name, modifiers)?,
         DataType::Varbinary(Some(BinaryLength::IntegerLength { length }))
             if *length <= REGULAR_LENGTH =>
@@ -141,10 +143,22 @@ pub(crate) fn translate_column_type(data_type: &DataType) -> Result<ColumnType, 
                 "VARBINARY({length}) exceeds the MySQL maximum of {REGULAR_LENGTH}"
             )));
         }
-        DataType::TinyBlob => blob("TINYBLOB", Some(TINY_LENGTH)),
-        DataType::Blob(None) => blob("BLOB", Some(REGULAR_LENGTH)),
-        DataType::MediumBlob => blob("MEDIUMBLOB", Some(MEDIUM_LENGTH)),
-        DataType::LongBlob => blob("LONGBLOB", None),
+        DataType::Binary(length) => {
+            let length = length.unwrap_or(1);
+            if length > MAX_CHAR_LENGTH {
+                return Err(MysqlParserError::Rejected(format!(
+                    "BINARY({length}) exceeds the MySQL maximum of {MAX_CHAR_LENGTH}"
+                )));
+            }
+            ColumnType {
+                declared: sized_type("BINARY", length),
+                family: Family::Binary { length },
+            }
+        }
+        DataType::TinyBlob => blob("TINYBLOB"),
+        DataType::Blob(None) => blob("BLOB"),
+        DataType::MediumBlob => blob("MEDIUMBLOB"),
+        DataType::LongBlob => blob("LONGBLOB"),
         DataType::Date => ColumnType {
             declared: simple_type("DATE"),
             family: Family::Date,
@@ -162,7 +176,7 @@ pub(crate) fn translate_column_type(data_type: &DataType) -> Result<ColumnType, 
             temporal("TIME", precision, Family::Time { precision })
         }
         DataType::JSON => ColumnType {
-            declared: simple_type("JSON TEXT"),
+            declared: simple_type("LONGTEXT"),
             family: Family::Json,
         },
         DataType::Enum(members, None) => enumeration(members)?,
@@ -182,7 +196,10 @@ impl ColumnType {
     }
 
     pub(crate) fn is_binary(&self) -> bool {
-        matches!(self.family, Family::Varbinary { .. } | Family::Blob { .. })
+        matches!(
+            self.family,
+            Family::Binary { .. } | Family::Varbinary { .. } | Family::Blob
+        )
     }
 
     pub(crate) fn is_character_string(&self) -> bool {
@@ -190,7 +207,7 @@ impl ColumnType {
             self.family,
             Family::Char { .. }
                 | Family::Varchar { .. }
-                | Family::Text { .. }
+                | Family::Text
                 | Family::Enum(_)
                 | Family::Set(_)
         )
@@ -198,91 +215,36 @@ impl ColumnType {
 
     pub(crate) fn value_check(&self, column: &ast::Name) -> Option<ast::Expr> {
         let id = || ast::Expr::Id(column.clone());
-        let at_most = |measured: ast::Expr, limit: u64| {
-            ast::Expr::Binary(
-                Box::new(measured),
-                ast::Operator::LessEquals,
-                Box::new(number(limit.into())),
-            )
-        };
-        let non_negative = || {
-            ast::Expr::Binary(
+        match &self.family {
+            Family::Bit { width: 64 } => Some(ast::Expr::Binary(
                 Box::new(id()),
                 ast::Operator::GreaterEquals,
                 Box::new(number(0)),
-            )
-        };
-        match &self.family {
-            Family::Integer { min: 0, max } if *max > i64::MAX.into() => Some(non_negative()),
-            Family::Integer { min, max } => Some(ast::Expr::Between {
-                lhs: Box::new(id()),
-                not: false,
-                start: Box::new(number(*min)),
-                end: Box::new(number(*max)),
-            }),
-            Family::Bit { width: 64 } => Some(non_negative()),
+            )),
             Family::Bit { width } => Some(ast::Expr::Between {
                 lhs: Box::new(id()),
                 not: false,
                 start: Box::new(number(0)),
                 end: Box::new(number((1_i128 << width) - 1)),
             }),
-            Family::Float {
-                unsigned,
-                digits: Some((precision, scale)),
-            } => {
-                let rounded = ast::Expr::Binary(
-                    Box::new(id()),
-                    ast::Operator::Equals,
-                    Box::new(call("round", vec![id(), number((*scale).into())])),
-                );
-                let limit =
-                    ast::Expr::Literal(ast::Literal::Numeric(format!("1e{}", precision - scale)));
-                let in_range = ast::Expr::Binary(
-                    Box::new(call("abs", vec![id()])),
-                    ast::Operator::Less,
-                    Box::new(limit),
-                );
-                let checked =
-                    ast::Expr::Binary(Box::new(rounded), ast::Operator::And, Box::new(in_range));
-                Some(if *unsigned {
-                    ast::Expr::Binary(
-                        Box::new(checked),
-                        ast::Operator::And,
-                        Box::new(non_negative()),
-                    )
-                } else {
-                    checked
-                })
-            }
-            Family::Decimal { unsigned: true, .. } | Family::Float { unsigned: true, .. } => {
-                Some(non_negative())
-            }
-            Family::Char { length } | Family::Varchar { length } => Some(at_most(
-                call("char_length", vec![call("rtrim", vec![id()])]),
-                *length,
-            )),
-            Family::Text {
-                max_bytes: Some(limit),
-            }
-            | Family::Blob {
-                max_bytes: Some(limit),
-            }
-            | Family::Varbinary { length: limit } => {
-                Some(at_most(call("octet_length", vec![id()]), *limit))
-            }
             Family::Json => Some(call("json_valid", vec![id()])),
             Family::Enum(members) => Some(one_of(id(), members.iter().cloned())),
             Family::Set(members) => Some(one_of(id(), set_values(members))),
-            Family::Decimal { .. }
+            Family::Integer { .. }
+            | Family::Decimal { .. }
             | Family::Float { .. }
-            | Family::Text { max_bytes: None }
-            | Family::Blob { max_bytes: None }
+            | Family::Char { .. }
+            | Family::Varchar { .. }
+            | Family::Text
+            | Family::Binary { .. }
+            | Family::Varbinary { .. }
+            | Family::Blob
             | Family::Date
             | Family::Datetime { .. }
             | Family::Timestamp { .. }
             | Family::Time { .. }
-            | Family::Year => None,
+            | Family::Year
+            | Family::Spatial => None,
         }
     }
 
@@ -292,7 +254,7 @@ impl ColumnType {
         prefix: Option<u64>,
     ) -> Result<u64, MysqlParserError> {
         let bytes = match (&self.family, prefix) {
-            (Family::Text { .. } | Family::Blob { .. }, None) => {
+            (Family::Text | Family::Blob, None) => {
                 return Err(MysqlParserError::Rejected(format!(
                     "BLOB/TEXT column `{column}` used in a key needs a key length"
                 )));
@@ -302,8 +264,13 @@ impl ColumnType {
                     "JSON column `{column}` cannot be indexed directly"
                 )));
             }
-            (Family::Text { .. }, Some(prefix)) => prefix.saturating_mul(BYTES_PER_CHARACTER),
-            (Family::Blob { .. }, Some(prefix)) => prefix,
+            (Family::Spatial, _) => {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "spatial column `{column}` in a key is not available"
+                )));
+            }
+            (Family::Text, Some(prefix)) => prefix.saturating_mul(BYTES_PER_CHARACTER),
+            (Family::Blob, Some(prefix)) => prefix,
             (Family::Char { length } | Family::Varchar { length }, prefix)
                 if prefix.is_none_or(|prefix| prefix <= *length) =>
             {
@@ -311,7 +278,7 @@ impl ColumnType {
                     .unwrap_or(*length)
                     .saturating_mul(BYTES_PER_CHARACTER)
             }
-            (Family::Varbinary { length }, prefix)
+            (Family::Binary { length } | Family::Varbinary { length }, prefix)
                 if prefix.is_none_or(|prefix| prefix <= *length) =>
             {
                 prefix.unwrap_or(*length)
@@ -349,9 +316,13 @@ pub(crate) fn set_values(members: &[String]) -> impl Iterator<Item = String> + '
     })
 }
 
-fn integer(name: &str, min: i128, max: i128) -> ColumnType {
+fn integer(name: &str, width: Option<u64>, min: i128, max: i128) -> ColumnType {
+    let declared = match width {
+        Some(width) => sized_type(name, width),
+        None => simple_type(name),
+    };
     ColumnType {
-        declared: simple_type(name),
+        declared,
         family: Family::Integer { min, max },
     }
 }
@@ -476,17 +447,17 @@ fn character_length(
     }
 }
 
-fn text(name: &str, max_bytes: Option<u64>) -> ColumnType {
+fn text(name: &str) -> ColumnType {
     ColumnType {
         declared: simple_type(name),
-        family: Family::Text { max_bytes },
+        family: Family::Text,
     }
 }
 
-fn blob(name: &str, max_bytes: Option<u64>) -> ColumnType {
+fn blob(name: &str) -> ColumnType {
     ColumnType {
         declared: simple_type(name),
-        family: Family::Blob { max_bytes },
+        family: Family::Blob,
     }
 }
 
@@ -504,19 +475,27 @@ fn custom(name: &ObjectName, modifiers: &[String]) -> Result<ColumnType, MysqlPa
             declared: simple_type("YEAR"),
             family: Family::Year,
         }),
+        (
+            name @ ("GEOMETRY" | "POINT" | "LINESTRING" | "POLYGON" | "MULTIPOINT"
+            | "MULTILINESTRING" | "MULTIPOLYGON" | "GEOMETRYCOLLECTION"),
+            [],
+        ) => Ok(ColumnType {
+            declared: simple_type(name),
+            family: Family::Spatial,
+        }),
         ("TEXT", [length]) => {
             let characters = length
                 .parse::<u64>()
                 .map_err(|_| unsupported_type(name, modifiers))?;
             let bytes = characters.saturating_mul(BYTES_PER_CHARACTER);
             Ok(if bytes <= TINY_LENGTH {
-                text("TINYTEXT", Some(TINY_LENGTH))
+                text("TINYTEXT")
             } else if bytes <= REGULAR_LENGTH {
-                text("TEXT", Some(REGULAR_LENGTH))
+                text("TEXT")
             } else if bytes <= MEDIUM_LENGTH {
-                text("MEDIUMTEXT", Some(MEDIUM_LENGTH))
+                text("MEDIUMTEXT")
             } else {
-                text("LONGTEXT", None)
+                text("LONGTEXT")
             })
         }
         _ => Err(unsupported_type(name, modifiers)),
@@ -554,7 +533,7 @@ fn enumeration(members: &[EnumMember]) -> Result<ColumnType, MysqlParserError> {
         .collect::<Result<Vec<_>, _>>()?;
     ensure_distinct_members(&members)?;
     Ok(ColumnType {
-        declared: simple_type("TEXT"),
+        declared: simple_type("ENUM"),
         family: Family::Enum(members),
     })
 }
@@ -567,7 +546,7 @@ fn set(members: &[String]) -> Result<ColumnType, MysqlParserError> {
     }
     ensure_distinct_members(members)?;
     Ok(ColumnType {
-        declared: simple_type("TEXT"),
+        declared: simple_type("\"SET\""),
         family: Family::Set(members.to_vec()),
     })
 }
