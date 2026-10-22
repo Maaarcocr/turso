@@ -4891,14 +4891,20 @@ fn translate_create_enum(
             params: vec![ast::TypeParam {
                 name: "value".into(),
                 ty: Some("text".into()),
+                default: None,
             }],
             base: "text".into(),
             encode: Some(Box::new(encode)),
             decode: Some(Box::new(decode)),
             operators: vec![ast::TypeOperator {
                 op: "<".into(),
+                operands: None,
+                returns: None,
                 func_name: None,
             }],
+            casts: vec![],
+            functions: vec![],
+            key: None,
             default: None,
         },
     })

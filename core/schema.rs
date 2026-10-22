@@ -231,6 +231,9 @@ pub enum TypeDefKind {
         encode: Option<Box<ast::Expr>>,
         decode: Option<Box<ast::Expr>>,
         operators: std::vec::Vec<TypeOperator>,
+        casts: std::vec::Vec<ast::TypeCast>,
+        functions: std::vec::Vec<ast::TypeFunction>,
+        key: Option<Box<ast::Expr>>,
         default: Option<Box<ast::Expr>>,
     },
     Struct(StructDef),
@@ -362,6 +365,27 @@ impl TypeDef {
         }
     }
 
+    pub fn casts(&self) -> &[ast::TypeCast] {
+        match &self.kind {
+            TypeDefKind::Custom { casts, .. } => casts,
+            _ => &[],
+        }
+    }
+
+    pub fn functions(&self) -> &[ast::TypeFunction] {
+        match &self.kind {
+            TypeDefKind::Custom { functions, .. } => functions,
+            _ => &[],
+        }
+    }
+
+    pub fn key(&self) -> Option<&ast::Expr> {
+        match &self.kind {
+            TypeDefKind::Custom { key, .. } => key.as_deref(),
+            _ => None,
+        }
+    }
+
     /// Returns the default expression (Custom types only).
     pub fn default_expr(&self) -> Option<&ast::Expr> {
         match &self.kind {
@@ -410,6 +434,9 @@ impl TypeDef {
                 encode,
                 decode,
                 operators,
+                casts,
+                functions,
+                key,
                 default,
             } => Self {
                 name: type_name.to_string(),
@@ -424,6 +451,9 @@ impl TypeDef {
                     encode: encode.clone(),
                     decode: decode.clone(),
                     operators: operators.clone(),
+                    casts: casts.clone(),
+                    functions: functions.clone(),
+                    key: key.clone(),
                     default: default.clone(),
                 },
             },
@@ -512,6 +542,9 @@ impl TypeDef {
                 encode: None,
                 decode: None,
                 operators: std::vec::Vec::new(),
+                casts: std::vec::Vec::new(),
+                functions: std::vec::Vec::new(),
+                key: None,
                 default,
             },
         }
@@ -534,6 +567,10 @@ impl TypeDef {
         self.params()
             .iter()
             .filter(|p| !p.name.eq_ignore_ascii_case("value"))
+    }
+
+    pub fn required_user_param_count(&self) -> usize {
+        self.user_params().filter(|p| p.default.is_none()).count()
     }
 
     /// Returns the original SQL used to create this type or domain.

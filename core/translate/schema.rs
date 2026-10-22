@@ -850,7 +850,8 @@ fn validate(
                                     None => 0,
                                 };
                                 let expected = td.user_params().count();
-                                if provided != expected {
+                                let required = td.required_user_param_count();
+                                if provided < required || provided > expected {
                                     bail_parse_error!(
                                         "type \"{}\" requires {} parameter(s), got {}",
                                         type_name,
@@ -2800,8 +2801,13 @@ pub fn translate_create_type(
 
     // Validate encode/decode expressions for safety (only for custom types)
     if let ast::CreateTypeBody::CustomType {
+        ref params,
         ref encode,
         ref decode,
+        ref key,
+        ref operators,
+        ref casts,
+        ref functions,
         ..
     } = body
     {
@@ -2811,12 +2817,55 @@ pub fn translate_create_type(
         if let Some(ref decode) = decode {
             validate_type_expr(decode, "DECODE", resolver)?;
         }
+        if let Some(ref key) = key {
+            validate_type_expr(key, "KEY", resolver)?;
+        }
+        let mut defaults_started = false;
+        for param in params
+            .iter()
+            .filter(|p| !p.name.eq_ignore_ascii_case("value"))
+        {
+            if param.default.is_some() {
+                defaults_started = true;
+            } else if defaults_started {
+                bail_parse_error!(
+                    "parameter {} of type {normalized_name} needs a DEFAULT because an earlier parameter has one",
+                    param.name
+                );
+            }
+        }
+        let signature_types = operators
+            .iter()
+            .flat_map(|op| op.operands.iter().flatten().chain(op.returns.iter()))
+            .chain(casts.iter().flat_map(|cast| cast.types.iter()))
+            .chain(
+                functions
+                    .iter()
+                    .flat_map(|function| function.args.iter().chain([&function.returns])),
+            );
+        for ty in signature_types {
+            validate_signature_type(ty, &normalized_name, resolver)?;
+        }
     }
 
     // Build canonical SQL (without IF NOT EXISTS) for persistence
     let sql = build_create_type_sql(&normalized_name, body);
 
     persist_type_definition(normalized_name, sql, resolver, program)
+}
+
+fn validate_signature_type(ty: &str, type_name: &str, resolver: &Resolver) -> Result<()> {
+    let is_dynamic_class = turso_macros::match_ignore_ascii_case!(match ty.as_bytes() {
+        b"INTEGER" | b"REAL" | b"TEXT" | b"BLOB" | b"ANY" => true,
+        _ => false,
+    });
+    if is_dynamic_class
+        || ty.eq_ignore_ascii_case(type_name)
+        || resolver.schema().get_type_def_unchecked(ty).is_some()
+    {
+        return Ok(());
+    }
+    bail_parse_error!("type \"{ty}\" used in the definition of type {type_name} does not exist")
 }
 
 /// Build canonical CREATE TYPE SQL from a normalized name and parsed body.
@@ -2834,6 +2883,9 @@ fn build_create_type_sql(name: &str, body: &ast::CreateTypeBody) -> String {
             decode,
             default,
             operators,
+            casts,
+            functions,
+            key,
         } => {
             let mut sql = if params.is_empty() {
                 format!(
@@ -2844,9 +2896,15 @@ fn build_create_type_sql(name: &str, body: &ast::CreateTypeBody) -> String {
             } else {
                 let param_strs: Vec<String> = params
                     .iter()
-                    .map(|p| match &p.ty {
-                        Some(ty) => format!("{} {}", quote_ident(&p.name), ty),
-                        None => quote_ident(&p.name),
+                    .map(|p| {
+                        let param = match &p.ty {
+                            Some(ty) => format!("{} {}", quote_ident(&p.name), ty),
+                            None => quote_ident(&p.name),
+                        };
+                        match &p.default {
+                            Some(default) => format!("{param} DEFAULT {default}"),
+                            None => param,
+                        }
                     })
                     .collect();
                 format!(
@@ -2862,18 +2920,42 @@ fn build_create_type_sql(name: &str, body: &ast::CreateTypeBody) -> String {
             if let Some(ref decode) = decode {
                 sql.push_str(&format!(" DECODE {decode}"));
             }
+            if let Some(ref key) = key {
+                sql.push_str(&format!(" KEY {key}"));
+            }
             if let Some(ref default) = default {
                 sql.push_str(&format!(" DEFAULT {default}"));
             }
+            for cast in casts {
+                let direction = match cast.direction {
+                    ast::TypeCastDirection::From => "FROM",
+                    ast::TypeCastDirection::To => "TO",
+                };
+                sql.push_str(&format!(
+                    " CAST {direction} {} AS IMPLICIT",
+                    cast.types.join(", ")
+                ));
+            }
             for op in operators {
-                match &op.func_name {
-                    Some(func_name) => sql.push_str(&format!(
-                        " OPERATOR '{}' {}",
-                        quote_string_literal(&op.op),
-                        quote_ident(func_name)
-                    )),
-                    None => sql.push_str(&format!(" OPERATOR '{}'", quote_string_literal(&op.op))),
+                sql.push_str(&format!(" OPERATOR '{}'", quote_string_literal(&op.op)));
+                if let Some(operands) = &op.operands {
+                    sql.push_str(&format!(" ({})", operands.join(", ")));
                 }
+                if let Some(returns) = &op.returns {
+                    sql.push_str(&format!(" RETURNS {returns}"));
+                }
+                if let Some(func_name) = &op.func_name {
+                    sql.push_str(&format!(" {}", quote_ident(func_name)));
+                }
+            }
+            for function in functions {
+                sql.push_str(&format!(
+                    " FUNCTION {}({}) RETURNS {} {}",
+                    function.name,
+                    function.args.join(", "),
+                    function.returns,
+                    quote_ident(&function.func_name)
+                ));
             }
             sql
         }

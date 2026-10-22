@@ -98,6 +98,22 @@ CREATE TABLE users (
 
 The first parameter is always the input `value`. Additional parameters are the arguments provided in the column type declaration, in order.
 
+A parameter can have a `DEFAULT`. A column declaration can then leave that parameter out, and ENCODE and DECODE see the default value. Parameters with a `DEFAULT` must come after the parameters without one.
+
+```sql
+CREATE TYPE shortstr(value text, maxlen integer DEFAULT 3) BASE text
+    ENCODE CASE
+        WHEN length(value) <= maxlen THEN value
+        ELSE RAISE(ABORT, 'value too long')
+    END
+    DECODE value;
+
+CREATE TABLE t (
+    code shortstr,       -- at most 3 characters
+    label shortstr(20)   -- at most 20 characters
+) STRICT;
+```
+
 ### OPERATOR
 
 The OPERATOR clause maps SQL operators to functions. This allows columns of a custom type to participate in comparisons, arithmetic, and ordering.
