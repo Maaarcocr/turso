@@ -202,7 +202,7 @@ The `<` operator is special: it controls how values of this type are sorted in O
 
 - **`KEY`**: A type with a `KEY` (see below) is sorted by its key in ORDER BY, GROUP BY and window PARTITION BY and ORDER BY, whatever its `<` says.
 - **`OPERATOR '<'`** (no function name): Uses the base type's native comparison of the stored values for ordering. This is sufficient for types where the encoded form sorts correctly (e.g., text dates in ISO 8601 format).
-- **`OPERATOR '<' my_compare`**: `my_compare(a, b)` is used by `<`, `>`, `<=` and `>=` in expressions. Sorting calls only the comparison functions built into Turso, such as `numeric_lt`; for any other function, ORDER BY, MIN and MAX sort the stored values, so give such a type a `KEY` that sorts like `my_compare`.
+- **`OPERATOR '<' my_compare`**: `my_compare(a, b)` is used by `<`, `>`, `<=` and `>=` in expressions. Sorting calls only the comparison functions built into Turso: `numeric_lt`, `uint64_lt`, `datetime_micros_lt` and `time_micros_lt` (see [Storage and conversion functions](#storage-and-conversion-functions)); for any other function, ORDER BY, MIN and MAX sort the stored values, so give such a type a `KEY` that sorts like `my_compare`.
 - **No `<` operator**: The type cannot be used in ORDER BY or CREATE INDEX.
 
 ```sql
@@ -286,6 +286,34 @@ CREATE TYPE email BASE text
     END
     DECODE value;
 ```
+
+## Storage and conversion functions
+
+These functions are available when custom types are enabled. They are meant for ENCODE, DECODE, ASSIGN, KEY and OPERATOR clauses, and can also be called in queries. Each returns NULL when an argument is NULL, except `conversion_error`.
+
+`conversion_error(kind, message)` stops the statement with a conversion error of the given kind: `'out of range'`, `'invalid value'`, `'too long'` or `'no more keys'`. Any other kind is an error of its own. When the error happens while INSERT or UPDATE stores a value in a table created by a dialect frontend, the error also names the column and the row number.
+
+```sql
+CREATE TYPE percent BASE integer
+    ENCODE CASE WHEN value BETWEEN 0 AND 100 THEN value
+           ELSE conversion_error('out of range', 'percent must be between 0 and 100') END
+    DECODE value;
+```
+
+| Function | Description |
+|----------|-------------|
+| `int64_add(a, b)`, `int64_sub(a, b)`, `int64_mul(a, b)`, `int64_neg(a)` | 64-bit integer arithmetic that fails with `out of range` instead of switching to a real result. |
+| `uint64_encode(value)`, `uint64_decode(stored)` | Unsigned 64-bit integers, 0 to 18446744073709551615. Values up to 9223372036854775807 are stored as integers, larger ones as an 8-byte big-endian blob, so stored values sort in numeric order. Decoding returns an integer, or text above 9223372036854775807. |
+| `uint64_lt(a, b)`, `uint64_eq(a, b)` | Compare two unsigned 64-bit values. |
+| `uint64_add(a, b)`, `uint64_sub(a, b)`, `uint64_mul(a, b)` | Unsigned 64-bit arithmetic that fails with `out of range` outside 0 to 18446744073709551615. |
+| `date_days_encode(text)`, `date_days_decode(stored)` | A `YYYY-MM-DD` date, years 0000 to 9999, stored as a day number. |
+| `datetime_micros_encode(text, fsp)`, `datetime_micros_decode(stored, fsp)` | A `YYYY-MM-DD HH:MM:SS[.f]` date and time stored as microseconds. `fsp` (0 to 6) is the number of fraction digits; more digits are rounded half away from zero. |
+| `time_micros_encode(text, fsp)`, `time_micros_decode(stored, fsp)` | A `[-]H:MM:SS[.f]` time of up to 9 hour digits stored as microseconds, with `fsp` as above. |
+| `datetime_micros_lt(a, b)`, `time_micros_lt(a, b)` | Compare two date-times or two times as points in time, not as text. |
+| `enumeration_encode(value, labels)`, `enumeration_decode(stored, labels)` | A label stored as its position, starting at 1. `labels` is the list of labels as SQL string literals joined by commas, such as `'small','large'`. |
+| `label_set_encode(value, labels)`, `label_set_decode(stored, labels)` | A comma-separated set of labels stored as a bit mask in the order of `labels`; at most 64 labels. |
+
+The encode functions accept only the forms shown and fail with `invalid value` otherwise; converting other input is the job of an ASSIGN expression.
 
 ## CAST Support
 
