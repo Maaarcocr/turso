@@ -2229,6 +2229,17 @@ pub enum TypeSize {
     MaxSize(Box<Expr>),
     /// precision
     TypeSize(Box<Expr>, Box<Expr>),
+    List(Vec<Box<Expr>>),
+}
+
+impl TypeSize {
+    pub fn parameters(&self) -> Vec<Box<Expr>> {
+        match self {
+            TypeSize::MaxSize(size) => vec![size.clone()],
+            TypeSize::TypeSize(first, second) => vec![first.clone(), second.clone()],
+            TypeSize::List(values) => values.clone(),
+        }
+    }
 }
 
 /// Transaction types

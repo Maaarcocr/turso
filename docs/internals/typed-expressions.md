@@ -1152,6 +1152,11 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Type parameter lists (commit 18).** `ast::TypeSize::List` holds a
+  parameter list with a text value or more than two values. Only a parser made
+  with `Parser::with_type_parameter_lists()` reads it; core uses one for the
+  text after a table marker (load, ALTER TABLE, VACUUM and statements with a
+  marker). One or two numbers still give `MaxSize` and `TypeSize`.
 - **Date and time storage (commit 17).** `date_days_encode`/`_decode`,
   `datetime_micros_encode`/`_decode` and `time_micros_encode`/`_decode` (the
   last two take the fsp) and `time_micros_lt` are in

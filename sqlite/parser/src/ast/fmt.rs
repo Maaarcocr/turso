@@ -2560,6 +2560,7 @@ impl ToTokens for TypeSize {
                 s.append(TK_COMMA, None)?;
                 size2.to_tokens(s, context)
             }
+            Self::List(values) => comma(values, s, context),
         }
     }
 }

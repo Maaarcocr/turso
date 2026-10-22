@@ -1,4 +1,4 @@
-use super::{sqlite, Dialect, SqliteDialect, POSTGRES_TABLE_SQL_PREFIX};
+use super::{Dialect, SqliteDialect, POSTGRES_TABLE_SQL_PREFIX};
 use crate::schema::BTreeTable;
 use crate::{LimboError, Result};
 use turso_parser::ast;
@@ -74,11 +74,13 @@ pub(crate) fn parse_statement(
             dialect.name()
         );
     }
-    let (cmd, consumed) = sqlite::parse(table_sql)?;
-    if !matches!(cmd, Some(ast::Cmd::Stmt(ast::Stmt::CreateTable { .. }))) {
+    let (Some(stmt), consumed) = parse_marked_table_sql(table_sql)? else {
         crate::bail_parse_error!("a table marker must be followed by CREATE TABLE");
-    }
-    Ok((cmd, sql.len() - table_sql.len() + consumed))
+    };
+    Ok((
+        Some(ast::Cmd::Stmt(stmt)),
+        sql.len() - table_sql.len() + consumed,
+    ))
 }
 
 pub(crate) fn parse_stored_table(
@@ -97,14 +99,20 @@ pub(crate) fn parse_stored_table_ast(
     sql: &str,
 ) -> Result<(ast::Stmt, Option<TableMarker>)> {
     match stored_table_marker(dialect, sql)? {
-        Some((marker, table_sql)) => Ok((sqlite::parse_table_sql_ast(table_sql)?, Some(marker))),
+        Some((marker, table_sql)) => Ok((stored_marked_table(table_sql)?, Some(marker))),
         None => Ok((dialect.parse_table_sql_ast(sql)?, None)),
     }
 }
 
 pub(crate) fn stored_table_sql_for_replay(dialect: &dyn Dialect, sql: &str) -> Result<String> {
     match stored_table_marker(dialect, sql)? {
-        Some((marker, table_sql)) => Ok(marker.write(&sqlite::table_sql_for_replay(table_sql)?)),
+        Some((marker, table_sql)) => {
+            let mut stmt = stored_marked_table(table_sql)?;
+            if let ast::Stmt::CreateTable { tbl_name, .. } = &mut stmt {
+                tbl_name.namespace = None;
+            }
+            Ok(marker.write(&stmt.to_string()))
+        }
         None => dialect.table_sql_for_replay(sql),
     }
 }
@@ -139,6 +147,25 @@ fn stored_table_marker<'a>(
         )));
     }
     Ok(Some((marker, table_sql)))
+}
+
+fn stored_marked_table(table_sql: &str) -> Result<ast::Stmt> {
+    match parse_marked_table_sql(table_sql)? {
+        (Some(stmt), _) => Ok(stmt),
+        (None, _) => Err(LimboError::Corrupt(format!(
+            "malformed database schema: marked table SQL is not CREATE TABLE: {table_sql}"
+        ))),
+    }
+}
+
+fn parse_marked_table_sql(table_sql: &str) -> Result<(Option<ast::Stmt>, usize)> {
+    let mut parser =
+        turso_parser::parser::Parser::new(table_sql.as_bytes()).with_type_parameter_lists();
+    let stmt = match parser.next_cmd()? {
+        Some(ast::Cmd::Stmt(stmt @ ast::Stmt::CreateTable { .. })) => Some(stmt),
+        _ => None,
+    };
+    Ok((stmt, parser.offset()))
 }
 
 fn dialect_writes_marker(dialect: &dyn Dialect, marker: &TableMarker) -> bool {
@@ -205,6 +232,25 @@ mod tests {
                 "{sql}"
             );
         }
+    }
+
+    #[test]
+    fn marked_table_text_may_have_type_parameter_lists() {
+        let table_sql = "CREATE TABLE t(e LABELS('small','large')) STRICT";
+        let marked = TableMarker::new("marking", false).write(table_sql);
+        let (cmd, consumed) = parse_statement(marking().as_ref(), &marked).unwrap();
+        assert_eq!(consumed, marked.len());
+        let Some(ast::Cmd::Stmt(stmt)) = cmd else {
+            panic!("expected a statement");
+        };
+        assert_eq!(
+            stmt.to_string(),
+            "CREATE TABLE t (e LABELS ('small', 'large')) STRICT"
+        );
+        let (stored, _) = parse_stored_table_ast(marking().as_ref(), &marked).unwrap();
+        assert_eq!(stored, stmt);
+        assert!(marking().parse(table_sql).is_err());
+        assert!(SqliteDialect.parse(table_sql).is_err());
     }
 
     #[test]

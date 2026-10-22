@@ -4160,7 +4160,12 @@ impl BTreeTable {
     }
 
     pub fn from_sql(sql: &str, root_page: i64) -> Result<BTreeTable> {
-        Self::from_sql_with_rowid_decision(sql, root_page, RowidDecision::BySqliteRule)
+        Self::from_parsed_sql(
+            Parser::new(sql.as_bytes()),
+            sql,
+            root_page,
+            RowidDecision::BySqliteRule,
+        )
     }
 
     pub(crate) fn from_marked_sql(
@@ -4168,7 +4173,8 @@ impl BTreeTable {
         root_page: i64,
         marker: crate::dialect::TableMarker,
     ) -> Result<BTreeTable> {
-        let mut table = Self::from_sql_with_rowid_decision(
+        let mut table = Self::from_parsed_sql(
+            Parser::new(sql.as_bytes()).with_type_parameter_lists(),
             sql,
             root_page,
             RowidDecision::FromMarker(marker.rowid_alias),
@@ -4178,12 +4184,12 @@ impl BTreeTable {
         Ok(table)
     }
 
-    fn from_sql_with_rowid_decision(
+    fn from_parsed_sql(
+        mut parser: Parser,
         sql: &str,
         root_page: i64,
         rowid_decision: RowidDecision,
     ) -> Result<BTreeTable> {
-        let mut parser = Parser::new(sql.as_bytes());
         let cmd = parser.next_cmd()?;
         match cmd {
             Some(Cmd::Stmt(Stmt::CreateTable { tbl_name, body, .. })) => {
@@ -5483,17 +5489,11 @@ pub(crate) fn create_table_with_rowid_decision(
                     .map(|t| column_declared_type(&t.name))
                     .unwrap_or_default();
 
-                let ty_params: std::vec::Vec<Box<Expr>> = match col_type {
-                    Some(ast::Type {
-                        size: Some(ast::TypeSize::MaxSize(ref expr)),
-                        ..
-                    }) => std::vec![expr.clone()],
-                    Some(ast::Type {
-                        size: Some(ast::TypeSize::TypeSize(ref e1, ref e2)),
-                        ..
-                    }) => std::vec![e1.clone(), e2.clone()],
-                    _ => std::vec::Vec::new(),
-                };
+                let ty_params: std::vec::Vec<Box<Expr>> = col_type
+                    .as_ref()
+                    .and_then(|written_type| written_type.size.as_ref())
+                    .map(ast::TypeSize::parameters)
+                    .unwrap_or_default();
 
                 let mut typename_exactly_integer = false;
                 let ty = match col_type {
@@ -6323,17 +6323,12 @@ impl Column {
             None => (Type::Null, false),
         };
 
-        let ty_params: std::vec::Vec<Box<turso_parser::ast::Expr>> = match &value.col_type {
-            Some(ast::Type {
-                size: Some(ast::TypeSize::MaxSize(ref expr)),
-                ..
-            }) => std::vec![expr.clone()],
-            Some(ast::Type {
-                size: Some(ast::TypeSize::TypeSize(ref e1, ref e2)),
-                ..
-            }) => std::vec![e1.clone(), e2.clone()],
-            _ => std::vec::Vec::new(),
-        };
+        let ty_params: std::vec::Vec<Box<turso_parser::ast::Expr>> = value
+            .col_type
+            .as_ref()
+            .and_then(|written_type| written_type.size.as_ref())
+            .map(ast::TypeSize::parameters)
+            .unwrap_or_default();
 
         coldef
             .flags

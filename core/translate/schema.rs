@@ -915,11 +915,10 @@ fn validate(
                             Some(td) if td.user_params().next().is_some() => {
                                 // Parametric type: verify the column provides the right
                                 // number of user parameters (excluding `value`).
-                                let provided = match &col_type.size {
-                                    Some(ast::TypeSize::TypeSize(_, _)) => 2,
-                                    Some(ast::TypeSize::MaxSize(_)) => 1,
-                                    None => 0,
-                                };
+                                let provided = col_type
+                                    .size
+                                    .as_ref()
+                                    .map_or(0, |size| size.parameters().len());
                                 let expected = td.user_params().count();
                                 let required = td.required_user_param_count();
                                 if provided < required || provided > expected {

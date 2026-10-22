@@ -198,6 +198,7 @@ pub struct Parser<'a> {
     /// Height of the most recently parsed expression (`1 + max(child heights)`,
     /// like SQLite's `Expr.nHeight`), bounded by [`MAX_EXPR_DEPTH`]
     last_expr_height: usize,
+    type_parameter_lists: bool,
 }
 
 /// Maximum query expression depth, our equivalent of SQLite's
@@ -231,7 +232,13 @@ impl<'a> Parser<'a> {
             type_nesting_depth: 0,
             expr_nesting_depth: 0,
             last_expr_height: 0,
+            type_parameter_lists: false,
         }
+    }
+
+    pub fn with_type_parameter_lists(mut self) -> Self {
+        self.type_parameter_lists = true;
+        self
     }
 
     fn create_variable(&mut self, token: &'a [u8]) -> Result<Expr> {
@@ -1328,8 +1335,12 @@ impl<'a> Parser<'a> {
         }
         let type_name = from_bytes(&self.lexer.input[start..end]);
 
+        let type_parameter_lists = self.type_parameter_lists;
         let size = if let Some(tok) = self.peek()? {
-            if tok.token_type == TK_LP {
+            if tok.token_type == TK_LP && type_parameter_lists {
+                eat_assert!(self, TK_LP);
+                Some(self.parse_type_parameter_list()?)
+            } else if tok.token_type == TK_LP {
                 eat_assert!(self, TK_LP);
                 let first_size = self.parse_signed()?;
                 let tok = eat_expect!(self, TK_RP, TK_COMMA);
@@ -1362,6 +1373,37 @@ impl<'a> Parser<'a> {
             size,
             array_dimensions,
         }))
+    }
+
+    fn parse_type_parameter_list(&mut self) -> Result<TypeSize> {
+        let mut values = Vec::new();
+        let mut has_text = false;
+        loop {
+            let value = match self.peek()?.map(|tok| tok.token_type) {
+                Some(TK_STRING) => {
+                    has_text = true;
+                    let tok = eat_assert!(self, TK_STRING);
+                    Box::new(Expr::Literal(Literal::String(from_bytes(tok.as_bytes()))))
+                }
+                _ => self.parse_signed()?,
+            };
+            values.push(value);
+            let tok = eat_expect!(self, TK_RP, TK_COMMA);
+            if tok.token_type == TK_RP {
+                break;
+            }
+        }
+        if has_text || values.len() > 2 {
+            return Ok(TypeSize::List(values));
+        }
+        let mut values = values.into_iter();
+        let first = values
+            .next()
+            .expect("a type parameter list has a first value");
+        Ok(match values.next() {
+            Some(second) => TypeSize::TypeSize(first, second),
+            None => TypeSize::MaxSize(first),
+        })
     }
 
     /// Parse a parenthesized list of `name Type` pairs for STRUCT/UNION type declarations.
@@ -5618,6 +5660,56 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn type_parameter_lists_parse_only_where_they_are_allowed() {
+        let sql = "CREATE TABLE t(e ENUM('small','large'), s LABELS('a','b','c'), \
+                   n T(1,2,3), d DECIMAL(10,2), v VARCHAR(5), w INT)";
+        let cmd = Parser::new(sql.as_bytes())
+            .with_type_parameter_lists()
+            .next_cmd()
+            .unwrap()
+            .unwrap();
+        let Cmd::Stmt(Stmt::CreateTable {
+            body: CreateTableBody::ColumnsAndConstraints { columns, .. },
+            ..
+        }) = &cmd
+        else {
+            panic!("expected CREATE TABLE, got {cmd:?}");
+        };
+        let sizes: Vec<_> = columns
+            .iter()
+            .map(|column| column.col_type.as_ref().unwrap().size.clone())
+            .collect();
+        let text = |value: &str| Box::new(Expr::Literal(Literal::String(value.to_string())));
+        let number = |value: &str| Box::new(Expr::Literal(Literal::Numeric(value.to_string())));
+        assert_eq!(
+            sizes,
+            vec![
+                Some(TypeSize::List(vec![text("'small'"), text("'large'")])),
+                Some(TypeSize::List(vec![text("'a'"), text("'b'"), text("'c'")])),
+                Some(TypeSize::List(vec![number("1"), number("2"), number("3")])),
+                Some(TypeSize::TypeSize(number("10"), number("2"))),
+                Some(TypeSize::MaxSize(number("5"))),
+                None,
+            ]
+        );
+        let printed = cmd.to_string();
+        let reparsed = Parser::new(printed.as_bytes())
+            .with_type_parameter_lists()
+            .next_cmd()
+            .unwrap()
+            .unwrap();
+        assert_eq!(reparsed, cmd);
+
+        for sql in [
+            "CREATE TABLE t(n foo(1,2,3))",
+            "CREATE TABLE t(e ENUM('small','large'))",
+            "SELECT CAST(1 AS foo(1,2,3))",
+        ] {
+            assert!(Parser::new(sql.as_bytes()).next_cmd().is_err(), "{sql}");
+        }
+    }
 
     #[test]
     fn test_offset() {

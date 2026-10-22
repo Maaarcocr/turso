@@ -1204,13 +1204,11 @@ fn cast_type(type_name: Option<&ast::Type>, env: &TypeEnv) -> ExprType {
 }
 
 fn cast_type_params(type_name: &ast::Type) -> Vec<ast::Expr> {
-    match &type_name.size {
-        Some(ast::TypeSize::MaxSize(size)) => vec![(**size).clone()],
-        Some(ast::TypeSize::TypeSize(precision, scale)) => {
-            vec![(**precision).clone(), (**scale).clone()]
-        }
-        None => Vec::new(),
-    }
+    type_name
+        .size
+        .as_ref()
+        .map(|size| size.parameters().into_iter().map(|param| *param).collect())
+        .unwrap_or_default()
 }
 
 fn is_typed_cast(def: &TypeDef, param_count: usize, uses_defaults: bool) -> bool {
