@@ -23,3 +23,27 @@ pub(crate) fn translate_identifier(identifier: &Ident) -> Result<ast::Name, Mysq
 pub(crate) fn quote_string(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
+
+const MAX_IDENTIFIER_LENGTH: usize = 64;
+
+pub(crate) fn translate_ddl_name(name: &ObjectName) -> Result<ast::Name, MysqlParserError> {
+    let translated = translate_unqualified_name(name)?;
+    ensure_identifier_length(&translated)?;
+    Ok(translated)
+}
+
+pub(crate) fn translate_ddl_identifier(identifier: &Ident) -> Result<ast::Name, MysqlParserError> {
+    let translated = translate_identifier(identifier)?;
+    ensure_identifier_length(&translated)?;
+    Ok(translated)
+}
+
+fn ensure_identifier_length(name: &ast::Name) -> Result<(), MysqlParserError> {
+    if name.as_str().chars().count() > MAX_IDENTIFIER_LENGTH {
+        return Err(MysqlParserError::Rejected(format!(
+            "identifier `{}` is longer than {MAX_IDENTIFIER_LENGTH} characters",
+            name.as_str()
+        )));
+    }
+    Ok(())
+}

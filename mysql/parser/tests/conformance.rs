@@ -91,7 +91,10 @@ fn lowers_basic_create_table_to_shared_ast() {
     .expect("basic CREATE TABLE must lower");
     assert_eq!(
         statement.to_string(),
-        "CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR (100), bio VARCHAR (1000))"
+        "CREATE TABLE users (\
+         id INT PRIMARY KEY NOT NULL CHECK (id BETWEEN - 2147483648 AND 2147483647), \
+         name VARCHAR (100) CHECK (char_length (rtrim (name)) <= 100), \
+         bio VARCHAR (1000) CHECK (char_length (rtrim (bio)) <= 1000))"
     );
 
     let ast::Stmt::CreateTable {
@@ -121,17 +124,30 @@ fn lowers_basic_create_table_to_shared_ast() {
     assert!(constraints.is_empty());
     assert_eq!(options, ast::TableOptions::empty());
     assert_eq!(columns[0].col_name.as_str(), "id");
-    assert_eq!(columns[0].col_type.as_ref().unwrap().name, "INTEGER");
+    assert_eq!(columns[0].col_type.as_ref().unwrap().name, "INT");
     assert!(matches!(
         columns[0].constraints.as_slice(),
-        [ast::NamedColumnConstraint {
-            name: None,
-            constraint: ast::ColumnConstraint::PrimaryKey {
-                order: None,
-                conflict_clause: None,
-                auto_increment: false,
+        [
+            ast::NamedColumnConstraint {
+                name: None,
+                constraint: ast::ColumnConstraint::PrimaryKey {
+                    order: None,
+                    conflict_clause: None,
+                    auto_increment: false,
+                },
             },
-        }]
+            ast::NamedColumnConstraint {
+                name: None,
+                constraint: ast::ColumnConstraint::NotNull {
+                    nullable: false,
+                    conflict_clause: None,
+                },
+            },
+            ast::NamedColumnConstraint {
+                name: None,
+                constraint: ast::ColumnConstraint::Check { .. },
+            },
+        ]
     ));
     assert_eq!(columns[1].col_name.as_str(), "name");
     assert_eq!(columns[1].col_type.as_ref().unwrap().name, "VARCHAR");
@@ -149,7 +165,9 @@ fn lowers_create_table_if_not_exists_and_preserves_identifiers() {
     .expect("quoted CREATE TABLE must lower");
     assert_eq!(
         statement.to_string(),
-        "CREATE TABLE IF NOT EXISTS `select` (`primary` INTEGER PRIMARY KEY, `display``name` VARCHAR (100))"
+        "CREATE TABLE IF NOT EXISTS `select` (\
+         `primary` INT PRIMARY KEY NOT NULL CHECK (`primary` BETWEEN - 2147483648 AND 2147483647), \
+         `display``name` VARCHAR (100) CHECK (char_length (rtrim (`display``name`)) <= 100))"
     );
 
     let ast::Stmt::CreateTable {
@@ -174,7 +192,79 @@ fn lowers_create_table_if_not_exists_and_preserves_identifiers() {
 }
 
 #[test]
-fn rejects_create_table_shapes_outside_the_basic_subset() {
+fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
+    let cases = [
+        (
+            "CREATE TABLE t (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'key', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL CHECK (id != 0) CHECK (id >= 0))",
+        ),
+        (
+            "CREATE TABLE t (a TINYINT(1) DEFAULT '1', b DECIMAL(10,2) UNSIGNED, c FLOAT(7,3), d BIT(3))",
+            "CREATE TABLE t (a TINYINT DEFAULT 1 CHECK (a BETWEEN - 128 AND 127), b DECIMAL UNSIGNED (10, 2) CHECK (b >= 0), c FLOAT (7, 3) CHECK (c = round (c, 3) AND abs (c) < 1e4), d BIT (3) CHECK (d BETWEEN 0 AND 7))",
+        ),
+        (
+            "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
+            "CREATE TABLE t (e TEXT NOT NULL DEFAULT 'x' CHECK (e IN ('x', 'y')), s TEXT DEFAULT 'r,w' CHECK (s IN ('', 'r', 'w', 'r,w')), j JSON TEXT CHECK (json_valid (j)), t TINYTEXT CHECK (octet_length (t) <= 255))",
+        ),
+        (
+            "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+        ),
+        (
+            "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
+            "CREATE TABLE t (id INT CHECK (id BETWEEN - 2147483648 AND 2147483647), email VARCHAR (50) CHECK (char_length (rtrim (email)) <= 50), CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
+        ),
+        (
+            "CREATE TABLE t (a INT, b INT AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2))",
+            "CREATE TABLE t (a INT CHECK (a BETWEEN - 2147483648 AND 2147483647), b INT CHECK (b BETWEEN - 2147483648 AND 2147483647) GENERATED ALWAYS AS (a + 1) STORED, c INT CHECK (c BETWEEN - 2147483648 AND 2147483647) GENERATED ALWAYS AS (a * 2) VIRTUAL)",
+        ),
+        (
+            "CREATE UNIQUE INDEX idx USING BTREE ON t (a DESC, b)",
+            "CREATE UNIQUE INDEX idx ON t (a DESC, b)",
+        ),
+        (
+            "DROP INDEX idx ON t",
+            "DROP INDEX idx",
+        ),
+        (
+            "ALTER TABLE t DROP INDEX idx",
+            "DROP INDEX idx",
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0 COMMENT 'x'",
+            "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0 CHECK (c BETWEEN 0 AND 4294967295)",
+        ),
+        (
+            "ALTER TABLE t RENAME COLUMN a TO b",
+            "ALTER TABLE t RENAME COLUMN a TO b",
+        ),
+        (
+            "ALTER TABLE t DROP COLUMN a",
+            "ALTER TABLE t DROP COLUMN a",
+        ),
+        (
+            "ALTER TABLE t RENAME TO u",
+            "ALTER TABLE t RENAME TO u",
+        ),
+        (
+            "RENAME TABLE t TO u",
+            "ALTER TABLE t RENAME TO u",
+        ),
+        (
+            "DROP TABLE IF EXISTS t",
+            "DROP TABLE IF EXISTS t",
+        ),
+    ];
+
+    for (mysql, sqlite) in cases {
+        let statement = parse_and_translate(mysql)
+            .unwrap_or_else(|error| panic!("DDL must lower: {error}\nSQL: {mysql}"));
+        assert_eq!(statement.to_string(), sqlite, "SQL: {mysql}");
+    }
+}
+
+#[test]
+fn rejects_create_table_shapes_without_a_faithful_lowering() {
     let cases = [
         SqlCase {
             name: "temporary",
@@ -213,40 +303,20 @@ fn rejects_create_table_shapes_outside_the_basic_subset() {
             sql: "CREATE TABLE users()",
         },
         SqlCase {
-            name: "int alias",
-            sql: "CREATE TABLE users(id INT)",
-        },
-        SqlCase {
-            name: "bigint",
-            sql: "CREATE TABLE users(id BIGINT)",
-        },
-        SqlCase {
-            name: "text",
-            sql: "CREATE TABLE users(name TEXT)",
-        },
-        SqlCase {
-            name: "integer precision",
-            sql: "CREATE TABLE users(id INTEGER(11))",
-        },
-        SqlCase {
-            name: "unsigned",
-            sql: "CREATE TABLE users(id INTEGER UNSIGNED)",
-        },
-        SqlCase {
             name: "zerofill",
             sql: "CREATE TABLE users(id INTEGER ZEROFILL)",
         },
         SqlCase {
-            name: "auto increment",
-            sql: "CREATE TABLE users(id INTEGER AUTO_INCREMENT)",
+            name: "auto increment in a composite primary key",
+            sql: "CREATE TABLE users(a INT AUTO_INCREMENT, b INT, PRIMARY KEY (a, b))",
+        },
+        SqlCase {
+            name: "auto increment on a decimal",
+            sql: "CREATE TABLE users(id DECIMAL(10,0) AUTO_INCREMENT PRIMARY KEY)",
         },
         SqlCase {
             name: "varchar missing length",
             sql: "CREATE TABLE users(name VARCHAR)",
-        },
-        SqlCase {
-            name: "varchar zero length",
-            sql: "CREATE TABLE users(name VARCHAR(0))",
         },
         SqlCase {
             name: "varchar dynamic length",
@@ -257,84 +327,77 @@ fn rejects_create_table_shapes_outside_the_basic_subset() {
             sql: "CREATE TABLE users(name VARCHAR(1.5))",
         },
         SqlCase {
-            name: "varchar unsafe length",
-            sql: "CREATE TABLE users(name VARCHAR(16384))",
+            name: "binary pads values",
+            sql: "CREATE TABLE users(code BINARY(4))",
         },
         SqlCase {
-            name: "null",
-            sql: "CREATE TABLE users(id INTEGER NULL)",
+            name: "geometry",
+            sql: "CREATE TABLE users(location POINT)",
         },
         SqlCase {
-            name: "not null",
-            sql: "CREATE TABLE users(id INTEGER NOT NULL)",
+            name: "set with too many members to enumerate",
+            sql: "CREATE TABLE users(flags SET('a','b','c','d','e','f','g'))",
         },
         SqlCase {
-            name: "default",
-            sql: "CREATE TABLE users(id INTEGER DEFAULT 1)",
+            name: "other character set",
+            sql: "CREATE TABLE users(name VARCHAR(10) CHARACTER SET latin1)",
         },
         SqlCase {
-            name: "unique",
-            sql: "CREATE TABLE users(id INTEGER UNIQUE)",
+            name: "other collation",
+            sql: "CREATE TABLE users(name VARCHAR(10) COLLATE utf8mb4_0900_as_cs)",
         },
         SqlCase {
-            name: "check",
-            sql: "CREATE TABLE users(id INTEGER CHECK (id > 0))",
+            name: "on update current timestamp",
+            sql: "CREATE TABLE users(updated TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
         },
         SqlCase {
-            name: "references",
-            sql: "CREATE TABLE users(id INTEGER REFERENCES parents(id))",
+            name: "invisible column",
+            sql: "CREATE TABLE users(id INT INVISIBLE)",
         },
         SqlCase {
-            name: "collate",
-            sql: "CREATE TABLE users(name VARCHAR(100) COLLATE utf8mb4_bin)",
+            name: "current timestamp with fractional seconds",
+            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6))",
         },
         SqlCase {
-            name: "generated",
-            sql: "CREATE TABLE users(id INTEGER, next_id INTEGER AS (id + 1))",
+            name: "datetime default that needs rounding",
+            sql: "CREATE TABLE users(seen DATETIME DEFAULT '2020-01-01 00:00:00.5')",
         },
         SqlCase {
-            name: "named constraint",
+            name: "named inline primary key",
             sql: "CREATE TABLE users(id INTEGER CONSTRAINT users_pk PRIMARY KEY)",
         },
         SqlCase {
-            name: "primary key on varchar",
-            sql: "CREATE TABLE users(name VARCHAR(100) PRIMARY KEY)",
+            name: "unique prefix key",
+            sql: "CREATE TABLE users(name VARCHAR(10), UNIQUE KEY name_key (name(3)))",
         },
         SqlCase {
-            name: "two primary keys",
-            sql: "CREATE TABLE users(id INTEGER PRIMARY KEY, other INTEGER PRIMARY KEY)",
+            name: "functional key part",
+            sql: "CREATE TABLE users(a INT, KEY k ((a + 1)))",
         },
         SqlCase {
-            name: "table primary key",
-            sql: "CREATE TABLE users(id INTEGER, PRIMARY KEY (id))",
+            name: "fulltext key",
+            sql: "CREATE TABLE users(bio TEXT, FULLTEXT KEY bio_text (bio))",
         },
         SqlCase {
-            name: "table index",
-            sql: "CREATE TABLE users(id INTEGER, INDEX users_id (id))",
+            name: "foreign key set default",
+            sql:
+                "CREATE TABLE users(a INT, FOREIGN KEY (a) REFERENCES p (id) ON DELETE SET DEFAULT)",
         },
         SqlCase {
-            name: "table key",
-            sql: "CREATE TABLE users(id INTEGER, KEY users_id (id))",
+            name: "other storage engine",
+            sql: "CREATE TABLE users(id INTEGER) ENGINE=MyISAM",
         },
         SqlCase {
-            name: "engine",
-            sql: "CREATE TABLE users(id INTEGER) ENGINE=InnoDB",
+            name: "other table character set",
+            sql: "CREATE TABLE users(id INTEGER) DEFAULT CHARSET=latin1",
         },
         SqlCase {
-            name: "charset",
-            sql: "CREATE TABLE users(id INTEGER) DEFAULT CHARSET=utf8mb4",
-        },
-        SqlCase {
-            name: "table collation",
-            sql: "CREATE TABLE users(id INTEGER) COLLATE=utf8mb4_0900_ai_ci",
+            name: "auto increment start",
+            sql: "CREATE TABLE users(id INTEGER) AUTO_INCREMENT=10",
         },
         SqlCase {
             name: "partitioning",
             sql: "CREATE TABLE users(id INTEGER) PARTITION BY HASH(id) PARTITIONS 2",
-        },
-        SqlCase {
-            name: "table comment",
-            sql: "CREATE TABLE users(id INTEGER) COMMENT='users'",
         },
     ];
 
@@ -349,6 +412,121 @@ fn rejects_create_table_shapes_outside_the_basic_subset() {
                 MysqlParserError::Parse(_) | MysqlParserError::Unsupported(_)
             ),
             "SQL: {}\nerror: {error}",
+            case.sql
+        );
+    }
+}
+
+#[test]
+fn reports_ddl_that_mysql_rejects() {
+    let cases = [
+        SqlCase {
+            name: "auto increment outside any key",
+            sql: "CREATE TABLE users(id INTEGER AUTO_INCREMENT)",
+        },
+        SqlCase {
+            name: "varchar longer than a utf8mb4 row allows",
+            sql: "CREATE TABLE users(name VARCHAR(16384))",
+        },
+        SqlCase {
+            name: "float precision beyond double",
+            sql: "CREATE TABLE users(ratio FLOAT(54))",
+        },
+        SqlCase {
+            name: "invalid decimal",
+            sql: "CREATE TABLE users(price DECIMAL(5,6))",
+        },
+        SqlCase {
+            name: "fractional seconds beyond microseconds",
+            sql: "CREATE TABLE users(created DATETIME(7))",
+        },
+        SqlCase {
+            name: "enum with duplicate members",
+            sql: "CREATE TABLE users(state ENUM('a', 'A'))",
+        },
+        SqlCase {
+            name: "collation on a binary string",
+            sql: "CREATE TABLE users(code VARBINARY(10) COLLATE utf8mb4_0900_bin)",
+        },
+        SqlCase {
+            name: "current timestamp on an integer",
+            sql: "CREATE TABLE users(created INT DEFAULT CURRENT_TIMESTAMP)",
+        },
+        SqlCase {
+            name: "non-numeric integer default",
+            sql: "CREATE TABLE users(id INT DEFAULT 'abc')",
+        },
+        SqlCase {
+            name: "out of range default",
+            sql: "CREATE TABLE users(id TINYINT DEFAULT 300)",
+        },
+        SqlCase {
+            name: "literal text default",
+            sql: "CREATE TABLE users(bio TEXT DEFAULT 'none')",
+        },
+        SqlCase {
+            name: "null default on a not null column",
+            sql: "CREATE TABLE users(id INT NOT NULL DEFAULT NULL)",
+        },
+        SqlCase {
+            name: "enum default outside the members",
+            sql: "CREATE TABLE users(state ENUM('a') DEFAULT 'b')",
+        },
+        SqlCase {
+            name: "invalid date default",
+            sql: "CREATE TABLE users(born DATE DEFAULT '2020-02-30')",
+        },
+        SqlCase {
+            name: "two primary keys",
+            sql: "CREATE TABLE users(id INTEGER PRIMARY KEY, other INTEGER PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "text primary key without a length",
+            sql: "CREATE TABLE users(name TEXT PRIMARY KEY)",
+        },
+        SqlCase {
+            name: "json key",
+            sql: "CREATE TABLE users(doc JSON, KEY doc_key (doc))",
+        },
+        SqlCase {
+            name: "key longer than 3072 bytes",
+            sql: "CREATE TABLE users(name VARCHAR(1000), KEY name_key (name))",
+        },
+        SqlCase {
+            name: "prefix key on an integer",
+            sql: "CREATE TABLE users(id INT, KEY id_key (id(4)))",
+        },
+        SqlCase {
+            name: "prefix longer than the column",
+            sql: "CREATE TABLE users(name VARCHAR(10), KEY name_key (name(11)))",
+        },
+        SqlCase {
+            name: "duplicate key names",
+            sql: "CREATE TABLE users(a INT, b INT, KEY k (a), KEY k (b))",
+        },
+        SqlCase {
+            name: "key on a missing column",
+            sql: "CREATE TABLE users(a INT, KEY k (b))",
+        },
+        SqlCase {
+            name: "index named primary",
+            sql: "CREATE INDEX `PRIMARY` ON users (id)",
+        },
+        SqlCase {
+            name: "identifier longer than 64 characters",
+            sql: "CREATE TABLE abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (id INT)",
+        },
+    ];
+
+    for case in cases {
+        let error = match parse_and_translate(case.sql) {
+            Ok(_) => panic!("{} unexpectedly lowered\nSQL: {}", case.name, case.sql),
+            Err(error) => error,
+        };
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "{}: SQL: {}\nerror: {error}",
+            case.name,
             case.sql
         );
     }
@@ -530,10 +708,15 @@ fn known_parser_gaps_return_errors() {
 #[test]
 fn lowering_rejects_unsupported_statement_families() {
     let cases = [
-        "CREATE TABLE users(id INT)",
-        "ALTER TABLE users ADD COLUMN name TEXT",
-        "DROP TABLE users",
         "TRUNCATE TABLE users",
+        "CREATE VIEW v AS SELECT 1",
+        "ALTER TABLE users ADD INDEX name_key (name)",
+        "ALTER TABLE users MODIFY COLUMN name VARCHAR(20)",
+        "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
+        "ALTER TABLE users ADD COLUMN a INT FIRST",
+        "DROP TABLE a, b",
+        "DROP TEMPORARY TABLE users",
+        "CREATE INDEX name_key ON users (name(10))",
         "INSERT INTO users VALUES (1)",
         "INSERT IGNORE INTO users VALUES (1)",
         "REPLACE INTO users VALUES (1)",
