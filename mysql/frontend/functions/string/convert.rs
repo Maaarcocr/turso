@@ -7,16 +7,15 @@ pub(super) const MAX_ALLOWED_PACKET: u64 = 64 * 1024 * 1024;
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Integer {
     pub(super) value: i64,
-    pub(super) unsigned: bool,
 }
 
 impl Integer {
     pub(super) fn is_negative(self) -> bool {
-        self.value < 0 && !self.unsigned
+        self.value < 0
     }
 
     pub(super) fn is_positive(self) -> bool {
-        self.value > 0 || (self.value < 0 && self.unsigned)
+        self.value > 0
     }
 
     pub(super) fn as_unsigned(self) -> u64 {
@@ -119,20 +118,14 @@ impl Str<'_> {
 }
 
 pub(super) fn integer(value: &Value) -> Option<Integer> {
-    let signed = |value| Integer {
-        value,
-        unsigned: false,
-    };
-    Some(match value {
+    let value = match value {
         Value::Null => return None,
-        Value::Numeric(Numeric::Integer(integer)) => signed(*integer),
-        Value::Numeric(Numeric::Float(double)) => signed(double_to_integer(f64::from(*double))),
-        Value::Text(text) => signed(string_to_integer(text.as_str().as_bytes())),
-        Value::Blob(bytes) => Integer {
-            value: hex_literal_value(bytes) as i64,
-            unsigned: true,
-        },
-    })
+        Value::Numeric(Numeric::Integer(integer)) => *integer,
+        Value::Numeric(Numeric::Float(double)) => double_to_integer(f64::from(*double)),
+        Value::Text(text) => string_to_integer(text.as_str().as_bytes()),
+        Value::Blob(bytes) => string_to_integer(bytes),
+    };
+    Some(Integer { value })
 }
 
 pub(super) fn double(value: &Value) -> Option<f64> {
@@ -141,16 +134,16 @@ pub(super) fn double(value: &Value) -> Option<f64> {
         Value::Numeric(Numeric::Integer(integer)) => *integer as f64,
         Value::Numeric(Numeric::Float(double)) => f64::from(*double),
         Value::Text(text) => string_to_double(text.as_str().as_bytes()),
-        Value::Blob(bytes) => hex_literal_value(bytes) as f64,
+        Value::Blob(bytes) => string_to_double(bytes),
     })
 }
 
-pub(super) fn string_compared_with_text(
+pub(super) fn string_converted_to_text(
     value: &Value,
-    compared_with_text: bool,
+    convert_binary: bool,
 ) -> Result<Option<Str<'_>>> {
     match value {
-        Value::Blob(bytes) if compared_with_text => match std::str::from_utf8(bytes) {
+        Value::Blob(bytes) if convert_binary => match std::str::from_utf8(bytes) {
             Ok(text) => Ok(Some(Str::Text(Cow::Borrowed(text)))),
             Err(_) => Err(LimboError::InvalidArgument(format!(
                 "Cannot convert string '{}' from binary to utf8mb4",
@@ -275,22 +268,6 @@ pub(super) fn parse_digits(bytes: &[u8], base: u32) -> (u64, bool) {
         }
     }
     (value, overflow)
-}
-
-pub(super) fn hex_literal_value(bytes: &[u8]) -> u64 {
-    if bytes.len() > 8 {
-        return 0;
-    }
-    bytes
-        .iter()
-        .fold(0, |value, byte| (value << 8) | u64::from(*byte))
-}
-
-pub(super) fn unsigned_value(value: u64) -> Value {
-    match i64::try_from(value) {
-        Ok(value) => Value::from_i64(value),
-        Err(_) => Value::build_text(value.to_string()),
-    }
 }
 
 pub(super) fn double_value(value: f64) -> Result<Value> {
