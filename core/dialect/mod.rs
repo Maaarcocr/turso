@@ -13,12 +13,14 @@
 pub mod dialect_types;
 pub mod marker;
 pub mod sqlite;
+pub mod storage_functions;
 #[cfg(test)]
 pub(crate) mod test_dialect;
 
 pub use dialect_types::{DialectType, StorageType};
 pub use marker::TableMarker;
 pub use sqlite::SqliteDialect;
+pub use storage_functions::StorageFunc;
 
 /// Prefix the PostgreSQL frontend puts before the `CREATE TABLE` text it
 /// stores in `sqlite_schema`.

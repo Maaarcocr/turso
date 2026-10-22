@@ -314,6 +314,20 @@ fn make_sort_comparator(
                 Ok(res)
             })
         }
+        SortComparatorType::Uint64Lt => {
+            std::sync::Arc::new(|a: &ValueRef, b: &ValueRef| -> Result<Ordering> {
+                Ok(match (a, b) {
+                    (ValueRef::Null, ValueRef::Null) => Ordering::Equal,
+                    (ValueRef::Null, _) => Ordering::Less,
+                    (_, ValueRef::Null) => Ordering::Greater,
+                    _ => crate::dialect::storage_functions::uint64_compare(
+                        &a.to_owned()?,
+                        &b.to_owned()?,
+                    )
+                    .unwrap_or_else(|_| a.partial_cmp(b).unwrap_or(Ordering::Equal)),
+                })
+            })
+        }
         SortComparatorType::StringReverse => {
             std::sync::Arc::new(|a: &ValueRef, b: &ValueRef| -> Result<Ordering> {
                 fn reverse_str(v: &ValueRef) -> String {
@@ -11594,6 +11608,13 @@ pub fn op_function(
                     }
                 };
                 state.registers[*dest].set_value(result);
+            }
+            ScalarFunc::Storage(func) => {
+                let args = state.registers[*start_reg..*start_reg + arg_count]
+                    .iter()
+                    .map(|register| register.get_value().clone())
+                    .collect::<Vec<_>>();
+                state.registers[*dest].set_value(func.execute(&args)?);
             }
             ScalarFunc::NumericKey => {
                 check_arg_count!(arg_count, 1);

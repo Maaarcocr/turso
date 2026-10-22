@@ -948,6 +948,7 @@ pub enum ScalarFunc {
     // Date type functions
     DatePlus,
     DateMinus,
+    Storage(crate::dialect::StorageFunc),
     // Array construction / element access (desugared from ARRAY[…] and expr[n] syntax)
     Array,
     ArrayElement,
@@ -1081,7 +1082,8 @@ impl Deterministic for ScalarFunc {
             | ScalarFunc::NumericNeg
             | ScalarFunc::NumericAbs
             | ScalarFunc::DatePlus
-            | ScalarFunc::DateMinus => true,
+            | ScalarFunc::DateMinus
+            | ScalarFunc::Storage(_) => true,
             ScalarFunc::Array
             | ScalarFunc::ArrayElement
             | ScalarFunc::ArraySetElement
@@ -1248,6 +1250,7 @@ impl Display for ScalarFunc {
             Self::NumericAbs => "numeric_abs",
             Self::DatePlus => "date_plus",
             Self::DateMinus => "date_minus",
+            Self::Storage(func) => func.name(),
             Self::Array => "array",
             Self::ArrayElement => "array_element",
             Self::ArraySetElement => "array_set_element",
@@ -1294,6 +1297,7 @@ impl ScalarFunc {
                 | Self::BinRecordJsonObject
                 | Self::ConnTxnId
                 | Self::IsAutocommit
+                | Self::Storage(_)
         )
     }
 
@@ -1402,6 +1406,10 @@ impl ScalarFunc {
             | Self::DatePlus
             | Self::DateMinus => &[2],
             Self::NumericEncode => &[3],
+            Self::Storage(func) => match func.arity() {
+                1 => &[1],
+                _ => &[2],
+            },
             // Array construction / element access
             Self::Array => &[-1], // variable arity
             Self::ArrayElement => &[2],

@@ -38,6 +38,7 @@ use crate::vdbe::insn::SortComparatorType;
 fn sort_comparator_from_func_name(func_name: &str) -> Option<SortComparatorType> {
     match func_name {
         "numeric_lt" => Some(SortComparatorType::NumericLt),
+        "uint64_lt" => Some(SortComparatorType::Uint64Lt),
         "test_uint_lt" => Some(SortComparatorType::TestUintLt),
         "string_reverse" => Some(SortComparatorType::StringReverse),
         "array_lt" => Some(SortComparatorType::ArrayLt),

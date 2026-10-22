@@ -1152,6 +1152,15 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Unsigned 64-bit storage (commit 16).** `uint64_encode`, `uint64_decode`,
+  `uint64_lt`, `uint64_eq`, `uint64_add`, `uint64_sub` and `uint64_mul` are
+  in `core/dialect/storage_functions.rs`; the KEY of `uint64` is
+  `uint64_encode`. With custom types off they are unknown functions, and
+  `PRAGMA function_list` does not list them. A `uint64` value is stored as an
+  INTEGER or a BLOB, so CREATE TYPE now accepts `BASE any` (also for user
+  types). The comparators used by sorting cannot return errors, so `uint64_lt`
+  in a sort compares values that are not unsigned integers by SQLite's rules,
+  as `numeric_lt` does.
 - **Name table (commit 15).** Core builds a CREATE TYPE statement for each
   dialect type from its storage type, its extra parameters and its behaviour,
   and registers it in every schema of the dialect instead of core's built-in

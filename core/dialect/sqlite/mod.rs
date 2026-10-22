@@ -201,6 +201,12 @@ fn pragma_vtabs() -> Vec<Arc<VirtualTable>> {
 /// surface regardless of the frontend dialect.
 pub fn resolve_builtin_function(name: &str, arg_count: usize) -> crate::Result<Option<Func>> {
     let normalized_name = crate::util::normalize_ident(name);
+    if let Some(func) = crate::dialect::StorageFunc::from_name(&normalized_name) {
+        if arg_count != func.arity() {
+            crate::bail_parse_error!("wrong number of arguments to function {}()", name)
+        }
+        return Ok(Some(Func::Scalar(ScalarFunc::Storage(func))));
+    }
     match normalized_name.as_str() {
         "avg" => {
             if arg_count != 1 {

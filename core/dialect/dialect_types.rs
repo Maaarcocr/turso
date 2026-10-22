@@ -13,6 +13,7 @@ pub enum StorageType {
     Text,
     Blob,
     RangedInteger { min: i64, max: i64 },
+    Uint64,
 }
 
 impl DialectType {
@@ -39,10 +40,15 @@ impl StorageType {
             StorageType::Real => "real",
             StorageType::Text => "text",
             StorageType::Blob => "blob",
+            StorageType::Uint64 => "any",
         }
     }
 
     fn conversions(self, type_name: &str) -> String {
+        if self == StorageType::Uint64 {
+            return " ENCODE uint64_encode(value) DECODE uint64_decode(value) KEY uint64_encode(value)"
+                .to_string();
+        }
         let StorageType::RangedInteger { min, max } = self else {
             return String::new();
         };
@@ -182,6 +188,75 @@ mod tests {
             .execute("CREATE TABLE v(b VARBINARY) STRICT")
             .unwrap_err();
         assert!(error.to_string().contains("parameter"), "{error}");
+    }
+
+    #[test]
+    fn unsigned_64_bit_values_are_stored_sorted_deduplicated_and_found_through_an_index() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let big = |text: &str| Value::build_text(text.to_string());
+        {
+            let db = open_db(&io, "types-uint64.db", marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, u UBIGINT) STRICT")
+                .unwrap();
+            conn.execute("CREATE INDEX t_u ON t(u)").unwrap();
+            for row in [
+                "(1, '18446744073709551615')",
+                "(2, '9223372036854775808')",
+                "(3, 5)",
+                "(4, '9223372036854775807')",
+                "(5, '18446744073709551615')",
+            ] {
+                conn.execute(format!("INSERT INTO t VALUES {row}")).unwrap();
+            }
+            for row in ["(6, -1)", "(7, '18446744073709551616')"] {
+                assert!(
+                    conn.execute(format!("INSERT INTO t VALUES {row}")).is_err(),
+                    "{row}"
+                );
+            }
+            conn.close().unwrap();
+        }
+        let db = open_db(&io, "types-uint64.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT u FROM t NOT INDEXED ORDER BY u, id"),
+            vec![
+                vec![Value::from_i64(5)],
+                vec![Value::from_i64(i64::MAX)],
+                vec![big("9223372036854775808")],
+                vec![big("18446744073709551615")],
+                vec![big("18446744073709551615")],
+            ]
+        );
+        assert_eq!(
+            query(&conn, "SELECT count(DISTINCT u) FROM t"),
+            ints(&[&[4]])
+        );
+        assert_eq!(
+            query(&conn, "SELECT id FROM t WHERE u = '9223372036854775808'"),
+            ints(&[&[2]])
+        );
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT id FROM t INDEXED BY t_u WHERE u = '18446744073709551615' ORDER BY id"
+            ),
+            ints(&[&[1], &[5]])
+        );
+        assert_eq!(
+            query(&conn, "SELECT min(u), max(u) FROM t"),
+            vec![vec![Value::from_i64(5), big("18446744073709551615")]]
+        );
+        assert_eq!(
+            query(&conn, "SELECT u + 1 FROM t WHERE id = 4"),
+            vec![vec![big("9223372036854775808")]]
+        );
+        assert!(conn
+            .prepare("SELECT u + 1 FROM t WHERE id = 1")
+            .unwrap()
+            .run_collect_rows()
+            .is_err());
     }
 
     #[test]

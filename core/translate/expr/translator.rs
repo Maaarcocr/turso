@@ -2061,7 +2061,10 @@ fn translate_function_call_expr(
                     target_register,
                     func_ctx,
                 ),
-                ScalarFunc::NumericKey | ScalarFunc::NumericNeg | ScalarFunc::NumericAbs => {
+                ScalarFunc::NumericKey
+                | ScalarFunc::NumericNeg
+                | ScalarFunc::NumericAbs
+                | ScalarFunc::Storage(_) => {
                     if !resolver.enable_custom_types {
                         crate::bail_parse_error!("no such function: {}", srf);
                     }

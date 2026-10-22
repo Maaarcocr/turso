@@ -4946,10 +4946,10 @@ impl<'a> Parser<'a> {
 
         // Validate base type
         match base.as_str() {
-            "text" | "integer" | "real" | "blob" => {}
+            "text" | "integer" | "real" | "blob" | "any" => {}
             _ => {
                 return Err(Error::ParseError(format!(
-                    "invalid base type '{base}', must be one of: text, integer, real, blob"
+                    "invalid base type '{base}', must be one of: text, integer, real, blob, any"
                 )));
             }
         }

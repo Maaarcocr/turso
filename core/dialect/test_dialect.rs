@@ -38,6 +38,15 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
             behaviour: "OPERATOR '<' (tinyint, tinyint) OPERATOR '=' (tinyint, tinyint)",
         },
         DialectType {
+            name: "ubigint",
+            storage: StorageType::Uint64,
+            parameters: "",
+            behaviour: "CAST FROM integer, text AS IMPLICIT \
+                OPERATOR '<' (ubigint, ubigint) uint64_lt \
+                OPERATOR '=' (ubigint, ubigint) uint64_eq \
+                OPERATOR '+' (ubigint, ubigint) RETURNS ubigint uint64_add",
+        },
+        DialectType {
             name: "text",
             storage: StorageType::Text,
             parameters: "",

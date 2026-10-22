@@ -69,6 +69,7 @@ impl Subprogram {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SortComparatorType {
     NumericLt,
+    Uint64Lt,
     StringReverse,
     TestUintLt,
     ArrayLt,

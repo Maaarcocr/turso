@@ -4105,7 +4105,7 @@ impl BTreeTable {
             if let Ok(Some(resolved)) = schema.resolve_type_unchecked(&col.ty_str) {
                 let (base_ty, _) = type_from_name(&resolved.primitive);
                 col.set_ty(base_ty);
-                col.override_affinity(Affinity::affinity(&resolved.primitive));
+                col.override_affinity(storage_affinity(&resolved.primitive));
                 col.resolved_type = Some(Arc::new(resolved));
             }
         }
@@ -4661,6 +4661,13 @@ impl BTreeTable {
         }
         Ok(deps)
     }
+}
+
+fn storage_affinity(primitive: &str) -> Affinity {
+    if primitive.eq_ignore_ascii_case("any") {
+        return Affinity::Blob;
+    }
+    Affinity::affinity(primitive)
 }
 
 fn push_on_conflict_clause(sql: &mut String, conflict_clause: Option<ResolveType>) {
