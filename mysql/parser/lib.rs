@@ -32,6 +32,8 @@ pub enum MysqlParserError {
     MultipleStatements(usize),
     #[error("unsupported MySQL syntax: {0}")]
     Unsupported(String),
+    #[error("MySQL rejects this statement: {0}")]
+    Rejected(String),
 }
 
 pub fn parse(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {

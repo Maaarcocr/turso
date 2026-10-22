@@ -138,6 +138,11 @@ pub(crate) fn translate_column_type(data_type: &DataType) -> Result<ColumnType, 
                 family: Family::Varbinary { length: *length },
             }
         }
+        DataType::Varbinary(Some(BinaryLength::IntegerLength { length })) => {
+            return Err(MysqlParserError::Rejected(format!(
+                "VARBINARY({length}) exceeds the MySQL maximum of {REGULAR_LENGTH}"
+            )));
+        }
         DataType::TinyBlob => blob("TINYBLOB", Some(TINY_LENGTH)),
         DataType::Blob(None) => blob("BLOB", Some(REGULAR_LENGTH)),
         DataType::MediumBlob => blob("MEDIUMBLOB", Some(MEDIUM_LENGTH)),
@@ -295,12 +300,12 @@ impl ColumnType {
     ) -> Result<u64, MysqlParserError> {
         let bytes = match (&self.family, prefix) {
             (Family::Text { .. } | Family::Blob { .. }, None) => {
-                return Err(MysqlParserError::Unsupported(format!(
+                return Err(MysqlParserError::Rejected(format!(
                     "BLOB/TEXT column `{column}` used in a key needs a key length"
                 )));
             }
             (Family::Json, _) => {
-                return Err(MysqlParserError::Unsupported(format!(
+                return Err(MysqlParserError::Rejected(format!(
                     "JSON column `{column}` cannot be indexed directly"
                 )));
             }
@@ -320,7 +325,7 @@ impl ColumnType {
             }
             (_, None) => NUMERIC_KEY_BYTES,
             (_, Some(_)) => {
-                return Err(MysqlParserError::Unsupported(format!(
+                return Err(MysqlParserError::Rejected(format!(
                     "prefix key on column `{column}` is not a valid MySQL key part"
                 )));
             }
@@ -360,7 +365,7 @@ fn integer(name: &str, min: i128, max: i128) -> ColumnType {
 
 fn bit(width: u64) -> Result<ColumnType, MysqlParserError> {
     if !(1..=64).contains(&width) {
-        return Err(MysqlParserError::Unsupported(format!(
+        return Err(MysqlParserError::Rejected(format!(
             "BIT({width}) is outside the MySQL range 1..=64"
         )));
     }
@@ -423,7 +428,7 @@ fn float(
                     && *precision <= MAX_FLOAT_DIGITS
             });
             let Some(scale) = scale else {
-                return Err(MysqlParserError::Unsupported(format!(
+                return Err(MysqlParserError::Rejected(format!(
                     "{name}{info} is not a valid MySQL floating-point type"
                 )));
             };
@@ -437,7 +442,7 @@ fn float(
             )
         }
         ExactNumberInfo::Precision(_) => {
-            return Err(MysqlParserError::Unsupported(format!(
+            return Err(MysqlParserError::Rejected(format!(
                 "{name}{info} is not a valid MySQL floating-point type"
             )));
         }
@@ -466,6 +471,11 @@ fn character_length(
         None => Ok(default_length),
         Some(CharacterLength::IntegerLength { length, unit: None }) if *length <= max_length => {
             Ok(*length)
+        }
+        Some(CharacterLength::IntegerLength { length, unit: None }) => {
+            Err(MysqlParserError::Rejected(format!(
+                "character length `{length}` exceeds the MySQL maximum of {max_length}"
+            )))
         }
         Some(length) => Err(MysqlParserError::Unsupported(format!(
             "character length `{length}` is outside the available range 0..={max_length}"
@@ -524,7 +534,7 @@ fn fractional_seconds(precision: Option<u64>) -> Result<u64, MysqlParserError> {
     match precision {
         None => Ok(0),
         Some(precision) if precision <= MAX_FRACTIONAL_SECONDS => Ok(precision),
-        Some(precision) => Err(MysqlParserError::Unsupported(format!(
+        Some(precision) => Err(MysqlParserError::Rejected(format!(
             "fractional seconds precision {precision} exceeds the MySQL maximum of 6"
         ))),
     }
@@ -574,9 +584,14 @@ fn ensure_distinct_members(members: &[String]) -> Result<(), MysqlParserError> {
         let duplicate = members[..position]
             .iter()
             .any(|earlier| earlier.to_lowercase() == member.to_lowercase());
-        if duplicate || member.ends_with(' ') {
+        if duplicate {
+            return Err(MysqlParserError::Rejected(format!(
+                "member `{member}` is listed twice"
+            )));
+        }
+        if member.ends_with(' ') {
             return Err(MysqlParserError::Unsupported(format!(
-                "member `{member}` needs MySQL's case-insensitive or space-trimming member rules"
+                "member `{member}` needs MySQL's trailing-space trimming"
             )));
         }
     }
@@ -637,11 +652,11 @@ fn sized_type(name: &str, size: u64) -> ast::Type {
 }
 
 fn key_too_long() -> MysqlParserError {
-    MysqlParserError::Unsupported("the key is longer than the 3072-byte InnoDB maximum".to_string())
+    MysqlParserError::Rejected("the key is longer than the 3072-byte InnoDB maximum".to_string())
 }
 
 fn invalid_decimal(info: &ExactNumberInfo) -> MysqlParserError {
-    MysqlParserError::Unsupported(format!("DECIMAL{info} is not a valid MySQL decimal type"))
+    MysqlParserError::Rejected(format!("DECIMAL{info} is not a valid MySQL decimal type"))
 }
 
 fn unsupported_type(name: &ObjectName, modifiers: &[String]) -> MysqlParserError {
