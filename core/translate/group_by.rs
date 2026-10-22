@@ -3,7 +3,7 @@ use turso_parser::ast::{self, SortOrder};
 
 use super::{
     emitter::TranslateCtx,
-    expr::{translate_condition_expr, translate_expr, ConditionMetadata},
+    expr::{emit_type_keys, translate_condition_expr, translate_expr, ConditionMetadata},
     plan::{Distinctness, GroupBy, SelectPlan, SubqueryEvalPhase, SubqueryOrigin},
     result_row::emit_select_result,
 };
@@ -725,10 +725,19 @@ pub fn group_by_process_single_group(
         c.collation = collation;
     }
 
+    let group_exprs: Vec<&ast::Expr> = group_by.exprs.iter().collect();
+    let compare_start_reg = emit_type_keys(
+        program,
+        &group_exprs,
+        Some(&plan.table_references),
+        groups_start_reg,
+        &t_ctx.resolver,
+    )?;
+
     // Compare the group by columns to the previous group by columns to see if we are at a new group or not
     program.emit_insn(Insn::Compare {
         start_reg_a: registers.reg_group_exprs_cmp,
-        start_reg_b: groups_start_reg,
+        start_reg_b: compare_start_reg,
         count: group_by.exprs.len(),
         key_info: compare_key_info,
     });
@@ -757,7 +766,7 @@ pub fn group_by_process_single_group(
 
     // New group, move current group by columns into the comparison register
     program.emit_insn(Insn::Move {
-        source_reg: groups_start_reg,
+        source_reg: compare_start_reg,
         dest_reg: registers.reg_group_exprs_cmp,
         count: group_by.exprs.len(),
     });
