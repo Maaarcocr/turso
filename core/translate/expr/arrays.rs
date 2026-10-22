@@ -262,16 +262,15 @@ pub(crate) fn emit_key_encode(
         &ColumnLayout::Identity { column_count: 1 },
         row_number_reg,
     )?;
-    let is_integer = program.allocate_label();
-    program.emit_insn(Insn::IsNull {
-        reg: key_reg,
-        target_pc: is_integer,
-    });
+    let out_of_range = program.allocate_label();
+    let done = program.allocate_label();
     program.emit_insn(Insn::IsType {
         reg: key_reg,
-        target_pc: is_integer,
-        value_type: crate::types::ValueType::Integer,
+        target_pc: out_of_range,
+        value_type: crate::types::ValueType::Blob,
     });
+    program.emit_insn(Insn::Goto { target_pc: done });
+    program.preassign_label_to_next_insn(out_of_range);
     emit_key_error(
         program,
         column,
@@ -279,7 +278,7 @@ pub(crate) fn emit_key_encode(
         "out of range",
         format!("key out of range for {}", key_description(table, column)),
     );
-    program.preassign_label_to_next_insn(is_integer);
+    program.preassign_label_to_next_insn(done);
     Ok(())
 }
 

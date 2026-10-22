@@ -550,6 +550,23 @@ mod tests {
     }
 
     #[test]
+    fn integer_keys_accept_integer_text_as_sqlite_keys_do() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "keys-text.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES ('5', 'x')").unwrap();
+        conn.execute("UPDATE t SET id = '6' WHERE id = 5").unwrap();
+        conn.execute("INSERT INTO t VALUES (8.0, 'z')").unwrap();
+        assert_eq!(rowid_and_id(&conn, "t"), ints(&[&[6, 6], &[8, 8]]));
+        let error = conn
+            .execute("INSERT INTO t VALUES ('seven', 'y')")
+            .unwrap_err();
+        assert!(error.to_string().contains("datatype mismatch"), "{error}");
+    }
+
+    #[test]
     fn keys_are_generated_only_with_autoincrement_or_for_nullable_keys() {
         use crate::ConversionErrorKind;
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
