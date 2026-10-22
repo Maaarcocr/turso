@@ -2668,8 +2668,10 @@ impl Program {
                         program.park_on_io(state, io, waker)
                     }
                     Err(boxed_err) => {
-                        if let (Some(target), LimboError::Constraint(_)) =
-                            (state.error_target, &*boxed_err)
+                        if let (
+                            Some(target),
+                            LimboError::Constraint(_) | LimboError::TypeConversion(_),
+                        ) = (state.error_target, &*boxed_err)
                         {
                             state.error_target = None;
                             state.pc = target.as_offset_int();
