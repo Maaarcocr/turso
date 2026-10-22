@@ -232,7 +232,17 @@ pub fn pragma_for(pragma: &PragmaName) -> Pragma {
         ),
         ListTypes => Pragma::new(
             PragmaFlags::Result0,
-            &["type", "parent", "encode", "decode", "default", "operators"],
+            &[
+                "type",
+                "parent",
+                "encode",
+                "decode",
+                "default",
+                "operators",
+                "casts",
+                "functions",
+                "key",
+            ],
         ),
         VdbeTrace => Pragma::new(
             PragmaFlags::NoColumns1 | PragmaFlags::Result0,

@@ -1747,77 +1747,43 @@ fn query_pragma(
         }
         PragmaName::ListTypes => {
             let base_reg = register;
-            program.alloc_registers(5); // 6 total (1 already allocated)
+            program.alloc_registers(LIST_TYPES_COLUMN_COUNT - 1);
 
-            // Built-in types: NULL parent, encode, decode, default, operators
             for builtin in &["INTEGER", "REAL", "TEXT", "BLOB", "ANY"] {
                 program.emit_string8(builtin.to_string(), base_reg);
-                program.emit_null(base_reg + 1, None);
-                program.emit_null(base_reg + 2, None);
-                program.emit_null(base_reg + 3, None);
-                program.emit_null(base_reg + 4, None);
-                program.emit_null(base_reg + 5, None);
-                program.emit_result_row(base_reg, 6);
+                for column in 1..LIST_TYPES_COLUMN_COUNT {
+                    program.emit_null(base_reg + column, None);
+                }
+                program.emit_result_row(base_reg, LIST_TYPES_COLUMN_COUNT);
             }
 
-            // Custom types from the type registry are only shown when strict mode is enabled
-            // Custom types are always shown since strict mode is always enabled
-            {
-                // Skip aliases where key != canonical name
-                let mut type_names: Vec<_> = schema
-                    .type_registry
-                    .iter()
-                    .filter(|(key, td)| *key == &td.name.to_lowercase())
-                    .map(|(key, _)| key)
-                    .collect();
-                type_names.sort();
-                for type_name in type_names {
-                    let type_def = &schema.type_registry[type_name];
-                    let display_name = if type_def.params().is_empty() {
-                        type_def.name.clone()
-                    } else {
-                        let params: Vec<String> = type_def
-                            .params()
-                            .iter()
-                            .map(|p| match &p.ty {
-                                Some(ty) => format!("{} {}", p.name, ty),
-                                None => p.name.clone(),
-                            })
-                            .collect();
-                        format!("{}({})", type_def.name, params.join(", "))
-                    };
-                    program.emit_string8(display_name, base_reg);
-                    program.emit_string8(type_def.base().to_string(), base_reg + 1);
-                    if let Some(expr) = type_def.encode() {
-                        program.emit_string8(expr.to_string(), base_reg + 2);
-                    } else {
-                        program.emit_null(base_reg + 2, None);
+            let mut type_names: Vec<_> = schema
+                .type_registry
+                .iter()
+                .filter(|(key, td)| *key == &td.name.to_lowercase())
+                .map(|(key, _)| key)
+                .collect();
+            type_names.sort();
+            for type_name in type_names {
+                let type_def = &schema.type_registry[type_name];
+                let columns = [
+                    Some(list_types_display_name(type_def)),
+                    Some(type_def.base().to_string()),
+                    type_def.encode().map(|expr| expr.to_string()),
+                    type_def.decode().map(|expr| expr.to_string()),
+                    type_def.default_expr().map(|expr| expr.to_string()),
+                    list_types_operators(type_def),
+                    list_types_casts(type_def),
+                    list_types_functions(type_def),
+                    type_def.key().map(|expr| expr.to_string()),
+                ];
+                for (column, text) in columns.into_iter().enumerate() {
+                    match text {
+                        Some(text) => program.emit_string8(text, base_reg + column),
+                        None => program.emit_null(base_reg + column, None),
                     }
-                    if let Some(expr) = type_def.decode() {
-                        program.emit_string8(expr.to_string(), base_reg + 3);
-                    } else {
-                        program.emit_null(base_reg + 3, None);
-                    }
-                    if let Some(expr) = type_def.default_expr() {
-                        program.emit_string8(expr.to_string(), base_reg + 4);
-                    } else {
-                        program.emit_null(base_reg + 4, None);
-                    }
-                    if type_def.operators().is_empty() {
-                        program.emit_null(base_reg + 5, None);
-                    } else {
-                        let ops: Vec<String> = type_def
-                            .operators()
-                            .iter()
-                            .map(|op| match &op.func_name {
-                                Some(f) => format!("'{}' {}", op.op, f),
-                                None => format!("'{}'", op.op),
-                            })
-                            .collect();
-                        program.emit_string8(ops.join(", "), base_reg + 5);
-                    }
-                    program.emit_result_row(base_reg, 6);
                 }
+                program.emit_result_row(base_reg, LIST_TYPES_COLUMN_COUNT);
             }
 
             let pragma_meta = pragma_for(&pragma);
@@ -1827,6 +1793,82 @@ fn query_pragma(
             Ok(TransactionMode::None)
         }
     }
+}
+
+const LIST_TYPES_COLUMN_COUNT: usize = 9;
+
+fn list_types_display_name(type_def: &crate::schema::TypeDef) -> String {
+    if type_def.params().is_empty() {
+        return type_def.name.clone();
+    }
+    let params: Vec<String> = type_def
+        .params()
+        .iter()
+        .map(|param| {
+            let mut text = param.name.clone();
+            if let Some(ty) = &param.ty {
+                text = format!("{text} {ty}");
+            }
+            if let Some(default) = &param.default {
+                text = format!("{text} DEFAULT {default}");
+            }
+            text
+        })
+        .collect();
+    format!("{}({})", type_def.name, params.join(", "))
+}
+
+fn list_types_operators(type_def: &crate::schema::TypeDef) -> Option<String> {
+    let operators: Vec<String> = type_def
+        .operators()
+        .iter()
+        .map(|operator| {
+            let mut text = format!("'{}'", operator.op);
+            if let Some(operands) = &operator.operands {
+                text = format!("{text} ({})", operands.join(", "));
+            }
+            if let Some(returns) = &operator.returns {
+                text = format!("{text} RETURNS {returns}");
+            }
+            if let Some(function) = &operator.func_name {
+                text = format!("{text} {function}");
+            }
+            text
+        })
+        .collect();
+    (!operators.is_empty()).then(|| operators.join(", "))
+}
+
+fn list_types_casts(type_def: &crate::schema::TypeDef) -> Option<String> {
+    let casts: Vec<String> = type_def
+        .casts()
+        .iter()
+        .map(|cast| {
+            let direction = match cast.direction {
+                turso_parser::ast::TypeCastDirection::From => "FROM",
+                turso_parser::ast::TypeCastDirection::To => "TO",
+            };
+            format!("{direction} {}", cast.types.join(", "))
+        })
+        .collect();
+    (!casts.is_empty()).then(|| casts.join("; "))
+}
+
+fn list_types_functions(type_def: &crate::schema::TypeDef) -> Option<String> {
+    let functions: Vec<String> = type_def
+        .functions()
+        .iter()
+        .map(|function| {
+            format!(
+                "{}({}) RETURNS {} {}",
+                function.name,
+                function.args.join(", "),
+                function.returns,
+                function.func_name
+            )
+        })
+        .collect();
+    (!functions.is_empty()).then(|| functions.join(", "))
 }
 
 /// 0-based index of `column` within `primary_key_columns`, if present.
