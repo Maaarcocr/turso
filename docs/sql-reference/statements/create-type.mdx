@@ -170,8 +170,9 @@ CREATE TYPE money(value any) BASE text
 
 The `<` operator is special: it controls how values of this type are sorted in ORDER BY, MIN, MAX, and CREATE INDEX. This applies to any expression whose result has the type, such as `p * 1` for a `numeric` column `p`, a column of a subquery, or a column of a compound SELECT.
 
-- **`OPERATOR '<'`** (no function name): Uses the base type's native comparison for ordering. This is sufficient for types where the encoded form sorts correctly (e.g., text dates in ISO 8601 format).
-- **`OPERATOR '<' my_compare`**: Uses `my_compare(a, b)` as a custom comparator. The function must return a negative integer if `a < b`, zero if `a = b`, and a positive integer if `a > b`.
+- **`KEY`**: A type with a `KEY` (see below) is sorted by its key in ORDER BY, GROUP BY and window PARTITION BY and ORDER BY, whatever its `<` says.
+- **`OPERATOR '<'`** (no function name): Uses the base type's native comparison of the stored values for ordering. This is sufficient for types where the encoded form sorts correctly (e.g., text dates in ISO 8601 format).
+- **`OPERATOR '<' my_compare`**: `my_compare(a, b)` is used by `<`, `>`, `<=` and `>=` in expressions. Sorting calls only the comparison functions built into Turso, such as `numeric_lt`; for any other function, ORDER BY, MIN and MAX sort the stored values, so give such a type a `KEY` that sorts like `my_compare`.
 - **No `<` operator**: The type cannot be used in ORDER BY or CREATE INDEX.
 
 ```sql

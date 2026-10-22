@@ -23,8 +23,8 @@ use super::{
     emitter::Resolver,
     emitter::TranslateCtx,
     expr::{
-        emit_type_keys, emit_user_facing_column_value, expr_type, operator_type, translate_expr,
-        type_keys, ExprType, TypeEnv,
+        emit_type_key, emit_type_keys, emit_user_facing_column_value, expr_type, operator_type,
+        translate_expr, type_keys, ExprType, TypeEnv, TypeKey,
     },
     plan::{Distinctness, ResultSetColumn, SelectPlan, TableReferences},
     result_row::{emit_offset, emit_result_row_and_limit},
@@ -154,6 +154,7 @@ pub struct SortMetadata {
     pub has_sequence: bool,
     /// Whether to use heap-sort with BTreeIndex instead of full-collection sort through Sorter
     pub use_heap_sort: bool,
+    pub(crate) keys: Vec<Option<TypeKey>>,
 }
 pub struct EmitOrderBy;
 
@@ -204,24 +205,31 @@ impl EmitOrderBy {
         // only emit sequence column if (we have GROUP BY and ORDER BY is not only aggregates or constants) OR (we decided to use heap-sort)
         let has_sequence = (has_group_by && !only_aggs) || use_heap_sort;
 
+        let order_exprs: Vec<&ast::Expr> =
+            order_by.iter().map(|(expr, _, _)| expr.as_ref()).collect();
+        let keys = type_keys(&order_exprs, Some(referenced_tables), &t_ctx.resolver)?;
+        let keyed: Vec<bool> = keys.iter().map(Option::is_some).collect();
         let remappings =
-            order_by_deduplicate_result_columns(order_by, result_columns, has_sequence)?;
+            order_by_deduplicate_result_columns(order_by, &keyed, result_columns, has_sequence)?;
         let sort_cursor = if use_heap_sort {
             let index_name = format!("heap_sort_{}", program.offset().as_offset_int()); // we don't really care about the name that much, just enough that we don't get name collisions
             let mut index_columns =
                 Vec::try_with_capacity_ext(order_by.len() + result_columns.len())?;
-            for (column, order, nulls) in order_by {
+            for ((column, order, nulls), keyed) in order_by.iter().zip(keyed.iter()) {
                 if nulls.is_some() {
                     return Err(crate::LimboError::InternalError(
                         "heap sort cannot express an explicit NULLS ordering".to_string(),
                     ));
                 }
-                let collation = Some(resolve_comparison_collseq_with_symbols(
-                    column,
-                    column,
-                    referenced_tables,
-                    Some(t_ctx.resolver.symbol_table),
-                )?);
+                let collation = match keyed {
+                    true => None,
+                    false => Some(resolve_comparison_collseq_with_symbols(
+                        column,
+                        column,
+                        referenced_tables,
+                        Some(t_ctx.resolver.symbol_table),
+                    )?),
+                };
                 let pos_in_table = index_columns.len();
                 // Have enough space pre-allocatoed to push without realloc
                 index_columns.push(IndexColumn {
@@ -271,6 +279,7 @@ impl EmitOrderBy {
             remappings,
             has_sequence,
             use_heap_sort,
+            keys,
         });
 
         if use_heap_sort {
@@ -292,14 +301,18 @@ impl EmitOrderBy {
                 Option<turso_parser::ast::NullsOrder>,
             )> = order_by
                 .iter()
-                .map(|(expr, dir, nulls)| {
-                    let collation = Some(resolve_comparison_collseq_with_symbols(
-                        expr,
-                        expr,
-                        referenced_tables,
-                        Some(t_ctx.resolver.symbol_table),
-                    )?);
-                    Ok::<_, crate::LimboError>((*dir, collation, *nulls))
+                .zip(keyed.iter())
+                .map(|((expr, dir, nulls), keyed)| {
+                    let collation = match keyed {
+                        true => CollationSeq::default(),
+                        false => resolve_comparison_collseq_with_symbols(
+                            expr,
+                            expr,
+                            referenced_tables,
+                            Some(t_ctx.resolver.symbol_table),
+                        )?,
+                    };
+                    Ok::<_, crate::LimboError>((*dir, Some(collation), *nulls))
                 })
                 .try_collect::<Result<Vec<_>>>()??;
 
@@ -307,8 +320,12 @@ impl EmitOrderBy {
             // For types with a `<` operator, the comparator is used for correct sort ordering.
             let mut comparators: Vec<Option<SortComparatorType>> = order_by
                 .iter()
-                .map(|(expr, _, _)| {
-                    custom_type_comparator(expr, referenced_tables, t_ctx.resolver.schema())
+                .zip(keyed.iter())
+                .map(|((expr, _, _), keyed)| match keyed {
+                    true => None,
+                    false => {
+                        custom_type_comparator(expr, referenced_tables, t_ctx.resolver.schema())
+                    }
                 })
                 .try_collect()?;
 
@@ -351,6 +368,7 @@ impl EmitOrderBy {
             ref remappings,
             has_sequence,
             use_heap_sort,
+            ..
         } = *t_ctx.meta_sort.as_ref().unwrap();
 
         let sorter_column_count = order_by.len()
@@ -519,6 +537,7 @@ impl EmitOrderBy {
         let start_reg = program.alloc_registers(orderby_sorter_column_count);
         for (i, (expr, _, _)) in order_by.iter().enumerate() {
             let key_reg = start_reg + i;
+            let type_key = sort_metadata.keys.get(i).and_then(Option::as_ref);
 
             // Check if this ORDER BY expression matches a finalized aggregate
             if let Some(agg_idx) = plan
@@ -540,9 +559,13 @@ impl EmitOrderBy {
                 // Sort keys must be encoded (on-disk) values. Suppress decode so the
                 // sorter compares encoded representations, using either the base type's
                 // built-in comparison (naked OPERATOR '<') or a custom comparator function.
-                let is_custom =
-                    result_column_custom_type_info(expr, &plan.table_references, resolver.schema())
-                        .is_some_and(|(_, td)| td.decode().is_some());
+                let is_custom = type_key.is_none()
+                    && result_column_custom_type_info(
+                        expr,
+                        &plan.table_references,
+                        resolver.schema(),
+                    )
+                    .is_some_and(|(_, td)| td.decode().is_some());
                 if is_custom {
                     program.flags.set_suppress_custom_type_decode(true);
                 }
@@ -557,6 +580,9 @@ impl EmitOrderBy {
                     program.flags.set_suppress_custom_type_decode(false);
                 }
                 result?;
+            }
+            if let Some(type_key) = type_key {
+                emit_type_key(program, key_reg, type_key, resolver)?;
             }
         }
 
@@ -813,6 +839,7 @@ pub fn order_by_deduplicate_result_columns(
         SortOrder,
         Option<turso_parser::ast::NullsOrder>,
     )],
+    keyed: &[bool],
     result_columns: &[ResultSetColumn],
     has_sequence: bool,
 ) -> Result<Vec<OrderByRemapping>> {
@@ -825,10 +852,9 @@ pub fn order_by_deduplicate_result_columns(
 
     let mut i = 0;
     for rc in result_columns.iter() {
-        let found = order_by
-            .iter()
-            .enumerate()
-            .find(|(_, (expr, _, _))| exprs_are_equivalent(expr, &rc.expr));
+        let found = order_by.iter().enumerate().find(|(j, (expr, _, _))| {
+            !keyed.get(*j).copied().unwrap_or(false) && exprs_are_equivalent(expr, &rc.expr)
+        });
         if let Some((j, _)) = found {
             result_column_remapping
                 .push_within_capacity(OrderByRemapping {

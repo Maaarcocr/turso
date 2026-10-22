@@ -3,7 +3,10 @@ use turso_parser::ast::{self, SortOrder};
 
 use super::{
     emitter::TranslateCtx,
-    expr::{emit_type_keys, translate_condition_expr, translate_expr, ConditionMetadata},
+    expr::{
+        emit_type_keys, translate_condition_expr, translate_expr, type_keys, ConditionMetadata,
+        TypeKey,
+    },
     plan::{Distinctness, GroupBy, SelectPlan, SubqueryEvalPhase, SubqueryOrigin},
     result_row::emit_select_result,
 };
@@ -140,11 +143,19 @@ impl EmitGroupBy {
         // END BLOCK
 
         let reg_sorter_key = program.alloc_register();
+        let group_exprs: Vec<&ast::Expr> = group_by.exprs.iter().collect();
+        let group_keys = if group_by.sort_elided {
+            Vec::new()
+        } else {
+            type_keys(&group_exprs, Some(&plan.table_references), &t_ctx.resolver)?
+        };
         let column_count = if !group_by.sort_elided {
             // Sorter path: store only unique leaf columns from aggregate args
             // instead of pre-computed expression results.
             t_ctx.agg_leaf_columns = collect_agg_leaf_columns(&plan.aggregates, plan)?;
-            t_ctx.non_aggregate_expressions.len() + t_ctx.agg_leaf_columns.len()
+            t_ctx.non_aggregate_expressions.len()
+                + t_ctx.agg_leaf_columns.len()
+                + group_keys.iter().flatten().count()
         } else {
             plan.agg_args_count() + t_ctx.non_aggregate_expressions.len()
         };
@@ -170,14 +181,18 @@ impl EmitGroupBy {
                 .iter()
                 .zip(sort_order.iter())
                 .zip(group_by.nulls_order.iter())
-                .map(|((expr, ord), nulls)| {
-                    let collation = Some(resolve_comparison_collseq_with_symbols(
-                        expr,
-                        expr,
-                        &plan.table_references,
-                        Some(t_ctx.resolver.symbol_table),
-                    )?);
-                    Ok::<_, crate::LimboError>((*ord, collation, *nulls))
+                .zip(group_keys.iter())
+                .map(|(((expr, ord), nulls), key)| {
+                    let collation = match key {
+                        Some(_) => CollationSeq::default(),
+                        None => resolve_comparison_collseq_with_symbols(
+                            expr,
+                            expr,
+                            &plan.table_references,
+                            Some(t_ctx.resolver.symbol_table),
+                        )?,
+                    };
+                    Ok::<_, crate::LimboError>((*ord, Some(collation), *nulls))
                 })
                 .try_collect::<Result<crate::alloc::Vec<_>>>()??;
 
@@ -185,8 +200,14 @@ impl EmitGroupBy {
             let comparators = group_by
                 .exprs
                 .iter()
-                .map(|expr| {
-                    custom_type_comparator(expr, &plan.table_references, t_ctx.resolver.schema())
+                .zip(group_keys.iter())
+                .map(|(expr, key)| match key {
+                    Some(_) => None,
+                    None => custom_type_comparator(
+                        expr,
+                        &plan.table_references,
+                        t_ctx.resolver.schema(),
+                    ),
                 })
                 .try_collect()?;
 
@@ -212,6 +233,7 @@ impl EmitGroupBy {
                 reg_sorter_key,
                 sorter_column_count: column_count,
                 start_reg_dest: reg_non_aggregate_exprs_acc,
+                group_keys,
             }
         } else {
             GroupByRowSource::MainLoop {
@@ -643,6 +665,7 @@ pub enum GroupByRowSource {
         /// Number of columns in the GROUP BY sorter
         sorter_column_count: usize,
         start_reg_dest: usize,
+        group_keys: Vec<Option<TypeKey>>,
     },
     MainLoop {
         /// If GROUP BY rows are read directly in the main loop, start_reg is the first register
@@ -702,6 +725,8 @@ pub fn group_by_process_single_group(
         GroupByRowSource::MainLoop { start_reg_src, .. } => *start_reg_src,
     };
 
+    let group_exprs: Vec<&ast::Expr> = group_by.exprs.iter().collect();
+    let group_keys = type_keys(&group_exprs, Some(&plan.table_references), &t_ctx.resolver)?;
     let mut compare_key_info = group_by
         .exprs
         .iter()
@@ -716,6 +741,9 @@ pub fn group_by_process_single_group(
         .enumerate()
         .take(group_by.exprs.len())
     {
+        if group_keys[i].is_some() {
+            continue;
+        }
         let collation = resolve_comparison_collseq_with_symbols(
             &group_by.exprs[i],
             &group_by.exprs[i],
@@ -725,14 +753,16 @@ pub fn group_by_process_single_group(
         c.collation = collation;
     }
 
-    let group_exprs: Vec<&ast::Expr> = group_by.exprs.iter().collect();
-    let compare_start_reg = emit_type_keys(
-        program,
-        &group_exprs,
-        Some(&plan.table_references),
-        groups_start_reg,
-        &t_ctx.resolver,
-    )?;
+    let compare_start_reg = match &row_source {
+        GroupByRowSource::Sorter { .. } => groups_start_reg,
+        GroupByRowSource::MainLoop { .. } => emit_type_keys(
+            program,
+            &group_exprs,
+            Some(&plan.table_references),
+            groups_start_reg,
+            &t_ctx.resolver,
+        )?,
+    };
 
     // Compare the group by columns to the previous group by columns to see if we are at a new group or not
     program.emit_insn(Insn::Compare {
@@ -934,15 +964,25 @@ pub fn group_by_process_single_group(
         GroupByRowSource::Sorter {
             pseudo_cursor,
             start_reg_dest,
+            sorter_column_count,
+            group_keys,
             ..
         } => {
             let mut next_reg = *start_reg_dest;
+            let first_key_value_column = sorter_column_count - group_keys.iter().flatten().count();
 
             for (sorter_column_index, (expr, expr_appears_in_result_columns)) in
                 t_ctx.non_aggregate_expressions.iter().enumerate()
             {
                 if *expr_appears_in_result_columns {
-                    program.emit_column_or_rowid(*pseudo_cursor, sorter_column_index, next_reg);
+                    let value_column = match group_keys.get(sorter_column_index) {
+                        Some(Some(_)) => {
+                            first_key_value_column
+                                + group_keys[..sorter_column_index].iter().flatten().count()
+                        }
+                        _ => sorter_column_index,
+                    };
+                    program.emit_column_or_rowid(*pseudo_cursor, value_column, next_reg);
                     t_ctx.resolver.cache_scalar_expr_reg(
                         std::borrow::Cow::Borrowed(expr),
                         next_reg,

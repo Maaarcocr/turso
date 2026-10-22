@@ -1,3 +1,4 @@
+use crate::translate::expr::emit_type_key;
 use crate::translate::plan::Operation::HashJoin;
 use crate::translate::plan::SimpleAggregate;
 use crate::translate::{
@@ -175,6 +176,7 @@ fn emit_loop_source<'a>(
                     sort_cursor,
                     sorter_column_count,
                     reg_sorter_key,
+                    group_keys,
                     ..
                 } => {
                     // Sorter path: store only unique leaf columns from aggregate args.
@@ -189,6 +191,18 @@ fn emit_loop_source<'a>(
                             reg,
                             &t_ctx.resolver,
                         )?;
+                    }
+                    for (i, key) in group_keys.iter().enumerate() {
+                        let Some(key) = key else {
+                            continue;
+                        };
+                        program.emit_insn(Insn::Copy {
+                            src_reg: start_reg + i,
+                            dst_reg: cur_reg,
+                            extra_amount: 0,
+                        });
+                        cur_reg += 1;
+                        emit_type_key(program, start_reg + i, key, &t_ctx.resolver)?;
                     }
                     sorter_insert(
                         program,
