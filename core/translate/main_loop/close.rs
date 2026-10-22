@@ -829,6 +829,7 @@ fn assign_new_subquery_output(
                     index,
                     affinity_str: destination_affinity,
                     is_delete,
+                    keys: None,
                 },
             )
         }

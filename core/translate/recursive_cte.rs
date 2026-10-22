@@ -208,6 +208,7 @@ pub(crate) fn emit_recursive_cte(
         &recursive_cte.query_destination,
         result_row_regs,
         num_result_columns,
+        resolver,
     )?;
     if let Some(limit) = output_limit_context.limit_ctx {
         program.emit_insn(Insn::DecrJumpZero {

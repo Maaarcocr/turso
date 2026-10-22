@@ -471,6 +471,7 @@ impl EmitOrderBy {
             } else {
                 None
             },
+            &t_ctx.resolver,
         )?;
 
         program.preassign_label_to_next_insn(sort_loop_next_label);

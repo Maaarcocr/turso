@@ -1054,6 +1054,7 @@ fn get_subquery_parser<'a>(
                     index: ephemeral_index,
                     affinity_str: Some(in_affinity_str.clone()),
                     is_delete: false,
+                    keys: None,
                 };
                 *expr = ast::Expr::SubqueryResult {
                     subquery_id,
@@ -1858,6 +1859,7 @@ fn emit_indexed_materialized_subquery(
             index,
             affinity_str,
             is_delete: false,
+            keys: None,
         };
     }
 
