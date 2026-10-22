@@ -11583,6 +11583,17 @@ pub fn op_function(
                 };
                 state.registers[*dest].set_value(result);
             }
+            ScalarFunc::NumericKey => {
+                check_arg_count!(arg_count, 1);
+                let value = state.registers[*start_reg].get_value().clone();
+                let result = match value {
+                    Value::Null => Value::Null,
+                    _ => Value::from_blob(crate::numeric::decimal::numeric_key(
+                        &value_to_bigdecimal(&value)?,
+                    )?),
+                };
+                state.registers[*dest].set_value(result);
+            }
             ScalarFunc::NumericLt | ScalarFunc::NumericEq => {
                 check_arg_count!(arg_count, 2);
                 let lhs_val = state.registers[*start_reg].get_value().clone();

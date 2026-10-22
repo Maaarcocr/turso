@@ -356,6 +356,89 @@ pub(crate) fn emit_conversion_into_type(
     Ok(())
 }
 
+pub(crate) fn emit_type_keys(
+    program: &mut ProgramBuilder,
+    exprs: &[&ast::Expr],
+    tables: Option<&TableReferences>,
+    start_reg: usize,
+    resolver: &Resolver,
+) -> Result<usize> {
+    let keys = type_keys(exprs, tables, resolver)?;
+    if keys.iter().all(Option::is_none) {
+        return Ok(start_reg);
+    }
+    let key_start = program.alloc_registers(exprs.len());
+    for (i, key) in keys.iter().enumerate() {
+        program.emit_insn(Insn::Copy {
+            src_reg: start_reg + i,
+            dst_reg: key_start + i,
+            extra_amount: 0,
+        });
+        if let Some(key) = key {
+            emit_type_key(program, key_start + i, key, resolver)?;
+        }
+    }
+    Ok(key_start)
+}
+
+pub(crate) fn type_keys(
+    exprs: &[&ast::Expr],
+    tables: Option<&TableReferences>,
+    resolver: &Resolver,
+) -> Result<Vec<Option<TypeKey>>> {
+    let env = TypeEnv::from_resolver(resolver);
+    exprs
+        .iter()
+        .map(|expr| match expr_type(expr, tables, &env) {
+            ExprType::Named(named) => type_key(&named, resolver),
+            ExprType::Dynamic(_) => Ok(None),
+        })
+        .collect()
+}
+
+pub(crate) struct TypeKey {
+    def: Arc<TypeDef>,
+    expr: ast::Expr,
+    column: Column,
+}
+
+pub(crate) fn type_key(named: &NamedType, resolver: &Resolver) -> Result<Option<TypeKey>> {
+    let Some(resolved) = resolver.schema().resolve_type_unchecked(&named.def.name)? else {
+        return Ok(None);
+    };
+    Ok(resolved.chain.iter().find_map(|def| {
+        def.key().map(|expr| TypeKey {
+            def: Arc::clone(def),
+            expr: expr.clone(),
+            column: conversion_column(named),
+        })
+    }))
+}
+
+pub(crate) fn emit_type_key(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    key: &TypeKey,
+    resolver: &Resolver,
+) -> Result<()> {
+    let skip_null = program.allocate_label();
+    program.emit_insn(Insn::IsNull {
+        reg,
+        target_pc: skip_null,
+    });
+    emit_type_expr(
+        program,
+        &key.expr,
+        reg,
+        reg,
+        &key.column,
+        &key.def,
+        resolver,
+    )?;
+    program.preassign_label_to_next_insn(skip_null);
+    Ok(())
+}
+
 pub(crate) fn conversion_column(named: &NamedType) -> Column {
     let mut column = Column::new(
         None,

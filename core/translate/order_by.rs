@@ -20,8 +20,12 @@ use crate::{
 };
 
 use super::{
+    emitter::Resolver,
     emitter::TranslateCtx,
-    expr::{expr_type, translate_expr, ExprType, TypeEnv},
+    expr::{
+        emit_type_keys, emit_user_facing_column_value, expr_type, translate_expr, type_keys,
+        ExprType, TypeEnv,
+    },
     plan::{Distinctness, ResultSetColumn, SelectPlan, TableReferences},
     result_row::{emit_offset, emit_result_row_and_limit},
 };
@@ -670,11 +674,14 @@ impl EmitOrderBy {
                     });
                 }
 
-                distinct_ctx.emit_deduplication_insns(
+                let key_start_reg = emit_sorter_distinct_keys(
                     program,
-                    result_columns.len(),
+                    plan,
+                    sort_metadata,
                     reordered_start_reg,
-                );
+                    resolver,
+                )?;
+                distinct_ctx.emit_deduplication_insns(program, result_columns.len(), key_start_reg);
             } else {
                 // Result columns are already in SELECT order, use them directly
                 let start_reg = sort_metadata
@@ -682,7 +689,9 @@ impl EmitOrderBy {
                     .first()
                     .map(|r| start_reg + r.orderby_sorter_idx)
                     .expect("remapping must exist for all result columns");
-                distinct_ctx.emit_deduplication_insns(program, result_columns.len(), start_reg);
+                let key_start_reg =
+                    emit_sorter_distinct_keys(program, plan, sort_metadata, start_reg, resolver)?;
+                distinct_ctx.emit_deduplication_insns(program, result_columns.len(), key_start_reg);
             }
         }
 
@@ -713,6 +722,52 @@ impl EmitOrderBy {
         }
         Ok(())
     }
+}
+
+fn emit_sorter_distinct_keys(
+    program: &mut ProgramBuilder,
+    plan: &SelectPlan,
+    sort_metadata: &SortMetadata,
+    start_reg: usize,
+    resolver: &Resolver,
+) -> Result<usize> {
+    let result_exprs: Vec<&ast::Expr> = plan.result_columns.iter().map(|rc| &rc.expr).collect();
+    let keys = type_keys(&result_exprs, Some(&plan.table_references), resolver)?;
+    if keys.iter().all(Option::is_none) {
+        return Ok(start_reg);
+    }
+    let values_start = program.alloc_registers(result_exprs.len());
+    for (i, expr) in result_exprs.iter().enumerate() {
+        let stored_column = sort_metadata.remappings[i]
+            .deduplicated
+            .then(|| {
+                result_column_custom_type_info(expr, &plan.table_references, resolver.schema())
+            })
+            .flatten()
+            .filter(|(_, type_def)| type_def.decode().is_some());
+        match stored_column {
+            Some((column, _)) => emit_user_facing_column_value(
+                program,
+                start_reg + i,
+                values_start + i,
+                column,
+                true,
+                resolver,
+            )?,
+            None => program.emit_insn(Insn::Copy {
+                src_reg: start_reg + i,
+                dst_reg: values_start + i,
+                extra_amount: 0,
+            }),
+        }
+    }
+    emit_type_keys(
+        program,
+        &result_exprs,
+        Some(&plan.table_references),
+        values_start,
+        resolver,
+    )
 }
 
 /// Emits the bytecode for inserting a row into a sorter.
