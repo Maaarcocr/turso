@@ -482,3 +482,17 @@ test escaped-quote-keeps-the-statement-whole {
 expect {
     5
 }
+
+test json-boolean-values-and-casts {
+    SELECT JSON_ARRAY(TRUE, 1 = 1, NOT 0, 1 IN (2)), JSON_OBJECT('a', 1 < 2), CAST(1 = 1 AS JSON), CAST('[1, 2]' AS JSON), 2 MEMBER OF ('[1, 2]');
+}
+expect {
+    [true, true, true, false]|{"a": true}|true|[1, 2]|1
+}
+
+test json-arrow-operators {
+    SELECT j->'$.a', j->>'$.a', j->'$.b[1]' FROM (SELECT '{"a": "x", "b": [1, 2]}' AS j) AS t;
+}
+expect {
+    "x"|x|2
+}

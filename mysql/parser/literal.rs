@@ -80,14 +80,6 @@ pub(crate) fn translate_introduced_string(
     }
 }
 
-fn text_literal(bytes: Vec<u8>) -> Result<ast::Expr, MysqlParserError> {
-    let text = String::from_utf8(bytes)
-        .map_err(|_| unsupported("a string that is not valid UTF-8".to_string()))?;
-    Ok(ast::Expr::Literal(ast::Literal::String(quote_string(
-        &text,
-    ))))
-}
-
 fn binary_literal(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlParserError> {
     match context {
         Context::Arithmetic => Err(unsupported(
@@ -114,6 +106,14 @@ fn binary_literal(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlPa
             ))))
         }
     }
+}
+
+fn text_literal(bytes: Vec<u8>) -> Result<ast::Expr, MysqlParserError> {
+    let text = String::from_utf8(bytes)
+        .map_err(|_| unsupported("a string that is not valid UTF-8".to_string()))?;
+    Ok(ast::Expr::Literal(ast::Literal::String(quote_string(
+        &text,
+    ))))
 }
 
 fn unsigned_number(bytes: &[u8]) -> Result<i64, MysqlParserError> {

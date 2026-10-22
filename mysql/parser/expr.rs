@@ -52,7 +52,7 @@ fn translate_node(
         }
         Expr::TypedString(typed) => translate_typed_string(typed, literal_context),
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
-        Expr::Identifier(identifier) => Ok(ast::Expr::Id(column_name(identifier)?)),
+        Expr::Identifier(identifier) => translate_identifier_expr(identifier),
         Expr::CompoundIdentifier(parts) => translate_compound_identifier(parts),
         Expr::UnaryOp { op, expr } => translate_unary(*op, expr, literal_context, context),
         Expr::BinaryOp { left, op, right } => translate_binary(left, op, right, context),
@@ -130,7 +130,7 @@ fn translate_node(
             data_type,
             array: false,
             format: None,
-        } => translate_cast(expr, data_type, context),
+        } => translate_cast(expr, data_type, literal_context, context),
         Expr::Convert {
             is_try: false,
             expr,
@@ -138,10 +138,17 @@ fn translate_node(
             charset,
             target_before_value: false,
             styles,
-        } if styles.is_empty() => {
-            translate_convert(expr, data_type.as_ref(), charset.as_ref(), context)
-        }
+        } if styles.is_empty() => translate_convert(
+            expr,
+            data_type.as_ref(),
+            charset.as_ref(),
+            literal_context,
+            context,
+        ),
         Expr::Collate { expr, collation } => translate_collate(expr, collation, context),
+        Expr::MemberOf(member_of) => {
+            translate_member_of(&member_of.value, &member_of.array, context)
+        }
         Expr::Function(function) => translate_function(function, context),
         Expr::Extract { field, expr, .. } => translate_extract(field, expr, context),
         Expr::Ceil {
@@ -201,13 +208,14 @@ fn translate_nested(
     )?))
 }
 
-fn column_name(identifier: &Ident) -> Result<ast::Name, MysqlParserError> {
-    if identifier.quote_style.is_none() && identifier.value.starts_with('@') {
-        return Err(MysqlParserError::Unsupported(format!(
-            "variable `{identifier}` is not lowered yet"
-        )));
+fn translate_identifier_expr(identifier: &Ident) -> Result<ast::Expr, MysqlParserError> {
+    if identifier.quote_style.is_none() {
+        let upper_name = identifier.value.to_ascii_uppercase();
+        if let Some(literal) = current_time_literal(&upper_name) {
+            return Ok(literal);
+        }
     }
-    translate_identifier(identifier)
+    Ok(ast::Expr::Id(column_name(identifier)?))
 }
 
 fn translate_compound_identifier(parts: &[Ident]) -> Result<ast::Expr, MysqlParserError> {
@@ -226,6 +234,15 @@ fn translate_compound_identifier(parts: &[Ident]) -> Result<ast::Expr, MysqlPars
             ObjectName::from(parts.to_vec())
         ))),
     }
+}
+
+fn column_name(identifier: &Ident) -> Result<ast::Name, MysqlParserError> {
+    if identifier.quote_style.is_none() && identifier.value.starts_with('@') {
+        return Err(MysqlParserError::Unsupported(format!(
+            "variable `{identifier}` is not lowered yet"
+        )));
+    }
+    translate_identifier(identifier)
 }
 
 fn translate_unary(
@@ -296,10 +313,6 @@ fn translate_binary(
         other => return Err(unsupported_operator(other)),
     };
     operation(left, operator, right, literal_context, context)
-}
-
-fn unsupported_operator(op: &BinaryOperator) -> MysqlParserError {
-    MysqlParserError::Unsupported(format!("binary operator `{op}` is not lowered yet"))
 }
 
 fn translate_integer_division(
@@ -395,6 +408,17 @@ fn translate_compared(
     other_side: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if is_json_cast(expr) {
+        return Err(json_outside_a_value_position(expr));
+    }
+    translate_compared_value(expr, other_side, context)
+}
+
+fn translate_compared_value(
+    expr: &Expr,
+    other_side: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
     if let Some(data_type) = temporal_type(other_side) {
         if let Some(text) = string_literal(expr) {
             return translate_temporal_text(data_type, text);
@@ -406,23 +430,6 @@ fn translate_compared(
         }
     }
     translate_in(expr, comparison_context(other_side), context)
-}
-
-fn temporal_type(expr: &Expr) -> Option<&DataType> {
-    match expr {
-        Expr::TypedString(typed) => Some(&typed.data_type),
-        Expr::Nested(inner) => temporal_type(inner),
-        _ => None,
-    }
-}
-
-fn is_literal(expr: &Expr) -> bool {
-    match expr {
-        Expr::Value(value) => !matches!(value.value, Value::Null | Value::Placeholder(_)),
-        Expr::Prefixed { .. } | Expr::TypedString(_) => true,
-        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => is_literal(inner),
-        _ => false,
-    }
 }
 
 fn comparison_context(other_side: &Expr) -> Context {
@@ -530,13 +537,42 @@ fn translate_between(
     high: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    if temporal_type(expr).is_some() && is_literal(high) && string_literal(high).is_none() {
-        return Err(unsupported(high));
-    }
     let lhs = translate_compared(expr, low, context)?;
     let start = translate_compared(low, expr, context)?;
     let end = translate_compared(high, expr, context)?;
     Ok(ast::Expr::between(lhs, negated, start, end))
+}
+
+fn is_json_cast(expr: &Expr) -> bool {
+    match expr {
+        Expr::Cast {
+            data_type: DataType::JSON,
+            ..
+        }
+        | Expr::Convert {
+            data_type: Some(DataType::JSON),
+            ..
+        } => true,
+        Expr::Nested(inner) => is_json_cast(inner),
+        _ => false,
+    }
+}
+
+fn temporal_type(expr: &Expr) -> Option<&DataType> {
+    match expr {
+        Expr::TypedString(typed) => Some(&typed.data_type),
+        Expr::Nested(inner) => temporal_type(inner),
+        _ => None,
+    }
+}
+
+fn is_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => !matches!(value.value, Value::Null | Value::Placeholder(_)),
+        Expr::Prefixed { .. } | Expr::TypedString(_) => true,
+        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => is_literal(inner),
+        _ => false,
+    }
 }
 
 fn translate_regexp(
@@ -547,12 +583,14 @@ fn translate_regexp(
 ) -> Result<ast::Expr, MysqlParserError> {
     if string_literal(pattern).is_some_and(str::is_empty) {
         return Err(MysqlParserError::Unsupported(
-            "an empty regular expression, which MySQL rejects at run time,".to_string(),
+            "an empty regular expression, which MySQL rejects at run time, is not lowered yet"
+                .to_string(),
         ));
     }
     if is_binary_literal(expr) || is_binary_literal(pattern) {
         return Err(MysqlParserError::Unsupported(
-            "a regular expression over a binary string, which MySQL rejects,".to_string(),
+            "a regular expression over a binary string, which MySQL rejects, is not lowered yet"
+                .to_string(),
         ));
     }
     let lhs = translate_in(expr, Context::Text, context)?;
@@ -584,9 +622,15 @@ fn translate_case(
     else_result: Option<&Expr>,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let base = operand
-        .map(|operand| translate_expr(operand, context).map(Box::new))
-        .transpose()?;
+    let base = match (operand, conditions.first()) {
+        (Some(operand), Some(first)) => Some(Box::new(translate_compared(
+            operand,
+            &first.condition,
+            context,
+        )?)),
+        (Some(operand), None) => Some(Box::new(translate_expr(operand, context)?)),
+        (None, _) => None,
+    };
     let when_then_pairs = conditions
         .iter()
         .map(|case| {
@@ -650,13 +694,24 @@ fn translate_convert(
     expr: &Expr,
     data_type: Option<&DataType>,
     charset: Option<&ObjectName>,
+    literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     match (data_type, charset) {
-        (Some(data_type), None) => translate_cast(expr, data_type, context),
+        (Some(data_type), None) => translate_cast(expr, data_type, literal_context, context),
         (None, Some(charset)) => translate_convert_using(expr, charset, context),
         _ => Err(unsupported(expr)),
     }
+}
+
+fn translate_member_of(
+    value: &Expr,
+    array: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let value = translate_json_value(value, context)?;
+    let array = translate_expr(array, context)?;
+    Ok(function_call("__mysql_member_of", vec![value, array]))
 }
 
 fn translate_extract(
@@ -836,6 +891,7 @@ fn translate_quantified_subquery(
 fn translate_cast(
     expr: &Expr,
     data_type: &DataType,
+    literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     let (target, operand_context) = match data_type {
@@ -848,6 +904,7 @@ fn translate_cast(
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
         DataType::Decimal(precision) => (decimal_type(precision)?, Context::Number),
         DataType::Char(None) | DataType::Character(None) => (type_name("CHAR"), Context::Value),
+        DataType::JSON => return translate_cast_as_json(expr, literal_context, context),
         other => {
             return Err(MysqlParserError::Unsupported(format!(
                 "CAST to `{other}` is not lowered yet"
@@ -857,6 +914,29 @@ fn translate_cast(
     Ok(ast::Expr::cast(
         translate_in(expr, operand_context, context)?,
         Some(target),
+    ))
+}
+
+fn translate_cast_as_json(
+    expr: &Expr,
+    literal_context: Context,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if literal_context != Context::Value {
+        return Err(json_outside_a_value_position(expr));
+    }
+    let value = translate_expr(expr, context)?;
+    let name = if is_boolean(expr) {
+        "__mysql_cast_boolean_as_json"
+    } else {
+        "__mysql_cast_as_json"
+    };
+    Ok(function_call(name, vec![value]))
+}
+
+fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "JSON value `{expr}` in a comparison, a computation or a function MySQL evaluates lazily is not lowered yet"
     ))
 }
 
@@ -878,7 +958,7 @@ fn decimal_type(precision: &ExactNumberInfo) -> Result<ast::Type, MysqlParserErr
         }
         _ => {
             return Err(MysqlParserError::Unsupported(format!(
-                "DECIMAL{precision}, which MySQL rejects,"
+                "DECIMAL{precision}, which MySQL rejects, is not lowered yet"
             )))
         }
     };
@@ -891,14 +971,6 @@ fn decimal_type(precision: &ExactNumberInfo) -> Result<ast::Type, MysqlParserErr
 
 fn number(value: u64) -> ast::Expr {
     ast::Expr::Literal(ast::Literal::Numeric(value.to_string()))
-}
-
-fn type_name(name: &str) -> ast::Type {
-    ast::Type {
-        name: name.to_string(),
-        size: None,
-        array_dimensions: 0,
-    }
 }
 
 fn translate_convert_using(
@@ -919,6 +991,14 @@ fn translate_convert_using(
         translate_expr(expr, context)?,
         Some(type_name(target)),
     ))
+}
+
+fn type_name(name: &str) -> ast::Type {
+    ast::Type {
+        name: name.to_string(),
+        size: None,
+        array_dimensions: 0,
+    }
 }
 
 fn translate_collate(
@@ -1009,40 +1089,8 @@ fn translate_interval_arithmetic(
     }
 }
 
-fn translate_interval(
-    interval: &Interval,
-    context: &mut TranslationContext,
-) -> Result<(ast::Expr, ast::Expr), MysqlParserError> {
-    let Interval {
-        value,
-        leading_field: Some(field),
-        leading_precision: None,
-        last_field: None,
-        fractional_seconds_precision: None,
-    } = interval
-    else {
-        return Err(MysqlParserError::Unsupported(format!(
-            "interval `{interval}` is not lowered yet"
-        )));
-    };
-    let amount = translate_expr(value, context)?;
-    Ok((amount, unit_literal(field)?))
-}
-
-fn unit_literal(field: &DateTimeField) -> Result<ast::Expr, MysqlParserError> {
-    let unit = match field {
-        DateTimeField::Custom(identifier) => identifier.value.to_ascii_uppercase(),
-        DateTimeField::Week(Some(_)) => String::new(),
-        other => other.to_string().to_ascii_uppercase(),
-    };
-    if !TEMPORAL_UNITS.contains(&unit.as_str()) {
-        return Err(MysqlParserError::Unsupported(format!(
-            "temporal unit `{field}` is not lowered yet"
-        )));
-    }
-    Ok(ast::Expr::Literal(ast::Literal::String(quote_string(
-        &unit,
-    ))))
+fn unsupported_operator(op: &BinaryOperator) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!("binary operator `{op}` is not lowered yet"))
 }
 
 fn translate_function(
@@ -1083,7 +1131,7 @@ fn translate_function(
     }
     if matches!(upper_name.as_str(), "ROUND" | "TRUNCATE") && has_negative_precision(list) {
         return Err(MysqlParserError::Unsupported(format!(
-            "{upper_name} to a negative number of decimals, which Turso does not round to tens,"
+            "{upper_name} to a negative number of decimals, which Turso does not round to tens, is not lowered yet"
         )));
     }
     let function_name = translate_identifier(identifier)?;
@@ -1161,13 +1209,7 @@ fn translate_function_without_parentheses(
     if identifier.quote_style.is_some() || function.over.is_some() {
         return Err(unsupported_function(function));
     }
-    let literal = match upper_name {
-        "CURRENT_DATE" => ast::Literal::CurrentDate,
-        "CURRENT_TIME" => ast::Literal::CurrentTime,
-        "CURRENT_TIMESTAMP" => ast::Literal::CurrentTimestamp,
-        _ => return Ok(function_call(upper_name, Vec::new())),
-    };
-    Ok(ast::Expr::Literal(literal))
+    Ok(current_time_literal(upper_name).unwrap_or_else(|| function_call(upper_name, Vec::new())))
 }
 
 fn translate_special_function(
@@ -1202,16 +1244,91 @@ fn translate_special_function(
             }
             Ok(Some(function_call(upper_name, translated)))
         }
-        ("CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP", []) => {
-            let literal = match upper_name {
-                "CURRENT_DATE" => ast::Literal::CurrentDate,
-                "CURRENT_TIME" => ast::Literal::CurrentTime,
-                _ => ast::Literal::CurrentTimestamp,
-            };
-            Ok(Some(ast::Expr::Literal(literal)))
+        ("GET_FORMAT", [Expr::Identifier(kind), format])
+            if kind.quote_style.is_none()
+                && matches!(
+                    kind.value.to_ascii_uppercase().as_str(),
+                    "DATE" | "TIME" | "DATETIME" | "TIMESTAMP"
+                ) =>
+        {
+            let kind = ast::Expr::Literal(ast::Literal::String(quote_string(
+                &kind.value.to_ascii_uppercase(),
+            )));
+            let format = translate_expr(format, context)?;
+            Ok(Some(function_call("GET_FORMAT", vec![kind, format])))
         }
+        (_, []) => Ok(current_time_literal(upper_name)),
         _ => Ok(None),
     }
+}
+
+fn translate_interval(
+    interval: &Interval,
+    context: &mut TranslationContext,
+) -> Result<(ast::Expr, ast::Expr), MysqlParserError> {
+    let Interval {
+        value,
+        leading_field: Some(field),
+        leading_precision: None,
+        last_field: None,
+        fractional_seconds_precision: None,
+    } = interval
+    else {
+        return Err(MysqlParserError::Unsupported(format!(
+            "interval `{interval}` is not lowered yet"
+        )));
+    };
+    let amount = translate_expr(value, context)?;
+    Ok((amount, unit_literal(field)?))
+}
+
+fn unit_literal(field: &DateTimeField) -> Result<ast::Expr, MysqlParserError> {
+    let unit = match field {
+        DateTimeField::Custom(identifier) => identifier.value.to_ascii_uppercase(),
+        DateTimeField::Week(Some(_)) => String::new(),
+        other => other.to_string().to_ascii_uppercase(),
+    };
+    if !TEMPORAL_UNITS.contains(&unit.as_str()) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "temporal unit `{field}` is not lowered yet"
+        )));
+    }
+    Ok(ast::Expr::Literal(ast::Literal::String(quote_string(
+        &unit,
+    ))))
+}
+
+fn current_time_literal(upper_name: &str) -> Option<ast::Expr> {
+    let literal = match upper_name {
+        "CURRENT_DATE" | "UTC_DATE" => ast::Literal::CurrentDate,
+        "CURRENT_TIME" | "UTC_TIME" => ast::Literal::CurrentTime,
+        "CURRENT_TIMESTAMP" | "UTC_TIMESTAMP" | "LOCALTIME" | "LOCALTIMESTAMP" => {
+            ast::Literal::CurrentTimestamp
+        }
+        _ => return None,
+    };
+    Some(ast::Expr::Literal(literal))
+}
+
+fn function_arguments(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+    context: &mut TranslationContext,
+) -> Result<Vec<ast::Expr>, MysqlParserError> {
+    unnamed_arguments(list)?
+        .into_iter()
+        .enumerate()
+        .map(|(position, arg)| {
+            if is_json_cast(arg) && evaluates_arguments_lazily(upper_name) {
+                return Err(json_outside_a_value_position(arg));
+            }
+            if is_json_value_position(upper_name, position) {
+                translate_json_value(arg, context)
+            } else {
+                translate_in(arg, argument_context(upper_name, position), context)
+            }
+        })
+        .collect()
 }
 
 fn unnamed_arguments(list: &FunctionArgumentList) -> Result<Vec<&Expr>, MysqlParserError> {
@@ -1226,16 +1343,19 @@ fn unnamed_arguments(list: &FunctionArgumentList) -> Result<Vec<&Expr>, MysqlPar
         .collect()
 }
 
-fn function_arguments(
-    upper_name: &str,
-    list: &FunctionArgumentList,
-    context: &mut TranslationContext,
-) -> Result<Vec<ast::Expr>, MysqlParserError> {
-    unnamed_arguments(list)?
-        .into_iter()
-        .enumerate()
-        .map(|(position, arg)| translate_in(arg, argument_context(upper_name, position), context))
-        .collect()
+fn evaluates_arguments_lazily(upper_name: &str) -> bool {
+    matches!(upper_name, "CONCAT_WS" | "ELT" | "MAKE_SET")
+}
+
+fn is_json_value_position(upper_name: &str, position: usize) -> bool {
+    match upper_name {
+        "JSON_ARRAY" => true,
+        "JSON_OBJECT" => position % 2 == 1,
+        "JSON_SET" | "JSON_INSERT" | "JSON_REPLACE" | "JSON_ARRAY_APPEND" | "JSON_ARRAY_INSERT" => {
+            position > 0 && position % 2 == 0
+        }
+        _ => false,
+    }
 }
 
 fn argument_context(upper_name: &str, position: usize) -> Context {
@@ -1248,6 +1368,61 @@ fn argument_context(upper_name: &str, position: usize) -> Context {
         "IF" if position == 0 => Context::Number,
         "CONCAT_WS" if position == 0 => Context::Text,
         _ => Context::Value,
+    }
+}
+
+fn translate_json_value(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let value = translate_expr(expr, context)?;
+    Ok(if is_boolean(expr) {
+        function_call("__mysql_cast_boolean_as_json", vec![value])
+    } else {
+        value
+    })
+}
+
+fn is_boolean(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => matches!(value.value, Value::Boolean(_)),
+        Expr::BinaryOp { op, .. } => matches!(
+            op,
+            BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+                | BinaryOperator::Spaceship
+                | BinaryOperator::And
+                | BinaryOperator::Or
+                | BinaryOperator::Xor
+                | BinaryOperator::StringConcat
+        ),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not | UnaryOperator::BangNot,
+            ..
+        }
+        | Expr::IsNull(_)
+        | Expr::IsNotNull(_)
+        | Expr::IsTrue(_)
+        | Expr::IsNotTrue(_)
+        | Expr::IsFalse(_)
+        | Expr::IsNotFalse(_)
+        | Expr::IsUnknown(_)
+        | Expr::IsNotUnknown(_)
+        | Expr::InList { .. }
+        | Expr::InSubquery { .. }
+        | Expr::Between { .. }
+        | Expr::Like { .. }
+        | Expr::RLike { .. }
+        | Expr::Exists { .. }
+        | Expr::AnyOp { .. }
+        | Expr::AllOp { .. }
+        | Expr::MemberOf(_) => true,
+        Expr::Nested(inner) => is_boolean(inner),
+        _ => false,
     }
 }
 
