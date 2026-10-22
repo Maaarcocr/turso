@@ -718,6 +718,9 @@ impl ToTokens for Stmt {
                         encode,
                         decode,
                         operators,
+                        casts,
+                        functions,
+                        key,
                         default,
                     } => {
                         // Parameters
@@ -730,6 +733,10 @@ impl ToTokens for Stmt {
                                 s.append(TK_ID, Some(&param.name))?;
                                 if let Some(ref ty) = param.ty {
                                     s.append(TK_ID, Some(ty))?;
+                                }
+                                if let Some(ref default) = param.default {
+                                    s.append(TK_DEFAULT, None)?;
+                                    default.to_tokens(s, context)?;
                                 }
                             }
                             s.append(TK_RP, None)?;
@@ -747,18 +754,66 @@ impl ToTokens for Stmt {
                             s.append(TK_ID, Some("DECODE"))?;
                             decode.to_tokens(s, context)?;
                         }
+                        if let Some(ref key) = key {
+                            s.append(TK_KEY, None)?;
+                            key.to_tokens(s, context)?;
+                        }
                         // DEFAULT
                         if let Some(ref default) = default {
                             s.append(TK_ID, Some("DEFAULT"))?;
                             default.to_tokens(s, context)?;
                         }
+                        for cast in casts {
+                            s.append(TK_CAST, None)?;
+                            match cast.direction {
+                                TypeCastDirection::From => s.append(TK_FROM, None)?,
+                                TypeCastDirection::To => s.append(TK_TO, None)?,
+                            }
+                            for (i, ty) in cast.types.iter().enumerate() {
+                                if i > 0 {
+                                    s.append(TK_COMMA, None)?;
+                                }
+                                s.append(TK_ID, Some(ty))?;
+                            }
+                            s.append(TK_AS, None)?;
+                            s.append(TK_ID, Some("IMPLICIT"))?;
+                        }
                         // OPERATOR clauses
                         for op in operators {
                             s.append(TK_ID, Some("OPERATOR"))?;
                             s.append(TK_STRING, Some(&format!("'{}'", op.op)))?;
+                            if let Some(ref operands) = op.operands {
+                                s.append(TK_LP, None)?;
+                                for (i, ty) in operands.iter().enumerate() {
+                                    if i > 0 {
+                                        s.append(TK_COMMA, None)?;
+                                    }
+                                    s.append(TK_ID, Some(ty))?;
+                                }
+                                s.append(TK_RP, None)?;
+                            }
+                            if let Some(ref returns) = op.returns {
+                                s.append(TK_ID, Some("RETURNS"))?;
+                                s.append(TK_ID, Some(returns))?;
+                            }
                             if let Some(ref func_name) = op.func_name {
                                 s.append(TK_ID, Some(func_name))?;
                             }
+                        }
+                        for function in functions {
+                            s.append(TK_ID, Some("FUNCTION"))?;
+                            s.append(TK_ID, Some(&function.name))?;
+                            s.append(TK_LP, None)?;
+                            for (i, ty) in function.args.iter().enumerate() {
+                                if i > 0 {
+                                    s.append(TK_COMMA, None)?;
+                                }
+                                s.append(TK_ID, Some(ty))?;
+                            }
+                            s.append(TK_RP, None)?;
+                            s.append(TK_ID, Some("RETURNS"))?;
+                            s.append(TK_ID, Some(&function.returns))?;
+                            s.append(TK_ID, Some(&function.func_name))?;
                         }
                     }
                 }

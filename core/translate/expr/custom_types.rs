@@ -530,7 +530,12 @@ pub(crate) fn emit_type_expr(
         // against the user-provided ty_params by position.
         let user_params: Vec<_> = type_def.user_params().collect();
         for (i, param) in user_params.iter().enumerate() {
-            if let Some(param_expr) = column.ty_params.get(i) {
+            let param_expr = column
+                .ty_params
+                .get(i)
+                .map(|param_expr| param_expr.as_ref())
+                .or(param.default.as_deref());
+            if let Some(param_expr) = param_expr {
                 let reg = program.alloc_register();
                 translate_expr(program, None, param_expr, reg, resolver)?;
                 program

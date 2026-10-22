@@ -1444,8 +1444,33 @@ pub enum AlterTableBody {
 pub struct TypeOperator {
     /// operator symbol: "+", "-", "*", "/", "<", "=", etc.
     pub op: String,
+    pub operands: Option<Vec<String>>,
+    pub returns: Option<String>,
     /// function name to call, or None for naked operators (use base type comparison)
     pub func_name: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TypeCastDirection {
+    From,
+    To,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TypeCast {
+    pub direction: TypeCastDirection,
+    pub types: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TypeFunction {
+    pub name: String,
+    pub args: Vec<String>,
+    pub returns: String,
+    pub func_name: String,
 }
 
 /// A parameter in a `CREATE TYPE` definition, with an optional type annotation.
@@ -1456,6 +1481,7 @@ pub struct TypeParam {
     pub name: String,
     /// Type annotation. None means untyped (backward compat).
     pub ty: Option<String>,
+    pub default: Option<Box<Expr>>,
 }
 
 /// A single named CHECK constraint on a domain
@@ -1484,6 +1510,9 @@ pub enum CreateTypeBody {
         decode: Option<Box<Expr>>,
         /// operator-to-function mappings
         operators: Vec<TypeOperator>,
+        casts: Vec<TypeCast>,
+        functions: Vec<TypeFunction>,
+        key: Option<Box<Expr>>,
         /// default expression for columns of this type
         default: Option<Box<Expr>>,
     },

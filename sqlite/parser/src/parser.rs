@@ -9,8 +9,8 @@ use crate::ast::{
     Operator, Over, PragmaBody, PragmaValue, QualifiedName, RefAct, RefArg, ResolveType,
     ResultColumn, Select, SelectBody, SelectTable, Set, SortOrder, SortedColumn, Stmt,
     TableConstraint, TableOptions, TransactionType, TriggerCmd, TriggerEvent, TriggerTime, Type,
-    TypeField, TypeOperator, TypeParam, TypeSize, UnaryOperator, Update, Upsert, UpsertDo,
-    UpsertIndex, Variable, Window, WindowDef, With,
+    TypeCast, TypeCastDirection, TypeField, TypeFunction, TypeOperator, TypeParam, TypeSize,
+    UnaryOperator, Update, Upsert, UpsertDo, UpsertIndex, Variable, Window, WindowDef, With,
 };
 use crate::error::Error;
 use crate::lexer::{Lexer, Token};
@@ -4919,37 +4919,10 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Parse optional parameter list: (name [type], name [type], ...)
         let mut params = Vec::new();
         if let Some(tok) = self.peek()? {
             if tok.token_type == TK_LP {
-                eat_assert!(self, TK_LP);
-                loop {
-                    let param_tok = self.eat()?;
-                    let param_name = match param_tok {
-                        Some(t) if t.token_type == TK_ID => from_bytes(t.as_bytes()),
-                        _ => return Err(Error::ParseError("expected parameter name".to_owned())),
-                    };
-                    // Check for optional type annotation (next token is ID, not comma/RP)
-                    let param_ty = match self.peek()? {
-                        Some(t) if t.token_type == TK_ID => {
-                            let ty_tok = self.eat()?;
-                            Some(from_bytes(ty_tok.unwrap().as_bytes()).to_lowercase())
-                        }
-                        _ => None,
-                    };
-                    params.push(TypeParam {
-                        name: param_name,
-                        ty: param_ty,
-                    });
-                    match self.peek()? {
-                        Some(tok) if tok.token_type == TK_COMMA => {
-                            eat_assert!(self, TK_COMMA);
-                        }
-                        _ => break,
-                    }
-                }
-                eat_expect!(self, TK_RP);
+                params = self.parse_type_param_list()?;
             }
         }
 
@@ -4984,9 +4957,11 @@ impl<'a> Parser<'a> {
         let mut encode = None;
         let mut decode = None;
         let mut default = None;
+        let mut key = None;
         let mut operators = Vec::new();
+        let mut casts = Vec::new();
+        let mut functions = Vec::new();
 
-        // Parse optional clauses: ENCODE, DECODE, OPERATOR
         loop {
             match self.peek()? {
                 Some(tok) if tok.token_type == TK_ID => {
@@ -5004,70 +4979,22 @@ impl<'a> Parser<'a> {
                         }
                         "OPERATOR" => {
                             eat_assert!(self, TK_ID);
-                            // Parse operator symbol as a string literal: '+'
-                            let op_tok = eat_expect!(self, TK_STRING);
-                            let op_raw = from_bytes(op_tok.as_bytes());
-                            // Strip quotes from string literal
-                            let op = op_raw
-                                .strip_prefix('\'')
-                                .and_then(|s| s.strip_suffix('\''))
-                                .unwrap_or(&op_raw)
-                                .to_owned();
-                            // Three syntaxes:
-                            // 1. OPERATOR 'op' func_name          (named)
-                            // 2. OPERATOR 'op' (type) -> func_name (old named)
-                            // 3. OPERATOR 'op'                     (naked: use base type)
-                            let func_name = if matches!(self.peek()?, Some(t) if t.token_type == TK_LP)
-                            {
-                                // Old syntax: skip (type) ->
-                                eat_assert!(self, TK_LP);
-                                self.eat()?; // consume type name
-                                eat_expect!(self, TK_RP);
-                                eat_expect!(self, TK_PTR);
-                                let func_tok = self.eat()?;
-                                match func_tok {
-                                    Some(t) if t.token_type == TK_ID => {
-                                        Some(from_bytes(t.as_bytes()))
-                                    }
-                                    _ => {
-                                        return Err(Error::ParseError(
-                                            "expected function name in OPERATOR clause".to_owned(),
-                                        ))
-                                    }
-                                }
-                            } else if matches!(self.peek()?, Some(t) if t.token_type == TK_ID) {
-                                // Check if the next ID is a clause keyword (not a function name)
-                                let next_kw = from_bytes_as_str(self.peek()?.unwrap().as_bytes())
-                                    .to_ascii_uppercase();
-                                match next_kw.as_str() {
-                                    "ENCODE" | "DECODE" | "OPERATOR" | "DEFAULT" => {
-                                        // Naked operator: no function name
-                                        None
-                                    }
-                                    _ => {
-                                        // Named operator: consume function name
-                                        let func_tok = self.eat()?;
-                                        match func_tok {
-                                            Some(t) if t.token_type == TK_ID => {
-                                                Some(from_bytes(t.as_bytes()))
-                                            }
-                                            _ => {
-                                                return Err(Error::ParseError(
-                                                    "expected function name in OPERATOR clause"
-                                                        .to_owned(),
-                                                ))
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                // End of statement or semicolon: naked operator
-                                None
-                            };
-                            operators.push(TypeOperator { op, func_name });
+                            operators.push(self.parse_type_operator_clause()?);
+                        }
+                        "FUNCTION" => {
+                            eat_assert!(self, TK_ID);
+                            functions.push(self.parse_type_function_clause()?);
                         }
                         _ => break,
                     }
+                }
+                Some(tok) if tok.token_type == TK_CAST => {
+                    eat_assert!(self, TK_CAST);
+                    casts.push(self.parse_type_cast_clause()?);
+                }
+                Some(tok) if tok.token_type == TK_KEY => {
+                    eat_assert!(self, TK_KEY);
+                    key = Some(self.parse_expr(0)?);
                 }
                 Some(tok) if tok.token_type == TK_DEFAULT => {
                     eat_assert!(self, TK_DEFAULT);
@@ -5087,9 +5014,203 @@ impl<'a> Parser<'a> {
                 encode,
                 decode,
                 operators,
+                casts,
+                functions,
+                key,
                 default,
             },
         })
+    }
+
+    fn parse_type_param_list(&mut self) -> Result<Vec<TypeParam>> {
+        eat_assert!(self, TK_LP);
+        let mut params = Vec::new();
+        loop {
+            let param_name = match self.eat()? {
+                Some(t) if t.token_type == TK_ID => from_bytes(t.as_bytes()),
+                _ => return Err(Error::ParseError("expected parameter name".to_owned())),
+            };
+            let ty = match self.peek()? {
+                Some(t) if t.token_type == TK_ID => Some(self.eat_type_name()?),
+                _ => None,
+            };
+            let default = match self.peek()? {
+                Some(t) if t.token_type == TK_DEFAULT => {
+                    eat_assert!(self, TK_DEFAULT);
+                    Some(self.parse_expr(0)?)
+                }
+                _ => None,
+            };
+            params.push(TypeParam {
+                name: param_name,
+                ty,
+                default,
+            });
+            match self.peek()? {
+                Some(tok) if tok.token_type == TK_COMMA => {
+                    eat_assert!(self, TK_COMMA);
+                }
+                _ => break,
+            }
+        }
+        eat_expect!(self, TK_RP);
+        Ok(params)
+    }
+
+    fn parse_type_operator_clause(&mut self) -> Result<TypeOperator> {
+        let op_tok = eat_expect!(self, TK_STRING);
+        let op_raw = from_bytes(op_tok.as_bytes());
+        let op = op_raw
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or(&op_raw)
+            .to_owned();
+
+        let mut operands = None;
+        if matches!(self.peek()?, Some(t) if t.token_type == TK_LP) {
+            eat_assert!(self, TK_LP);
+            let types = self.parse_type_name_list()?;
+            eat_expect!(self, TK_RP);
+            if matches!(self.peek()?, Some(t) if t.token_type == TK_PTR) {
+                if types.len() != 1 {
+                    return Err(Error::ParseError(
+                        "expected one type before -> in OPERATOR clause".to_owned(),
+                    ));
+                }
+                eat_assert!(self, TK_PTR);
+                let func_name = self.eat_type_clause_function_name()?;
+                return Ok(TypeOperator {
+                    op,
+                    operands: None,
+                    returns: None,
+                    func_name: Some(func_name),
+                });
+            }
+            if types.len() > 2 {
+                return Err(Error::ParseError(
+                    "an OPERATOR signature has one or two operand types".to_owned(),
+                ));
+            }
+            operands = Some(types);
+        }
+
+        let returns = if self.peek_type_clause_keyword("RETURNS")? {
+            eat_assert!(self, TK_ID);
+            Some(self.eat_type_name()?)
+        } else {
+            None
+        };
+
+        let next_is_id = matches!(self.peek()?, Some(t) if t.token_type == TK_ID);
+        let func_name = if next_is_id && !self.peek_type_clause_keyword_any()? {
+            Some(self.eat_type_clause_function_name()?)
+        } else {
+            None
+        };
+
+        Ok(TypeOperator {
+            op,
+            operands,
+            returns,
+            func_name,
+        })
+    }
+
+    fn parse_type_cast_clause(&mut self) -> Result<TypeCast> {
+        let direction = match self.eat()? {
+            Some(t) if t.token_type == TK_FROM => TypeCastDirection::From,
+            Some(t) if t.token_type == TK_TO => TypeCastDirection::To,
+            _ => {
+                return Err(Error::ParseError(
+                    "expected FROM or TO after CAST in CREATE TYPE".to_owned(),
+                ))
+            }
+        };
+        let types = self.parse_type_name_list()?;
+        eat_expect!(self, TK_AS);
+        match self.eat()? {
+            Some(t)
+                if t.token_type == TK_ID
+                    && from_bytes_as_str(t.as_bytes()).eq_ignore_ascii_case("IMPLICIT") => {}
+            _ => {
+                return Err(Error::ParseError(
+                    "expected AS IMPLICIT in CAST clause".to_owned(),
+                ))
+            }
+        }
+        Ok(TypeCast { direction, types })
+    }
+
+    fn parse_type_function_clause(&mut self) -> Result<TypeFunction> {
+        let name = match self.eat()? {
+            Some(t) if t.token_type.fallback_id_if_ok() == TK_ID => {
+                from_bytes(t.as_bytes()).to_lowercase()
+            }
+            _ => {
+                return Err(Error::ParseError(
+                    "expected function name in FUNCTION clause".to_owned(),
+                ))
+            }
+        };
+        eat_expect!(self, TK_LP);
+        let args = self.parse_type_name_list()?;
+        eat_expect!(self, TK_RP);
+        if !self.peek_type_clause_keyword("RETURNS")? {
+            return Err(Error::ParseError(
+                "expected RETURNS in FUNCTION clause".to_owned(),
+            ));
+        }
+        eat_assert!(self, TK_ID);
+        let returns = self.eat_type_name()?;
+        let func_name = self.eat_type_clause_function_name()?;
+        Ok(TypeFunction {
+            name,
+            args,
+            returns,
+            func_name,
+        })
+    }
+
+    fn parse_type_name_list(&mut self) -> Result<Vec<String>> {
+        let mut types = vec![self.eat_type_name()?];
+        while matches!(self.peek()?, Some(t) if t.token_type == TK_COMMA) {
+            eat_assert!(self, TK_COMMA);
+            types.push(self.eat_type_name()?);
+        }
+        Ok(types)
+    }
+
+    fn eat_type_name(&mut self) -> Result<String> {
+        match self.eat()? {
+            Some(t) if t.token_type == TK_ID => Ok(from_bytes(t.as_bytes()).to_lowercase()),
+            _ => Err(Error::ParseError("expected type name".to_owned())),
+        }
+    }
+
+    fn eat_type_clause_function_name(&mut self) -> Result<String> {
+        match self.eat()? {
+            Some(t) if t.token_type == TK_ID => Ok(from_bytes(t.as_bytes())),
+            _ => Err(Error::ParseError(
+                "expected function name in OPERATOR clause".to_owned(),
+            )),
+        }
+    }
+
+    fn peek_type_clause_keyword(&mut self, keyword: &str) -> Result<bool> {
+        Ok(matches!(
+            self.peek()?,
+            Some(t) if t.token_type == TK_ID
+                && from_bytes_as_str(t.as_bytes()).eq_ignore_ascii_case(keyword)
+        ))
+    }
+
+    fn peek_type_clause_keyword_any(&mut self) -> Result<bool> {
+        for keyword in ["ENCODE", "DECODE", "OPERATOR", "FUNCTION", "RETURNS"] {
+            if self.peek_type_clause_keyword(keyword)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Parse `CREATE DOMAIN [IF NOT EXISTS] name AS base_type
@@ -13329,6 +13450,119 @@ mod tests {
         } else {
             panic!("expected CreateType");
         }
+    }
+
+    fn parse_custom_type_body(sql: &str) -> CreateTypeBody {
+        let cmd = Parser::new(sql.as_bytes()).next().unwrap().unwrap();
+        let Cmd::Stmt(Stmt::CreateType { body, .. }) = cmd else {
+            panic!("expected CreateType");
+        };
+        body
+    }
+
+    #[test]
+    fn test_create_type_with_signatures_casts_functions_and_key() {
+        let sql = "CREATE TYPE money(value any, scale integer DEFAULT NULL) BASE blob \
+                   ENCODE money_encode(value, scale) DECODE money_decode(value) \
+                   KEY money_key(value) \
+                   CAST FROM integer, real AS IMPLICIT CAST TO real AS IMPLICIT \
+                   OPERATOR '+' (money, money) RETURNS money money_add \
+                   OPERATOR '-' (money) RETURNS money money_neg \
+                   OPERATOR '<' (money, money) money_lt \
+                   OPERATOR '=' \
+                   FUNCTION abs(money) RETURNS money money_abs";
+        let body = parse_custom_type_body(sql);
+        let CreateTypeBody::CustomType {
+            params,
+            key,
+            casts,
+            operators,
+            functions,
+            ..
+        } = &body
+        else {
+            panic!("expected CustomType body");
+        };
+        assert_eq!(params[0].default, None);
+        assert_eq!(
+            params[1].default,
+            Some(Box::new(Expr::Literal(Literal::Null)))
+        );
+        assert!(key.is_some());
+        assert_eq!(
+            casts,
+            &vec![
+                TypeCast {
+                    direction: TypeCastDirection::From,
+                    types: vec!["integer".to_owned(), "real".to_owned()],
+                },
+                TypeCast {
+                    direction: TypeCastDirection::To,
+                    types: vec!["real".to_owned()],
+                },
+            ]
+        );
+        let signature = |op: &TypeOperator| {
+            (
+                op.op.clone(),
+                op.operands.clone(),
+                op.returns.clone(),
+                op.func_name.clone(),
+            )
+        };
+        let money = || "money".to_owned();
+        assert_eq!(
+            operators.iter().map(signature).collect::<Vec<_>>(),
+            vec![
+                (
+                    "+".to_owned(),
+                    Some(vec![money(), money()]),
+                    Some(money()),
+                    Some("money_add".to_owned())
+                ),
+                (
+                    "-".to_owned(),
+                    Some(vec![money()]),
+                    Some(money()),
+                    Some("money_neg".to_owned())
+                ),
+                (
+                    "<".to_owned(),
+                    Some(vec![money(), money()]),
+                    None,
+                    Some("money_lt".to_owned())
+                ),
+                ("=".to_owned(), None, None, None),
+            ]
+        );
+        assert_eq!(
+            functions,
+            &vec![TypeFunction {
+                name: "abs".to_owned(),
+                args: vec![money()],
+                returns: money(),
+                func_name: "money_abs".to_owned(),
+            }]
+        );
+
+        let formatted = Parser::new(sql.as_bytes())
+            .next()
+            .unwrap()
+            .unwrap()
+            .to_string();
+        assert_eq!(parse_custom_type_body(&formatted), body);
+    }
+
+    #[test]
+    fn test_create_type_old_operator_syntax_has_no_signature() {
+        let body =
+            parse_custom_type_body("CREATE TYPE t(value any) BASE text OPERATOR '+' (t) -> t_add");
+        let CreateTypeBody::CustomType { operators, .. } = body else {
+            panic!("expected CustomType body");
+        };
+        assert_eq!(operators[0].operands, None);
+        assert_eq!(operators[0].returns, None);
+        assert_eq!(operators[0].func_name.as_deref(), Some("t_add"));
     }
 
     #[test]

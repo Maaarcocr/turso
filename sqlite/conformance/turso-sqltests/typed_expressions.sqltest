@@ -21,3 +21,52 @@ test numeric-rounding-can-exceed-precision {
 }
 expect error {
 }
+
+test create-type-stores-signatures-casts-functions-and-key {
+    CREATE TYPE money(value any, scale integer DEFAULT NULL) BASE text ENCODE value DECODE value KEY value CAST FROM integer, real AS IMPLICIT OPERATOR '+' (money, money) RETURNS money money_add OPERATOR '-' (money) RETURNS money money_neg OPERATOR '<' (money, integer) money_lt OPERATOR '=' FUNCTION abs(money) RETURNS money money_abs;
+    SELECT sql FROM sqlite_turso_types WHERE sql LIKE 'CREATE TYPE money%';
+}
+expect {
+    CREATE TYPE money(value any, scale integer DEFAULT NULL) BASE text ENCODE value DECODE value KEY value CAST FROM integer, real AS IMPLICIT OPERATOR '+' (money, money) RETURNS money money_add OPERATOR '-' (money) RETURNS money money_neg OPERATOR '<' (money, integer) money_lt OPERATOR '=' FUNCTION abs(money) RETURNS money money_abs
+}
+
+test create-type-keeps-old-operator-syntax {
+    CREATE TYPE t(value any) BASE text ENCODE value DECODE value OPERATOR '+' (t) -> t_add;
+    SELECT sql FROM sqlite_turso_types WHERE sql LIKE 'CREATE TYPE t(%';
+}
+expect {
+    CREATE TYPE t(value any) BASE text ENCODE value DECODE value OPERATOR '+' t_add
+}
+
+test create-type-rejects-unknown-signature-type {
+    CREATE TYPE money(value any) BASE text OPERATOR '+' (money, no_such_type) RETURNS money money_add;
+}
+expect error {
+}
+
+@requires strict "uses STRICT tables"
+test type-parameter-default-makes-parameter-optional {
+    CREATE TYPE shortstr(value text, maxlen integer DEFAULT 3) BASE text ENCODE CASE WHEN length(value) <= maxlen THEN value ELSE RAISE(ABORT, 'too long') END DECODE value;
+    CREATE TABLE t1(a shortstr, b shortstr(5)) STRICT;
+    INSERT INTO t1 VALUES ('abc', 'abcde');
+    SELECT a, b FROM t1;
+}
+expect {
+    abc|abcde
+}
+
+@requires strict "uses STRICT tables"
+test type-parameter-default-is-used-by-encode {
+    CREATE TYPE shortstr(value text, maxlen integer DEFAULT 3) BASE text ENCODE CASE WHEN length(value) <= maxlen THEN value ELSE RAISE(ABORT, 'too long') END DECODE value;
+    CREATE TABLE t1(a shortstr) STRICT;
+    INSERT INTO t1 VALUES ('abcd');
+}
+expect error {
+    too long
+}
+
+test type-parameter-default-must-be-trailing {
+    CREATE TYPE pair(value any, a integer DEFAULT 1, b integer) BASE text;
+}
+expect error {
+}
