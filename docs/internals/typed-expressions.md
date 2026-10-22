@@ -1193,12 +1193,13 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   `rowid_alias` on a key of another type is an error. At load,
   `rowid_alias` on a key whose declared type is not an integer storage type is
   a Corrupt error. In a marked table the key goes through ASSIGN before BEFORE
-  triggers, then ENCODE, and a value that is still not an integer (a `uint64`
-  above 9223372036854775807) is an out-of-range error before `MustBeInt`;
+  triggers, then ENCODE; a BLOB (a `uint64` above 9223372036854775807) is an
+  out-of-range error, and every other value goes on to `MustBeInt`;
   UPDATE and UPSERT DO UPDATE do the same and check NOT NULL. INSERT
   generates a key for NULL or a missing key only when the table has
   AUTOINCREMENT or the key is not NOT NULL, and for 0 when AUTOINCREMENT and
-  `TypeRules::zero_generates_key` are both set; otherwise a NULL key fails NOT
+  `TypeRules::zero_generates_key` are both set and the INSERT names the key
+  column (not `rowid`, which VACUUM uses to copy rows); otherwise a NULL key fails NOT
   NULL (OR IGNORE skips the row). A generated key larger than the type's
   largest value fails with "no more keys". ALTER COLUMN of the key of a marked
   table stays refused, because ALTER COLUMN loses the values of an INTEGER
@@ -1326,6 +1327,33 @@ TABLE stores it as plain SQLite text, so the SQLite dialect opens it
 afterwards. Rewritten tables will use the marker of Proposal 2
 (`/* turso_dialect:postgres */` with canonical SQLite text and today's rowid
 rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
+
+### Implementation notes (Proposal 3)
+
+- **Literals and casts (commit 27).** Decimal literals and integer
+  literals too large for bigint become `CAST('<text>' AS numeric)`;
+  integer literals that fit bigint stay integers, because pg_query
+  reports every integer outside int4 as a float constant. `::numeric(p)`
+  has scale 0. The fraction of `percentile_cont` and `percentile_disc`
+  WITHIN GROUP is cast to double precision, the type of that parameter in
+  PostgreSQL.
+- **Marker of rewritten tables (commit 28).** `Dialect::marks_rewritten_tables`
+  (by default `marks_tables`) lets a dialect mark only the tables that core
+  rewrites. PostgreSQL turns it on: ALTER TABLE (ADD, DROP and RENAME
+  COLUMN, ALTER COLUMN, RENAME TABLE and the foreign keys that a rename
+  changes) and CREATE TABLE with bound sequence names store
+  `/* turso_dialect:postgres [rowid_alias] */` with canonical SQLite text,
+  where `rowid_alias` is SQLite's rule applied to the rewritten table.
+  Statements carrying that marker (VACUUM, dump) are accepted again with
+  the same decision. The behaviours that exist for dialects with a name
+  table (every type name looked up in it, ASSIGN of DEFAULTs in ADD
+  COLUMN, conversion of keys, key generation, the column and row of
+  conversion errors) depend on the dialect having one
+  (`Schema::uses_name_table`), not on the marker alone, so PostgreSQL
+  tables behave the same before and after a rewrite. In a dialect without
+  a name table the key of a `rowid_alias` table must be declared exactly
+  INTEGER, as in SQLite. ALTER COLUMN of the key of a marked table is
+  refused in every dialect.
 
 ## Proposal 4: typed aggregates and ordered numeric storage
 
