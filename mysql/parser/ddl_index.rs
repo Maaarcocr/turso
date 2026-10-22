@@ -7,8 +7,6 @@ use sqlparser::ast::{
 };
 use turso_parser::ast;
 
-/// One column of a MySQL key, with the prefix length MySQL indexes when the
-/// key covers only the start of a string.
 pub(crate) struct KeyPart {
     pub(crate) name: ast::Name,
     pub(crate) prefix: Option<u64>,

@@ -20,8 +20,6 @@ const REGULAR_LENGTH: u64 = 65_535;
 const MEDIUM_LENGTH: u64 = 16_777_215;
 const NUMERIC_KEY_BYTES: u64 = 8;
 
-/// A MySQL column type: the declared type Turso stores and the MySQL type
-/// family whose value rules the column must keep.
 pub(crate) struct ColumnType {
     pub(crate) declared: ast::Type,
     pub(crate) family: Family,
@@ -198,8 +196,6 @@ impl ColumnType {
         )
     }
 
-    /// The CHECK expression that keeps stored values inside the MySQL type,
-    /// or `None` when every value Turso can store is valid.
     pub(crate) fn value_check(&self, column: &ast::Name) -> Option<ast::Expr> {
         let id = || ast::Expr::Id(column.clone());
         let at_most = |measured: ast::Expr, limit: u64| {
@@ -290,9 +286,6 @@ impl ColumnType {
         }
     }
 
-    /// The bytes a key part on this column takes in an InnoDB index, which
-    /// MySQL limits to 3072. A prefix is a number of characters for text and
-    /// a number of bytes for binary strings.
     pub(crate) fn key_part_bytes(
         &self,
         column: &str,

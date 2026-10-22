@@ -8,11 +8,6 @@ const TIMESTAMP_MIN: &str = "1970-01-01 00:00:01";
 const TIMESTAMP_MAX: &str = "2038-01-19 03:14:07.999999";
 const MAX_TIME_HOURS: u32 = 838;
 
-/// Lowers a column DEFAULT the way MySQL stores it: the value is checked
-/// against the column type and written in the form MySQL would return, so
-/// rows that take the default read back like MySQL rows. A default MySQL
-/// refuses is `Rejected`; one MySQL accepts but converts in a way this
-/// lowering does not reproduce is `Unsupported`.
 pub(crate) fn resolve_default(
     column_type: &ColumnType,
     value: DefaultValue,
@@ -238,8 +233,6 @@ fn unsupported() -> MysqlParserError {
     )
 }
 
-/// A plain decimal number as MySQL writes it: an optional sign, whole digits
-/// and fraction digits, without an exponent.
 struct Decimal {
     negative: bool,
     whole: String,
@@ -379,9 +372,6 @@ impl Time {
     }
 }
 
-/// Reads `YYYY-M-D` with an optional `H:M[:S][.fraction]` time. Text in that
-/// shape with an impossible date or time is `Rejected`; any other shape is
-/// `Unsupported`, because MySQL accepts more formats than this reads.
 fn parse_datetime(text: &str) -> Result<(Date, Option<Time>), MysqlParserError> {
     let (date, time) = match text.split_once([' ', 'T']) {
         Some((date, time)) => (date, Some(parse_time(time, 23)?)),
