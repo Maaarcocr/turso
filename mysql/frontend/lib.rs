@@ -26,8 +26,12 @@ impl Dialect for MySqlDialect {
             Err(_) => return turso_core::dialect::sqlite::parse(sql),
         };
         let text = &sql[statement.text.clone()];
-        if let Ok(stmt) = turso_mysql_parser::parse_and_translate(text) {
-            return Ok((Some(ast::Cmd::Stmt(stmt)), statement.end));
+        match turso_mysql_parser::parse_and_translate(text) {
+            Ok(stmt) => return Ok((Some(ast::Cmd::Stmt(stmt)), statement.end)),
+            Err(error @ turso_mysql_parser::MysqlParserError::Rejected(_)) => {
+                return Err(LimboError::ParseError(error.to_string()));
+            }
+            Err(_) => {}
         }
         // Anything the MySQL frontend cannot lower yet falls back to SQLite
         // parsing of the same statement, mirroring the PostgreSQL frontend.
