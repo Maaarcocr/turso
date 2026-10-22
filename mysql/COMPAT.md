@@ -99,6 +99,10 @@ MySQL 8.4.10:
   fractional digits), integers and doubles as packed numbers, and the
   `sql_mode` of the target profile (`NO_ZERO_DATE` rejects `'0000-00-00'`
   strings; `DATE()` and `TIMESTAMP()` also reject zero months and days).
+- JSON values from the JSON functions convert as MySQL converts JSON: a
+  JSON string as its text, numbers and booleans only in numeric positions;
+  other JSON values are `NULL` in date and time positions and `0` in numeric
+  positions.
 - Results print as MySQL prints them: `TIME` values from `-838:59:59` to
   `838:59:59` (larger values are clamped), and fractional seconds with the
   precision MySQL derives from the argument (the digits written in a string,
@@ -125,6 +129,7 @@ forms, which take the unit as an upper-case string:
 | `DATE_SUB(d, INTERVAL v unit)`, `SUBDATE(d, INTERVAL v unit)`, `d - INTERVAL v unit` | `DATE_SUB(d, v, 'UNIT')` |
 | `EXTRACT(unit FROM d)` | `EXTRACT('UNIT', d)` |
 | `TIMESTAMPADD(unit, n, d)`, `TIMESTAMPDIFF(unit, a, b)` | `TIMESTAMPADD('UNIT', n, d)`, `TIMESTAMPDIFF('UNIT', a, b)` |
+| `GET_FORMAT(DATE, 'USA')` | `GET_FORMAT('DATE', 'USA')` |
 
 Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
 
@@ -137,13 +142,18 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
 - Decimal literals reach the functions as doubles, so their precision and
   fractional digits are lost: `MAKETIME(10, 34, 58.1234)` gives
   `10:34:58.123400` (MySQL: `10:34:58.1234`) and `MICROSECOND(
-  20000101103458.1234)` gives `125000`. Hexadecimal `0x..` literals are
-  integers rather than binary strings.
+  20000101103458.1234)` gives `125000`.
+- A `BLOB` argument is read as MySQL reads a hexadecimal literal: as a
+  string in date and time positions and as a `BIGINT UNSIGNED` made of its
+  bytes in numeric positions (`MAKEDATE(X'31', 1)` is `2049-01-01`). A
+  `_binary '..'` string arrives as the same `BLOB`, so in numeric positions
+  it is also read as bytes, where MySQL parses its text. Through the SQLite
+  fallback, `0x..` literals are integers.
 - An integer literal above the `BIGINT` range becomes a double. The doubles
   for `9223372036854775808` and `18446744073709551615` are read as those
   `BIGINT UNSIGNED` values, so `18446744073709551616` behaves like
   `18446744073709551615`.
 - Warnings are not reported.
 
-Not implemented: `GET_FORMAT`, locales other than `en_US`
-(`lc_time_names`), and leap seconds.
+Not implemented: locales other than `en_US` (`lc_time_names`) and leap
+seconds.

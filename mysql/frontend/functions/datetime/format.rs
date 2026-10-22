@@ -1,3 +1,6 @@
+use turso_core::{LimboError, Result, Value};
+
+use super::arg::Arg;
 use super::calendar::{self, WEEK_FIRST_WEEKDAY, WEEK_MONDAY_FIRST, WEEK_YEAR};
 use super::temporal::MyTime;
 
@@ -134,4 +137,31 @@ fn ordinal_suffix(day: u32) -> &'static str {
 
 fn twelve_hour(hour: u32) -> u32 {
     (hour + 11) % 12 + 1
+}
+
+pub(super) fn get_format(args: &[Arg]) -> Result<Value> {
+    let kind = args[0].text().unwrap_or_default().to_ascii_uppercase();
+    let Some(standard) = args[1].text() else {
+        return Ok(Value::Null);
+    };
+    let formats = match kind.as_str() {
+        "DATE" => ["%m.%d.%Y", "%Y-%m-%d", "%Y-%m-%d", "%d.%m.%Y", "%Y%m%d"],
+        "TIME" => ["%h:%i:%s %p", "%H:%i:%s", "%H:%i:%s", "%H.%i.%s", "%H%i%s"],
+        "DATETIME" | "TIMESTAMP" => [
+            "%Y-%m-%d %H.%i.%s",
+            "%Y-%m-%d %H:%i:%s",
+            "%Y-%m-%d %H:%i:%s",
+            "%Y-%m-%d %H.%i.%s",
+            "%Y%m%d%H%i%s",
+        ],
+        _ => {
+            return Err(LimboError::InvalidArgument(format!(
+                "unknown GET_FORMAT type: {kind}"
+            )))
+        }
+    };
+    let index = ["USA", "JIS", "ISO", "EUR", "INTERNAL"]
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(&standard));
+    Ok(index.map_or(Value::Null, |index| Value::build_text(formats[index])))
 }
