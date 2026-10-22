@@ -134,6 +134,7 @@ pub struct ColumnTypeInfo {
     /// than raw bytes. The `kind` field carries that distinction directly
     /// without forcing the caller to re-query the schema.
     pub kind: ColumnTypeKind,
+    pub parameters: Vec<String>,
 }
 
 /// Classification of a result column's declared type.
@@ -1426,11 +1427,17 @@ impl Statement {
                 None => (None, ColumnTypeKind::Builtin),
             };
             drop(schema);
+            let parameters = table_column
+                .ty_params
+                .iter()
+                .map(|param| param.to_string())
+                .collect();
             return Ok(Some(ColumnTypeInfo {
                 declared_name,
                 array_dimensions,
                 base_type,
                 kind,
+                parameters,
             }));
         }
         // Not a table column: infer the result primitive from the
@@ -1452,6 +1459,7 @@ impl Statement {
             },
             base_type: None,
             kind: ColumnTypeKind::Builtin,
+            parameters: Vec::new(),
         }))
     }
 
@@ -1481,6 +1489,12 @@ impl Statement {
             array_dimensions: 0,
             base_type: Some(resolved.primitive.to_uppercase()),
             kind: custom_type_kind(&resolved),
+            parameters: named
+                .params
+                .iter()
+                .flatten()
+                .map(|param| param.to_string())
+                .collect(),
         })
     }
 

@@ -857,6 +857,7 @@ pub struct Schema {
     /// Custom type registry, loaded from sqlite_turso_types
     pub type_registry: HashMap<String, Arc<TypeDef>>,
     pub type_rules: &'static crate::dialect::TypeRules,
+    pub class_operators: Option<Arc<TypeDef>>,
 
     pub generated_columns_enabled: bool,
     /// Named sequences (CREATE SEQUENCE)
@@ -1102,6 +1103,14 @@ impl Schema {
                 bootstrap_dialect_types(&mut type_registry, type_rules.dialect_types)?;
             }
         }
+        let class_operators = if enable_custom_types && !type_rules.class_operators.is_empty() {
+            Some(Arc::new(parse_type_sql(format!(
+                "CREATE TYPE \"class operators\"(value any) BASE blob {}",
+                type_rules.class_operators
+            ))?))
+        } else {
+            None
+        };
         let mut schema = Self {
             tables,
             #[cfg(feature = "conn_raw_api")]
@@ -1122,6 +1131,7 @@ impl Schema {
             dropped_root_pages: HashSet::default(),
             type_registry,
             type_rules: dialect.type_rules(),
+            class_operators,
             generated_columns_enabled: false,
             sequences: HashMap::default(),
         };
@@ -3495,6 +3505,7 @@ impl TryClone for Schema {
             dropped_root_pages: self.dropped_root_pages.try_clone()?,
             type_registry: self.type_registry.try_clone()?,
             type_rules: self.type_rules,
+            class_operators: self.class_operators.clone(),
             generated_columns_enabled: self.generated_columns_enabled,
             sequences: self.sequences.try_clone()?,
         })

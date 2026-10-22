@@ -210,13 +210,32 @@ pub struct TypeRules {
     pub builtin_behaviour_overrides: &'static [(&'static str, &'static str)],
     pub cast_uses_parameter_defaults: bool,
     pub dialect_types: &'static [DialectType],
+    pub class_operators: &'static str,
+    pub class_conversions: &'static [ClassConversion],
+    pub decimal_literal_type: Option<&'static str>,
+    pub string_literals_are_text: bool,
+    pub result_parameters: Option<ResultParameters>,
 }
+
+#[derive(Debug)]
+pub struct ClassConversion {
+    pub from: &'static str,
+    pub to: &'static str,
+    pub function: Option<&'static str>,
+}
+
+pub type ResultParameters = fn(operator: &str, operands: [Option<&[i64]>; 2]) -> Option<Vec<i64>>;
 
 impl TypeRules {
     pub const SQLITE: TypeRules = TypeRules {
         builtin_behaviour_overrides: &[],
         cast_uses_parameter_defaults: false,
         dialect_types: &[],
+        class_operators: "",
+        class_conversions: &[],
+        decimal_literal_type: None,
+        string_literals_are_text: false,
+        result_parameters: None,
     };
 
     pub(crate) fn behaviour_override(&self, type_name: &str) -> Option<&'static str> {

@@ -217,6 +217,15 @@ fn translate_expr_by_kind(
         ast::Expr::Like { .. } => {
             translate_like_expr(program, referenced_tables, expr, target_register, resolver)
         }
+        ast::Expr::Literal(ast::Literal::Numeric(digits))
+            if decimal_literal_type(digits, &TypeEnv::from_resolver(resolver)).is_some() =>
+        {
+            program.emit_insn(Insn::String8 {
+                value: digits.clone(),
+                dest: target_register,
+            });
+            Ok(target_register)
+        }
         ast::Expr::Literal(lit) => emit_literal(program, lit, target_register),
         ast::Expr::Name(_) => {
             crate::bail_parse_error!("ast::Expr::Name is not supported in this position")

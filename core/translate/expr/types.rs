@@ -30,6 +30,8 @@ pub(crate) type SubqueryColumnTypes = HashMap<TableInternalId, Vec<Option<NamedT
 
 pub(crate) struct TypeEnv<'a> {
     schema: &'a Schema,
+    rules: &'a crate::dialect::TypeRules,
+    class_operators: Option<&'a Arc<TypeDef>>,
     self_table: Option<Arc<BTreeTable>>,
     subquery_types: Option<&'a RefCell<SubqueryColumnTypes>>,
     computed: RefCell<HashMap<(usize, usize), ExprType>>,
@@ -40,6 +42,8 @@ impl<'a> TypeEnv<'a> {
     pub(crate) fn new(schema: &'a Schema) -> Self {
         Self {
             schema,
+            rules: schema.type_rules,
+            class_operators: schema.class_operators.as_ref(),
             self_table: None,
             subquery_types: None,
             computed: RefCell::new(HashMap::default()),
@@ -48,8 +52,16 @@ impl<'a> TypeEnv<'a> {
     }
 
     pub(crate) fn from_resolver(resolver: &'a Resolver) -> Self {
+        let schema = resolver.schema();
+        let rules = resolver.dialect.type_rules();
+        let uses_database_rules = std::ptr::eq(rules, schema.type_rules);
         Self {
-            schema: resolver.schema(),
+            schema,
+            rules,
+            class_operators: schema
+                .class_operators
+                .as_ref()
+                .filter(|_| uses_database_rules),
             self_table: resolver.self_table_with_custom_type_operators(),
             subquery_types: Some(&resolver.subquery_types),
             computed: RefCell::new(HashMap::default()),
@@ -159,6 +171,7 @@ pub(crate) enum Conversion {
     None,
     IntoType(NamedType),
     IntoClass(DynamicClass),
+    Function(String),
 }
 
 impl Conversion {
@@ -204,7 +217,7 @@ fn compute_expr_type(
         ast::Expr::Cast { type_name, .. } => cast_type(type_name.as_ref(), env),
         ast::Expr::Parenthesized(exprs) if exprs.len() == 1 => expr_type(&exprs[0], tables, env),
         ast::Expr::Collate(inner, _) => expr_type(inner, tables, env),
-        ast::Expr::Literal(literal) => ExprType::Dynamic(literal_class(literal)),
+        ast::Expr::Literal(literal) => literal_type(literal, env),
         ast::Expr::RowId { .. } => ExprType::Dynamic(DynamicClass::Integer),
         ast::Expr::Binary(lhs, op, rhs) => binary_type(lhs, op, rhs, tables, env),
         ast::Expr::Case {
@@ -253,21 +266,56 @@ pub(crate) fn resolve_unary_operator(
         ast::UnaryOperator::Negative => "-",
         _ => return None,
     };
-    let ExprType::Named(named) = operator_type(&expr_type(operand, tables, env), env) else {
-        return None;
-    };
-    named.def.operators().iter().find_map(|declared| {
+    match operator_type(&expr_type(operand, tables, env), env) {
+        ExprType::Named(named) => {
+            let slot = Slot::Named(Arc::clone(&named.def));
+            unary_signature(&named.def, symbol, &slot, Conversion::None, env).or_else(|| {
+                let class = [
+                    DynamicClass::Integer,
+                    DynamicClass::Real,
+                    DynamicClass::Text,
+                ]
+                .into_iter()
+                .find(|class| declares_cast_to_class(&named.def, *class))?;
+                unary_signature(
+                    env.class_operators?,
+                    symbol,
+                    &Slot::Class(class),
+                    Conversion::IntoClass(class),
+                    env,
+                )
+            })
+        }
+        ExprType::Dynamic(DynamicClass::Unknown) => None,
+        ExprType::Dynamic(class) => unary_signature(
+            env.class_operators?,
+            symbol,
+            &Slot::Class(class),
+            Conversion::None,
+            env,
+        ),
+    }
+}
+
+fn unary_signature(
+    owner: &TypeDef,
+    symbol: &str,
+    operand_slot: &Slot,
+    conversion: Conversion,
+    env: &TypeEnv,
+) -> Option<ResolvedFunction> {
+    owner.operators().iter().find_map(|declared| {
         let operands = declared.operands.as_ref()?;
         let [operand_type] = operands.as_slice() else {
             return None;
         };
-        if declared.op != symbol || !operand_type.eq_ignore_ascii_case(&named.def.name) {
+        if declared.op != symbol || !slot_named(operand_type, env)?.is(operand_slot) {
             return None;
         }
         let function = declared.func_name.clone()?;
         Some(ResolvedFunction {
             function,
-            conversions: vec![Conversion::None],
+            conversions: vec![conversion.clone()],
             result: declared
                 .returns
                 .as_deref()
@@ -333,7 +381,9 @@ fn resolve_type_function_for(
             let Some(fits) = slots
                 .iter()
                 .zip(arg_types.iter().zip(args))
-                .map(|(slot, (arg_type, arg))| fit_operand(arg_type, Some(arg), slot, false, None))
+                .map(|(slot, (arg_type, arg))| {
+                    fit_operand(arg_type, Some(arg), slot, false, None, env.rules)
+                })
                 .collect::<Option<Vec<Fit>>>()
             else {
                 continue;
@@ -547,21 +597,78 @@ pub(crate) fn resolve_typed_operator(
         (&operand_types[1], operands[1].1),
     ];
     let owners = named_owners(&operands);
-    if owners.is_empty() {
+    if owners.is_empty() && env.class_operators.is_none() {
         return Ok(None);
     }
     let mut candidates = Vec::new();
-    for owner in &owners {
+    for owner in owners.iter().chain(env.class_operators) {
         for signature in signatures_for(owner, op, symbol, env) {
-            if let Some(candidate) = fit_signature(&signature, &operands) {
+            if let Some(candidate) = fit_signature(&signature, &operands, env) {
                 candidates.push(candidate);
             }
         }
     }
     if let Some(best) = choose_candidate(candidates, &operands)? {
-        return Ok(Some(best));
+        if owners.is_empty() && same_as_sqlite_operator(&best) {
+            return Ok(None);
+        }
+        return Ok(Some(with_result_parameters(best, symbol, &operands, env)));
+    }
+    if owners.is_empty() {
+        return Ok(None);
     }
     Ok(cast_to_class_fallback(op, &operands))
+}
+
+fn same_as_sqlite_operator(resolved: &ResolvedOperator) -> bool {
+    resolved.function.is_none()
+        && resolved.conversions.iter().all(Conversion::is_none)
+        && matches!(resolved.result, ExprType::Dynamic(_))
+}
+
+fn with_result_parameters(
+    mut resolved: ResolvedOperator,
+    symbol: &str,
+    operands: &[(&ExprType, Option<&ast::Expr>); 2],
+    env: &TypeEnv,
+) -> ResolvedOperator {
+    let Some(rule) = env.rules.result_parameters else {
+        return resolved;
+    };
+    let ExprType::Named(result) = &mut resolved.result else {
+        return resolved;
+    };
+    if result.params.is_some() {
+        return resolved;
+    }
+    let operand_params = [0, 1].map(|i| {
+        let named = match (&resolved.conversions[i], operands[i].0) {
+            (Conversion::IntoType(named), _) => Some(named),
+            (_, ExprType::Named(named)) => Some(named),
+            _ => None,
+        };
+        named.and_then(|named| integer_params(named.params.as_deref()?))
+    });
+    let params = rule(
+        symbol,
+        [operand_params[0].as_deref(), operand_params[1].as_deref()],
+    );
+    result.params = params.map(|params| params.into_iter().map(integer_literal).collect());
+    resolved
+}
+
+fn integer_params(params: &[ast::Expr]) -> Option<Vec<i64>> {
+    params
+        .iter()
+        .map(|param| match param {
+            ast::Expr::Literal(ast::Literal::Numeric(digits)) => digits.parse().ok(),
+            _ => None,
+        })
+        .collect()
+}
+
+fn integer_literal(value: i64) -> ast::Expr {
+    ast::Expr::Literal(ast::Literal::Numeric(value.to_string()))
 }
 
 pub(crate) fn emit_value_conversion(
@@ -590,6 +697,11 @@ pub(crate) fn emit_value_conversion(
             emit_conversion_into_type(program, source_reg, dest, named, resolver)?;
             Ok(dest)
         }
+        Conversion::Function(function) => {
+            let dest = program.alloc_register();
+            emit_conversion_function(program, source_reg, dest, function, resolver)?;
+            Ok(dest)
+        }
     }
 }
 
@@ -611,7 +723,35 @@ pub(crate) fn emit_value_conversion_in_place(
         Conversion::IntoType(named) => {
             emit_conversion_into_type(program, reg, reg, named, resolver)
         }
+        Conversion::Function(function) => {
+            let source = program.alloc_register();
+            program.emit_insn(Insn::Copy {
+                src_reg: reg,
+                dst_reg: source,
+                extra_amount: 0,
+            });
+            emit_conversion_function(program, source, reg, function, resolver)
+        }
     }
+}
+
+fn emit_conversion_function(
+    program: &mut ProgramBuilder,
+    source_reg: usize,
+    dest: usize,
+    function: &str,
+    resolver: &Resolver,
+) -> Result<()> {
+    let func = resolver
+        .resolve_function(function, 1)?
+        .ok_or_else(|| LimboError::ParseError(format!("no such function: {function}")))?;
+    program.emit_insn(Insn::Function {
+        constant_mask: 0,
+        start_reg: source_reg,
+        dest,
+        func: crate::function::FuncCtx { func, arg_count: 1 },
+    });
+    Ok(())
 }
 
 pub(crate) fn branch_conversions(
@@ -1362,6 +1502,37 @@ fn is_null_literal(expr: &ast::Expr) -> bool {
     matches!(expr, ast::Expr::Literal(ast::Literal::Null))
 }
 
+fn literal_type(literal: &ast::Literal, env: &TypeEnv) -> ExprType {
+    match literal {
+        ast::Literal::Numeric(digits) => match decimal_literal_type(digits, env) {
+            Some(named) => ExprType::Named(named),
+            None => ExprType::Dynamic(literal_class(literal)),
+        },
+        ast::Literal::String(_) if env.rules.string_literals_are_text => {
+            ExprType::Dynamic(DynamicClass::Text)
+        }
+        _ => ExprType::Dynamic(literal_class(literal)),
+    }
+}
+
+pub(crate) fn decimal_literal_type(digits: &str, env: &TypeEnv) -> Option<NamedType> {
+    let type_name = env.rules.decimal_literal_type?;
+    let (whole, fraction) = digits.split_once('.')?;
+    if !whole.bytes().all(|b| b.is_ascii_digit()) || !fraction.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let def = env.schema.get_type_def_unchecked(type_name)?;
+    let scale = fraction.len();
+    let precision = (whole.trim_start_matches('0').len() + scale).max(1);
+    Some(NamedType {
+        def: Arc::clone(def),
+        params: Some(vec![
+            integer_literal(precision as i64),
+            integer_literal(scale as i64),
+        ]),
+    })
+}
+
 fn literal_class(literal: &ast::Literal) -> DynamicClass {
     match literal {
         ast::Literal::String(_) | ast::Literal::Null => DynamicClass::Unknown,
@@ -1439,6 +1610,17 @@ enum Slot {
     Named(Arc<TypeDef>),
     Class(DynamicClass),
     Any,
+}
+
+impl Slot {
+    fn is(&self, other: &Slot) -> bool {
+        match (self, other) {
+            (Slot::Named(a), Slot::Named(b)) => a.name.eq_ignore_ascii_case(&b.name),
+            (Slot::Class(a), Slot::Class(b)) => a == b,
+            (Slot::Any, Slot::Any) => true,
+            _ => false,
+        }
+    }
 }
 
 struct Signature {
@@ -1576,6 +1758,7 @@ struct Candidate {
 fn fit_signature(
     signature: &Signature,
     operands: &[(&ExprType, Option<&ast::Expr>); 2],
+    env: &TypeEnv,
 ) -> Option<Candidate> {
     let other_named = |i: usize| match operands[1 - i].0 {
         ExprType::Named(named) => Some(named),
@@ -1588,6 +1771,7 @@ fn fit_signature(
             &signature.slots[i],
             signature.legacy,
             other_named(i),
+            env.rules,
         )
     };
     let fits = [fit(0)?, fit(1)?];
@@ -1647,12 +1831,16 @@ fn fit_operand(
     slot: &Slot,
     legacy: bool,
     other: Option<&NamedType>,
+    rules: &crate::dialect::TypeRules,
 ) -> Option<Fit> {
     match slot {
         Slot::Any => Some(Fit::Any),
         Slot::Class(class) => match operand {
             ExprType::Dynamic(operand_class) if operand_class == class => Some(Fit::Exact),
             ExprType::Dynamic(DynamicClass::Unknown) => Some(Fit::Any),
+            ExprType::Dynamic(operand_class) => {
+                class_conversion(rules, *operand_class, *class).map(Fit::Convert)
+            }
             ExprType::Named(named) if declares_cast_to_class(&named.def, *class) => {
                 Some(Fit::Convert(Conversion::IntoClass(*class)))
             }
@@ -1680,6 +1868,21 @@ fn fit_operand(
             ExprType::Named(_) | ExprType::Dynamic(_) => None,
         },
     }
+}
+
+fn class_conversion(
+    rules: &crate::dialect::TypeRules,
+    from: DynamicClass,
+    to: DynamicClass,
+) -> Option<Conversion> {
+    let declared = rules.class_conversions.iter().find(|conversion| {
+        conversion.from.eq_ignore_ascii_case(class_name(from))
+            && conversion.to.eq_ignore_ascii_case(class_name(to))
+    })?;
+    Some(match declared.function {
+        Some(function) => Conversion::Function(function.to_string()),
+        None => Conversion::IntoClass(to),
+    })
 }
 
 fn conversion_into(target: &Arc<TypeDef>, other: Option<&NamedType>) -> Option<Conversion> {

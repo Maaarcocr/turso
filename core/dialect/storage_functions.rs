@@ -24,6 +24,10 @@ pub enum StorageFunc {
     EnumerationDecode,
     LabelSetEncode,
     LabelSetDecode,
+    Int64Add,
+    Int64Sub,
+    Int64Mul,
+    Int64Neg,
 }
 
 impl StorageFunc {
@@ -52,6 +56,10 @@ impl StorageFunc {
             StorageFunc::EnumerationDecode => "enumeration_decode",
             StorageFunc::LabelSetEncode => "label_set_encode",
             StorageFunc::LabelSetDecode => "label_set_decode",
+            StorageFunc::Int64Add => "int64_add",
+            StorageFunc::Int64Sub => "int64_sub",
+            StorageFunc::Int64Mul => "int64_mul",
+            StorageFunc::Int64Neg => "int64_neg",
         }
     }
 
@@ -60,7 +68,8 @@ impl StorageFunc {
             StorageFunc::Uint64Encode
             | StorageFunc::Uint64Decode
             | StorageFunc::DateDaysEncode
-            | StorageFunc::DateDaysDecode => 1,
+            | StorageFunc::DateDaysDecode
+            | StorageFunc::Int64Neg => 1,
             StorageFunc::Uint64Lt
             | StorageFunc::Uint64Eq
             | StorageFunc::Uint64Add
@@ -74,7 +83,10 @@ impl StorageFunc {
             | StorageFunc::EnumerationEncode
             | StorageFunc::EnumerationDecode
             | StorageFunc::LabelSetEncode
-            | StorageFunc::LabelSetDecode => 2,
+            | StorageFunc::LabelSetDecode
+            | StorageFunc::Int64Add
+            | StorageFunc::Int64Sub
+            | StorageFunc::Int64Mul => 2,
         }
     }
 
@@ -89,6 +101,25 @@ impl StorageFunc {
             return Ok(Value::Null);
         }
         match self {
+            StorageFunc::Int64Add | StorageFunc::Int64Sub | StorageFunc::Int64Mul => {
+                let lhs = int64_operand(&args[0])?;
+                let rhs = int64_operand(&args[1])?;
+                let result = match self {
+                    StorageFunc::Int64Add => lhs.checked_add(rhs),
+                    StorageFunc::Int64Sub => lhs.checked_sub(rhs),
+                    _ => lhs.checked_mul(rhs),
+                };
+                result
+                    .map(Value::from_i64)
+                    .ok_or_else(|| int64_out_of_range(&format!("{lhs} {} {rhs}", self.operator())))
+            }
+            StorageFunc::Int64Neg => {
+                let operand = int64_operand(&args[0])?;
+                operand
+                    .checked_neg()
+                    .map(Value::from_i64)
+                    .ok_or_else(|| int64_out_of_range(&format!("-({operand})")))
+            }
             StorageFunc::Uint64Encode => uint64_encode(&args[0]),
             StorageFunc::EnumerationEncode => label_storage::enumeration_encode(&args[0], &args[1]),
             StorageFunc::EnumerationDecode => label_storage::enumeration_decode(&args[0], &args[1]),
@@ -137,8 +168,8 @@ impl StorageFunc {
 
     fn operator(self) -> &'static str {
         match self {
-            StorageFunc::Uint64Add => "+",
-            StorageFunc::Uint64Sub => "-",
+            StorageFunc::Uint64Add | StorageFunc::Int64Add => "+",
+            StorageFunc::Uint64Sub | StorageFunc::Int64Sub => "-",
             _ => "*",
         }
     }
@@ -225,6 +256,19 @@ fn uint64_value(number: i128) -> Result<Value> {
         Ok(small) => Ok(Value::from_i64(small)),
         Err(_) => Ok(Value::build_text(number.to_string())),
     }
+}
+
+fn int64_operand(value: &Value) -> Result<i64> {
+    match value {
+        Value::Numeric(Numeric::Integer(number)) => Ok(*number),
+        other => Err(LimboError::Constraint(format!(
+            "invalid value for int64: {other}"
+        ))),
+    }
+}
+
+fn int64_out_of_range(expression: &str) -> LimboError {
+    LimboError::Constraint(format!("value out of range for int64: {expression}"))
 }
 
 fn uint64_out_of_range(value: &str) -> LimboError {

@@ -1152,6 +1152,25 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Class signatures, literal types and result parameters (commit 21).**
+  `TypeRules` gains `class_operators` (OPERATOR clauses over classes and
+  types, in CREATE TYPE clause syntax, parsed once per schema),
+  `class_conversions` (implicit conversions between classes, through a named
+  function or SQLite's CAST), `decimal_literal_type` (a literal with a decimal
+  point and no exponent is a value of this type, with precision and scale from
+  its digits, and is emitted as its text), `string_literals_are_text` (string
+  literals are the Text class instead of Unknown) and `result_parameters` (a
+  function from an operator and its operands' integer parameters to the
+  result's parameters). A class signature without a function, conversion or
+  typed result is SQLite's operator and does not change the bytecode. A
+  dialect that declares class conversions must also declare the same-class
+  operators it wants kept (`OPERATOR '=' (text, text)`), or two texts compare
+  through the conversion. A unary operator on a typed value that declares
+  `CAST TO` a class uses the class's unary signature. Engine helper statements
+  compile with SQLite's rules (their resolver uses the SQLite dialect); the
+  optimizer's checks use the database's rules. `ColumnTypeInfo` gains
+  `parameters`. `int64_add`, `int64_sub`, `int64_mul` and `int64_neg` are
+  core functions.
 - **Enumeration and label-set storage (commit 19).** The storage type
   declares one parameter, `labels`; a type built on it accepts any number of
   column parameters (at least one), and core passes them to ENCODE, DECODE and

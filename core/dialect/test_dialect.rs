@@ -1,4 +1,4 @@
-use super::{sqlite, Dialect, DialectType, SqliteDialect, StorageType, TypeRules};
+use super::{sqlite, ClassConversion, Dialect, DialectType, SqliteDialect, StorageType, TypeRules};
 use crate::schema::BTreeTable;
 use crate::storage::database::DatabaseFile;
 use crate::{Connection, Database, OpenFlags, Result, Value, IO};
@@ -12,12 +12,52 @@ pub(crate) struct MarkingDialect {
 pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
     builtin_behaviour_overrides: &[],
     cast_uses_parameter_defaults: true,
+    class_operators: "OPERATOR '+' (integer, integer) RETURNS integer int64_add \
+        OPERATOR '-' (integer, integer) RETURNS integer int64_sub \
+        OPERATOR '*' (integer, integer) RETURNS integer int64_mul \
+        OPERATOR '-' (integer) RETURNS integer int64_neg \
+        OPERATOR '/' (integer, integer) RETURNS decimal numeric_div \
+        OPERATOR '=' (integer, integer) \
+        OPERATOR '<' (integer, integer) \
+        OPERATOR '=' (real, real) \
+        OPERATOR '<' (real, real) \
+        OPERATOR '=' (text, text) \
+        OPERATOR '<' (text, text)",
+    class_conversions: &[
+        ClassConversion {
+            from: "text",
+            to: "real",
+            function: Some("test_text_length"),
+        },
+        ClassConversion {
+            from: "integer",
+            to: "real",
+            function: None,
+        },
+    ],
+    decimal_literal_type: Some("decimal"),
+    string_literals_are_text: true,
+    result_parameters: Some(test_result_parameters),
     dialect_types: &[
+        DialectType {
+            name: "decimal",
+            storage: StorageType::Numeric,
+            parameters: "",
+            behaviour: "CAST FROM integer, int, tinyint AS IMPLICIT \
+                OPERATOR '+' (decimal, decimal) RETURNS decimal numeric_add \
+                OPERATOR '-' (decimal, decimal) RETURNS decimal numeric_sub \
+                OPERATOR '*' (decimal, decimal) RETURNS decimal numeric_mul \
+                OPERATOR '/' (decimal, decimal) RETURNS decimal numeric_div \
+                OPERATOR '-' (decimal) RETURNS decimal numeric_neg \
+                OPERATOR '<' (decimal, decimal) numeric_lt \
+                OPERATOR '=' (decimal, decimal) numeric_eq",
+        },
         DialectType {
             name: "integer",
             storage: StorageType::Integer,
             parameters: "",
-            behaviour: "OPERATOR '<' (integer, integer) OPERATOR '=' (integer, integer)",
+            behaviour: "CAST TO integer AS IMPLICIT \
+                OPERATOR '<' (integer, integer) OPERATOR '=' (integer, integer)",
         },
         DialectType {
             name: "int",
@@ -26,7 +66,8 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 max: 2147483647,
             },
             parameters: "",
-            behaviour: "OPERATOR '<' (int, int) OPERATOR '=' (int, int)",
+            behaviour:
+                "CAST TO integer AS IMPLICIT OPERATOR '<' (int, int) OPERATOR '=' (int, int)",
         },
         DialectType {
             name: "tinyint",
@@ -35,7 +76,8 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 max: 127,
             },
             parameters: "width integer DEFAULT NULL",
-            behaviour: "OPERATOR '<' (tinyint, tinyint) OPERATOR '=' (tinyint, tinyint)",
+            behaviour: "CAST TO integer AS IMPLICIT \
+                OPERATOR '<' (tinyint, tinyint) OPERATOR '=' (tinyint, tinyint)",
         },
         DialectType {
             name: "ubigint",
@@ -158,7 +200,25 @@ impl Dialect for MarkingDialect {
         name: &str,
         arg_count: usize,
     ) -> Result<Option<crate::function::Func>> {
+        if name.eq_ignore_ascii_case("test_text_length") && arg_count == 1 {
+            return Ok(Some(crate::function::Func::Dialect(
+                "test_text_length".to_string(),
+            )));
+        }
         sqlite::resolve_builtin_function(name, arg_count)
+    }
+
+    fn exec_scalar_function(
+        &self,
+        _conn: &Connection,
+        name: &str,
+        args: &[Value],
+    ) -> Result<Value> {
+        assert_eq!(name, "test_text_length");
+        match &args[0] {
+            Value::Text(text) => Ok(Value::from_f64(text.as_str().chars().count() as f64)),
+            other => Ok(other.clone()),
+        }
     }
 
     fn requires_custom_types(&self) -> bool {
@@ -171,6 +231,24 @@ impl Dialect for MarkingDialect {
 
     fn marks_tables(&self) -> bool {
         true
+    }
+}
+
+fn test_result_parameters(operator: &str, operands: [Option<&[i64]>; 2]) -> Option<Vec<i64>> {
+    let precision = |params: Option<&[i64]>| params.and_then(|p| p.first().copied()).unwrap_or(19);
+    let scale = |params: Option<&[i64]>| params.and_then(|p| p.get(1).copied()).unwrap_or(0);
+    let [lhs, rhs] = operands;
+    match operator {
+        "/" => Some(vec![precision(lhs) + 4, scale(lhs) + 4]),
+        "*" => Some(vec![
+            precision(lhs) + precision(rhs),
+            scale(lhs) + scale(rhs),
+        ]),
+        "+" | "-" => {
+            let scale = scale(lhs).max(scale(rhs));
+            Some(vec![precision(lhs).max(precision(rhs)) + 1, scale])
+        }
+        _ => None,
     }
 }
 

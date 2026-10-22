@@ -19,6 +19,7 @@ pub enum StorageType {
     TimeMicros,
     Enumeration,
     LabelSet,
+    Numeric,
 }
 
 impl DialectType {
@@ -51,7 +52,7 @@ impl StorageType {
             | StorageType::Enumeration
             | StorageType::LabelSet => "text",
             StorageType::Blob => "blob",
-            StorageType::Uint64 => "any",
+            StorageType::Uint64 | StorageType::Numeric => "any",
         }
     }
 
@@ -65,7 +66,7 @@ impl StorageType {
             | StorageType::Enumeration => "integer",
             StorageType::Real => "real",
             StorageType::Text => "text",
-            StorageType::Blob => "blob",
+            StorageType::Blob | StorageType::Numeric => "blob",
             StorageType::Uint64 | StorageType::LabelSet => "any",
         }
     }
@@ -78,6 +79,7 @@ impl StorageType {
         match self {
             StorageType::DatetimeMicros | StorageType::TimeMicros => "fsp integer DEFAULT 0",
             StorageType::Enumeration | StorageType::LabelSet => "labels text",
+            StorageType::Numeric => "precision integer DEFAULT NULL, scale integer DEFAULT NULL",
             _ => "",
         }
     }
@@ -105,6 +107,9 @@ impl StorageType {
                 .to_string(),
             StorageType::Enumeration => " ENCODE enumeration_encode(value, labels) \
                 DECODE enumeration_decode(value, labels) KEY enumeration_encode(value, labels)"
+                .to_string(),
+            StorageType::Numeric => " ENCODE numeric_encode(value, precision, scale) \
+                DECODE numeric_decode(value) KEY numeric_key(value)"
                 .to_string(),
             StorageType::LabelSet => " ENCODE label_set_encode(value, labels) \
                 DECODE label_set_decode(value, labels) KEY label_set_encode(value, labels)"
@@ -446,6 +451,98 @@ mod tests {
         assert_eq!(
             query(&conn, "SELECT id FROM t WHERE size = 'small'"),
             ints(&[&[2]])
+        );
+    }
+
+    fn column_parameters(conn: &Arc<crate::Connection>, sql: &str) -> Vec<String> {
+        let stmt = conn.prepare(sql).unwrap();
+        stmt.get_column_type_info(0).unwrap().unwrap().parameters
+    }
+
+    #[test]
+    fn integer_arithmetic_reports_out_of_range_through_class_signatures() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "class-integers.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT 2 + 3, 7 - 9, 6 * 7, -(4)"),
+            ints(&[&[5, -2, 42, -4]])
+        );
+        for sql in [
+            "SELECT 9223372036854775807 + 1",
+            "SELECT -9223372036854775807 - 2",
+            "SELECT 4611686018427387904 * 2",
+        ] {
+            let error = conn.prepare(sql).unwrap().run_collect_rows().unwrap_err();
+            assert!(error.to_string().contains("out of range"), "{sql}: {error}");
+        }
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, a INTEGER) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, -9223372036854775808)")
+            .unwrap();
+        assert!(conn
+            .prepare("SELECT -a FROM t")
+            .unwrap()
+            .run_collect_rows()
+            .is_err());
+
+        let sqlite_db = open_db(
+            &io,
+            "class-integers-sqlite.db",
+            Arc::new(crate::dialect::SqliteDialect),
+        )
+        .unwrap();
+        let sqlite_conn = sqlite_db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&sqlite_conn, "SELECT 9223372036854775807 + 1"),
+            vec![vec![Value::from_f64(9223372036854775808.0)]]
+        );
+    }
+
+    #[test]
+    fn integer_division_has_the_scale_of_the_result_rule() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "class-division.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        let text = |value: &str| Value::build_text(value.to_string());
+        assert_eq!(
+            query(&conn, "SELECT 7 / 2"),
+            vec![vec![text("3.5000000000000000")]]
+        );
+        assert_eq!(column_parameters(&conn, "SELECT 7 / 2"), vec!["23", "4"]);
+        let rows = query(&conn, "SELECT 64 / 77 * 77");
+        let Value::Text(value) = &rows[0][0] else {
+            panic!("expected a decimal text, got {:?}", rows[0][0]);
+        };
+        assert!(value.as_str().starts_with("63.9999999999"), "{value}");
+        assert_eq!(
+            column_parameters(&conn, "SELECT 64 / 77 * 77"),
+            vec!["42", "4"]
+        );
+        assert_eq!(column_parameters(&conn, "SELECT 1.50"), vec!["3", "2"]);
+    }
+
+    #[test]
+    fn comparisons_convert_by_the_class_rules() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "class-comparisons.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, tiny TINYINT, i INT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 1, 1), (2, 2, 2)")
+            .unwrap();
+        assert_eq!(
+            query(&conn, "SELECT id FROM t WHERE tiny = 1000"),
+            ints(&[])
+        );
+        assert_eq!(query(&conn, "SELECT id FROM t WHERE i = 1.5"), ints(&[]));
+        assert_eq!(
+            query(&conn, "SELECT id FROM t WHERE i = 2.0"),
+            ints(&[&[2]])
+        );
+        assert_eq!(
+            query(&conn, "SELECT 'abc' = 3, 'abc' = 0"),
+            ints(&[&[1, 0]])
         );
     }
 

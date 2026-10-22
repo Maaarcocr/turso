@@ -194,6 +194,11 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
     )],
     cast_uses_parameter_defaults: true,
     dialect_types: &[],
+    class_operators: "",
+    class_conversions: &[],
+    decimal_literal_type: None,
+    string_literals_are_text: false,
+    result_parameters: None,
 };
 
 pub fn encode_pg_schema_sql(sql: &str) -> String {
