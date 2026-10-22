@@ -1,0 +1,426 @@
+# Owned specs for MySQL date and time functions. Every expected value was
+# recorded from MySQL 8.4.10 (mysql/conformance/target.toml) with its time
+# zone tables loaded; error tests note the MySQL error in a comment. Named
+# time zones read the host's zoneinfo files (see mysql/COMPAT.md).
+
+@database :memory:
+
+test week-modes-at-year-start {
+    SELECT WEEK('2000-01-01', 0), WEEK('2000-01-01', 1), WEEK('2000-01-01', 2), WEEK('2000-01-01', 3), WEEK('2000-01-01', 4), WEEK('2000-01-01', 5), WEEK('2000-01-01', 6), WEEK('2000-01-01', 7);
+}
+expect {
+    0|0|52|52|0|0|52|52
+}
+
+test week-modes-at-year-end {
+    SELECT WEEK('2000-12-31', 0), WEEK('2000-12-31', 1), WEEK('2000-12-31', 2), WEEK('2000-12-31', 3), WEEK('2000-12-31', 4), WEEK('2000-12-31', 5), WEEK('2000-12-31', 6), WEEK('2000-12-31', 7);
+}
+expect {
+    53|52|53|52|53|52|1|52
+}
+
+test week-mode-uses-low-three-bits {
+    SELECT WEEK('2000-01-01', -1), WEEK('2000-01-01', 9), WEEK('2000-01-01', NULL), WEEK('2000-01-01');
+}
+expect {
+    52|0|0|0
+}
+
+test week-of-zero-date-is-null {
+    SELECT WEEK('0000-00-00'), WEEK(0), WEEK('2000-00-01');
+}
+expect {
+    NULL|NULL|NULL
+}
+
+test week-in-year-zero {
+    SELECT WEEK('0000-01-03', 0), YEARWEEK('0000-01-03', 0), YEARWEEK('0000-01-01');
+}
+expect {
+    1|1|1
+}
+
+test year-week-and-week-of-year {
+    SELECT YEARWEEK('2000-01-01'), YEARWEEK('2000-01-01', 1), YEARWEEK('2008-12-29', 3), WEEKOFYEAR('2008-12-29');
+}
+expect {
+    199952|199952|200901|1
+}
+
+test weekday-and-day-of-week {
+    SELECT WEEKDAY('2000-01-01'), DAYOFWEEK('2000-01-01'), DAYNAME('2000-01-01'), DAYOFYEAR('2000-12-31');
+}
+expect {
+    5|7|Saturday|366
+}
+
+test date-parts-allow-zero-in-date {
+    SELECT YEAR('2000-00-00'), MONTH('2000-00-01'), DAY('2000-01-00'), QUARTER('2000-08-01');
+}
+expect {
+    2000|0|0|3
+}
+
+test zero-date-string-is-null-but-zero-number-is-not {
+    SELECT MONTH('0000-00-00'), MONTH(0), DAYOFMONTH(0);
+}
+expect {
+    NULL|0|0
+}
+
+test invalid-dates-are-null {
+    SELECT MONTH('2000-02-30'), DAY('2001-02-29'), MONTH('2000-13-01'), YEAR('foobar');
+}
+expect {
+    NULL|NULL|NULL|NULL
+}
+
+test trailing-garbage-is-truncated {
+    SELECT YEAR('2000-01-01foo'), DAY('2000-01-02 foo'), HOUR('2000-01-01 10:34:58foo');
+}
+expect {
+    2000|2|10
+}
+
+test two-digit-years {
+    SELECT YEAR('69-01-01'), YEAR('70-01-01'), YEAR('0-1-1'), YEAR(690101), YEAR(700101);
+}
+expect {
+    2069|1970|0|2069|1970
+}
+
+test packed-numbers-as-dates {
+    SELECT MONTH(101), MONTH(100), YEAR(9991231), MONTH(20000101103458), MONTH(99999999999999);
+}
+expect {
+    1|NULL|999|1|NULL
+}
+
+test iso-separator-and-time-zone-displacement {
+    SELECT HOUR('2000-01-01T10:34:58'), YEAR('20000101T103458'), TIMESTAMP('2000-01-01 10:00:00+05:00'), TIMESTAMP('2000-01-01 10:00:00-05:30');
+}
+expect {
+    0|2000|2000-01-01 05:00:00|2000-01-01 15:30:00
+}
+
+test month-and-day-names {
+    SELECT MONTHNAME('2000-12-01'), MONTHNAME('2000-00-01'), DAYNAME('2000-00-01');
+}
+expect {
+    December|NULL|NULL
+}
+
+test time-parts-of-strings {
+    SELECT HOUR('101:34:58'), HOUR('5 10:34:58'), MINUTE('-10:34:58'), SECOND('103458'), MICROSECOND('10:00:00.1234567');
+}
+expect {
+    101|130|34|58|123457
+}
+
+test time-parts-of-numbers {
+    SELECT HOUR(8385959), HOUR(8395959), HOUR(-8385959), MICROSECOND(1.5e0), SECOND(20000101103458);
+}
+expect {
+    838|NULL|838|500000|58
+}
+
+test time-strings-without-digits-are-null {
+    SELECT TIME('foobar'), TIME('-a'), TIME('.5'), TIME(':12:34'), TIME('- 1');
+}
+expect {
+    NULL|NULL|00:00:00.5|00:12:34|-00:00:00
+}
+
+test time-rounding-uses-last-fraction-digit {
+    SELECT TIME('10:34:58.12345641'), TIME('10:34:58.12345649'), MICROSECOND('10:00:00.9999995');
+}
+expect {
+    10:34:58.123456|10:34:58.123457|0
+}
+
+test time-clamps-to-range {
+    SELECT TIME('1000:00:00'), TIME('34 22:59:59'), TIME('35 0:0:0'), TIME('20000101');
+}
+expect {
+    838:59:59|838:59:59|838:59:59|838:59:59
+}
+
+test time-exponent-is-null {
+    SELECT TIME('1e1'), TIME('123456.7e1');
+}
+expect {
+    NULL|NULL
+}
+
+test time-to-sec {
+    SELECT TIME_TO_SEC('838:59:59'), TIME_TO_SEC('-10:00:00'), TIME_TO_SEC('10:00:00.5'), TIME_TO_SEC('2000-01-01 10:00:00');
+}
+expect {
+    3020399|-36000|36000|36000
+}
+
+test sec-to-time {
+    SELECT SEC_TO_TIME(3600), SEC_TO_TIME(-1), SEC_TO_TIME(1.5e0), SEC_TO_TIME('3600.999999999'), SEC_TO_TIME(9999999), SEC_TO_TIME(NULL);
+}
+expect {
+    01:00:00|-00:00:01|00:00:01.500000|01:00:01.000000|838:59:59|NULL
+}
+
+test to-days-and-seconds {
+    SELECT TO_DAYS('2000-01-01'), TO_DAYS('0000-01-01'), TO_DAYS('2000-00-01'), TO_SECONDS('2000-01-01 10:00:00'), TO_SECONDS(950501);
+}
+expect {
+    730485|1|NULL|63113940000|62966505600
+}
+
+test from-days {
+    SELECT FROM_DAYS(730485), FROM_DAYS(0), FROM_DAYS(366), FROM_DAYS(3652424), FROM_DAYS(3652499), FROM_DAYS(3652500);
+}
+expect {
+    2000-01-01|0000-00-00|0001-01-01|9999-12-31|NULL|0000-00-00
+}
+
+test last-day {
+    SELECT LAST_DAY('2000-02-05'), LAST_DAY('2001-02-05 10:00:00'), LAST_DAY('2000-02-00'), LAST_DAY('2000-00-00'), LAST_DAY(0);
+}
+expect {
+    2000-02-29|2001-02-28|2000-02-29|NULL|NULL
+}
+
+test make-date {
+    SELECT MAKEDATE(2000, 60), MAKEDATE(0, 1), MAKEDATE(69, 1), MAKEDATE(70, 1), MAKEDATE(100, 1), MAKEDATE(2000, 0), MAKEDATE(9999, 366);
+}
+expect {
+    2000-02-29|2000-01-01|2069-01-01|1970-01-01|0100-01-01|NULL|NULL
+}
+
+test make-date-coerces-arguments {
+    SELECT MAKEDATE('2000.9', 1), MAKEDATE(2000, ' 32foo'), MAKEDATE(2000, 2.5e0), MAKEDATE(X'31', 1);
+}
+expect {
+    2000-01-01|2000-02-01|2000-01-02|2049-01-01
+}
+
+test make-time {
+    SELECT MAKETIME(10, 34, 58), MAKETIME(-1, 0, 0), MAKETIME(10, 34, 58.1234e0), MAKETIME(10, 34, '58.5'), MAKETIME(900, 0, 0);
+}
+expect {
+    10:34:58|-01:00:00|10:34:58.123400|10:34:58.500000|838:59:59
+}
+
+test make-time-invalid-parts-are-null {
+    SELECT MAKETIME(10, 60, 0), MAKETIME(10, 0, 60), MAKETIME(10, 0, -0.5e0), MAKETIME(NULL, 0, 0);
+}
+expect {
+    NULL|NULL|NULL|NULL
+}
+
+test make-time-stops-at-null-hour {
+    SELECT MAKETIME(NULL * 1, -18446744073709540000e0, 1);
+}
+expect {
+    NULL
+}
+
+test period-add-and-diff {
+    SELECT PERIOD_ADD(200801, 2), PERIOD_ADD(6912, 1), PERIOD_ADD(7001, 1), PERIOD_ADD(1, 2), PERIOD_DIFF(200802, 200703), PERIOD_DIFF(9912, 1);
+}
+expect {
+    200803|207001|197002|200003|11|-1
+}
+
+test period-add-wraps-like-mysql {
+    SELECT PERIOD_ADD(200801, -2000000), PERIOD_ADD(200801, '18446744073709551615');
+}
+expect {
+    6148914691220051281|200712
+}
+
+# mysql-error: 1210 Incorrect arguments to period_add
+test period-add-rejects-invalid-period {
+    SELECT PERIOD_ADD(200813, 1);
+}
+expect error {
+}
+
+# mysql-error: 1210 Incorrect arguments to period_diff
+test period-diff-rejects-invalid-period {
+    SELECT PERIOD_DIFF(0, 1);
+}
+expect error {
+}
+
+test convert-tz-offsets {
+    SELECT CONVERT_TZ('2004-01-01 12:00:00', '+00:00', '+14:00'), CONVERT_TZ('2004-01-01 12:00:00', '+00:00', '-13:59'), CONVERT_TZ('2004-01-01 12:00:00', '+00:00', '+01:5'), CONVERT_TZ('2004-01-01 12:00:00', 'SYSTEM', '+010:00');
+}
+expect {
+    2004-01-02 02:00:00|2003-12-31 22:01:00|2004-01-01 13:05:00|2004-01-01 22:00:00
+}
+
+test convert-tz-invalid-offsets-are-null {
+    SELECT CONVERT_TZ('2004-01-01 12:00:00', '+00:00', '+14:01'), CONVERT_TZ('2004-01-01 12:00:00', '+00:00', ' +01:00'), CONVERT_TZ('2004-01-01 12:00:00', 'bogus', '+01:00'), CONVERT_TZ('2004-01-01 12:00:00', 1, '+01:00');
+}
+expect {
+    NULL|NULL|NULL|NULL
+}
+
+test convert-tz-keeps-values-outside-timestamp-range {
+    SELECT CONVERT_TZ('1970-01-01 00:59:59', '+01:00', '+00:00'), CONVERT_TZ('1970-01-01 01:00:00', '+01:00', '+00:00'), CONVERT_TZ('1970-01-01 01:00:01', '+01:00', '+00:00'), CONVERT_TZ('3001-01-19 00:59:59', '+01:00', '+00:00'), CONVERT_TZ('3001-01-19 01:00:00', '+01:00', '+00:00');
+}
+expect {
+    1970-01-01 00:59:59|1970-01-01 01:00:00|1970-01-01 00:00:01|3001-01-18 23:59:59|3001-01-19 01:00:00
+}
+
+test convert-tz-fractional-seconds {
+    SELECT CONVERT_TZ('2004-01-01 12:00:00.5', '+00:00', '+01:00'), CONVERT_TZ('2004-01-01 12:00:00.123456789', '+00:00', '+01:00'), CONVERT_TZ(20040101, '+00:00', '+01:00'), CONVERT_TZ('2004-01-01', '+00:00', '+01:00');
+}
+expect {
+    2004-01-01 13:00:00.5|2004-01-01 13:00:00.123457|2004-01-01 01:00:00|2004-01-01 01:00:00
+}
+
+test convert-tz-named-zones {
+    SELECT CONVERT_TZ('2000-07-01 12:00:00', 'America/New_York', 'UTC'), CONVERT_TZ('2000-01-01 12:00:00', 'america/new_york', 'Europe/London '), CONVERT_TZ('2100-07-01 12:00:00', 'America/New_York', 'UTC');
+}
+expect {
+    2000-07-01 16:00:00|2000-01-01 17:00:00|2100-07-01 17:00:00
+}
+
+test convert-tz-named-zone-gap-and-overlap {
+    SELECT CONVERT_TZ('2000-04-02 02:30:00', 'America/New_York', 'UTC'), CONVERT_TZ('2000-10-29 01:30:00', 'America/New_York', 'UTC'), CONVERT_TZ('1969-12-31 19:00:00', 'America/New_York', 'UTC');
+}
+expect {
+    2000-04-02 07:00:00|2000-10-29 05:30:00|1969-12-31 19:00:00
+}
+
+test from-unixtime {
+    SELECT FROM_UNIXTIME(1447430881), FROM_UNIXTIME('1447430881'), FROM_UNIXTIME(1447430881.5e0), FROM_UNIXTIME(X'31'), FROM_UNIXTIME(-1), FROM_UNIXTIME(32536771199), FROM_UNIXTIME(32536771200);
+}
+expect {
+    2015-11-13 16:08:01|2015-11-13 16:08:01.000000|2015-11-13 16:08:01.500000|1970-01-01 00:00:49|NULL|3001-01-18 23:59:59|NULL
+}
+
+test from-unixtime-with-format {
+    SELECT FROM_UNIXTIME(1447430881, '%Y %D %M %h:%i:%s %p'), FROM_UNIXTIME(1447430881, '');
+}
+expect {
+    2015 13th November 04:08:01 PM|NULL
+}
+
+test unix-timestamp {
+    SELECT UNIX_TIMESTAMP('2015-11-13 10:20:19'), UNIX_TIMESTAMP('2015-11-13 10:20:19.012'), UNIX_TIMESTAMP('1969-12-31 23:59:59'), UNIX_TIMESTAMP('3001-01-19 00:00:00'), UNIX_TIMESTAMP(20151113), UNIX_TIMESTAMP('foo'), UNIX_TIMESTAMP('2000-00-00');
+}
+expect {
+    1447410019|1447410019.012|0|0|1447372800|0.000000|0
+}
+
+test date-format-all-specifiers {
+    SELECT DATE_FORMAT('2000-01-01 13:05:09.012345', '%a %b %c %D %d %e %f %H %h %I %i %j %k %l %M %m %p %r %S %s %T %U %u %V %v %W %w %X %x %Y %y %% %q');
+}
+expect {
+    Sat Jan 1 1st 01 1 012345 13 01 01 05 001 13 1 January 01 PM 01:05:09 PM 09 09 13:05:09 00 00 52 52 Saturday 6 1999 1999 2000 00 % q
+}
+
+test date-format-week-specifiers {
+    SELECT DATE_FORMAT('2008-12-29', '%U %u %V %v %X %x'), DATE_FORMAT('0000-01-03', '%a %U %X');
+}
+expect {
+    52 53 52 01 2008 2009|Tue 01 0000
+}
+
+test date-format-null-cases {
+    SELECT DATE_FORMAT('2000-00-01', '%a'), DATE_FORMAT('2000-00-01', '%M'), DATE_FORMAT('2000-01-01', ''), DATE_FORMAT('0000-00-00', '%Y');
+}
+expect {
+    Wed|NULL|NULL|NULL
+}
+
+test time-format {
+    SELECT TIME_FORMAT('100:00:00', '%H %k %h %I %l %p %r %T'), TIME_FORMAT('-01:02:03.5', '%H:%i:%s.%f'), TIME_FORMAT('10:00:00', '%Y-%m-%d'), TIME_FORMAT('10:00:00', '%a');
+}
+expect {
+    100 100 04 04 4 AM 04:00:00 AM 100:00:00|-01:02:03.500000|0000-00-00|NULL
+}
+
+test str-to-date-result-types {
+    SELECT STR_TO_DATE('2000-01-02', '%Y-%m-%d'), STR_TO_DATE('2000-01-02 10:11:12', '%Y-%m-%d %H:%i:%s'), STR_TO_DATE('2000-01-02 10:11:12.5', '%Y-%m-%d %H:%i:%s.%f'), STR_TO_DATE('10:11:12.5', '%H:%i:%s.%f'), STR_TO_DATE('9', '%s');
+}
+expect {
+    2000-01-02|2000-01-02 10:11:12|2000-01-02 10:11:12.500000|10:11:12.500000|00:00:09
+}
+
+test str-to-date-names-and-twelve-hour-clock {
+    SELECT STR_TO_DATE('1st May 2000', '%D %M %Y'), STR_TO_DATE('mar 3 2000', '%b %e %Y'), STR_TO_DATE('12 AM', '%h %p'), STR_TO_DATE('10:11:12 pm', '%r');
+}
+expect {
+    2000-05-01|2000-03-03|00:00:00|22:11:12
+}
+
+test str-to-date-weeks-and-day-of-year {
+    SELECT STR_TO_DATE('Sunday 2000 01', '%W %X %V'), STR_TO_DATE('1 2000 01', '%w %x %v'), STR_TO_DATE('2000 100', '%Y %j');
+}
+expect {
+    2000-01-02|2000-01-03|2000-04-09
+}
+
+test str-to-date-invalid-input-is-null {
+    SELECT STR_TO_DATE('9', '%m'), STR_TO_DATE('2000-02-30', '%Y-%m-%d'), STR_TO_DATE('13 PM', '%h %p'), STR_TO_DATE('Ma 2000', '%b %Y'), STR_TO_DATE('abc', 'abc');
+}
+expect {
+    NULL|NULL|NULL|NULL|NULL
+}
+
+test date-time-and-timestamp-casts {
+    SELECT DATE('2000-01-01 23:59:59.9999999'), TIME('2000-01-01 10:00:00.5'), TIMESTAMP('2000-01-01'), TIMESTAMP('2000-01-01 23:59:59.9999999'), TIMESTAMP(20000101);
+}
+expect {
+    2000-01-02|10:00:00.5|2000-01-01 00:00:00|2000-01-02 00:00:00.000000|2000-01-01 00:00:00
+}
+
+test casts-reject-zero-in-date {
+    SELECT DATE('0000-00-00'), DATE(0), DATE('2000-00-01'), TIMESTAMP('0000-00-00');
+}
+expect {
+    NULL|NULL|NULL|NULL
+}
+
+test date-diff {
+    SELECT DATEDIFF('2000-01-02 00:00:00', '2000-01-01 23:59:59'), DATEDIFF('2000-01-01', 20000102), DATEDIFF('2000-01-02', '0000-00-00');
+}
+expect {
+    1|-1|NULL
+}
+
+test time-diff {
+    SELECT TIMEDIFF('10:00:00', '09:00:00.5'), TIMEDIFF('2000-01-02 00:00:00', '2000-01-01 00:00:00'), TIMEDIFF('2000-01-02 00:00:00', '10:00:00'), TIMEDIFF('-10:00:00', '-11:00:00'), TIMEDIFF('2000-03-01 00:00:00', '2000-01-01 00:00:00');
+}
+expect {
+    00:59:59.5|24:00:00|NULL|01:00:00|838:59:59
+}
+
+test add-time-and-sub-time {
+    SELECT ADDTIME('10:00:00', '01:00:00.5'), ADDTIME('2000-01-01 23:00:00', '01:00:00'), ADDTIME('-10:00:00', '01:00:00'), ADDTIME('10:00:00', '2000-01-01 01:00:00'), SUBTIME('10:00:00', '11:00:00'), SUBTIME('2000-01-01 00:00:00', '1 01:00:00');
+}
+expect {
+    11:00:00.500000|2000-01-02 00:00:00|-09:00:00|NULL|-01:00:00|1999-12-30 23:00:00
+}
+
+test timestamp-with-time {
+    SELECT TIMESTAMP('2000-01-01 10:00:00', '-11:00:00'), TIMESTAMP('2000-01-01', '10:00:00.5'), TIMESTAMP('2000-01-01', NULL);
+}
+expect {
+    1999-12-31 23:00:00|2000-01-01 10:00:00.5|NULL
+}
+
+test add-date-and-sub-date-with-days {
+    SELECT ADDDATE('2000-01-01', 31), SUBDATE('2000-01-01', 31), ADDDATE('2000-01-01 10:00:00', 1), ADDDATE('9999-12-31', 1), SUBDATE('0000-00-00', 1);
+}
+expect {
+    2000-02-01|1999-12-01|2000-01-02 10:00:00|NULL|NULL
+}
+
+test json-arguments-convert-like-mysql {
+    SELECT WEEK(JSON_EXTRACT('["2000-01-01"]', '$[0]')), HOUR(JSON_EXTRACT('["10:00:00"]', '$[0]')), YEAR(JSON_EXTRACT('[20000101]', '$[0]')), YEAR(JSON_ARRAY()), MAKEDATE(JSON_EXTRACT('[2000.5]', '$[0]'), 1), MAKEDATE(JSON_EXTRACT('[true]', '$[0]'), 1), SEC_TO_TIME(JSON_EXTRACT('["1.5"]', '$[0]'));
+}
+expect {
+    0|10|NULL|NULL|2000-01-01|2001-01-01|00:00:01.500000
+}
