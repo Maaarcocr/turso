@@ -19,7 +19,8 @@ CREATE TYPE [IF NOT EXISTS] type-name [(parameters)]
     BASE base-type
     ENCODE encode-expr
     DECODE decode-expr
-    [OPERATOR 'op' [function-name] ...]
+    [OPERATOR 'op' [(left-type, right-type)] [RETURNS type] [function-name] ...]
+    [CAST {FROM | TO} type [, ...] AS IMPLICIT ...]
     [DEFAULT default-expr];
 ```
 
@@ -128,6 +129,34 @@ OPERATOR 'op' function-name
 | `function-name` | The name of a SQL function to call when this operator is used. Omit to use the base type's native comparison. |
 
 When an operator is defined, expressions like `column + 1` are rewritten into `function_name(column, 1)`.
+
+#### Operator signatures
+
+An operator can say which operand types it accepts and what type its result has:
+
+```sql
+OPERATOR '+' (money, money) RETURNS money money_add
+OPERATOR '<' (money, money) money_lt
+```
+
+A type in a signature is a registered type, one of `integer`, `real`, `text` and `blob`, or `any` (any value, passed unchanged). With `RETURNS`, the result has that type, so the type's operators apply to it again: `(a + b) + c` calls `money_add` twice. An operator without a signature accepts two values of its own type (and, for `+`, `-`, `*`, `/` and `%` on a type whose DECODE returns the stored value unchanged, any other value), and its result has no type.
+
+The operator is chosen from the signatures of the operands' types. A literal string, `NULL` or a `?` parameter takes the type of the other operand. Other values fit a signature only if they have its type, or a `CAST ... AS IMPLICIT` clause allows the conversion. The signature with the most operands of exactly its types wins; two equally good signatures are an error (`operator is not unique`). When no signature fits, the standard SQLite operator is used.
+
+A value converted to a type goes through the type's ENCODE and DECODE, so it is validated and normalized like a stored value: comparing a `date` column with `'garbage'` is an error, and comparing a `uuid` column with an upper-case literal finds the stored lower-case value. A type that declares no `=` operator still compares a literal or parameter with its values after this conversion.
+
+### CAST ... AS IMPLICIT
+
+`CAST FROM type AS IMPLICIT` lets values of another type, or of a SQLite storage class, be converted to this type when an operator needs it. `CAST TO type AS IMPLICIT` lets values of this type be converted to another type or storage class when no operator signature fits.
+
+```sql
+CREATE TYPE money(value any) BASE text
+    ENCODE value DECODE value
+    CAST FROM integer AS IMPLICIT
+    OPERATOR '+' (money, money) RETURNS money money_add;
+
+-- money_column + 1 calls money_add with 1 converted to money.
+```
 
 #### Ordering with OPERATOR '<'
 
@@ -280,12 +309,12 @@ Turso provides the following built-in custom types in STRICT tables:
 | `boolean` | integer | -- | Constrained to 0 or 1. Aliases: `bool`. |
 | `smallint` | integer | -- | Integer constrained to -32768 through 32767. Aliases: `int2`. |
 | `bigint` | integer | -- | Integer (no range constraint). Aliases: `int8`. |
-| `varchar(N)` | text | `maxlen` | Text with a maximum length of N characters. |
+| `varchar(N)` | text | `maxlen` | Text with a maximum length of N characters. Without `(N)` the length is not limited. |
 | `date` | text | -- | ISO 8601 date (YYYY-MM-DD), validated on insert. Supports `+` and `-` with whole-day integers. |
 | `time` | text | -- | ISO 8601 time (HH:MM:SS), validated on insert. |
 | `timestamp` | text | -- | ISO 8601 datetime, validated on insert. |
 | `timestamptz` | text | -- | ISO 8601 datetime with the same validation and normalization as `timestamp`. PostgreSQL-compatible name; the stored text carries no offset. |
-| `numeric(P,S)` | blob | `precision`, `scale` | Fixed-point decimal with P total digits and S decimal places. Values with more decimal places are rounded half away from zero (`1.505` becomes `1.51`). Supports arithmetic operators. |
+| `numeric(P,S)` | blob | `precision`, `scale` | Fixed-point decimal with P total digits and S decimal places. Values with more decimal places are rounded half away from zero (`1.505` becomes `1.51`). Without parameters the value is not limited. Supports arithmetic operators, whose results are numeric; integers and reals are converted to numeric. |
 | `uuid` | blob | -- | UUID stored as 16-byte blob, displayed as string. Default: `uuid4_str()`. |
 | `inet` | text | -- | Validated IP address (IPv4 or IPv6). |
 | `cidr` | text | -- | Network address in CIDR notation. Stored as given; no validation yet. |

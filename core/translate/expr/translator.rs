@@ -600,8 +600,6 @@ fn translate_truth_test_expr(
     Ok(target_register)
 }
 
-/// Translates the binary expression with the operator of a custom type, if
-/// either operand has a custom type that defines one. Returns false otherwise.
 #[inline(never)]
 fn try_translate_custom_type_operator(
     program: &mut ProgramBuilder,
@@ -612,18 +610,21 @@ fn try_translate_custom_type_operator(
     target_register: usize,
     resolver: &Resolver,
 ) -> Result<bool> {
-    let Some(resolved) = find_custom_type_operator(e1, e2, op, referenced_tables, resolver) else {
+    let env = TypeEnv::from_resolver(resolver);
+    let Some(resolved) = resolve_operator(op, e1, e2, referenced_tables, &env)? else {
         return Ok(false);
     };
-    let result_reg =
-        emit_custom_type_operator(program, referenced_tables, e1, e2, &resolved, resolver)?;
-    if result_reg != target_register {
-        program.emit_insn(Insn::Copy {
-            src_reg: result_reg,
-            dst_reg: target_register,
-            extra_amount: 0,
-        });
-    }
+    emit_typed_operator(
+        program,
+        referenced_tables,
+        e1,
+        op,
+        e2,
+        &resolved,
+        target_register,
+        resolver,
+        BinaryEmitMode::Value,
+    )?;
     Ok(true)
 }
 
@@ -3111,6 +3112,12 @@ fn translate_raise_expr(
         unreachable!("translate_raise_expr expects Expr::Raise");
     };
     let in_trigger = program.trigger.is_some();
+    if let Some(target_pc) = program.raise_target {
+        if !matches!(resolve_type, ResolveType::Ignore) {
+            program.emit_insn(Insn::Goto { target_pc });
+            return Ok(target_register);
+        }
+    }
     match resolve_type {
         ResolveType::Ignore => {
             if !in_trigger {

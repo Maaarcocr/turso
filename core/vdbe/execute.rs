@@ -2765,6 +2765,29 @@ pub fn op_type_check(
     Ok(InsnFunctionStepResult::Step)
 }
 
+pub fn op_error_target(
+    _program: &Program,
+    state: &mut ProgramState,
+    insn: &Insn,
+    _pager: &Arc<Pager>,
+) -> InsnResult {
+    load_insn!(ErrorTarget { target_pc }, insn);
+    state.error_target = Some(*target_pc);
+    state.pc += 1;
+    Ok(InsnFunctionStepResult::Step)
+}
+
+pub fn op_clear_error_target(
+    _program: &Program,
+    state: &mut ProgramState,
+    _insn: &Insn,
+    _pager: &Arc<Pager>,
+) -> InsnResult {
+    state.error_target = None;
+    state.pc += 1;
+    Ok(InsnFunctionStepResult::Step)
+}
+
 pub fn op_is_type(
     _program: &Program,
     state: &mut ProgramState,
@@ -11474,7 +11497,8 @@ pub fn op_function(
                         use std::str::FromStr;
 
                         let precision = match precision_reg.get_value() {
-                            Value::Numeric(Numeric::Integer(i)) => *i,
+                            Value::Numeric(Numeric::Integer(i)) => Some(*i),
+                            Value::Null => None,
                             _ => {
                                 return Err(LimboError::Constraint(
                                     "numeric_encode: precision must be an integer".to_string(),
@@ -11484,6 +11508,7 @@ pub fn op_function(
                         };
                         let scale = match scale_reg.get_value() {
                             Value::Numeric(Numeric::Integer(i)) => *i,
+                            Value::Null => 0,
                             _ => {
                                 return Err(LimboError::Constraint(
                                     "numeric_encode: scale must be an integer".to_string(),
@@ -11507,7 +11532,10 @@ pub fn op_function(
                                 "invalid input for type numeric: \"{text}\""
                             ))
                         })?;
-                        let validated = validate_precision_scale(&bd, precision, scale)?;
+                        let validated = match precision {
+                            Some(precision) => validate_precision_scale(&bd, precision, scale)?,
+                            None => bd,
+                        };
                         Value::from_blob(bigdecimal_to_blob(&validated))
                     }
                 };

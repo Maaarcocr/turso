@@ -881,6 +881,12 @@ pub enum Insn {
         target_pc: BranchOffset,
     },
 
+    ErrorTarget {
+        target_pc: BranchOffset,
+    },
+
+    ClearErrorTarget,
+
     /// Jump if the register is NULL or has type `value_type`.
     IsType {
         reg: usize,
@@ -2335,6 +2341,8 @@ impl InsnVariants {
             InsnVariants::ColumnRange => execute::op_column_range,
             InsnVariants::ColumnHasField => execute::op_column_has_field,
             InsnVariants::IsType => execute::op_is_type,
+            InsnVariants::ErrorTarget => execute::op_error_target,
+            InsnVariants::ClearErrorTarget => execute::op_clear_error_target,
             InsnVariants::TypeCheck => execute::op_type_check,
             InsnVariants::ArrayEncode => execute::op_array_encode,
             InsnVariants::ArrayDecode => execute::op_array_decode,

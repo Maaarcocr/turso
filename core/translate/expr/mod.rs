@@ -106,7 +106,10 @@ pub use metadata::ConditionMetadata;
 pub use translator::{
     resolve_expr, translate_expr, translate_expr_no_constant_opt, NoConstantOptReason,
 };
-pub(crate) use types::{expr_type, ExprType, TypeEnv};
+pub(crate) use types::{
+    emit_value_conversion, expr_type, resolve_operator, resolve_typed_operator, Conversion,
+    DynamicClass, ExprType, NamedType, ResolvedOperator, TypeEnv,
+};
 pub use utils::{
     as_binary_components, maybe_apply_affinity, sanitize_string, truth_test_rhs, unwrap_parens,
     unwrap_parens_owned,

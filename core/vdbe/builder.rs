@@ -288,6 +288,7 @@ pub struct ProgramBuilder {
     /// When set, `Expr::Id("value")` resolves to the register holding the input value,
     /// and type parameter names resolve to registers holding their concrete values.
     pub id_register_overrides: HashMap<String, usize>,
+    pub(crate) raise_target: Option<BranchOffset>,
     /// Hash join build signatures keyed by hash table id.
     hash_build_signatures: HashMap<usize, HashBuildSignature>,
     /// Hash tables to keep open across subplans (e.g. materialization).
@@ -793,6 +794,7 @@ impl ProgramBuilder {
             trigger_conflict_override: None,
             cursor_overrides: Vec::new(),
             id_register_overrides: HashMap::default(),
+            raise_target: None,
             hash_build_signatures: HashMap::default(),
             hash_tables_to_keep_open: BitSet::default(),
             subquery_result_regs: HashMap::default(),
@@ -1808,6 +1810,9 @@ impl ProgramBuilder {
                 }
                 Insn::IsType { target_pc, .. } => {
                     resolve(target_pc, "IsType")?;
+                }
+                Insn::ErrorTarget { target_pc } => {
+                    resolve(target_pc, "ErrorTarget")?;
                 }
                 Insn::IfNullRow { target_pc, .. } => {
                     resolve(target_pc, "IfNullRow")?;

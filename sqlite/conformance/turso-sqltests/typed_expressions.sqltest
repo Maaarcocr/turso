@@ -70,3 +70,127 @@ test type-parameter-default-must-be-trailing {
 }
 expect error {
 }
+
+@requires strict "uses STRICT tables"
+test numeric-operator-applies-to-typed-subexpressions {
+    CREATE TABLE t1(p numeric(20,2), i INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('12345678901234567.89', 3);
+    SELECT (p + 1) + 2, p + i, (p + i) * 1 FROM t1;
+}
+expect {
+    12345678901234570.89|12345678901234570.89|12345678901234570.89
+}
+
+@requires strict "uses STRICT tables"
+test numeric-literal-is-not-converted-with-column-scale {
+    CREATE TABLE t1(p numeric(5,2), q numeric(5,0)) STRICT;
+    INSERT INTO t1 VALUES ('1.55', '2');
+    SELECT q * 1.5 FROM t1;
+    SELECT p FROM t1 WHERE p < 1.555;
+    SELECT count(*) FROM t1 WHERE p = 1.555;
+    SELECT p FROM t1 WHERE p < 100000;
+}
+expect {
+    3.0
+    1.55
+    0
+    1.55
+}
+
+@requires strict "uses STRICT tables"
+test numeric-result-compares-as-number {
+    CREATE TABLE t1(p numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES ('1.50');
+    SELECT count(*) FROM t1 WHERE p * 1 > 5;
+    SELECT p * 1 < 5 FROM t1;
+}
+expect {
+    0
+    1
+}
+
+@requires strict "uses STRICT tables"
+test typed-equality-index-and-scan-agree {
+    CREATE TABLE t1(p numeric(5,2), s smallint, v varchar(3)) STRICT;
+    CREATE INDEX t1_p ON t1(p);
+    CREATE INDEX t1_s ON t1(s);
+    CREATE INDEX t1_v ON t1(v);
+    INSERT INTO t1 VALUES ('1.55', 1, 'abc'), ('1.56', 2, 'abd'), ('1.50', 3, 'abe');
+    SELECT 'index', count(*) FROM t1 INDEXED BY t1_p WHERE p = 1.555;
+    SELECT 'scan', count(*) FROM t1 NOT INDEXED WHERE p = 1.555;
+    SELECT 'index', p FROM t1 INDEXED BY t1_p WHERE p = 1.5;
+    SELECT 'scan', p FROM t1 NOT INDEXED WHERE p = 1.5;
+    SELECT 'index', count(*) FROM t1 INDEXED BY t1_p WHERE p = 100000;
+    SELECT 'scan', count(*) FROM t1 NOT INDEXED WHERE p = 100000;
+    SELECT 'index', count(*) FROM t1 INDEXED BY t1_s WHERE s = 100000;
+    SELECT 'scan', count(*) FROM t1 NOT INDEXED WHERE s = 100000;
+    SELECT 'index', count(*) FROM t1 INDEXED BY t1_v WHERE v = 'abcdef';
+    SELECT 'scan', count(*) FROM t1 NOT INDEXED WHERE v = 'abcdef';
+}
+expect {
+    index|0
+    scan|0
+    index|1.50
+    scan|1.50
+    index|0
+    scan|0
+    index|0
+    scan|0
+    index|0
+    scan|0
+}
+
+@requires strict "uses STRICT tables"
+test uuid-literal-is-converted-before-comparing {
+    CREATE TABLE t1(u uuid) STRICT;
+    CREATE INDEX t1_u ON t1(u);
+    INSERT INTO t1 VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+    SELECT 'index', count(*) FROM t1 INDEXED BY t1_u WHERE u = 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11';
+    SELECT 'scan', count(*) FROM t1 NOT INDEXED WHERE u = 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11';
+}
+expect {
+    index|1
+    scan|1
+}
+
+@requires strict "uses STRICT tables"
+test date-comparison-with-invalid-date-fails {
+    CREATE TABLE t1(d date) STRICT;
+    INSERT INTO t1 VALUES ('2024-01-05');
+    SELECT count(*) FROM t1 WHERE d = 'garbage';
+}
+expect error {
+    invalid date value
+}
+
+@requires strict "uses STRICT tables"
+test date-plus-untyped-operand-adds-days {
+    CREATE TABLE t1(d date) STRICT;
+    INSERT INTO t1 VALUES ('2024-01-05');
+    SELECT d + (SELECT 2), d + 1, d - 1 FROM t1;
+}
+expect {
+    2024-01-07|2024-01-06|2024-01-04
+}
+
+@requires strict "uses STRICT tables"
+test operator-signature-with-two-equal-candidates-is-an-error {
+    CREATE TYPE money(value any) BASE text ENCODE value DECODE value OPERATOR '+' (money, integer) RETURNS money numeric_add OPERATOR '+' (money, real) RETURNS money numeric_add;
+    CREATE TABLE t1(m money) STRICT;
+    INSERT INTO t1 VALUES ('1');
+    SELECT m + NULL FROM t1;
+}
+expect error {
+    operator is not unique
+}
+
+@requires strict "uses STRICT tables"
+test operator-signature-declared-by-user-type {
+    CREATE TYPE money(value any) BASE text ENCODE value DECODE value CAST FROM integer AS IMPLICIT OPERATOR '+' (money, money) RETURNS money numeric_add OPERATOR '<' (money, money) numeric_lt;
+    CREATE TABLE t1(m money, i INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('1.25', 2);
+    SELECT (m + i) + (m + i), (m + i) < 4 FROM t1;
+}
+expect {
+    6.50|1
+}

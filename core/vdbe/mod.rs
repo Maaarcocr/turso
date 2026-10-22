@@ -1035,6 +1035,7 @@ pub struct ProgramState {
     pub io_completions: Option<IOCompletions>,
     pub(crate) extension_state: crate::native_ext::ExtensionState,
     pub pc: InsnReference,
+    pub(crate) error_target: Option<BranchOffset>,
     pub(crate) cursors: Vec<Option<Cursor>>,
     /// Database id associated with each opened cursor. Ephemeral and pseudo
     /// cursors have no database id.
@@ -1252,6 +1253,7 @@ impl ProgramState {
             sequence_inner_tx_pending: None,
             sequence_inner_retry_count: 0,
             current_time: None,
+            error_target: None,
             #[cfg(feature = "json")]
             json_cache: JsonCacheCell::new(),
             active_op_state: ActiveOpStateSlot::default(),
@@ -1405,6 +1407,7 @@ impl ProgramState {
         self.query_deadline = None;
         self.explicit_checkpoint_guard = None;
         self.current_time = None;
+        self.error_target = None;
         #[cfg(feature = "json")]
         self.json_cache.clear();
 
@@ -2661,7 +2664,16 @@ impl Program {
                         let io = state.take_suspended_io();
                         program.park_on_io(state, io, waker)
                     }
-                    Err(boxed_err) => program.fail_step(state, pager, *boxed_err),
+                    Err(boxed_err) => {
+                        if let (Some(target), LimboError::Constraint(_)) =
+                            (state.error_target, &*boxed_err)
+                        {
+                            state.error_target = None;
+                            state.pc = target.as_offset_int();
+                            return None;
+                        }
+                        program.fail_step(state, pager, *boxed_err)
+                    }
                     Ok(InsnFunctionStepResult::Step) | Ok(InsnFunctionStepResult::Row) => {
                         unreachable!("the dispatch loop settles steps and rows itself")
                     }

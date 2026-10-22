@@ -856,42 +856,22 @@ impl Default for Schema {
     }
 }
 
-fn bootstrap_builtin_types(registry: &mut HashMap<String, Arc<TypeDef>>) -> crate::Result<()> {
+fn bootstrap_builtin_types(
+    registry: &mut HashMap<String, Arc<TypeDef>>,
+    rules: &crate::dialect::TypeRules,
+) -> crate::Result<()> {
     use turso_parser::ast::{Cmd, Stmt};
     use turso_parser::parser::Parser;
 
-    let type_sqls: &[&str] = &[
-        #[cfg(feature = "uuid")]
-        "CREATE TYPE uuid(value any) BASE blob ENCODE CASE WHEN value IS NULL THEN NULL WHEN typeof(value) = 'blob' AND length(value) = 16 THEN value ELSE coalesce(uuid_blob(value), RAISE(ABORT, 'invalid UUID value')) END DECODE uuid_str(value) OPERATOR '<'",
-        "CREATE TYPE boolean(value any) BASE integer ENCODE boolean_to_int(value) DECODE CASE WHEN value THEN 1 ELSE 0 END OPERATOR '<'",
-        #[cfg(feature = "json")]
-        "CREATE TYPE json(value text) BASE text ENCODE json(value) DECODE value",
-        #[cfg(feature = "json")]
-        "CREATE TYPE jsonb(value text) BASE blob ENCODE jsonb(value) DECODE json(value)",
-        "CREATE TYPE varchar(value text, maxlen integer) BASE text ENCODE CASE WHEN length(value) <= maxlen THEN value ELSE RAISE(ABORT, 'value too long for varchar') END DECODE value OPERATOR '<'",
-        "CREATE TYPE date(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN date(value) IS NULL THEN RAISE(ABORT, 'invalid date value') ELSE date(value) END DECODE value OPERATOR '+' date_plus OPERATOR '-' date_minus OPERATOR '<'",
-        // ENCODE preserves sub-second precision through strftime + a rtrim pair
-        // that strips trailing zeros and the dangling dot, matching PostgreSQL's
-        // text format: whole seconds render as `HH:MM:SS` (no .000), trailing
-        // zeros are dropped (`.500` -> `.5`), and the dot is removed when no
-        // fractional digits remain. `time(...)` / `datetime(...)` would truncate
-        // the fraction outright, silently dropping precision on insert.
-        // Caveat: Turso's `%f` directive is millisecond resolution, so PG's
-        // microsecond inputs are clamped to 3 digits (`.123456` -> `.123`).
-        "CREATE TYPE time(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN time(value) IS NULL THEN RAISE(ABORT, 'invalid time value') ELSE rtrim(rtrim(strftime('%H:%M:%f', value), '0'), '.') END DECODE value OPERATOR '<'",
-        "CREATE TYPE timestamp(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN datetime(value) IS NULL THEN RAISE(ABORT, 'invalid timestamp value') ELSE rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', value), '0'), '.') END DECODE value OPERATOR '<'",
-        "CREATE TYPE timestamptz(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN datetime(value) IS NULL THEN RAISE(ABORT, 'invalid timestamp value') ELSE rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', value), '0'), '.') END DECODE value OPERATOR '<'",
-        "CREATE TYPE smallint(value integer) BASE integer ENCODE CASE WHEN value BETWEEN -32768 AND 32767 THEN value ELSE RAISE(ABORT, 'integer out of range for smallint') END DECODE value OPERATOR '<'",
-        "CREATE TYPE bigint(value integer) BASE integer",
-        "CREATE TYPE inet(value text) BASE text ENCODE validate_ipaddr(value) DECODE value",
-        "CREATE TYPE cidr(value text) BASE text ENCODE value DECODE value",
-        "CREATE TYPE macaddr(value text) BASE text ENCODE value DECODE value",
-        "CREATE TYPE macaddr8(value text) BASE text ENCODE value DECODE value",
-        "CREATE TYPE bytea(value blob) BASE blob OPERATOR '<'",
-        "CREATE TYPE numeric(value any, precision integer, scale integer) BASE blob ENCODE numeric_encode(value, precision, scale) DECODE numeric_decode(value) OPERATOR '+' numeric_add OPERATOR '-' numeric_sub OPERATOR '*' numeric_mul OPERATOR '/' numeric_div OPERATOR '<' numeric_lt OPERATOR '=' numeric_eq",
-    ];
-
-    for sql in type_sqls {
+    for builtin in BUILTIN_TYPES {
+        let behaviour = rules
+            .behaviour_override(builtin.name)
+            .unwrap_or(builtin.behaviour);
+        let sql = if behaviour.is_empty() {
+            builtin.storage.to_string()
+        } else {
+            format!("{} {behaviour}", builtin.storage)
+        };
         let mut parser = Parser::new(sql.as_bytes());
         let Ok(Some(Cmd::Stmt(Stmt::CreateType {
             type_name, body, ..
@@ -902,7 +882,7 @@ fn bootstrap_builtin_types(registry: &mut HashMap<String, Arc<TypeDef>>) -> crat
             )));
         };
 
-        let type_def = TypeDef::from_create_type(&type_name, &body, true, sql.to_string())?;
+        let type_def = TypeDef::from_create_type(&type_name, &body, true, sql.clone())?;
         registry.insert(type_name.to_lowercase(), Arc::new(type_def));
     }
 
@@ -919,6 +899,111 @@ fn bootstrap_builtin_types(registry: &mut HashMap<String, Arc<TypeDef>>) -> crat
     }
     Ok(())
 }
+
+struct BuiltinType {
+    name: &'static str,
+    storage: &'static str,
+    behaviour: &'static str,
+}
+
+const BUILTIN_TYPES: &[BuiltinType] = &[
+    #[cfg(feature = "uuid")]
+    BuiltinType {
+        name: "uuid",
+        storage: "CREATE TYPE uuid(value any) BASE blob ENCODE CASE WHEN value IS NULL THEN NULL WHEN typeof(value) = 'blob' AND length(value) = 16 THEN value ELSE coalesce(uuid_blob(value), RAISE(ABORT, 'invalid UUID value')) END DECODE uuid_str(value)",
+        behaviour: "OPERATOR '<' (uuid, uuid) OPERATOR '=' (uuid, uuid)",
+    },
+    BuiltinType {
+        name: "boolean",
+        storage: "CREATE TYPE boolean(value any) BASE integer ENCODE boolean_to_int(value) DECODE CASE WHEN value THEN 1 ELSE 0 END",
+        behaviour: "OPERATOR '<' (boolean, boolean) OPERATOR '=' (boolean, boolean)",
+    },
+    #[cfg(feature = "json")]
+    BuiltinType {
+        name: "json",
+        storage: "CREATE TYPE json(value text) BASE text ENCODE json(value) DECODE value",
+        behaviour: "",
+    },
+    #[cfg(feature = "json")]
+    BuiltinType {
+        name: "jsonb",
+        storage: "CREATE TYPE jsonb(value text) BASE blob ENCODE jsonb(value) DECODE json(value)",
+        behaviour: "",
+    },
+    BuiltinType {
+        name: "varchar",
+        storage: "CREATE TYPE varchar(value text, maxlen integer DEFAULT NULL) BASE text ENCODE CASE WHEN maxlen IS NULL OR length(value) <= maxlen THEN value ELSE RAISE(ABORT, 'value too long for varchar') END DECODE value",
+        behaviour: "OPERATOR '<' (varchar, varchar) OPERATOR '=' (varchar, varchar)",
+    },
+    BuiltinType {
+        name: "date",
+        storage: "CREATE TYPE date(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN date(value) IS NULL THEN RAISE(ABORT, 'invalid date value') ELSE date(value) END DECODE value",
+        behaviour: "OPERATOR '+' date_plus OPERATOR '-' date_minus OPERATOR '<' (date, date) OPERATOR '=' (date, date)",
+    },
+    // ENCODE preserves sub-second precision through strftime + a rtrim pair
+    // that strips trailing zeros and the dangling dot, matching PostgreSQL's
+    // text format: whole seconds render as `HH:MM:SS` (no .000), trailing
+    // zeros are dropped (`.500` -> `.5`), and the dot is removed when no
+    // fractional digits remain. `time(...)` / `datetime(...)` would truncate
+    // the fraction outright, silently dropping precision on insert.
+    // Caveat: Turso's `%f` directive is millisecond resolution, so PG's
+    // microsecond inputs are clamped to 3 digits (`.123456` -> `.123`).
+    BuiltinType {
+        name: "time",
+        storage: "CREATE TYPE time(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN time(value) IS NULL THEN RAISE(ABORT, 'invalid time value') ELSE rtrim(rtrim(strftime('%H:%M:%f', value), '0'), '.') END DECODE value",
+        behaviour: "OPERATOR '<' (time, time) OPERATOR '=' (time, time)",
+    },
+    BuiltinType {
+        name: "timestamp",
+        storage: "CREATE TYPE timestamp(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN datetime(value) IS NULL THEN RAISE(ABORT, 'invalid timestamp value') ELSE rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', value), '0'), '.') END DECODE value",
+        behaviour: "OPERATOR '<' (timestamp, timestamp) OPERATOR '=' (timestamp, timestamp)",
+    },
+    BuiltinType {
+        name: "timestamptz",
+        storage: "CREATE TYPE timestamptz(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN datetime(value) IS NULL THEN RAISE(ABORT, 'invalid timestamp value') ELSE rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', value), '0'), '.') END DECODE value",
+        behaviour: "OPERATOR '<' (timestamptz, timestamptz) OPERATOR '=' (timestamptz, timestamptz)",
+    },
+    BuiltinType {
+        name: "smallint",
+        storage: "CREATE TYPE smallint(value integer) BASE integer ENCODE CASE WHEN value BETWEEN -32768 AND 32767 THEN value ELSE RAISE(ABORT, 'integer out of range for smallint') END DECODE value",
+        behaviour: "OPERATOR '<' (smallint, smallint) OPERATOR '=' (smallint, smallint)",
+    },
+    BuiltinType {
+        name: "bigint",
+        storage: "CREATE TYPE bigint(value integer) BASE integer",
+        behaviour: "",
+    },
+    BuiltinType {
+        name: "inet",
+        storage: "CREATE TYPE inet(value text) BASE text ENCODE validate_ipaddr(value) DECODE value",
+        behaviour: "",
+    },
+    BuiltinType {
+        name: "cidr",
+        storage: "CREATE TYPE cidr(value text) BASE text ENCODE value DECODE value",
+        behaviour: "",
+    },
+    BuiltinType {
+        name: "macaddr",
+        storage: "CREATE TYPE macaddr(value text) BASE text ENCODE value DECODE value",
+        behaviour: "",
+    },
+    BuiltinType {
+        name: "macaddr8",
+        storage: "CREATE TYPE macaddr8(value text) BASE text ENCODE value DECODE value",
+        behaviour: "",
+    },
+    BuiltinType {
+        name: "bytea",
+        storage: "CREATE TYPE bytea(value blob) BASE blob",
+        behaviour: "OPERATOR '<' (bytea, bytea) OPERATOR '=' (bytea, bytea)",
+    },
+    BuiltinType {
+        name: "numeric",
+        storage: "CREATE TYPE numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL) BASE blob ENCODE numeric_encode(value, precision, scale) DECODE numeric_decode(value)",
+        behaviour: "CAST FROM integer, real AS IMPLICIT OPERATOR '+' (numeric, numeric) RETURNS numeric numeric_add OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div OPERATOR '<' (numeric, numeric) numeric_lt OPERATOR '=' (numeric, numeric) numeric_eq",
+    },
+];
 
 impl Schema {
     fn normalize_table_lookup_name(&self, name: &str) -> String {
@@ -969,7 +1054,7 @@ impl Schema {
         let incompatible_materialized_view_roots = HashMap::default();
         let mut type_registry = HashMap::default();
         if enable_custom_types {
-            bootstrap_builtin_types(&mut type_registry)?;
+            bootstrap_builtin_types(&mut type_registry, dialect.type_rules())?;
         }
         let mut schema = Self {
             tables,

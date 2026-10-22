@@ -1,6 +1,8 @@
 use super::{cost_params::CostModelParams, AvailableIndexes};
 use crate::alloc::TursoIteratorExt;
-use crate::translate::expr::comparison_affinity;
+use crate::translate::expr::{
+    comparison_affinity, expr_type, resolve_typed_operator, ExprType, NamedType, TypeEnv,
+};
 use crate::{
     schema::{Column, Index, Schema},
     translate::{
@@ -1289,11 +1291,23 @@ pub fn constraints_from_where_clause(
             {
                 if let Some(position_in_index) = match constraint.table_col_pos {
                     Some(pos) => index.column_table_pos_to_index_pos(pos),
-                    None => constraint.expr.as_ref().and_then(|e| {
-                        let normalized =
-                            normalize_expr_for_index_matching(e, table_reference, table_references);
-                        index.expression_to_index_pos(&normalized)
-                    }),
+                    None => constraint
+                        .expr
+                        .as_ref()
+                        .filter(|e| {
+                            !matches!(
+                                expr_type(e, Some(table_references), &TypeEnv::new(schema)),
+                                ExprType::Named(_)
+                            )
+                        })
+                        .and_then(|e| {
+                            let normalized = normalize_expr_for_index_matching(
+                                e,
+                                table_reference,
+                                table_references,
+                            );
+                            index.expression_to_index_pos(&normalized)
+                        }),
                 } {
                     turso_assert!(
                         constraint.usable,
@@ -1308,18 +1322,14 @@ pub fn constraints_from_where_clause(
                         if table_collation != index_collation {
                             continue;
                         }
-                        // Custom type columns encode values as blobs. Blob ordering (memcmp)
-                        // doesn't necessarily match the custom type's semantic ordering, so
-                        // range constraints (>, <, >=, <=) can't use the index. Equality (=)
-                        // still works because encoded(A) == encoded(B) iff A == B.
-                        if schema
-                            .get_type_def(
-                                &constrained_column.ty_str,
-                                table_reference.table.is_strict(),
-                            )
-                            .is_some()
-                            && constraint.operator != ast::Operator::Equals.into()
-                        {
+                        if !typed_column_constraint_can_use_index(
+                            constraint,
+                            constrained_column,
+                            table_reference,
+                            table_references,
+                            where_clause,
+                            schema,
+                        ) {
                             continue;
                         }
                         let idx_col_aff = constrained_column.affinity();
@@ -2473,4 +2483,57 @@ fn find_best_index_for_constraint(
     }
 
     (None, vec![])
+}
+
+fn typed_column_constraint_can_use_index(
+    constraint: &Constraint,
+    column: &crate::schema::Column,
+    table_reference: &JoinedTable,
+    table_references: &TableReferences,
+    where_clause: &[WhereTerm],
+    schema: &Schema,
+) -> bool {
+    let Some(def) = schema.get_type_def(&column.ty_str, table_reference.table.is_strict()) else {
+        return true;
+    };
+    if constraint.operator != ast::Operator::Equals.into() {
+        return false;
+    }
+    let env = TypeEnv::new(schema);
+    let constraining_expr = match &constraint.constraining_expr {
+        Some((_, expr, _)) => expr,
+        None => constraint.get_constraining_expr_ref(where_clause),
+    };
+    let column_type = ExprType::Named(NamedType {
+        def: Arc::clone(def),
+        params: Some(column.ty_params.iter().map(|p| (**p).clone()).collect()),
+    });
+    let constraining_type = expr_type(constraining_expr, Some(table_references), &env);
+    match resolve_typed_operator(
+        &ast::Operator::Equals,
+        [
+            (&column_type, None),
+            (&constraining_type, Some(constraining_expr)),
+        ],
+        &env,
+    ) {
+        Ok(Some(resolved)) => match &resolved.own_operator_of {
+            Some(owner) => owner.name.eq_ignore_ascii_case(&def.name),
+            None => {
+                resolved.function.is_none()
+                    && resolved.conversions[0].is_none()
+                    && reads_stored_values_unchanged(column, schema)
+            }
+        },
+        Ok(None) => reads_stored_values_unchanged(column, schema),
+        Err(_) => false,
+    }
+}
+
+fn reads_stored_values_unchanged(column: &crate::schema::Column, schema: &Schema) -> bool {
+    schema
+        .resolve_type_unchecked(&column.ty_str)
+        .ok()
+        .flatten()
+        .is_some_and(|resolved| resolved.reads_stored_values_unchanged())
 }
