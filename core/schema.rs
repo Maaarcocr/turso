@@ -1066,7 +1066,7 @@ const BUILTIN_TYPES: &[BuiltinType] = &[
     BuiltinType {
         name: "numeric",
         storage: "CREATE TYPE numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL) BASE blob ENCODE numeric_encode(value, precision, scale) DECODE numeric_decode(value) KEY numeric_key(value)",
-        behaviour: "CAST FROM integer, real AS IMPLICIT OPERATOR '+' (numeric, numeric) RETURNS numeric numeric_add OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div OPERATOR '-' (numeric) RETURNS numeric numeric_neg OPERATOR '<' (numeric, numeric) numeric_lt OPERATOR '=' (numeric, numeric) numeric_eq FUNCTION abs(numeric) RETURNS numeric numeric_abs",
+        behaviour: "CAST FROM integer, real AS IMPLICIT OPERATOR '+' (numeric, numeric) RETURNS numeric numeric_add OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div OPERATOR '-' (numeric) RETURNS numeric numeric_neg OPERATOR '<' (numeric, numeric) numeric_lt OPERATOR '=' (numeric, numeric) numeric_eq FUNCTION abs(numeric) RETURNS numeric numeric_abs FUNCTION sum(numeric) RETURNS numeric numeric_sum",
     },
 ];
 

@@ -1357,6 +1357,19 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
 
 ## Proposal 4: typed aggregates and ordered numeric storage
 
+### Implementation notes (Proposal 4)
+
+- **SUM and AVG (commit 29).** `numeric_sum` is a core aggregate (exact
+  decimal addition, with an inverse step so sliding window frames work; it
+  needs custom types). A type declares it with `FUNCTION sum(T) RETURNS R
+  numeric_sum`; numeric does, in core and in PostgreSQL. When an expression
+  is bound, `sum(x)` of such a type becomes `numeric_sum(x)` and `avg(x)`
+  becomes `numeric_sum(x) / count(x)`, keeping DISTINCT, FILTER and OVER, so
+  the division is the type's `/` and the result's static parameters come from
+  the dialect's result rule (`"sum"` gives the sum's parameters, then `/` its
+  own). The column name stays the one written. Types without a declared sum,
+  and all queries with custom types off, are unchanged.
+
 **Aggregates.** Only type-declared aggregates: `FUNCTION sum(numeric) RETURNS
 numeric numeric_sum` and `avg`, with native exact accumulators. A type without
 one keeps SQLite's aggregate on the in-memory values, as today. `TOTAL` stays

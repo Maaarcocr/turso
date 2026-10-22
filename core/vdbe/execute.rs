@@ -7477,6 +7477,11 @@ fn init_agg_payload(func: &AggFunc, payload: &mut crate::alloc::Vec<Value>) -> R
             payload.push(Value::from_f64(0.0));
             payload.push(Value::from_i64(0));
         }
+        AggFunc::NumericSum => {
+            payload.try_reserve_exact(2)?;
+            payload.push(Value::Null);
+            payload.push(Value::from_i64(0));
+        }
         AggFunc::Min | AggFunc::Max => {
             payload.try_reserve_exact(1)?;
             payload.push(Value::Null);
@@ -7594,6 +7599,7 @@ fn update_agg_payload(
             };
             *i = i.checked_add(1).or_overflow()?;
         }
+        AggFunc::NumericSum => numeric_sum_step(arg, payload, NumericSumStep::Add)?,
         AggFunc::Avg => {
             if matches!(arg, Value::Null) {
                 return Ok(());
@@ -8227,9 +8233,49 @@ pub(crate) fn agg_payload_width(func: &AggFunc) -> Option<usize> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NumericSumStep {
+    Add,
+    Remove,
+}
+
+fn numeric_sum_step(arg: &Value, payload: &mut [Value], step: NumericSumStep) -> Result<()> {
+    if matches!(arg, Value::Null) {
+        return Ok(());
+    }
+    let value = value_to_bigdecimal(arg)?;
+    let [acc, count, ..] = payload else {
+        unreachable!("numeric_sum payload has a total and a count per init_agg_payload");
+    };
+    let Value::Numeric(Numeric::Integer(rows)) = count else {
+        unreachable!("numeric_sum count slot is Integer per init_agg_payload");
+    };
+    let total = match &*acc {
+        Value::Null => bigdecimal::BigDecimal::from(0),
+        total => value_to_bigdecimal(total)?,
+    };
+    let total = match step {
+        NumericSumStep::Add => {
+            *rows += 1;
+            total + value
+        }
+        NumericSumStep::Remove => {
+            *rows -= 1;
+            total - value
+        }
+    };
+    let total = crate::numeric::decimal::check_numeric_range(total)?;
+    *acc = Value::build_text(crate::numeric::decimal::format_numeric(&total));
+    Ok(())
+}
+
 fn finalize_agg_payload(func: &AggFunc, payload: &[Value]) -> Result<Value> {
     let val = match func {
         AggFunc::Count | AggFunc::Count0 => payload[0].clone(),
+        AggFunc::NumericSum => match &payload[1] {
+            Value::Numeric(Numeric::Integer(0)) => Value::Null,
+            _ => payload[0].clone(),
+        },
         AggFunc::Avg => {
             // Payload: [sum, r_err, count]
             let count = payload[2].as_int().unwrap_or(0);
@@ -9135,6 +9181,7 @@ fn kbn_step_int_neg(acc: &mut Value, i: i64, state: &mut SumAggState) {
 /// xInverse implementations at `func.c:1859-1986`.
 fn inverse_agg_payload(func: &AggFunc, arg: Value, payload: &mut [Value]) -> Result<()> {
     match func {
+        AggFunc::NumericSum => numeric_sum_step(&arg, payload, NumericSumStep::Remove)?,
         AggFunc::Count => {
             if !matches!(arg, Value::Null) {
                 let Value::Numeric(Numeric::Integer(i)) = &mut payload[0] else {

@@ -363,7 +363,7 @@ expect {
     jsonb(value text)|blob|jsonb (value)|json (value)|||||
     macaddr(value text)|text|value|value|||||
     macaddr8(value text)|text|value|value|||||
-    numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL)|blob|numeric_encode (value, precision, scale)|numeric_decode (value)||'+' (numeric, numeric) RETURNS numeric numeric_add, '-' (numeric, numeric) RETURNS numeric numeric_sub, '*' (numeric, numeric) RETURNS numeric numeric_mul, '/' (numeric, numeric) RETURNS numeric numeric_div, '-' (numeric) RETURNS numeric numeric_neg, '<' (numeric, numeric) numeric_lt, '=' (numeric, numeric) numeric_eq|FROM integer, real|abs(numeric) RETURNS numeric numeric_abs|numeric_key (value)
+    numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL)|blob|numeric_encode (value, precision, scale)|numeric_decode (value)||'+' (numeric, numeric) RETURNS numeric numeric_add, '-' (numeric, numeric) RETURNS numeric numeric_sub, '*' (numeric, numeric) RETURNS numeric numeric_mul, '/' (numeric, numeric) RETURNS numeric numeric_div, '-' (numeric) RETURNS numeric numeric_neg, '<' (numeric, numeric) numeric_lt, '=' (numeric, numeric) numeric_eq|FROM integer, real|abs(numeric) RETURNS numeric numeric_abs, sum(numeric) RETURNS numeric numeric_sum|numeric_key (value)
     smallint(value integer)|integer|CASE WHEN value BETWEEN - 32768 AND 32767 THEN value ELSE RAISE (ABORT, 'integer out of range for smallint') END|value||'<' (smallint, smallint), '=' (smallint, smallint)|||
     time(value text)|text|CASE WHEN value IS NULL THEN NULL WHEN time (value) IS NULL THEN RAISE (ABORT, 'invalid time value') ELSE rtrim (rtrim (strftime ('%H:%M:%f', value), '0'), '.') END|value||'<' (time, time), '=' (time, time)|||
     timestamp(value text)|text|CASE WHEN value IS NULL THEN NULL WHEN datetime (value) IS NULL THEN RAISE (ABORT, 'invalid timestamp value') ELSE rtrim (rtrim (strftime ('%Y-%m-%d %H:%M:%f', value), '0'), '.') END|value||'<' (timestamp, timestamp), '=' (timestamp, timestamp)|||
@@ -397,7 +397,7 @@ expect {
     jsonb(value text)|blob|jsonb (value)|json (value)|||||
     macaddr(value text)|text|value|value|||||
     macaddr8(value text)|text|value|value|||||
-    numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL)|blob|numeric_encode (value, precision, scale)|numeric_decode (value)||'+' (numeric, numeric) RETURNS numeric numeric_add, '-' (numeric, numeric) RETURNS numeric numeric_sub, '*' (numeric, numeric) RETURNS numeric numeric_mul, '/' (numeric, numeric) RETURNS numeric numeric_div, '-' (numeric) RETURNS numeric numeric_neg, '<' (numeric, numeric) numeric_lt, '=' (numeric, numeric) numeric_eq|FROM integer, real|abs(numeric) RETURNS numeric numeric_abs|numeric_key (value)
+    numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL)|blob|numeric_encode (value, precision, scale)|numeric_decode (value)||'+' (numeric, numeric) RETURNS numeric numeric_add, '-' (numeric, numeric) RETURNS numeric numeric_sub, '*' (numeric, numeric) RETURNS numeric numeric_mul, '/' (numeric, numeric) RETURNS numeric numeric_div, '-' (numeric) RETURNS numeric numeric_neg, '<' (numeric, numeric) numeric_lt, '=' (numeric, numeric) numeric_eq|FROM integer, real|abs(numeric) RETURNS numeric numeric_abs, sum(numeric) RETURNS numeric numeric_sum|numeric_key (value)
     smallint(value integer)|integer|CASE WHEN value BETWEEN - 32768 AND 32767 THEN value ELSE RAISE (ABORT, 'integer out of range for smallint') END|value||'<' (smallint, smallint), '=' (smallint, smallint)|||
     test_uint(value any)|text|test_uint_encode (value)|test_uint_decode (value)|0|'+' test_uint_add|||
     time(value text)|text|CASE WHEN value IS NULL THEN NULL WHEN time (value) IS NULL THEN RAISE (ABORT, 'invalid time value') ELSE rtrim (rtrim (strftime ('%H:%M:%f', value), '0'), '.') END|value||'<' (time, time), '=' (time, time)|||
@@ -1003,9 +1003,9 @@ test order-by-group-by-numeric {
     SELECT category, SUM(val) as total FROM t1 GROUP BY category ORDER BY total;
 }
 expect {
-    c|-5.0
-    b|70.0
-    a|109.0
+    c|-5.00
+    b|70.00
+    a|109.00
 }
 
 # GROUP BY decodes values for grouping, so ORDER BY in this context
@@ -1797,7 +1797,7 @@ test filter-sum-numeric {
     SELECT SUM(val), SUM(val) FILTER (WHERE grp = 'a') FROM t1;
 }
 expect {
-    154.0|150.0
+    154.00|150.00
 }
 
 @requires strict "uses STRICT tables"
@@ -1817,7 +1817,7 @@ test filter-avg-numeric {
     SELECT AVG(val), AVG(val) FILTER (WHERE grp = 'b') FROM t1;
 }
 expect {
-    25.0|35.0
+    25.0000000000000000|35.0000000000000000
 }
 
 @requires strict "uses STRICT tables"
@@ -1858,7 +1858,7 @@ test filter-numeric-with-nulls {
     SELECT COUNT(val) FILTER (WHERE flag = 1), SUM(val) FILTER (WHERE flag = 1) FROM t1;
 }
 expect {
-    1|10.0
+    1|10.00
 }
 
 @requires strict "uses STRICT tables"
@@ -1869,7 +1869,7 @@ test filter-numeric-with-having {
     SELECT grp, SUM(val) FILTER (WHERE flag = 1) AS s FROM t1 GROUP BY grp HAVING s > 0;
 }
 expect {
-    a|40.0
+    a|40.00
 }
 
 @requires strict "uses STRICT tables"
@@ -1879,8 +1879,8 @@ test filter-numeric-order-by-filtered-agg {
     SELECT grp, SUM(val) FILTER (WHERE val > 15) AS s FROM t1 GROUP BY grp ORDER BY s;
 }
 expect {
-    b|60.0
-    a|80.0
+    b|60.00
+    a|80.00
 }
 
 @requires strict "uses STRICT tables"
@@ -1919,7 +1919,7 @@ test filter-numeric-multiple-different-conditions {
     FROM t1;
 }
 expect {
-    3|2|12.0
+    3|2|12.00
 }
 
 @requires strict "uses STRICT tables"
@@ -1929,7 +1929,7 @@ test filter-numeric-condition-on-custom-col {
     SELECT COUNT(*) FILTER (WHERE val > 10), SUM(val) FILTER (WHERE val > 10) FROM t1;
 }
 expect {
-    2|150.0
+    2|150.00
 }
 
 @requires strict "uses STRICT tables"

@@ -62,7 +62,8 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 OPERATOR '/' (decimal, decimal) RETURNS decimal numeric_div \
                 OPERATOR '-' (decimal) RETURNS decimal numeric_neg \
                 OPERATOR '<' (decimal, decimal) numeric_lt \
-                OPERATOR '=' (decimal, decimal) numeric_eq",
+                OPERATOR '=' (decimal, decimal) numeric_eq \
+                FUNCTION sum(decimal) RETURNS decimal numeric_sum",
         },
         DialectType {
             name: "integer",
@@ -382,6 +383,7 @@ fn test_result_parameters(operator: &str, operands: [Option<&[i64]>; 2]) -> Opti
             let scale = scale(lhs).max(scale(rhs));
             Some(vec![precision(lhs).max(precision(rhs)) + 1, scale])
         }
+        "sum" => Some(vec![precision(lhs) + 22, scale(lhs)]),
         _ => None,
     }
 }

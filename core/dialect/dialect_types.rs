@@ -1047,6 +1047,32 @@ mod tests {
     }
 
     #[test]
+    fn avg_divides_the_typed_sum_with_the_dialect_division() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "typed-avg.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, d DECIMAL(10,2)) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 1.10), (2, 2.20)")
+            .unwrap();
+        assert_eq!(
+            column_parameters(&conn, "SELECT sum(d) FROM t"),
+            vec!["32", "2"]
+        );
+        assert_eq!(
+            column_parameters(&conn, "SELECT avg(d) FROM t"),
+            vec!["36", "6"]
+        );
+        assert_eq!(
+            query(&conn, "SELECT sum(d), avg(d) FROM t"),
+            vec![vec![
+                Value::build_text("3.30"),
+                Value::build_text("1.6500000000000000")
+            ]]
+        );
+    }
+
+    #[test]
     fn affinity_comes_from_the_storage_type() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let db = open_db(&io, "types-affinity.db", marking()).unwrap();
