@@ -101,7 +101,8 @@ pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
     let database = Database::open(
         io,
         path,
-        turso_core::OpenOptions::new(Arc::new(MySqlDialect)),
+        turso_core::OpenOptions::new(Arc::new(MySqlDialect))
+            .db_opts(turso_core::DatabaseOpts::new().with_generated_columns(true)),
     )?;
     database.connect(turso_core::ConnectOpts::new())
 }
