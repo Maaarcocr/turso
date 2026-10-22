@@ -667,6 +667,39 @@ mod tests {
 
     #[cfg(all(feature = "fs", not(target_family = "wasm")))]
     #[test]
+    fn vacuum_keeps_a_zero_key_of_an_autoincrement_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("zero-key.db");
+        let io: Arc<dyn IO> = Arc::new(crate::io::PlatformIO::new().unwrap());
+        let db = Database::open_file_with_flags(
+            io.clone(),
+            path.to_str().unwrap(),
+            OpenFlags::Create,
+            crate::DatabaseOpts::new().with_vacuum(true),
+            None,
+            marking(),
+        )
+        .unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INT NOT NULL PRIMARY KEY AUTOINCREMENT, v TEXT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t(v) VALUES ('a'), ('b')")
+            .unwrap();
+        conn.execute("UPDATE t SET id = 0 WHERE v = 'a'").unwrap();
+        conn.execute("INSERT INTO t(rowid, v) VALUES (0, 'c')")
+            .expect_err("rowid 0 is taken");
+        conn.execute("VACUUM").unwrap();
+        assert_eq!(
+            query(&conn, "SELECT id, v FROM t ORDER BY id"),
+            vec![
+                vec![Value::from_i64(0), Value::build_text("a")],
+                vec![Value::from_i64(2), Value::build_text("b")],
+            ]
+        );
+    }
+
+    #[cfg(all(feature = "fs", not(target_family = "wasm")))]
+    #[test]
     fn vacuum_keeps_the_marker_and_the_rowid_decision() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("source.db");
