@@ -96,6 +96,11 @@ yet:
   valid value of their type; `DATETIME '..'`; invalid temporal literals; odd
   `X'...'` digits; character set introducers other than the ones above.
 - Expressions nested deeper than 100 levels (the SQLite parser's limit).
+- A grouped `SELECT` (with `GROUP BY`, or with an aggregate and no `GROUP BY`)
+  whose select list or `HAVING` may use a column that is neither grouped nor
+  inside an aggregate, including `*`: MySQL's default `ONLY_FULL_GROUP_BY`
+  rejects it (error 1055 or 1140) unless the column depends on a key, and
+  Turso does not check it.
 - `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN` modifiers, `STRAIGHT_JOIN`
   joins, index hints, `PARTITION (...)` selection, `INTO`, locking reads
   (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`, `VALUES` without
@@ -112,8 +117,8 @@ is SQLite division (integer division for two integers) rather than MySQL's
 DECIMAL division; integer overflow becomes a REAL instead of an error; bit
 operators are signed 64-bit rather than BIGINT UNSIGNED; string comparisons and
 `LIKE` use binary or ASCII case folding rather than `utf8mb4_0900_ai_ci`;
-`WHERE` may refer to select-list aliases; `ONLY_FULL_GROUP_BY` is not
-enforced; and unaliased columns are named after the expression as sqlparser
+`WHERE` may refer to select-list aliases; `ORDER BY` with `DISTINCT` may use
+columns outside the select list; and unaliased columns are named after the expression as sqlparser
 prints it (string literals after their value).
 
 ## JSON functions
