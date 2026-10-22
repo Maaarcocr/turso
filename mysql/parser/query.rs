@@ -2,11 +2,12 @@ use crate::expr::{translate_condition, translate_expr, translate_window};
 use crate::names::translate_identifier;
 use crate::MysqlParserError;
 use sqlparser::ast::{
-    Cte, Distinct, Expr, GroupByExpr, Join, JoinConstraint, JoinOperator, LimitClause,
-    NamedWindowDefinition, NamedWindowExpr, ObjectName, ObjectNamePart, Offset, OffsetRows,
-    OptimizerHint, OrderBy, OrderByExpr, OrderByKind, Query, Select, SelectFlavor, SelectItem,
-    SelectItemQualifiedWildcardKind, SelectModifiers, SetExpr, SetOperator, SetQuantifier,
-    TableAlias, TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions, With,
+    Cte, Distinct, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr,
+    Join, JoinConstraint, JoinOperator, LimitClause, NamedWindowDefinition, NamedWindowExpr,
+    ObjectName, ObjectNamePart, Offset, OffsetRows, OptimizerHint, OrderBy, OrderByExpr,
+    OrderByKind, Query, Select, SelectFlavor, SelectItem, SelectItemQualifiedWildcardKind,
+    SelectModifiers, SetExpr, SetOperator, SetQuantifier, TableAlias, TableFactor, TableWithJoins,
+    Value, Values, WildcardAdditionalOptions, With,
 };
 use std::num::NonZeroU32;
 use turso_parser::{ast, MAX_EXPR_DEPTH};
@@ -348,6 +349,11 @@ fn translate_select(
     {
         return Err(unsupported(format!("SELECT clause in `{select}`")));
     }
+    if may_break_only_full_group_by(select) {
+        return Err(unsupported(format!(
+            "a grouped SELECT that may use a column outside GROUP BY, which ONLY_FULL_GROUP_BY rejects in MySQL and Turso allows, `{select}`"
+        )));
+    }
     let distinctness = match distinct {
         None => None,
         Some(Distinct::All) => Some(ast::Distinctness::All),
@@ -378,6 +384,261 @@ fn translate_select(
         where_clause,
         group_by,
         window_clause,
+    })
+}
+
+fn may_break_only_full_group_by(select: &Select) -> bool {
+    let GroupByExpr::Expressions(group_by, _) = &select.group_by else {
+        return true;
+    };
+    let projections = select
+        .projection
+        .iter()
+        .map(projected_expr)
+        .collect::<Vec<_>>();
+    let grouped = !group_by.is_empty()
+        || projections
+            .iter()
+            .flatten()
+            .any(|expr| contains_aggregate(expr))
+        || select.having.as_ref().is_some_and(contains_aggregate);
+    if !grouped {
+        return false;
+    }
+    let aliases = select
+        .projection
+        .iter()
+        .filter_map(|item| match item {
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mut grouping = group_by.iter().collect::<Vec<_>>();
+    for term in group_by {
+        grouping.extend(selected_by_group_term(term, select));
+    }
+    let groups = Grouping {
+        exprs: grouping,
+        aliases: &[],
+    };
+    let having_groups = Grouping {
+        aliases: &aliases,
+        ..groups.clone()
+    };
+    projections.iter().any(|expr| match expr {
+        Some(expr) => uses_ungrouped_column(expr, &groups),
+        None => true,
+    }) || select
+        .having
+        .as_ref()
+        .is_some_and(|having| uses_ungrouped_column(having, &having_groups))
+}
+
+fn projected_expr(item: &SelectItem) -> Option<&Expr> {
+    match item {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
+        _ => None,
+    }
+}
+
+fn selected_by_group_term<'a>(term: &Expr, select: &'a Select) -> Option<&'a Expr> {
+    match term {
+        Expr::Value(value) => match &value.value {
+            Value::Number(ordinal, false) => {
+                let position = ordinal.parse::<usize>().ok()?.checked_sub(1)?;
+                projected_expr(select.projection.get(position)?)
+            }
+            _ => None,
+        },
+        Expr::Identifier(name) => select.projection.iter().find_map(|item| match item {
+            SelectItem::ExprWithAlias { expr, alias }
+                if alias.value.eq_ignore_ascii_case(&name.value) =>
+            {
+                Some(expr)
+            }
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
+#[derive(Clone)]
+struct Grouping<'a> {
+    exprs: Vec<&'a Expr>,
+    aliases: &'a [&'a str],
+}
+
+impl Grouping<'_> {
+    fn contains(&self, expr: &Expr) -> bool {
+        self.exprs
+            .iter()
+            .any(|grouped| without_parentheses(grouped) == without_parentheses(expr))
+    }
+
+    fn contains_column(&self, name: &str) -> bool {
+        self.aliases
+            .iter()
+            .any(|alias| alias.eq_ignore_ascii_case(name))
+            || self.exprs.iter().any(|grouped| {
+                column_name_of(without_parentheses(grouped))
+                    .is_some_and(|column| column.eq_ignore_ascii_case(name))
+            })
+    }
+}
+
+fn without_parentheses(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Nested(inner) => without_parentheses(inner),
+        other => other,
+    }
+}
+
+fn column_name_of(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Identifier(identifier) => Some(&identifier.value),
+        Expr::CompoundIdentifier(parts) => parts.last().map(|part| part.value.as_str()),
+        _ => None,
+    }
+}
+
+fn uses_ungrouped_column(expr: &Expr, groups: &Grouping) -> bool {
+    if groups.contains(expr) {
+        return false;
+    }
+    match expr {
+        Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
+            !column_name_of(expr).is_some_and(|name| groups.contains_column(name))
+        }
+        Expr::Value(_) | Expr::TypedString(_) | Expr::Prefixed { .. } | Expr::Interval(_) => false,
+        Expr::Subquery(_) | Expr::Exists { .. } => false,
+        Expr::Function(function) if is_aggregate(function) => false,
+        Expr::Function(function) => function_arguments(function)
+            .is_none_or(|args| args.iter().any(|arg| uses_ungrouped_column(arg, groups))),
+        Expr::InSubquery { expr, .. } => uses_ungrouped_column(expr, groups),
+        other => match child_expressions(other) {
+            Some(children) => children
+                .iter()
+                .any(|child| uses_ungrouped_column(child, groups)),
+            None => true,
+        },
+    }
+}
+
+fn contains_aggregate(expr: &Expr) -> bool {
+    match expr {
+        Expr::Function(function) if is_aggregate(function) => true,
+        Expr::Function(function) => function_arguments(function)
+            .is_some_and(|args| args.iter().any(|arg| contains_aggregate(arg))),
+        Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => false,
+        other => child_expressions(other)
+            .is_some_and(|children| children.iter().any(|child| contains_aggregate(child))),
+    }
+}
+
+fn is_aggregate(function: &Function) -> bool {
+    function.over.is_none()
+        && matches!(
+            function.name.to_string().to_ascii_uppercase().as_str(),
+            "COUNT"
+                | "SUM"
+                | "AVG"
+                | "MIN"
+                | "MAX"
+                | "GROUP_CONCAT"
+                | "BIT_AND"
+                | "BIT_OR"
+                | "BIT_XOR"
+                | "STD"
+                | "STDDEV"
+                | "STDDEV_POP"
+                | "STDDEV_SAMP"
+                | "VARIANCE"
+                | "VAR_POP"
+                | "VAR_SAMP"
+                | "JSON_ARRAYAGG"
+                | "JSON_OBJECTAGG"
+                | "ANY_VALUE"
+        )
+}
+
+fn function_arguments(function: &Function) -> Option<Vec<&Expr>> {
+    match &function.args {
+        FunctionArguments::None => Some(Vec::new()),
+        FunctionArguments::List(list) => list
+            .args
+            .iter()
+            .map(|arg| match arg {
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
+                FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => None,
+                _ => None,
+            })
+            .collect(),
+        FunctionArguments::Subquery(_) => None,
+    }
+}
+
+fn child_expressions(expr: &Expr) -> Option<Vec<&Expr>> {
+    Some(match expr {
+        Expr::Value(_) | Expr::TypedString(_) | Expr::Prefixed { .. } => Vec::new(),
+        Expr::Nested(inner)
+        | Expr::UnaryOp { expr: inner, .. }
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::IsTrue(inner)
+        | Expr::IsNotTrue(inner)
+        | Expr::IsFalse(inner)
+        | Expr::IsNotFalse(inner)
+        | Expr::IsUnknown(inner)
+        | Expr::IsNotUnknown(inner)
+        | Expr::Cast { expr: inner, .. }
+        | Expr::Convert { expr: inner, .. }
+        | Expr::Collate { expr: inner, .. }
+        | Expr::Extract { expr: inner, .. }
+        | Expr::Ceil { expr: inner, .. }
+        | Expr::Floor { expr: inner, .. } => vec![inner],
+        Expr::BinaryOp { left, right, .. }
+        | Expr::AnyOp { left, right, .. }
+        | Expr::AllOp { left, right, .. } => vec![left, right],
+        Expr::Like { expr, pattern, .. } | Expr::RLike { expr, pattern, .. } => {
+            vec![expr, pattern]
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => vec![expr, low, high],
+        Expr::InList { expr, list, .. } => std::iter::once(expr.as_ref()).chain(list).collect(),
+        Expr::Tuple(items) => items.iter().collect(),
+        Expr::Position { expr, r#in } => vec![expr, r#in],
+        Expr::MemberOf(member_of) => vec![&member_of.value, &member_of.array],
+        Expr::Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => std::iter::once(expr.as_ref())
+            .chain(substring_from.as_deref())
+            .chain(substring_for.as_deref())
+            .collect(),
+        Expr::Trim {
+            expr, trim_what, ..
+        } => std::iter::once(expr.as_ref())
+            .chain(trim_what.as_deref())
+            .collect(),
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => operand
+            .as_deref()
+            .into_iter()
+            .chain(
+                conditions
+                    .iter()
+                    .flat_map(|case| [&case.condition, &case.result]),
+            )
+            .chain(else_result.as_deref())
+            .collect(),
+        _ => return None,
     })
 }
 
