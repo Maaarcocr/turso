@@ -2,6 +2,8 @@ use super::*;
 use crate::schema::{Schema, TypeDefKind};
 use crate::translate::plan::Plan;
 use crate::types::ValueType;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub(crate) enum ExprType {
@@ -27,6 +29,8 @@ pub(crate) enum DynamicClass {
 pub(crate) struct TypeEnv<'a> {
     schema: &'a Schema,
     self_table: Option<Arc<BTreeTable>>,
+    computed: RefCell<HashMap<(usize, usize), ExprType>>,
+    depth: Cell<usize>,
 }
 
 impl<'a> TypeEnv<'a> {
@@ -34,6 +38,8 @@ impl<'a> TypeEnv<'a> {
         Self {
             schema,
             self_table: None,
+            computed: RefCell::new(HashMap::default()),
+            depth: Cell::new(0),
         }
     }
 
@@ -41,6 +47,8 @@ impl<'a> TypeEnv<'a> {
         Self {
             schema: resolver.schema(),
             self_table: resolver.self_table_with_custom_type_operators(),
+            computed: RefCell::new(HashMap::default()),
+            depth: Cell::new(0),
         }
     }
 }
@@ -82,6 +90,30 @@ pub(crate) fn expr_type(
     if env.schema.type_registry.is_empty() {
         return ExprType::Dynamic(DynamicClass::Unknown);
     }
+    let outermost = env.depth.get() == 0;
+    let key = (
+        expr as *const ast::Expr as usize,
+        tables.map_or(0, |tables| tables as *const TableReferences as usize),
+    );
+    if let Some(computed) = env.computed.borrow().get(&key) {
+        return computed.clone();
+    }
+    env.depth.set(env.depth.get() + 1);
+    let computed = compute_expr_type(expr, tables, env);
+    env.depth.set(env.depth.get() - 1);
+    if outermost {
+        env.computed.borrow_mut().clear();
+    } else {
+        env.computed.borrow_mut().insert(key, computed.clone());
+    }
+    computed
+}
+
+fn compute_expr_type(
+    expr: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> ExprType {
     match expr {
         ast::Expr::Column { table, column, .. } => column_type(*table, *column, tables, env),
         ast::Expr::Cast { type_name, .. } => cast_type(type_name.as_ref(), env),
@@ -161,13 +193,23 @@ pub(crate) fn resolve_type_function(
     if env.schema.type_registry.is_empty() {
         return Ok(None);
     }
+    let arg_types: Vec<ExprType> = args.iter().map(|arg| expr_type(arg, tables, env)).collect();
+    resolve_type_function_for(name, args, &arg_types, env)
+}
+
+fn resolve_type_function_for(
+    name: &str,
+    args: &[Box<ast::Expr>],
+    arg_types: &[ExprType],
+    env: &TypeEnv,
+) -> Result<Option<ResolvedFunction>> {
     if matches!(
         crate::function::Func::resolve_function(name, args.len()),
         Ok(Some(crate::function::Func::Agg(_)))
     ) {
         return Ok(None);
     }
-    let arg_types: Vec<ExprType> = args.iter().map(|arg| expr_type(arg, tables, env)).collect();
+    let arg_types: Vec<ExprType> = arg_types.to_vec();
     let mut owners: Vec<Arc<TypeDef>> = Vec::new();
     for arg_type in &arg_types {
         if let ExprType::Named(named) = arg_type {
@@ -771,9 +813,9 @@ fn subquery_column_type(plan: &Plan, column: usize, env: &TypeEnv) -> ExprType {
             }
             None => ExprType::Dynamic(DynamicClass::Unknown),
         },
-        Plan::CompoundSelect { .. } => match plan_column_types(plan, env).into_iter().nth(column) {
-            Some(Some(named)) => ExprType::Named(named),
-            _ => ExprType::Dynamic(DynamicClass::Unknown),
+        Plan::CompoundSelect { .. } => match plan_column_type(plan, column, env) {
+            Some(named) => ExprType::Named(named),
+            None => ExprType::Dynamic(DynamicClass::Unknown),
         },
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
@@ -864,17 +906,25 @@ pub(crate) fn convert_recursive_cte_results(
 }
 
 pub(crate) fn plan_column_types(plan: &Plan, env: &TypeEnv) -> Vec<Option<NamedType>> {
+    let column_count = match plan {
+        Plan::Select(select) => select.result_columns.len(),
+        Plan::CompoundSelect { right_most, .. } => right_most.result_columns.len(),
+        _ => 0,
+    };
+    (0..column_count)
+        .map(|column| plan_column_type(plan, column, env))
+        .collect()
+}
+
+fn plan_column_type(plan: &Plan, column: usize, env: &TypeEnv) -> Option<NamedType> {
     match plan {
-        Plan::Select(select) => select
-            .result_columns
-            .iter()
-            .map(|result_column| {
-                match expr_type(&result_column.expr, Some(&select.table_references), env) {
-                    ExprType::Named(named) => Some(named),
-                    ExprType::Dynamic(_) => None,
-                }
-            })
-            .collect(),
+        Plan::Select(select) => {
+            let result_column = select.result_columns.get(column)?;
+            match expr_type(&result_column.expr, Some(&select.table_references), env) {
+                ExprType::Named(named) => Some(named),
+                ExprType::Dynamic(_) => None,
+            }
+        }
         Plan::CompoundSelect {
             left, right_most, ..
         } => {
@@ -884,29 +934,23 @@ pub(crate) fn plan_column_types(plan: &Plan, env: &TypeEnv) -> Vec<Option<NamedT
                 .chain(std::iter::once(right_most.as_ref()))
                 .collect();
             if arms.iter().any(|arm| !arm.values.is_empty()) {
-                return vec![None; right_most.result_columns.len()];
+                return None;
             }
-            (0..right_most.result_columns.len())
-                .map(|column| {
-                    let branches: Vec<(&ast::Expr, Option<ExprType>)> = arms
-                        .iter()
-                        .map(|arm| {
-                            let expr = &arm.result_columns[column].expr;
-                            (expr, branch_type(expr, Some(&arm.table_references), env))
-                        })
-                        .collect();
-                    match common_branch_type(&branches) {
-                        Some((named, conversions))
-                            if conversions.iter().all(Conversion::is_none) =>
-                        {
-                            Some(named)
-                        }
-                        _ => None,
-                    }
+            let branches: Vec<(&ast::Expr, Option<ExprType>)> = arms
+                .iter()
+                .map(|arm| {
+                    let expr = &arm.result_columns.get(column)?.expr;
+                    Some((expr, branch_type(expr, Some(&arm.table_references), env)))
                 })
-                .collect()
+                .collect::<Option<_>>()?;
+            match common_branch_type(&branches) {
+                Some((named, conversions)) if conversions.iter().all(Conversion::is_none) => {
+                    Some(named)
+                }
+                _ => None,
+            }
         }
-        _ => Vec::new(),
+        _ => None,
     }
 }
 
@@ -1025,23 +1069,29 @@ fn function_call_type(
     tables: Option<&TableReferences>,
     env: &TypeEnv,
 ) -> ExprType {
-    use crate::function::ScalarFunc;
-    if let Ok(Some(resolved)) = resolve_type_function(name.as_str(), args, tables, env) {
+    use crate::function::{Func, ScalarFunc};
+    let arg_types: Vec<ExprType> = args.iter().map(|arg| expr_type(arg, tables, env)).collect();
+    if let Ok(Some(resolved)) = resolve_type_function_for(name.as_str(), args, &arg_types, env) {
         return resolved.result;
     }
-    match crate::function::Func::resolve_function(name.as_str(), args.len()) {
-        Ok(Some(crate::function::Func::Scalar(
+    let common_of = |indexes: &mut dyn Iterator<Item = usize>| {
+        let branches: Vec<(&ast::Expr, Option<ExprType>)> = indexes
+            .map(|i| {
+                let arg = args[i].as_ref();
+                (arg, (!is_null_literal(arg)).then(|| arg_types[i].clone()))
+            })
+            .collect();
+        match common_branch_type(&branches) {
+            Some((named, _)) => ExprType::Named(named),
+            None => ExprType::Dynamic(DynamicClass::Unknown),
+        }
+    };
+    match Func::resolve_function(name.as_str(), args.len()) {
+        Ok(Some(Func::Scalar(
             ScalarFunc::Coalesce | ScalarFunc::IfNull | ScalarFunc::Max | ScalarFunc::Min,
-        ))) => {
-            let args: Vec<&ast::Expr> = args.iter().map(|arg| arg.as_ref()).collect();
-            common_type(&args, tables, env)
-        }
-        Ok(Some(crate::function::Func::Scalar(ScalarFunc::Iif))) => {
-            common_type(&iif_branches(args), tables, env)
-        }
-        Ok(Some(crate::function::Func::Scalar(ScalarFunc::Nullif))) => {
-            expr_type(&args[0], tables, env)
-        }
+        ))) => common_of(&mut (0..args.len())),
+        Ok(Some(Func::Scalar(ScalarFunc::Iif))) => common_of(&mut iif_branch_indexes(args.len())),
+        Ok(Some(Func::Scalar(ScalarFunc::Nullif))) => arg_types[0].clone(),
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
 }
@@ -1058,11 +1108,15 @@ pub(crate) fn case_branches<'e>(
 }
 
 pub(crate) fn iif_branches(args: &[Box<ast::Expr>]) -> Vec<&ast::Expr> {
-    let mut branches: Vec<&ast::Expr> = args.chunks_exact(2).map(|pair| pair[1].as_ref()).collect();
-    if args.len() % 2 != 0 {
-        branches.extend(args.last().map(|arg| arg.as_ref()));
-    }
-    branches
+    iif_branch_indexes(args.len())
+        .map(|i| args[i].as_ref())
+        .collect()
+}
+
+fn iif_branch_indexes(arg_count: usize) -> impl Iterator<Item = usize> {
+    (1..arg_count)
+        .step_by(2)
+        .chain((arg_count % 2 != 0).then(|| arg_count - 1))
 }
 
 fn common_type(exprs: &[&ast::Expr], tables: Option<&TableReferences>, env: &TypeEnv) -> ExprType {
