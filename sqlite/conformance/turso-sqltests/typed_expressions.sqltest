@@ -1,0 +1,23 @@
+@database :memory:
+@requires-file custom_types "uses custom types"
+
+@requires strict "uses STRICT tables"
+test numeric-rounds-half-away-from-zero {
+    CREATE TABLE t1(p numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES ('1.505'), ('-1.505'), ('1.504'), ('2.995');
+    SELECT p FROM t1;
+}
+expect {
+    1.51
+    -1.51
+    1.50
+    3.00
+}
+
+@requires strict "uses STRICT tables"
+test numeric-rounding-can-exceed-precision {
+    CREATE TABLE t1(p numeric(3,2)) STRICT;
+    INSERT INTO t1 VALUES ('9.995');
+}
+expect error {
+}

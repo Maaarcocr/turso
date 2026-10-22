@@ -196,8 +196,7 @@ pub fn validate_precision_scale(
         return Ok(BigDecimal::new(BigInt::from(0), scale));
     }
 
-    // Round to the requested scale
-    let rounded = val.with_scale(scale);
+    let rounded = val.with_scale_round(scale, bigdecimal::RoundingMode::HalfUp);
 
     // Count total significant digits (excluding leading zeros)
     let (bigint, _) = rounded.as_bigint_and_exponent();
@@ -258,6 +257,27 @@ mod tests {
         let val = BigDecimal::from_str("123.45").unwrap();
         let result = validate_precision_scale(&val, 5, 2);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_precision_scale_rounds_half_away_from_zero() {
+        let cases = [
+            ("1.505", "1.51"),
+            ("-1.505", "-1.51"),
+            ("1.504", "1.50"),
+            ("2.995", "3.00"),
+        ];
+        for (input, expected) in cases {
+            let val = BigDecimal::from_str(input).unwrap();
+            let rounded = validate_precision_scale(&val, 10, 2).unwrap();
+            assert_eq!(format_numeric(&rounded), expected, "input {input}");
+        }
+    }
+
+    #[test]
+    fn test_validate_precision_scale_rounding_can_overflow() {
+        let val = BigDecimal::from_str("9.995").unwrap();
+        assert!(validate_precision_scale(&val, 3, 2).is_err());
     }
 
     #[test]
