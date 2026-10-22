@@ -663,7 +663,6 @@ pub enum QueryDestination {
         affinity_str: Option<Arc<String>>,
         /// Whether this is a delete operation that will remove the index entries
         is_delete: bool,
-        /// Keys that decide duplicates when values of a type compare by key.
         keys: Option<Arc<IndexRowKeys>>,
     },
     /// The results of the query are stored in an ephemeral table,
