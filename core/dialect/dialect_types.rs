@@ -1030,6 +1030,23 @@ mod tests {
     }
 
     #[test]
+    fn only_converted_columns_name_themselves_for_errors() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "conversion-context.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, a TEXT, b DOUBLE, tiny TINYINT) STRICT",
+        )
+        .unwrap();
+        let contexts: Vec<String> = query(&conn, "EXPLAIN INSERT INTO t VALUES (1, 'x', 1.5, 2)")
+            .iter()
+            .filter(|row| row[1].to_string() == "TypeConversionContext")
+            .map(|row| row[5].to_string())
+            .collect();
+        assert_eq!(contexts, vec!["id", "tiny", ""]);
+    }
+
+    #[test]
     fn affinity_comes_from_the_storage_type() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let db = open_db(&io, "types-affinity.db", marking()).unwrap();

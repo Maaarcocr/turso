@@ -386,6 +386,7 @@ pub(crate) fn emit_custom_type_assign_columns(
     layout: &ColumnLayout,
     row_number_reg: Option<usize>,
 ) -> Result<()> {
+    let mut named_a_column = false;
     for (i, col) in columns.iter().enumerate() {
         if only_columns.is_some_and(|filter| !filter.get(i)) || col.is_virtual_generated() {
             continue;
@@ -400,12 +401,7 @@ pub(crate) fn emit_custom_type_assign_columns(
         else {
             continue;
         };
-        if let (Some(row_reg), Some(name)) = (row_number_reg, col.name.as_deref()) {
-            program.emit_insn(Insn::TypeConversionContext {
-                column: Some(std::sync::Arc::from(name)),
-                row_reg,
-            });
-        }
+        named_a_column |= emit_conversion_context(program, col, row_number_reg);
         let reg = layout.to_register(start_reg, i);
         let skip_null = program.allocate_label();
         program.emit_insn(Insn::IsNull {
@@ -415,11 +411,8 @@ pub(crate) fn emit_custom_type_assign_columns(
         emit_type_expr(program, assign, reg, reg, col, def, resolver)?;
         program.preassign_label_to_next_insn(skip_null);
     }
-    if let Some(row_reg) = row_number_reg {
-        program.emit_insn(Insn::TypeConversionContext {
-            column: None,
-            row_reg,
-        });
+    if named_a_column {
+        emit_conversion_context_end(program, row_number_reg);
     }
     Ok(())
 }
@@ -441,17 +434,12 @@ pub(crate) fn emit_custom_type_encode_columns(
     layout: &ColumnLayout,
     row_number_reg: Option<usize>,
 ) -> Result<()> {
+    let mut named_a_column = false;
     for (i, col) in columns.iter().enumerate() {
         if let Some(filter) = only_columns {
             if !filter.get(i) {
                 continue;
             }
-        }
-        if let (Some(row_reg), Some(name)) = (row_number_reg, col.name.as_deref()) {
-            program.emit_insn(Insn::TypeConversionContext {
-                column: Some(std::sync::Arc::from(name)),
-                row_reg,
-            });
         }
 
         let reg = layout.to_register(start_reg, i);
@@ -490,6 +478,10 @@ pub(crate) fn emit_custom_type_encode_columns(
             None
         };
 
+        if resolved.chain.iter().any(|td| td.encode().is_some()) {
+            named_a_column |= emit_conversion_context(program, col, row_number_reg);
+        }
+
         // Apply encode for each type in the chain (child first, then parent)
         for td in &resolved.chain {
             if let Some(encode_expr) = td.encode() {
@@ -501,13 +493,34 @@ pub(crate) fn emit_custom_type_encode_columns(
             program.preassign_label_to_next_insn(label);
         }
     }
+    if named_a_column {
+        emit_conversion_context_end(program, row_number_reg);
+    }
+    Ok(())
+}
+
+fn emit_conversion_context(
+    program: &mut ProgramBuilder,
+    column: &Column,
+    row_number_reg: Option<usize>,
+) -> bool {
+    let (Some(row_reg), Some(name)) = (row_number_reg, column.name.as_deref()) else {
+        return false;
+    };
+    program.emit_insn(Insn::TypeConversionContext {
+        column: Some(std::sync::Arc::from(name)),
+        row_reg,
+    });
+    true
+}
+
+fn emit_conversion_context_end(program: &mut ProgramBuilder, row_number_reg: Option<usize>) {
     if let Some(row_reg) = row_number_reg {
         program.emit_insn(Insn::TypeConversionContext {
             column: None,
             row_reg,
         });
     }
-    Ok(())
 }
 
 pub(crate) fn emit_row_number_counter(program: &mut ProgramBuilder) -> usize {
