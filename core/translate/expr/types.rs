@@ -114,19 +114,25 @@ pub(crate) fn resolve_operator(
     if env.schema.type_registry.is_empty() {
         return Ok(None);
     }
-    let op = match op {
-        ast::Operator::Is | ast::Operator::IsNot => {
-            if is_null_literal(lhs) || is_null_literal(rhs) {
-                return Ok(None);
-            }
-            &ast::Operator::Equals
-        }
-        _ if operator_symbol(op).is_none() => return Ok(None),
-        _ => op,
+    let Some(op) = resolvable_operator(op, lhs, rhs) else {
+        return Ok(None);
     };
     let lhs_type = expr_type(lhs, tables, env);
     let rhs_type = expr_type(rhs, tables, env);
     resolve_typed_operator(op, [(&lhs_type, Some(lhs)), (&rhs_type, Some(rhs))], env)
+}
+
+fn resolvable_operator<'o>(
+    op: &'o ast::Operator,
+    lhs: &ast::Expr,
+    rhs: &ast::Expr,
+) -> Option<&'o ast::Operator> {
+    match op {
+        ast::Operator::Is | ast::Operator::IsNot => {
+            (!is_null_literal(lhs) && !is_null_literal(rhs)).then_some(&ast::Operator::Equals)
+        }
+        _ => operator_symbol(op).map(|_| op),
+    }
 }
 
 pub(crate) fn hash_join_can_compare_values(
@@ -464,7 +470,16 @@ fn binary_type(
     tables: Option<&TableReferences>,
     env: &TypeEnv,
 ) -> ExprType {
-    if let Ok(Some(resolved)) = resolve_operator(op, lhs, rhs, tables, env) {
+    let Some(resolvable) = resolvable_operator(op, lhs, rhs) else {
+        return untyped_operator_type(op);
+    };
+    let lhs_type = expr_type(lhs, tables, env);
+    let rhs_type = expr_type(rhs, tables, env);
+    if let Ok(Some(resolved)) = resolve_typed_operator(
+        resolvable,
+        [(&lhs_type, Some(lhs)), (&rhs_type, Some(rhs))],
+        env,
+    ) {
         return resolved.result;
     }
     match op {
@@ -473,12 +488,18 @@ fn binary_type(
         | ast::Operator::Multiply
         | ast::Operator::Divide
         | ast::Operator::Modulus => {
-            let class_of = |expr| match expr_type(expr, tables, env) {
+            let class_of = |operand_type: ExprType| match operand_type {
                 ExprType::Dynamic(class) => class,
                 ExprType::Named(_) => DynamicClass::Unknown,
             };
-            ExprType::Dynamic(arithmetic_class(class_of(lhs), class_of(rhs)))
+            ExprType::Dynamic(arithmetic_class(class_of(lhs_type), class_of(rhs_type)))
         }
+        _ => untyped_operator_type(op),
+    }
+}
+
+fn untyped_operator_type(op: &ast::Operator) -> ExprType {
+    match op {
         ast::Operator::Concat => ExprType::Dynamic(DynamicClass::Text),
         _ if op.is_comparison()
             || matches!(
