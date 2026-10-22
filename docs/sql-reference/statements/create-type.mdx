@@ -151,6 +151,8 @@ The same `=` and `<` are used wherever SQL compares values, not only by the oper
 
 `CASE`, `coalesce()`, `ifnull()`, `iif()`, `min()` and `max()` return a value of a type when all their non-NULL branches have that type or are converted to it by a `CAST FROM ... AS IMPLICIT` clause or are `?` parameters; those branches are converted. So `coalesce(p, 0) + 1` is `numeric` arithmetic. A text literal or a value of unknown type is not converted: `coalesce(p, 'none')` returns `'none'` when `p` is NULL, and the result has no type.
 
+The columns of a subquery or a common table expression have the type of its result columns; a compound SELECT column has a type when all its branches have that type. The columns of a recursive common table expression have the type of the initial SELECT's columns, and the values of the recursive SELECT are converted to it as by `CAST`, so `WITH RECURSIVE r(x) AS (SELECT CAST(1 AS numeric(10,2)) UNION ALL SELECT x + 0.505 FROM r WHERE x < 2)` returns `1.00`, `1.51` and `2.02`.
+
 ### CAST ... AS IMPLICIT
 
 `CAST FROM type AS IMPLICIT` lets values of another type, or of a SQLite storage class, be converted to this type when an operator needs it. `CAST TO type AS IMPLICIT` lets values of this type be converted to another type or storage class when no operator signature fits.

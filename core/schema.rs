@@ -3303,6 +3303,7 @@ impl TryClone for RecursiveCteInput {
         Ok(Self {
             name: self.name.clone(),
             columns: self.columns.try_clone()?,
+            column_types: self.column_types.clone(),
         })
     }
 }
@@ -4744,6 +4745,13 @@ impl ParenthesizedJoinColumnSource {
 pub struct RecursiveCteInput {
     pub name: String,
     pub columns: Vec<Column>,
+    pub column_types: Vec<Option<RecursiveCteColumnType>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RecursiveCteColumnType {
+    pub type_name: String,
+    pub params: Vec<ast::Expr>,
 }
 
 #[derive(Debug, Clone, Copy)]

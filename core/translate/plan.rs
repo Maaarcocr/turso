@@ -3235,6 +3235,7 @@ impl JoinedTable {
         query: &Plan,
         internal_id: TableInternalId,
         explicit_columns: Option<&[String]>,
+        column_types: Vec<Option<crate::schema::RecursiveCteColumnType>>,
     ) -> Result<Self> {
         let mut columns = subquery_output_columns(query, explicit_columns)?;
         // The recursive self-reference reads SQLite's queue table, whose
@@ -3247,6 +3248,7 @@ impl JoinedTable {
         let table = Table::RecursiveCteInput(Arc::new(RecursiveCteInput {
             name: identifier.clone(),
             columns,
+            column_types,
         }));
         Ok(Self {
             op: Operation::default_scan_for(&table),

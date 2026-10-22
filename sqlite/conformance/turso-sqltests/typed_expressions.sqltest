@@ -510,3 +510,22 @@ test check-constraint-sees-decoded-values {
 expect {
     42|999
 }
+
+@requires strict "uses STRICT tables"
+test recursive-cte-columns-have-the-anchor-type {
+    CREATE TABLE t1(p numeric(10,2), q numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES ('1.00', '0.50');
+    WITH RECURSIVE r(x) AS (SELECT CAST('1.00' AS numeric(10,2)) UNION ALL SELECT x + 1 FROM r WHERE x < 3) SELECT x FROM r;
+    WITH RECURSIVE r(x) AS (SELECT p FROM t1 UNION ALL SELECT x + 0.505 FROM r WHERE x < 2) SELECT x FROM r;
+    SELECT x + 1 FROM (SELECT p AS x FROM t1 UNION ALL SELECT q FROM t1) ORDER BY 1;
+}
+expect {
+    1.00
+    2.00
+    3.00
+    1.00
+    1.51
+    2.02
+    1.50
+    2.00
+}
