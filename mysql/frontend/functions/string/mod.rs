@@ -49,6 +49,7 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("SQRT", 1) => numeric::sqrt,
         ("TAN", 1) => numeric::tan,
         ("TRUNCATE", 2) => numeric::truncate,
+        ("__MYSQL_CONV_BINARY_LITERAL", 3) => numeric::conv_binary_literal,
 
         ("FIELD", 2..) => compare::field,
         ("GREATEST", 2..) => compare::greatest,

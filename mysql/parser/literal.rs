@@ -80,6 +80,15 @@ pub(crate) fn translate_introduced_string(
     }
 }
 
+pub(crate) fn translate_as_bytes(value: &Value) -> Result<ast::Expr, MysqlParserError> {
+    let bytes = match value {
+        Value::HexStringLiteral(digits) => hex_bytes(digits)?,
+        Value::SingleQuotedByteStringLiteral(bits) => bit_bytes(bits)?,
+        other => return Err(unsupported(format!("literal `{other}` as bytes"))),
+    };
+    Ok(blob_literal(&bytes))
+}
+
 fn binary_literal(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlParserError> {
     match context {
         Context::Arithmetic => Err(unsupported(
@@ -99,13 +108,13 @@ fn binary_literal(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlPa
             ))
         }
         Context::Text => text_literal(bytes),
-        Context::Value => {
-            let digits: String = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
-            Ok(ast::Expr::Literal(ast::Literal::Blob(format!(
-                "x'{digits}'"
-            ))))
-        }
+        Context::Value => Ok(blob_literal(&bytes)),
     }
+}
+
+fn blob_literal(bytes: &[u8]) -> ast::Expr {
+    let digits: String = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
+    ast::Expr::Literal(ast::Literal::Blob(format!("x'{digits}'")))
 }
 
 fn text_literal(bytes: Vec<u8>) -> Result<ast::Expr, MysqlParserError> {
