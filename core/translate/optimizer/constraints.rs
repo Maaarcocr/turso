@@ -1067,7 +1067,16 @@ pub fn constraints_from_where_clause(
 
                 match lhs.as_ref() {
                     ast::Expr::Column { table, column, .. }
-                        if *table == table_reference.internal_id =>
+                        if *table == table_reference.internal_id
+                            && rhs.iter().all(|value| {
+                                typed_column_can_seek_equal_to(
+                                    &table_reference.table.columns()[*column],
+                                    table_reference,
+                                    value,
+                                    table_references,
+                                    schema,
+                                )
+                            }) =>
                     {
                         let is_rowid = rowid_alias_column == Some(*column);
                         cs.constraints.push(Constraint {
@@ -2493,17 +2502,39 @@ fn typed_column_constraint_can_use_index(
     where_clause: &[WhereTerm],
     schema: &Schema,
 ) -> bool {
-    let Some(def) = schema.get_type_def(&column.ty_str, table_reference.table.is_strict()) else {
+    if schema
+        .get_type_def(&column.ty_str, table_reference.table.is_strict())
+        .is_none()
+    {
         return true;
-    };
+    }
     if constraint.operator != ast::Operator::Equals.into() {
         return false;
     }
-    let env = TypeEnv::new(schema);
     let constraining_expr = match &constraint.constraining_expr {
         Some((_, expr, _)) => expr,
         None => constraint.get_constraining_expr_ref(where_clause),
     };
+    typed_column_can_seek_equal_to(
+        column,
+        table_reference,
+        constraining_expr,
+        table_references,
+        schema,
+    )
+}
+
+fn typed_column_can_seek_equal_to(
+    column: &crate::schema::Column,
+    table_reference: &JoinedTable,
+    constraining_expr: &ast::Expr,
+    table_references: &TableReferences,
+    schema: &Schema,
+) -> bool {
+    let Some(def) = schema.get_type_def(&column.ty_str, table_reference.table.is_strict()) else {
+        return true;
+    };
+    let env = TypeEnv::new(schema);
     let column_type = ExprType::Named(NamedType {
         def: Arc::clone(def),
         params: Some(column.ty_params.iter().map(|p| (**p).clone()).collect()),

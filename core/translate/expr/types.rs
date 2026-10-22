@@ -95,10 +95,7 @@ pub(crate) fn expr_type(
             else_expr,
             ..
         } => common_type(
-            when_then_pairs
-                .iter()
-                .map(|(_, then)| then.as_ref())
-                .chain(else_expr.as_deref()),
+            &case_branches(when_then_pairs, else_expr.as_deref()),
             tables,
             env,
         ),
@@ -114,12 +111,97 @@ pub(crate) fn resolve_operator(
     tables: Option<&TableReferences>,
     env: &TypeEnv,
 ) -> Result<Option<ResolvedOperator>> {
-    if env.schema.type_registry.is_empty() || operator_symbol(op).is_none() {
+    if env.schema.type_registry.is_empty() {
         return Ok(None);
     }
+    let op = match op {
+        ast::Operator::Is | ast::Operator::IsNot => {
+            if is_null_literal(lhs) || is_null_literal(rhs) {
+                return Ok(None);
+            }
+            &ast::Operator::Equals
+        }
+        _ if operator_symbol(op).is_none() => return Ok(None),
+        _ => op,
+    };
     let lhs_type = expr_type(lhs, tables, env);
     let rhs_type = expr_type(rhs, tables, env);
     resolve_typed_operator(op, [(&lhs_type, Some(lhs)), (&rhs_type, Some(rhs))], env)
+}
+
+pub(crate) fn hash_join_can_compare_values(
+    lhs: &ast::Expr,
+    rhs: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> bool {
+    match resolve_operator(&ast::Operator::Equals, lhs, rhs, tables, env) {
+        Ok(None) => true,
+        Ok(Some(resolved)) => {
+            resolved.function.is_none() && resolved.conversions.iter().all(Conversion::is_none)
+        }
+        Err(_) => false,
+    }
+}
+
+pub(crate) fn common_type_conversions(
+    exprs: &[&ast::Expr],
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> Option<(NamedType, Vec<Conversion>)> {
+    if env.schema.type_registry.is_empty() {
+        return None;
+    }
+    let types: Vec<Option<ExprType>> = exprs
+        .iter()
+        .map(|expr| (!is_null_literal(expr)).then(|| expr_type(expr, tables, env)))
+        .collect();
+    let mut common: Option<NamedType> = None;
+    for named in types.iter().flatten().filter_map(|ty| match ty {
+        ExprType::Named(named) => Some(named),
+        ExprType::Dynamic(_) => None,
+    }) {
+        common = match common {
+            None => Some(named.clone()),
+            Some(current) if current.is(&named.def) => {
+                let params = match (current.params, &named.params) {
+                    (Some(a), Some(b)) if a == *b => Some(a),
+                    _ => None,
+                };
+                Some(NamedType {
+                    def: current.def,
+                    params,
+                })
+            }
+            Some(_) => return None,
+        };
+    }
+    let mut common = common?;
+    let mut conversions = Vec::with_capacity(types.len());
+    for (expr, ty) in exprs.iter().zip(&types) {
+        let conversion = match ty {
+            None | Some(ExprType::Named(_)) => Conversion::None,
+            Some(ExprType::Dynamic(class)) => {
+                let converts = match class {
+                    DynamicClass::Unknown => matches!(expr, ast::Expr::Variable(_)),
+                    _ => declares_cast(
+                        &common.def,
+                        ast::TypeCastDirection::From,
+                        class_name(*class),
+                    ),
+                };
+                if !converts {
+                    return None;
+                }
+                conversion_into(&common.def, Some(&common))?
+            }
+        };
+        conversions.push(conversion);
+    }
+    if conversions.iter().any(|conversion| !conversion.is_none()) {
+        common.params = None;
+    }
+    Some((common, conversions))
 }
 
 pub(crate) fn resolve_typed_operator(
@@ -175,6 +257,40 @@ pub(crate) fn emit_value_conversion(
             Ok(dest)
         }
     }
+}
+
+pub(crate) fn emit_value_conversion_in_place(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    conversion: &Conversion,
+    resolver: &Resolver,
+) -> Result<()> {
+    match conversion {
+        Conversion::None => Ok(()),
+        Conversion::IntoClass(class) => {
+            program.emit_insn(Insn::Cast {
+                reg,
+                affinity: class_affinity(*class),
+            });
+            Ok(())
+        }
+        Conversion::IntoType(named) => {
+            emit_conversion_into_type(program, reg, reg, named, resolver)
+        }
+    }
+}
+
+pub(crate) fn branch_conversions(
+    branches: &[&ast::Expr],
+    tables: Option<&TableReferences>,
+    resolver: &Resolver,
+) -> Option<Vec<Conversion>> {
+    let env = TypeEnv::from_resolver(resolver);
+    let (_, conversions) = common_type_conversions(branches, tables, &env)?;
+    conversions
+        .iter()
+        .any(|conversion| !conversion.is_none())
+        .then_some(conversions)
 }
 
 pub(crate) fn emit_conversion_into_type(
@@ -402,7 +518,13 @@ fn function_call_type(
     match crate::function::Func::resolve_function(name.as_str(), args.len()) {
         Ok(Some(crate::function::Func::Scalar(
             ScalarFunc::Coalesce | ScalarFunc::IfNull | ScalarFunc::Max | ScalarFunc::Min,
-        ))) => common_type(args.iter().map(|arg| arg.as_ref()), tables, env),
+        ))) => {
+            let args: Vec<&ast::Expr> = args.iter().map(|arg| arg.as_ref()).collect();
+            common_type(&args, tables, env)
+        }
+        Ok(Some(crate::function::Func::Scalar(ScalarFunc::Iif))) => {
+            common_type(&iif_branches(args), tables, env)
+        }
         Ok(Some(crate::function::Func::Scalar(ScalarFunc::Nullif))) => {
             expr_type(&args[0], tables, env)
         }
@@ -410,35 +532,34 @@ fn function_call_type(
     }
 }
 
-fn common_type<'e>(
-    exprs: impl Iterator<Item = &'e ast::Expr>,
-    tables: Option<&TableReferences>,
-    env: &TypeEnv,
-) -> ExprType {
-    let mut common: Option<NamedType> = None;
-    for expr in exprs.filter(|expr| !matches!(expr, ast::Expr::Literal(ast::Literal::Null))) {
-        let ExprType::Named(named) = expr_type(expr, tables, env) else {
-            return ExprType::Dynamic(DynamicClass::Unknown);
-        };
-        common = match common {
-            None => Some(named),
-            Some(current) if current.is(&named.def) => {
-                let params = match (current.params, named.params) {
-                    (Some(a), Some(b)) if a == b => Some(a),
-                    _ => None,
-                };
-                Some(NamedType {
-                    def: current.def,
-                    params,
-                })
-            }
-            Some(_) => return ExprType::Dynamic(DynamicClass::Unknown),
-        };
+pub(crate) fn case_branches<'e>(
+    when_then_pairs: &'e [(Box<ast::Expr>, Box<ast::Expr>)],
+    else_expr: Option<&'e ast::Expr>,
+) -> Vec<&'e ast::Expr> {
+    when_then_pairs
+        .iter()
+        .map(|(_, then)| then.as_ref())
+        .chain(else_expr)
+        .collect()
+}
+
+pub(crate) fn iif_branches(args: &[Box<ast::Expr>]) -> Vec<&ast::Expr> {
+    let mut branches: Vec<&ast::Expr> = args.chunks_exact(2).map(|pair| pair[1].as_ref()).collect();
+    if args.len() % 2 != 0 {
+        branches.extend(args.last().map(|arg| arg.as_ref()));
     }
-    match common {
-        Some(named) => ExprType::Named(named),
+    branches
+}
+
+fn common_type(exprs: &[&ast::Expr], tables: Option<&TableReferences>, env: &TypeEnv) -> ExprType {
+    match common_type_conversions(exprs, tables, env) {
+        Some((named, _)) => ExprType::Named(named),
         None => ExprType::Dynamic(DynamicClass::Unknown),
     }
+}
+
+fn is_null_literal(expr: &ast::Expr) -> bool {
+    matches!(expr, ast::Expr::Literal(ast::Literal::Null))
 }
 
 fn literal_class(literal: &ast::Literal) -> DynamicClass {

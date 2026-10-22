@@ -246,24 +246,40 @@ pub(super) fn emit_binary_expr_row_valued(
         let done_label = program.allocate_label();
         for i in 0..arity {
             let next_label = program.allocate_label();
-            let (affinity, collation) = row_component_affinity_collation(
-                lhs_expr,
-                rhs_expr,
+            let equality = if null_eq {
+                ast::Operator::Is
+            } else {
+                ast::Operator::Equals
+            };
+            if !emit_typed_row_component_jump(
+                program,
+                &equality,
+                [lhs_expr, rhs_expr],
+                [lhs_start + i, rhs_start + i],
                 i,
+                next_label,
                 referenced_tables,
                 resolver,
-            )?;
-            program.emit_insn(Insn::Eq {
-                lhs: lhs_start + i,
-                rhs: rhs_start + i,
-                target_pc: next_label,
-                flags: if null_eq {
-                    CmpInsFlags::default().null_eq().with_affinity(affinity)
-                } else {
-                    CmpInsFlags::default().with_affinity(affinity)
-                },
-                collation,
-            });
+            )? {
+                let (affinity, collation) = row_component_affinity_collation(
+                    lhs_expr,
+                    rhs_expr,
+                    i,
+                    referenced_tables,
+                    resolver,
+                )?;
+                program.emit_insn(Insn::Eq {
+                    lhs: lhs_start + i,
+                    rhs: rhs_start + i,
+                    target_pc: next_label,
+                    flags: if null_eq {
+                        CmpInsFlags::default().null_eq().with_affinity(affinity)
+                    } else {
+                        CmpInsFlags::default().with_affinity(affinity)
+                    },
+                    collation,
+                });
+            }
             if null_eq {
                 program.emit_insn(Insn::Integer {
                     value: 0,
@@ -341,15 +357,41 @@ pub(super) fn emit_binary_expr_row_valued(
                     reg: rhs,
                     target_pc: null_result_label,
                 });
-                program.emit_insn(Insn::Eq {
-                    lhs,
-                    rhs,
-                    target_pc: next_cmp_label,
-                    flags: CmpInsFlags::default().with_affinity(aff),
-                    collation,
-                });
                 let true_label = program.allocate_label();
+                let order = match order_op {
+                    RowOrderingOp::Less => ast::Operator::Less,
+                    RowOrderingOp::Greater => ast::Operator::Greater,
+                };
+                if !emit_typed_row_component_jump(
+                    program,
+                    &ast::Operator::Equals,
+                    [lhs_expr, rhs_expr],
+                    [lhs, rhs],
+                    i,
+                    next_cmp_label,
+                    referenced_tables,
+                    resolver,
+                )? {
+                    program.emit_insn(Insn::Eq {
+                        lhs,
+                        rhs,
+                        target_pc: next_cmp_label,
+                        flags: CmpInsFlags::default().with_affinity(aff),
+                        collation,
+                    });
+                }
+                let ordered_by_type = emit_typed_row_component_jump(
+                    program,
+                    &order,
+                    [lhs_expr, rhs_expr],
+                    [lhs, rhs],
+                    i,
+                    true_label,
+                    referenced_tables,
+                    resolver,
+                )?;
                 match order_op {
+                    _ if ordered_by_type => {}
                     RowOrderingOp::Less => {
                         program.emit_insn(Insn::Lt {
                             lhs,
@@ -420,6 +462,48 @@ pub(super) fn emit_binary_expr_row_valued(
         _ => crate::bail_parse_error!("row value misused"),
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_typed_row_component_jump(
+    program: &mut ProgramBuilder,
+    op: &ast::Operator,
+    rows: [&Expr; 2],
+    starts: [usize; 2],
+    component: usize,
+    target_when_true: BranchOffset,
+    referenced_tables: Option<&TableReferences>,
+    resolver: Option<&Resolver>,
+) -> Result<bool> {
+    let Some(resolver) = resolver else {
+        return Ok(false);
+    };
+    let (Some(lhs), Some(rhs)) = (
+        row_value_component_expr(rows[0], component)?,
+        row_value_component_expr(rows[1], component)?,
+    ) else {
+        return Ok(false);
+    };
+    let env = TypeEnv::from_resolver(resolver);
+    let Some(resolved) = resolve_operator(op, lhs, rhs, referenced_tables, &env)? else {
+        return Ok(false);
+    };
+    let result_reg = program.alloc_register();
+    emit_typed_comparison(
+        program,
+        referenced_tables,
+        op,
+        &resolved,
+        [(starts[0], Some(lhs)), (starts[1], Some(rhs))],
+        result_reg,
+        resolver,
+    )?;
+    program.emit_insn(Insn::If {
+        reg: result_reg,
+        target_pc: target_when_true,
+        jump_if_null: false,
+    });
+    Ok(true)
 }
 
 pub(super) fn invert_boolean_register(program: &mut ProgramBuilder, target_register: usize) {

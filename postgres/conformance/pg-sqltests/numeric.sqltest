@@ -57,3 +57,43 @@ test numeric-division-keeps-at-least-16-significant-digits {
 expect {
     0.51666666666666666667|1550.0000000000000000|0.000064516129032258064516
 }
+
+test numeric-in-case-and-nullif-compare-as-numbers {
+    CREATE TABLE t (p numeric(10,2), q numeric(10,0));
+    INSERT INTO t VALUES ('2.00', '10');
+    SELECT count(*) FROM t WHERE p IN (2);
+    SELECT count(*) FROM t WHERE p IN (3, 2);
+    SELECT count(*) FROM t WHERE p NOT IN (2);
+    SELECT CASE p WHEN 2 THEN 'yes' ELSE 'no' END FROM t;
+    SELECT count(*) FROM t WHERE nullif(p, 2) IS NULL;
+    SELECT nullif(p, 3) FROM t;
+}
+expect {
+    1
+    1
+    0
+    yes
+    1
+    2.00
+}
+
+test numeric-coalesce-and-case-keep-numeric {
+    CREATE TABLE t (p numeric(10,2));
+    INSERT INTO t VALUES ('2.00'), (NULL);
+    SELECT coalesce(p, 0) + 1, CASE WHEN p > 0 THEN p ELSE 0 END + 1 FROM t ORDER BY 1;
+}
+expect {
+    1|1
+    3.00|3.00
+}
+
+test numeric-join-compares-as-numbers {
+    CREATE TABLE a (q numeric(10,0));
+    CREATE TABLE b (y numeric(10,1));
+    INSERT INTO a VALUES ('10'), ('20');
+    INSERT INTO b VALUES ('10.0'), ('30.0');
+    SELECT a.q, b.y FROM a JOIN b ON a.q = b.y;
+}
+expect {
+    10|10.0
+}
