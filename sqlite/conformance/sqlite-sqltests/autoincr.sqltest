@@ -527,3 +527,59 @@ expect {
 	3
 	blob|5a
 }
+
+# AUTOINCREMENT needs a primary key that is the rowid (issue #6940).
+test autoinc-int-primary-key-is-rejected {
+	CREATE TABLE t(id INT PRIMARY KEY AUTOINCREMENT, v);
+}
+expect error {
+	AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+}
+
+test autoinc-bigint-primary-key-is-rejected {
+	CREATE TABLE t(id BIGINT PRIMARY KEY AUTOINCREMENT, v);
+}
+expect error {
+	AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+}
+
+test autoinc-table-constraint-on-int-primary-key-is-rejected {
+	CREATE TABLE t(id INT, v, PRIMARY KEY(id AUTOINCREMENT));
+}
+expect error {
+	AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+}
+
+test autoinc-integer-primary-key-desc-is-rejected {
+	CREATE TABLE t(id INTEGER PRIMARY KEY DESC AUTOINCREMENT, v);
+}
+expect error {
+	AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+}
+
+test autoinc-temp-table-int-primary-key-is-rejected {
+	CREATE TEMP TABLE t(id INT PRIMARY KEY AUTOINCREMENT, v);
+}
+expect error {
+	AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+}
+
+@requires strict "uses STRICT tables"
+test autoinc-strict-int-primary-key-is-rejected {
+	CREATE TABLE t(id INT PRIMARY KEY AUTOINCREMENT, v TEXT) STRICT;
+}
+expect error {
+	AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+}
+
+@cross-check-integrity
+test autoinc-table-constraint-desc-on-integer-primary-key-is-the-rowid {
+	CREATE TABLE t(id INTEGER, v, PRIMARY KEY(id DESC AUTOINCREMENT));
+	INSERT INTO t(v) VALUES ('a');
+	INSERT INTO t(v) VALUES ('b');
+	SELECT id, v FROM t ORDER BY id;
+}
+expect {
+	1|a
+	2|b
+}

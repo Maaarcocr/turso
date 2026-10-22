@@ -902,6 +902,10 @@ fn validate(
                 );
             }
         }
+        if table.has_autoincrement && !table.columns().iter().any(|column| column.is_rowid_alias())
+        {
+            bail_parse_error!("AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY");
+        }
     }
     Ok(())
 }

@@ -491,6 +491,30 @@ fn test_drop_sqlite_created_mixed_case_autoincrement_table() -> anyhow::Result<(
     Ok(())
 }
 
+#[test]
+fn test_open_table_with_autoincrement_on_a_primary_key_that_is_not_the_rowid() -> anyhow::Result<()>
+{
+    let (_tmp_dir, db_path) = create_database_with_sqlite(
+        "CREATE TABLE t(id INT PRIMARY KEY, v TEXT); \
+         CREATE TABLE helper(x INTEGER PRIMARY KEY AUTOINCREMENT); \
+         DROP TABLE helper; \
+         INSERT INTO t VALUES (NULL, 'a'), (7, 'b'); \
+         PRAGMA writable_schema = ON; \
+         UPDATE sqlite_schema \
+            SET sql = 'CREATE TABLE t (id INT PRIMARY KEY AUTOINCREMENT, v TEXT)' \
+            WHERE name = 't';",
+    )?;
+    let db = TempDatabase::builder().with_db_path(&db_path).build();
+    let conn = db.connect_limbo();
+    let rows: Vec<(i64, String)> = conn.exec_rows("SELECT coalesce(id, -1), v FROM t ORDER BY v");
+    assert_eq!(rows, vec![(-1, "a".to_string()), (7, "b".to_string())]);
+    assert_that!(conn.execute("CREATE TABLE u(id INT PRIMARY KEY AUTOINCREMENT)"))
+        .err()
+        .display_string()
+        .contains("AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY");
+    Ok(())
+}
+
 fn create_database_with_sqlite(
     sql: &str,
 ) -> anyhow::Result<(tempfile::TempDir, std::path::PathBuf)> {
