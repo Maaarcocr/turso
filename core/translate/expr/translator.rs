@@ -2045,9 +2045,6 @@ fn translate_function_call_expr(
                 | ScalarFunc::NumericDiv
                 | ScalarFunc::NumericLt
                 | ScalarFunc::NumericEq
-                | ScalarFunc::NumericKey
-                | ScalarFunc::NumericNeg
-                | ScalarFunc::NumericAbs
                 | ScalarFunc::DatePlus
                 | ScalarFunc::DateMinus => translate_function(
                     program,
@@ -2057,6 +2054,19 @@ fn translate_function_call_expr(
                     target_register,
                     func_ctx,
                 ),
+                ScalarFunc::NumericKey | ScalarFunc::NumericNeg | ScalarFunc::NumericAbs => {
+                    if !resolver.enable_custom_types {
+                        crate::bail_parse_error!("no such function: {}", srf);
+                    }
+                    translate_function(
+                        program,
+                        args,
+                        referenced_tables,
+                        resolver,
+                        target_register,
+                        func_ctx,
+                    )
+                }
                 ScalarFunc::ArrayLength
                 | ScalarFunc::ArrayAppend
                 | ScalarFunc::ArrayPrepend
