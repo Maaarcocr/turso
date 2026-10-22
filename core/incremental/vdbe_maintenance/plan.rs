@@ -10,6 +10,7 @@ use crate::sync::Arc;
 use crate::translate::collate::{get_collseq_from_expr_with_symbols, CollationSeq};
 use crate::translate::emitter::Resolver;
 use crate::translate::expr::{expr_contains_nondeterministic_scalar_function, WalkControl};
+use crate::translate::expr::{expr_type, type_keys, ExprType, TypeEnv};
 use crate::translate::optimizer::optimize_plan;
 use crate::translate::optimizer::unnest::rewrite_correlated_subqueries;
 use crate::translate::plan::{
@@ -149,6 +150,32 @@ fn validate_supported_aggregate(agg: &Aggregate) -> Result<()> {
     Ok(())
 }
 
+fn reject_typed_aggregation(plan: &SelectPlan, resolver: &Resolver) -> Result<()> {
+    let env = TypeEnv::from_resolver(resolver);
+    for aggregate in &plan.aggregates {
+        for arg in &aggregate.args {
+            if let ExprType::Named(named) = expr_type(arg, Some(&plan.table_references), &env) {
+                return unsupported(&format!(
+                    "aggregates over values of type {}",
+                    named.def.name
+                ));
+            }
+        }
+    }
+    let group_exprs: Vec<&ast::Expr> = plan
+        .group_by
+        .iter()
+        .flat_map(|group_by| group_by.exprs.iter())
+        .collect();
+    if type_keys(&group_exprs, Some(&plan.table_references), resolver)?
+        .iter()
+        .any(Option::is_some)
+    {
+        return unsupported("GROUP BY on values compared by a type key");
+    }
+    Ok(())
+}
+
 /// Lower the main query planner's bound relational plan into the maintenance
 /// DAG. Parser spelling (aliases, stars, USING expansion, ordinal GROUP BY,
 /// and compound arity) has already been resolved by this point.
@@ -239,6 +266,7 @@ fn build_select_plan_dag(
     if plan.limit.is_some() || plan.offset.is_some() {
         return unsupported("LIMIT or OFFSET");
     }
+    reject_typed_aggregation(plan, resolver)?;
     if !plan.values.is_empty() {
         return unsupported("VALUES");
     }
