@@ -7,6 +7,9 @@ use crate::{LimboError, ValueBlob};
 const NUMERIC_BLOB_VERSION: u8 = 0x01;
 const FLAG_NEGATIVE: u8 = 0x01;
 const MAX_SCALE_MAGNITUDE: i64 = 1_000_000;
+const DIVISION_MIN_SIGNIFICANT_DIGITS: i64 = 16;
+const DIVISION_MAX_SCALE: i64 = 1000;
+const DECIMAL_DIGITS_PER_BASE_10000_DIGIT: i64 = 4;
 
 /// Serialize a BigDecimal to our portable blob format.
 ///
@@ -166,6 +169,79 @@ pub fn format_numeric(bd: &BigDecimal) -> String {
     }
 }
 
+pub fn divide(dividend: &BigDecimal, divisor: &BigDecimal) -> crate::Result<BigDecimal> {
+    use bigdecimal::Zero;
+
+    if divisor.is_zero() {
+        return Err(LimboError::Constraint("division by zero".to_string()));
+    }
+    let result_scale = division_scale(dividend, divisor);
+    let (dividend_digits, dividend_scale) = dividend.as_bigint_and_exponent();
+    let (divisor_digits, divisor_scale) = divisor.as_bigint_and_exponent();
+    let shift = divisor_scale - dividend_scale + result_scale;
+    let (numerator, denominator) = if shift >= 0 {
+        (dividend_digits * power_of_ten(shift), divisor_digits)
+    } else {
+        (dividend_digits, divisor_digits * power_of_ten(-shift))
+    };
+    let quotient = &numerator / &denominator;
+    let remainder = &numerator % &denominator;
+    let rounds_away_from_zero = remainder.magnitude() * 2u32 >= *denominator.magnitude();
+    let quotient = if !rounds_away_from_zero {
+        quotient
+    } else if numerator.sign() == denominator.sign() {
+        quotient + 1
+    } else {
+        quotient - 1
+    };
+    Ok(BigDecimal::new(quotient, result_scale))
+}
+
+fn division_scale(dividend: &BigDecimal, divisor: &BigDecimal) -> i64 {
+    let (dividend_weight, dividend_leading_digit) = leading_base_10000_digit(dividend);
+    let (divisor_weight, divisor_leading_digit) = leading_base_10000_digit(divisor);
+    let mut quotient_weight = dividend_weight - divisor_weight;
+    if dividend_leading_digit <= divisor_leading_digit {
+        quotient_weight -= 1;
+    }
+    let scale =
+        DIVISION_MIN_SIGNIFICANT_DIGITS - quotient_weight * DECIMAL_DIGITS_PER_BASE_10000_DIGIT;
+    scale
+        .max(dividend.fractional_digit_count())
+        .max(divisor.fractional_digit_count())
+        .clamp(0, DIVISION_MAX_SCALE)
+}
+
+fn leading_base_10000_digit(value: &BigDecimal) -> (i64, u32) {
+    use bigdecimal::Zero;
+
+    if value.is_zero() {
+        return (0, 0);
+    }
+    let (digits, scale) = value.as_bigint_and_exponent();
+    let magnitude = BigInt::from_biguint(Sign::Plus, digits.magnitude().clone());
+    let leading_power_of_ten = value.digits() as i64 - 1 - scale;
+    let weight = leading_power_of_ten.div_euclid(DECIMAL_DIGITS_PER_BASE_10000_DIGIT);
+    let shift = -scale - weight * DECIMAL_DIGITS_PER_BASE_10000_DIGIT;
+    let leading_digit = if shift >= 0 {
+        magnitude * power_of_ten(shift)
+    } else {
+        magnitude / power_of_ten(-shift)
+    };
+    let leading_digit =
+        u32::try_from(&leading_digit).expect("leading base-10000 digit fits in u32");
+    assert!(
+        (1..10000).contains(&leading_digit),
+        "leading base-10000 digit out of range: {leading_digit}"
+    );
+    (weight, leading_digit)
+}
+
+fn power_of_ten(exponent: i64) -> BigInt {
+    let exponent = u32::try_from(exponent).expect("power of ten exponent fits in u32");
+    BigInt::from(10).pow(exponent)
+}
+
 /// Validate that a BigDecimal fits within the given precision and scale.
 /// Precision = total number of significant digits.
 /// Scale = number of digits after the decimal point.
@@ -217,6 +293,42 @@ mod tests {
     use super::*;
     use bigdecimal::Zero;
     use std::str::FromStr;
+
+    #[test]
+    fn test_divide_chooses_postgres_scale() {
+        let cases = [
+            ("1.55", "3", "0.51666666666666666667"),
+            ("100.00", "10", "10.0000000000000000"),
+            ("1", "3", "0.33333333333333333333"),
+            ("10", "3", "3.3333333333333333"),
+            ("0", "7", "0.00000000000000000000"),
+            ("1234567", "0.001", "1234567000.00000000"),
+            ("0.00001", "3", "0.000003333333333333333333"),
+            ("2.5", "-2", "-1.25000000000000000000"),
+            ("-7", "3", "-2.3333333333333333"),
+            ("1.0", "9999", "0.00010001000100010001"),
+            ("99999", "1", "99999.000000000000"),
+            ("2", "3", "0.66666666666666666667"),
+            ("-2", "3", "-0.66666666666666666667"),
+        ];
+        for (dividend, divisor, expected) in cases {
+            let dividend = BigDecimal::from_str(dividend).unwrap();
+            let divisor = BigDecimal::from_str(divisor).unwrap();
+            let quotient = divide(&dividend, &divisor).unwrap();
+            assert_eq!(
+                format_numeric(&quotient),
+                expected,
+                "{dividend} / {divisor}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_divide_by_zero_is_an_error() {
+        let one = BigDecimal::from_str("1").unwrap();
+        let zero = BigDecimal::from_str("0.00").unwrap();
+        assert!(divide(&one, &zero).is_err());
+    }
 
     #[test]
     fn test_roundtrip_positive() {

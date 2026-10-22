@@ -11575,16 +11575,7 @@ pub fn op_function(
                             ScalarFunc::NumericAdd => a + b,
                             ScalarFunc::NumericSub => a - b,
                             ScalarFunc::NumericMul => a * b,
-                            ScalarFunc::NumericDiv => {
-                                use bigdecimal::Zero;
-                                if b.is_zero() {
-                                    return Err(LimboError::Constraint(
-                                        "division by zero".to_string(),
-                                    )
-                                    .into());
-                                }
-                                a / b
-                            }
+                            ScalarFunc::NumericDiv => crate::numeric::decimal::divide(&a, &b)?,
                             _ => unreachable!(),
                         };
                         Value::build_text(crate::numeric::decimal::format_numeric(&res))
