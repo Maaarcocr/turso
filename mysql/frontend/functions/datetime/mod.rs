@@ -75,6 +75,7 @@ const FUNCTIONS: &[Function] = &[
     function("DATE_FORMAT", &[2], build::date_format),
     function("TIME_FORMAT", &[2], build::time_format),
     function("STR_TO_DATE", &[2], str_to_date::str_to_date),
+    function("GET_FORMAT", &[2], format::get_format),
     function("CONVERT_TZ", &[3], epoch::convert_tz),
     function("FROM_UNIXTIME", &[1, 2], epoch::from_unixtime),
     function("UNIX_TIMESTAMP", &[0, 1], epoch::unix_timestamp),

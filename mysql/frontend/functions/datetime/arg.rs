@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use turso_core::types::TextSubtype;
 use turso_core::{LimboError, Numeric, Result, Value};
 
 use super::decimal::Decimal;
@@ -17,6 +18,7 @@ pub(super) enum Arg<'a> {
     Double(f64),
     Text(&'a [u8]),
     Binary(&'a [u8]),
+    Json(&'a str),
 }
 
 impl<'a> Arg<'a> {
@@ -25,6 +27,7 @@ impl<'a> Arg<'a> {
             Value::Null => Self::Null,
             Value::Numeric(Numeric::Integer(i)) => Self::Int(*i),
             Value::Numeric(Numeric::Float(f)) => Self::from_real(f64::from(*f)),
+            Value::Text(text) if text.subtype == TextSubtype::Json => Self::Json(text.as_str()),
             Value::Text(text) => Self::Text(text.as_str().as_bytes()),
             Value::Blob(blob) => Self::Binary(blob),
         }
@@ -45,7 +48,7 @@ impl<'a> Arg<'a> {
     }
 
     pub fn is_unsigned(&self) -> bool {
-        matches!(self, Self::Unsigned(_))
+        matches!(self, Self::Unsigned(_) | Self::Binary(_))
     }
 
     pub fn datetime(&self, flags: DateFlags) -> Option<MyTime> {
@@ -54,16 +57,11 @@ impl<'a> Arg<'a> {
             Self::Int(number) => parse::datetime_from_number(number, flags),
             Self::Unsigned(number) => parse::datetime_from_number(number as i64, flags),
             Self::Double(number) => datetime_from_double(number, flags),
-            Self::Text(text) | Self::Binary(text) => {
-                let flags = DateFlags {
-                    no_zero_date: true,
-                    ..flags
-                };
-                let parsed = parse::parse_datetime(text, flags).ok()?;
-                let mut time = parsed.time;
-                time.add_nanos_to_datetime(parsed.rounding_nanos)
-                    .then_some(time)
-            }
+            Self::Text(text) | Self::Binary(text) => datetime_from_text(text, flags),
+            Self::Json(json) => match JsonScalar::read(json) {
+                JsonScalar::String(text) => datetime_from_text(text.as_bytes(), flags),
+                _ => None,
+            },
         }
     }
 
@@ -73,17 +71,11 @@ impl<'a> Arg<'a> {
             Self::Int(number) => parse::time_from_number(number),
             Self::Unsigned(number) => parse::time_from_number(number as i64),
             Self::Double(number) => time_from_double(number),
-            Self::Text(text) | Self::Binary(text) => {
-                let parsed = parse::parse_time(text)?;
-                let mut time = parsed.time;
-                if time.kind == Kind::Time {
-                    time.add_nanos_to_time(parsed.rounding_nanos);
-                    Some(time)
-                } else {
-                    time.add_nanos_to_datetime(parsed.rounding_nanos)
-                        .then_some(time)
-                }
-            }
+            Self::Text(text) | Self::Binary(text) => time_from_text(text),
+            Self::Json(json) => match JsonScalar::read(json) {
+                JsonScalar::String(text) => time_from_text(text.as_bytes()),
+                _ => None,
+            },
         }
     }
 
@@ -95,6 +87,7 @@ impl<'a> Arg<'a> {
                 .map_or(MAX_FSP, |parsed| parsed.fraction_digits),
             Self::Binary(bytes) => parse::parse_datetime(bytes, DateFlags::FUZZY)
                 .map_or(0, |parsed| parsed.fraction_digits),
+            Self::Json(_) => MAX_FSP,
         }
     }
 
@@ -108,13 +101,14 @@ impl<'a> Arg<'a> {
             Self::Binary(bytes) => {
                 parse::parse_time(bytes).map_or(0, |parsed| parsed.fraction_digits)
             }
+            Self::Json(_) => MAX_FSP,
         }
     }
 
     pub fn number_fsp(&self) -> u8 {
         match *self {
             Self::Null | Self::Int(_) | Self::Unsigned(_) | Self::Binary(_) => 0,
-            Self::Double(_) | Self::Text(_) => MAX_FSP,
+            Self::Double(_) | Self::Text(_) | Self::Json(_) => MAX_FSP,
         }
     }
 
@@ -126,6 +120,12 @@ impl<'a> Arg<'a> {
             Self::Double(number) => Some(int_from_double(number)?),
             Self::Text(text) => Some(int_from_text(text)),
             Self::Binary(bytes) => Some(int_from_binary(bytes) as i64),
+            Self::Json(json) => Some(match JsonScalar::read(json) {
+                JsonScalar::String(text) => int_from_text(text.as_bytes()),
+                JsonScalar::Number(number) => int_from_json_number(number)?,
+                JsonScalar::Boolean(value) => i64::from(value),
+                JsonScalar::Other => 0,
+            }),
         })
     }
 
@@ -137,6 +137,15 @@ impl<'a> Arg<'a> {
             Self::Double(number) => Some(Decimal::from_double(number)),
             Self::Text(text) => Some(Decimal::parse(text)),
             Self::Binary(bytes) => Some(Decimal::from_unsigned(int_from_binary(bytes))),
+            Self::Json(json) => Some(match JsonScalar::read(json) {
+                JsonScalar::String(text) => Decimal::parse(text.as_bytes()),
+                JsonScalar::Number(number) => match json_integer(number) {
+                    Some(integer) => Decimal::from_int(integer),
+                    None => Decimal::parse(number.as_bytes()),
+                },
+                JsonScalar::Boolean(value) => Decimal::from_int(i64::from(value)),
+                JsonScalar::Other => Decimal::default(),
+            }),
         }
     }
 
@@ -147,8 +156,106 @@ impl<'a> Arg<'a> {
             Self::Unsigned(number) => Some(Cow::Owned(number.to_string())),
             Self::Double(number) => Some(Cow::Owned(format_double(number))),
             Self::Text(text) | Self::Binary(text) => Some(String::from_utf8_lossy(text)),
+            Self::Json(json) => Some(Cow::Borrowed(json)),
         }
     }
+}
+
+fn datetime_from_text(text: &[u8], flags: DateFlags) -> Option<MyTime> {
+    let flags = DateFlags {
+        no_zero_date: true,
+        ..flags
+    };
+    let parsed = parse::parse_datetime(text, flags).ok()?;
+    let mut time = parsed.time;
+    time.add_nanos_to_datetime(parsed.rounding_nanos)
+        .then_some(time)
+}
+
+fn time_from_text(text: &[u8]) -> Option<MyTime> {
+    let parsed = parse::parse_time(text)?;
+    let mut time = parsed.time;
+    if time.kind == Kind::Time {
+        time.add_nanos_to_time(parsed.rounding_nanos);
+        Some(time)
+    } else {
+        time.add_nanos_to_datetime(parsed.rounding_nanos)
+            .then_some(time)
+    }
+}
+
+enum JsonScalar<'a> {
+    String(String),
+    Number(&'a str),
+    Boolean(bool),
+    Other,
+}
+
+impl<'a> JsonScalar<'a> {
+    fn read(json: &'a str) -> Self {
+        let json = json.trim();
+        match json.as_bytes().first() {
+            Some(b'"') => unquote_json_string(json).map_or(Self::Other, Self::String),
+            Some(b't') => Self::Boolean(true),
+            Some(b'f') => Self::Boolean(false),
+            Some(b'-' | b'0'..=b'9') => Self::Number(json),
+            _ => Self::Other,
+        }
+    }
+}
+
+fn unquote_json_string(json: &str) -> Option<String> {
+    let inner = json.strip_prefix('"')?.strip_suffix('"')?;
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next()? {
+            'b' => out.push('\u{8}'),
+            'f' => out.push('\u{c}'),
+            'n' => out.push('\n'),
+            'r' => out.push('\r'),
+            't' => out.push('\t'),
+            'u' => {
+                let high = hex_code_unit(&mut chars)?;
+                let code = if (0xD800..0xDC00).contains(&high) {
+                    if chars.next()? != '\\' || chars.next()? != 'u' {
+                        return None;
+                    }
+                    let low = hex_code_unit(&mut chars)?;
+                    0x10000 + ((high - 0xD800) << 10) + (low.checked_sub(0xDC00)?)
+                } else {
+                    high
+                };
+                out.push(char::from_u32(code)?);
+            }
+            other => out.push(other),
+        }
+    }
+    Some(out)
+}
+
+fn hex_code_unit(chars: &mut std::str::Chars) -> Option<u32> {
+    let digits: String = chars.take(4).collect();
+    if digits.len() != 4 {
+        return None;
+    }
+    u32::from_str_radix(&digits, 16).ok()
+}
+
+fn int_from_json_number(number: &str) -> Result<i64> {
+    match json_integer(number) {
+        Some(integer) => Ok(integer),
+        None => int_from_double(number.parse().unwrap_or(0.0)),
+    }
+}
+
+fn json_integer(number: &str) -> Option<i64> {
+    let integer: i128 = number.parse().ok()?;
+    Some(integer.clamp(i128::from(i64::MIN), i128::from(u64::MAX)) as i64)
 }
 
 fn datetime_from_double(number: f64, flags: DateFlags) -> Option<MyTime> {

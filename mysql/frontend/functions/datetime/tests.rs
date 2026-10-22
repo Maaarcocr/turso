@@ -208,6 +208,41 @@ fn extract_reads_dates_or_times_by_unit() {
 }
 
 #[test]
+fn get_format_takes_the_kind_as_text() {
+    let connection = crate::open_memory().expect("in-memory database opens");
+    assert_eq!(
+        select(&connection, "GET_FORMAT('DATE', 'USA')"),
+        Value::build_text("%m.%d.%Y")
+    );
+    assert_eq!(
+        select(&connection, "GET_FORMAT('TIME', 'usa')"),
+        Value::build_text("%h:%i:%s %p")
+    );
+    assert_eq!(
+        select(&connection, "GET_FORMAT('TIMESTAMP', 'INTERNAL')"),
+        Value::build_text("%Y%m%d%H%i%s")
+    );
+    assert_eq!(
+        select(&connection, "GET_FORMAT('DATE', 'USA ')"),
+        Value::Null
+    );
+}
+
+#[test]
+fn hexadecimal_blobs_are_unsigned_numbers() {
+    let connection = crate::open_memory().expect("in-memory database opens");
+    assert_eq!(
+        select(&connection, "MAKETIME(X'FF666F6F626172FF', 0, 0)"),
+        Value::build_text("838:59:59")
+    );
+    assert_eq!(
+        select(&connection, "MAKEDATE(X'31', 1)"),
+        Value::build_text("2049-01-01")
+    );
+    assert_eq!(select(&connection, "WEEK(X'31')"), Value::Null);
+}
+
+#[test]
 fn interval_functions_reject_unknown_units() {
     let connection = crate::open_memory().expect("in-memory database opens");
     for sql in [
