@@ -742,6 +742,20 @@ fn column_type(
         Some((_, Table::FromClauseSubquery(subquery))) => {
             subquery_column_type(&subquery.plan, column, env)
         }
+        Some((_, Table::RecursiveCteInput(input))) => {
+            match input.column_types.get(column).and_then(Option::as_ref) {
+                Some(column_type) => {
+                    match env.schema.get_type_def_unchecked(&column_type.type_name) {
+                        Some(def) => ExprType::Named(NamedType {
+                            def: Arc::clone(def),
+                            params: Some(column_type.params.clone()),
+                        }),
+                        None => ExprType::Dynamic(DynamicClass::Unknown),
+                    }
+                }
+                None => ExprType::Dynamic(DynamicClass::Unknown),
+            }
+        }
         Some((_, table)) => match table.get_column_at(column) {
             Some(col) => stored_column_type(col, table.is_strict(), env),
             None => ExprType::Dynamic(DynamicClass::Unknown),
@@ -774,12 +788,149 @@ fn stored_column_type(column: &Column, is_strict: bool, env: &TypeEnv) -> ExprTy
 }
 
 fn subquery_column_type(plan: &Plan, column: usize, env: &TypeEnv) -> ExprType {
-    let Plan::Select(select) = plan else {
-        return ExprType::Dynamic(DynamicClass::Unknown);
+    match plan {
+        Plan::Select(select) => match select.result_columns.get(column) {
+            Some(result_column) => {
+                expr_type(&result_column.expr, Some(&select.table_references), env)
+            }
+            None => ExprType::Dynamic(DynamicClass::Unknown),
+        },
+        Plan::CompoundSelect { .. } => match plan_column_types(plan, env).into_iter().nth(column) {
+            Some(Some(named)) => ExprType::Named(named),
+            _ => ExprType::Dynamic(DynamicClass::Unknown),
+        },
+        _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+pub(crate) fn recursive_cte_column_types(
+    anchor: &Plan,
+    env: &TypeEnv,
+) -> Vec<Option<crate::schema::RecursiveCteColumnType>> {
+    plan_column_types(anchor, env)
+        .into_iter()
+        .map(|named| {
+            let named = named?;
+            let params = match named.params {
+                Some(params) => params,
+                None => named
+                    .def
+                    .user_params()
+                    .map(|param| param.default.as_deref().cloned())
+                    .collect::<Option<Vec<ast::Expr>>>()?,
+            };
+            (params.len() <= 2).then(|| crate::schema::RecursiveCteColumnType {
+                type_name: named.def.name.clone(),
+                params,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn convert_recursive_cte_results(
+    recursive: &mut Plan,
+    column_types: &[Option<crate::schema::RecursiveCteColumnType>],
+    env: &TypeEnv,
+) {
+    let arms: Vec<&mut crate::translate::plan::SelectPlan> = match recursive {
+        Plan::Select(select) => vec![select],
+        Plan::CompoundSelect {
+            left, right_most, ..
+        } => left
+            .iter_mut()
+            .map(|(arm, _)| arm)
+            .chain(std::iter::once(right_most.as_mut()))
+            .collect(),
+        _ => return,
     };
-    match select.result_columns.get(column) {
-        Some(result_column) => expr_type(&result_column.expr, Some(&select.table_references), env),
-        None => ExprType::Dynamic(DynamicClass::Unknown),
+    for arm in arms {
+        for (column, column_type) in column_types.iter().enumerate() {
+            let Some(column_type) = column_type else {
+                continue;
+            };
+            let Some(result_column) = arm.result_columns.get_mut(column) else {
+                continue;
+            };
+            let already_typed =
+                match expr_type(&result_column.expr, Some(&arm.table_references), env) {
+                    ExprType::Named(named) => {
+                        named.def.name.eq_ignore_ascii_case(&column_type.type_name)
+                            && named.params.as_deref() == Some(column_type.params.as_slice())
+                    }
+                    ExprType::Dynamic(_) => false,
+                };
+            if already_typed {
+                continue;
+            }
+            let size = match column_type.params.as_slice() {
+                [] => None,
+                [max] => Some(ast::TypeSize::MaxSize(Box::new(max.clone()))),
+                [precision, scale] => Some(ast::TypeSize::TypeSize(
+                    Box::new(precision.clone()),
+                    Box::new(scale.clone()),
+                )),
+                _ => unreachable!("recursive CTE column types have at most two parameters"),
+            };
+            let value = std::mem::replace(
+                &mut result_column.expr,
+                ast::Expr::Literal(ast::Literal::Null),
+            );
+            result_column.expr = ast::Expr::Cast {
+                expr: Box::new(value),
+                type_name: Some(ast::Type {
+                    name: column_type.type_name.clone(),
+                    size,
+                    array_dimensions: 0,
+                }),
+            };
+        }
+    }
+}
+
+pub(crate) fn plan_column_types(plan: &Plan, env: &TypeEnv) -> Vec<Option<NamedType>> {
+    match plan {
+        Plan::Select(select) => select
+            .result_columns
+            .iter()
+            .map(|result_column| {
+                match expr_type(&result_column.expr, Some(&select.table_references), env) {
+                    ExprType::Named(named) => Some(named),
+                    ExprType::Dynamic(_) => None,
+                }
+            })
+            .collect(),
+        Plan::CompoundSelect {
+            left, right_most, ..
+        } => {
+            let arms: Vec<&crate::translate::plan::SelectPlan> = left
+                .iter()
+                .map(|(arm, _)| arm)
+                .chain(std::iter::once(right_most.as_ref()))
+                .collect();
+            if arms.iter().any(|arm| !arm.values.is_empty()) {
+                return vec![None; right_most.result_columns.len()];
+            }
+            (0..right_most.result_columns.len())
+                .map(|column| {
+                    let branches: Vec<(&ast::Expr, Option<ExprType>)> = arms
+                        .iter()
+                        .map(|arm| {
+                            let expr = &arm.result_columns[column].expr;
+                            (expr, branch_type(expr, Some(&arm.table_references), env))
+                        })
+                        .collect();
+                    match common_branch_type(&branches) {
+                        Some((named, conversions))
+                            if conversions.iter().all(Conversion::is_none) =>
+                        {
+                            Some(named)
+                        }
+                        _ => None,
+                    }
+                })
+                .collect()
+        }
+        _ => Vec::new(),
     }
 }
 
