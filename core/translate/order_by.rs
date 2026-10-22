@@ -21,7 +21,7 @@ use crate::{
 
 use super::{
     emitter::TranslateCtx,
-    expr::translate_expr,
+    expr::{expr_type, translate_expr, ExprType, TypeEnv},
     plan::{Distinctness, ResultSetColumn, SelectPlan, TableReferences},
     result_row::{emit_offset, emit_result_row_and_limit},
 };
@@ -62,17 +62,18 @@ pub(crate) fn custom_type_comparator(
         if col.is_array() {
             return Some(SortComparatorType::ArrayLt);
         }
-        let type_def = schema.get_type_def(&col.ty_str, table.is_strict())?;
-        type_def
+    } else if super::expr::expr_is_array(expr, Some(referenced_tables)) {
+        return Some(SortComparatorType::ArrayLt);
+    }
+    match expr_type(expr, Some(referenced_tables), &TypeEnv::new(schema)) {
+        ExprType::Named(named) => named
+            .def
             .operators()
             .iter()
             .find(|op| op.op == "<")
             .and_then(|op| op.func_name.as_ref())
-            .and_then(|func_name| sort_comparator_from_func_name(func_name))
-    } else if super::expr::expr_is_array(expr, Some(referenced_tables)) {
-        Some(SortComparatorType::ArrayLt)
-    } else {
-        None
+            .and_then(|func_name| sort_comparator_from_func_name(func_name)),
+        ExprType::Dynamic(_) => None,
     }
 }
 

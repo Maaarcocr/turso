@@ -319,3 +319,28 @@ expect {
     60
     60.00
 }
+
+@requires strict "uses STRICT tables"
+test typed-expressions-sort-by-the-type-order {
+    CREATE TABLE t1(p numeric(10,2), g INTEGER) STRICT;
+    INSERT INTO t1 VALUES ('9.00', 1), ('10.00', 1);
+    SELECT max(p * 1), min(p * 1) FROM t1;
+    SELECT p FROM t1 ORDER BY p * 1 DESC;
+    SELECT x FROM (SELECT p * 1 AS x FROM t1) ORDER BY x;
+    SELECT p * 1 FROM t1 UNION ALL SELECT p * 2 FROM t1 ORDER BY 1;
+    SELECT g, max(p * 1) FROM t1 GROUP BY g;
+    SELECT max(x) FROM (SELECT p AS x FROM t1);
+}
+expect {
+    10.00|9.00
+    10.00
+    9.00
+    9.00
+    10.00
+    9.00
+    10.00
+    18.00
+    20.00
+    1|10.00
+    10.00
+}
