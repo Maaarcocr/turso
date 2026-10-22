@@ -191,13 +191,16 @@ pub trait Dialect: Send + Sync + 'static {
     }
 }
 
+#[derive(Debug)]
 pub struct TypeRules {
     pub builtin_behaviour_overrides: &'static [(&'static str, &'static str)],
+    pub cast_uses_parameter_defaults: bool,
 }
 
 impl TypeRules {
     pub const SQLITE: TypeRules = TypeRules {
         builtin_behaviour_overrides: &[],
+        cast_uses_parameter_defaults: false,
     };
 
     pub(crate) fn behaviour_override(&self, type_name: &str) -> Option<&'static str> {

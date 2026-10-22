@@ -192,6 +192,7 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
          OPERATOR '=' (numeric, numeric) numeric_eq \
          FUNCTION abs(numeric) RETURNS numeric numeric_abs",
     )],
+    cast_uses_parameter_defaults: true,
 };
 
 pub fn encode_pg_schema_sql(sql: &str) -> String {

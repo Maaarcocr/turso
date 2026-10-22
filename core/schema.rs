@@ -844,6 +844,7 @@ pub struct Schema {
 
     /// Custom type registry, loaded from sqlite_turso_types
     pub type_registry: HashMap<String, Arc<TypeDef>>,
+    pub type_rules: &'static crate::dialect::TypeRules,
 
     pub generated_columns_enabled: bool,
     /// Named sequences (CREATE SEQUENCE)
@@ -1075,6 +1076,7 @@ impl Schema {
             broken_views: HashSet::default(),
             dropped_root_pages: HashSet::default(),
             type_registry,
+            type_rules: dialect.type_rules(),
             generated_columns_enabled: false,
             sequences: HashMap::default(),
         };
@@ -3416,6 +3418,7 @@ impl TryClone for Schema {
             broken_views: self.broken_views.try_clone()?,
             dropped_root_pages: self.dropped_root_pages.try_clone()?,
             type_registry: self.type_registry.try_clone()?,
+            type_rules: self.type_rules,
             generated_columns_enabled: self.generated_columns_enabled,
             sequences: self.sequences.try_clone()?,
         })

@@ -834,6 +834,7 @@ fn translate_cast_expr(
     target_register: usize,
     resolver: &Resolver,
 ) -> Result<usize> {
+    let cast_expr = expr;
     let ast::Expr::Cast { expr, type_name } = expr else {
         unreachable!("translate_cast_expr expects Expr::Cast");
     };
@@ -856,83 +857,12 @@ fn translate_cast_expr(
             super::arrays::emit_array_encode(program, target_register, &column, resolver, "")?;
             return Ok(target_register);
         }
-        if let Some(resolved) = resolver.schema().resolve_type_unchecked(cast_type_name)? {
-            // Build ty_params from AST TypeSize so parametric types
-            // (e.g. numeric(10,2)) get their parameters passed through.
-            let ty_params: Vec<Box<ast::Expr>> = match &tn.size {
-                Some(ast::TypeSize::MaxSize(e)) => vec![e.clone()],
-                Some(ast::TypeSize::TypeSize(e1, e2)) => {
-                    vec![e1.clone(), e2.clone()]
-                }
-                None => Vec::new(),
-            };
+    }
 
-            // Domains: apply parent encode chain, then validate constraints
-            // on the encoded value (domain CHECK sees the stored representation).
-            if resolved.is_domain() {
-                // Apply encode from parent custom types (domain itself has encode: None)
-                let cast_col = Column::new(
-                    None,
-                    cast_type_name.clone(),
-                    None,
-                    None,
-                    Type::Null,
-                    None,
-                    ColDef::default(),
-                );
-                for td in &resolved.chain {
-                    if let Some(encode_expr) = td.encode() {
-                        emit_type_expr(
-                            program,
-                            encode_expr,
-                            target_register,
-                            target_register,
-                            &cast_col,
-                            td,
-                            resolver,
-                        )?;
-                    }
-                }
-
-                // Validate domain constraints on the encoded value
-                emit_domain_cast_constraints(program, &resolved.chain, target_register, resolver)?;
-                return Ok(target_register);
-            }
-
-            let type_def = resolved.leaf();
-            // If the custom type requires parameters but the CAST
-            // doesn't provide them (e.g. CAST(x AS NUMERIC) vs
-            // CAST(x AS numeric(10,2))), fall through to regular CAST.
-            let user_param_count = type_def.user_params().count();
-            if user_param_count == 0 || ty_params.len() == user_param_count {
-                let mut cast_col = Column::new(
-                    None,
-                    cast_type_name.clone(),
-                    None,
-                    None,
-                    Type::Null,
-                    None,
-                    ColDef::default(),
-                );
-                cast_col.ty_params = ty_params;
-
-                // CAST to custom type applies only the encode function,
-                // producing the stored representation.
-                // e.g. CAST(42 AS cents) → 4200
-                if let Some(encode_expr) = type_def.encode() {
-                    emit_type_expr(
-                        program,
-                        encode_expr,
-                        target_register,
-                        target_register,
-                        &cast_col,
-                        type_def,
-                        resolver,
-                    )?;
-                }
-                return Ok(target_register);
-            }
-        }
+    let env = TypeEnv::from_resolver(resolver);
+    if let ExprType::Named(named) = expr_type(cast_expr, referenced_tables, &env) {
+        emit_cast_into_type(program, target_register, &named, resolver)?;
+        return Ok(target_register);
     }
 
     // SQLite allows CAST(x AS) without a type name, treating it as NUMERIC affinity
