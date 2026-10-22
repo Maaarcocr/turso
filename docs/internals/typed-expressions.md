@@ -1152,6 +1152,17 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Date and time storage (commit 17).** `date_days_encode`/`_decode`,
+  `datetime_micros_encode`/`_decode` and `time_micros_encode`/`_decode` (the
+  last two take the fsp) and `time_micros_lt` are in
+  `core/dialect/time_storage.rs`. ENCODE reads the canonical in-memory text
+  only (`YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS[.f]`, `[-]H:MM:SS[.f]` with any
+  number of hour digits up to 9), years 0000 to 9999, and rounds the fraction
+  to fsp digits half away from zero; converting other input is ASSIGN's job.
+  The storage type adds the parameter `fsp integer DEFAULT 0` to date-time and
+  time types. KEY encodes with 6 digits, so it equals the stored value.
+  DECODE refuses a stored value with more fraction digits than the column's
+  fsp, instead of dropping digits.
 - **Unsigned 64-bit storage (commit 16).** `uint64_encode`, `uint64_decode`,
   `uint64_lt`, `uint64_eq`, `uint64_add`, `uint64_sub` and `uint64_mul` are
   in `core/dialect/storage_functions.rs`; the KEY of `uint64` is

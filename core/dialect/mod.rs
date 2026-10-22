@@ -16,6 +16,7 @@ pub mod sqlite;
 pub mod storage_functions;
 #[cfg(test)]
 pub(crate) mod test_dialect;
+pub(crate) mod time_storage;
 
 pub use dialect_types::{DialectType, StorageType};
 pub use marker::TableMarker;

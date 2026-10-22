@@ -1,3 +1,4 @@
+use super::time_storage;
 use crate::numeric::Numeric;
 use crate::{LimboError, Result, Value};
 use std::cmp::Ordering;
@@ -12,6 +13,13 @@ pub enum StorageFunc {
     Uint64Add,
     Uint64Sub,
     Uint64Mul,
+    DateDaysEncode,
+    DateDaysDecode,
+    DatetimeMicrosEncode,
+    DatetimeMicrosDecode,
+    TimeMicrosEncode,
+    TimeMicrosDecode,
+    TimeMicrosLt,
 }
 
 impl StorageFunc {
@@ -29,22 +37,33 @@ impl StorageFunc {
             StorageFunc::Uint64Add => "uint64_add",
             StorageFunc::Uint64Sub => "uint64_sub",
             StorageFunc::Uint64Mul => "uint64_mul",
+            StorageFunc::DateDaysEncode => "date_days_encode",
+            StorageFunc::DateDaysDecode => "date_days_decode",
+            StorageFunc::DatetimeMicrosEncode => "datetime_micros_encode",
+            StorageFunc::DatetimeMicrosDecode => "datetime_micros_decode",
+            StorageFunc::TimeMicrosEncode => "time_micros_encode",
+            StorageFunc::TimeMicrosDecode => "time_micros_decode",
+            StorageFunc::TimeMicrosLt => "time_micros_lt",
         }
     }
 
     pub fn arity(self) -> usize {
         match self {
-            StorageFunc::Uint64Encode | StorageFunc::Uint64Decode => 1,
+            StorageFunc::Uint64Encode
+            | StorageFunc::Uint64Decode
+            | StorageFunc::DateDaysEncode
+            | StorageFunc::DateDaysDecode => 1,
             StorageFunc::Uint64Lt
             | StorageFunc::Uint64Eq
             | StorageFunc::Uint64Add
             | StorageFunc::Uint64Sub
-            | StorageFunc::Uint64Mul => 2,
+            | StorageFunc::Uint64Mul
+            | StorageFunc::DatetimeMicrosEncode
+            | StorageFunc::DatetimeMicrosDecode
+            | StorageFunc::TimeMicrosEncode
+            | StorageFunc::TimeMicrosDecode
+            | StorageFunc::TimeMicrosLt => 2,
         }
-    }
-
-    pub fn returns_boolean(self) -> bool {
-        matches!(self, StorageFunc::Uint64Lt | StorageFunc::Uint64Eq)
     }
 
     pub fn execute(self, args: &[Value]) -> Result<Value> {
@@ -59,6 +78,19 @@ impl StorageFunc {
         }
         match self {
             StorageFunc::Uint64Encode => uint64_encode(&args[0]),
+            StorageFunc::DateDaysEncode => time_storage::date_days_encode(&args[0]),
+            StorageFunc::DateDaysDecode => time_storage::date_days_decode(&args[0]),
+            StorageFunc::DatetimeMicrosEncode => {
+                time_storage::datetime_micros_encode(&args[0], &args[1])
+            }
+            StorageFunc::DatetimeMicrosDecode => {
+                time_storage::datetime_micros_decode(&args[0], &args[1])
+            }
+            StorageFunc::TimeMicrosEncode => time_storage::time_micros_encode(&args[0], &args[1]),
+            StorageFunc::TimeMicrosDecode => time_storage::time_micros_decode(&args[0], &args[1]),
+            StorageFunc::TimeMicrosLt => Ok(Value::from_i64(
+                (time_storage::time_micros_compare(&args[0], &args[1])? == Ordering::Less) as i64,
+            )),
             StorageFunc::Uint64Decode => uint64_decode(&args[0]),
             StorageFunc::Uint64Lt => Ok(Value::from_i64(
                 (uint64_compare(&args[0], &args[1])? == Ordering::Less) as i64,

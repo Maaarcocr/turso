@@ -47,6 +47,26 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 OPERATOR '+' (ubigint, ubigint) RETURNS ubigint uint64_add",
         },
         DialectType {
+            name: "date_days",
+            storage: StorageType::DateDays,
+            parameters: "",
+            behaviour: "OPERATOR '<' (date_days, date_days) OPERATOR '=' (date_days, date_days)",
+        },
+        DialectType {
+            name: "datetime_micros",
+            storage: StorageType::DatetimeMicros,
+            parameters: "",
+            behaviour: "OPERATOR '<' (datetime_micros, datetime_micros) \
+                OPERATOR '=' (datetime_micros, datetime_micros)",
+        },
+        DialectType {
+            name: "time_micros",
+            storage: StorageType::TimeMicros,
+            parameters: "",
+            behaviour: "OPERATOR '<' (time_micros, time_micros) time_micros_lt \
+                OPERATOR '=' (time_micros, time_micros)",
+        },
+        DialectType {
             name: "text",
             storage: StorageType::Text,
             parameters: "",

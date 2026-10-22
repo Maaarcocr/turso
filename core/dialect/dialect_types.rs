@@ -14,29 +14,50 @@ pub enum StorageType {
     Blob,
     RangedInteger { min: i64, max: i64 },
     Uint64,
+    DateDays,
+    DatetimeMicros,
+    TimeMicros,
 }
 
 impl DialectType {
     pub(crate) fn create_type_sql(&self) -> String {
-        let parameters = if self.parameters.is_empty() {
-            String::new()
-        } else {
-            format!(", {}", self.parameters)
-        };
-        let class = self.storage.class();
+        let parameters: String = [self.storage.parameters(), self.parameters]
+            .into_iter()
+            .filter(|parameters| !parameters.is_empty())
+            .map(|parameters| format!(", {parameters}"))
+            .collect();
         let name = self.name.replace('"', "\"\"");
-        let conversions = self.storage.conversions(self.name);
         format!(
-            "CREATE TYPE \"{name}\"(value {class}{parameters}) BASE {class}{conversions} {}",
+            "CREATE TYPE \"{name}\"(value {}{parameters}) BASE {}{} {}",
+            self.storage.input_class(),
+            self.storage.stored_class(),
+            self.storage.conversions(self.name),
             self.behaviour
         )
     }
 }
 
 impl StorageType {
-    fn class(self) -> &'static str {
+    fn input_class(self) -> &'static str {
         match self {
             StorageType::Integer | StorageType::RangedInteger { .. } => "integer",
+            StorageType::Real => "real",
+            StorageType::Text
+            | StorageType::DateDays
+            | StorageType::DatetimeMicros
+            | StorageType::TimeMicros => "text",
+            StorageType::Blob => "blob",
+            StorageType::Uint64 => "any",
+        }
+    }
+
+    fn stored_class(self) -> &'static str {
+        match self {
+            StorageType::Integer
+            | StorageType::RangedInteger { .. }
+            | StorageType::DateDays
+            | StorageType::DatetimeMicros
+            | StorageType::TimeMicros => "integer",
             StorageType::Real => "real",
             StorageType::Text => "text",
             StorageType::Blob => "blob",
@@ -44,30 +65,54 @@ impl StorageType {
         }
     }
 
-    fn conversions(self, type_name: &str) -> String {
-        if self == StorageType::Uint64 {
-            return " ENCODE uint64_encode(value) DECODE uint64_decode(value) KEY uint64_encode(value)"
-                .to_string();
+    fn parameters(self) -> &'static str {
+        match self {
+            StorageType::DatetimeMicros | StorageType::TimeMicros => "fsp integer DEFAULT 0",
+            _ => "",
         }
-        let StorageType::RangedInteger { min, max } = self else {
-            return String::new();
-        };
-        let mut limits = Vec::with_capacity(2);
-        if min > i64::MIN {
-            limits.push(format!("value >= {min}"));
-        }
-        if max < i64::MAX {
-            limits.push(format!("value <= {max}"));
-        }
-        if limits.is_empty() {
-            return String::new();
-        }
-        format!(
-            " ENCODE CASE WHEN {} THEN value ELSE RAISE(ABORT, 'integer out of range for {}') END DECODE value",
-            limits.join(" AND "),
-            type_name.replace('\'', "''")
-        )
     }
+
+    fn conversions(self, type_name: &str) -> String {
+        match self {
+            StorageType::Integer | StorageType::Real | StorageType::Text | StorageType::Blob => {
+                String::new()
+            }
+            StorageType::RangedInteger { min, max } => {
+                ranged_integer_conversions(min, max, type_name)
+            }
+            StorageType::Uint64 => {
+                " ENCODE uint64_encode(value) DECODE uint64_decode(value) KEY uint64_encode(value)"
+                    .to_string()
+            }
+            StorageType::DateDays => " ENCODE date_days_encode(value) \
+                DECODE date_days_decode(value) KEY date_days_encode(value)"
+                .to_string(),
+            StorageType::DatetimeMicros => " ENCODE datetime_micros_encode(value, fsp) \
+                DECODE datetime_micros_decode(value, fsp) KEY datetime_micros_encode(value, 6)"
+                .to_string(),
+            StorageType::TimeMicros => " ENCODE time_micros_encode(value, fsp) \
+                DECODE time_micros_decode(value, fsp) KEY time_micros_encode(value, 6)"
+                .to_string(),
+        }
+    }
+}
+
+fn ranged_integer_conversions(min: i64, max: i64, type_name: &str) -> String {
+    let mut limits = Vec::with_capacity(2);
+    if min > i64::MIN {
+        limits.push(format!("value >= {min}"));
+    }
+    if max < i64::MAX {
+        limits.push(format!("value <= {max}"));
+    }
+    if limits.is_empty() {
+        return String::new();
+    }
+    format!(
+        " ENCODE CASE WHEN {} THEN value ELSE RAISE(ABORT, 'integer out of range for {}') END DECODE value",
+        limits.join(" AND "),
+        type_name.replace('\'', "''")
+    )
 }
 
 #[cfg(test)]
@@ -257,6 +302,69 @@ mod tests {
             .unwrap()
             .run_collect_rows()
             .is_err());
+    }
+
+    #[test]
+    fn dates_and_times_are_stored_as_integers_and_sorted_as_times() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let text = |value: &str| Value::build_text(value.to_string());
+        {
+            let db = open_db(&io, "types-time.db", marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "CREATE TABLE t(id INTEGER PRIMARY KEY, d DATE_DAYS, dt DATETIME_MICROS(2), \
+                 tm TIME_MICROS) STRICT",
+            )
+            .unwrap();
+            for row in [
+                "(1, '2024-05-01', '2024-05-01 10:30:00.25', '100:00:00')",
+                "(2, '1969-12-31', '1969-12-31 23:59:59.5', '20:00:00')",
+                "(3, '0001-01-01', '2024-05-01 10:30:00.125', '-01:00:00')",
+                "(4, '9999-12-31', '2024-05-01 10:30:00', '-02:00:00')",
+            ] {
+                conn.execute(format!("INSERT INTO t VALUES {row}")).unwrap();
+            }
+            for row in [
+                "(5, '2024-00-10', NULL, NULL)",
+                "(6, NULL, '2024-05-01 24:00:00', NULL)",
+                "(7, NULL, NULL, '10:61:00')",
+            ] {
+                assert!(
+                    conn.execute(format!("INSERT INTO t VALUES {row}")).is_err(),
+                    "{row}"
+                );
+            }
+            conn.close().unwrap();
+        }
+        let db = open_db(&io, "types-time.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT d, dt FROM t ORDER BY id"),
+            vec![
+                vec![text("2024-05-01"), text("2024-05-01 10:30:00.25")],
+                vec![text("1969-12-31"), text("1969-12-31 23:59:59.50")],
+                vec![text("0001-01-01"), text("2024-05-01 10:30:00.13")],
+                vec![text("9999-12-31"), text("2024-05-01 10:30:00.00")],
+            ]
+        );
+        assert_eq!(
+            query(&conn, "SELECT tm FROM t ORDER BY tm"),
+            vec![
+                vec![text("-02:00:00")],
+                vec![text("-01:00:00")],
+                vec![text("20:00:00")],
+                vec![text("100:00:00")],
+            ]
+        );
+        assert_eq!(
+            query(&conn, "SELECT min(tm), max(tm), min(d), max(d) FROM t"),
+            vec![vec![
+                text("-02:00:00"),
+                text("100:00:00"),
+                text("0001-01-01"),
+                text("9999-12-31"),
+            ]]
+        );
     }
 
     #[test]
