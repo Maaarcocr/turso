@@ -770,3 +770,41 @@ expect {
     4|2
     5|3
 }
+
+@requires strict "uses STRICT tables"
+test check-constraints-compare-typed-values-with-the-type-operators {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(10,2) CHECK (p > 0), q numeric(10,2), CHECK (q < p * 2)) STRICT;
+    INSERT INTO t1 VALUES (1, '1.50', '2.99');
+    INSERT INTO t1 VALUES (2, '0.01', NULL);
+    SELECT id, p, q FROM t1 ORDER BY id;
+}
+expect {
+    1|1.50|2.99
+    2|0.01|
+}
+
+@requires strict "uses STRICT tables"
+test check-constraint-on-a-typed-comparison-refuses-rows {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(10,2) CHECK (p > 0)) STRICT;
+    INSERT INTO t1 VALUES (1, '-1.00');
+}
+expect error {
+    CHECK constraint failed
+}
+
+@requires strict "uses STRICT tables"
+test check-constraint-with-a-typed-product-refuses-rows {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(10,2), q numeric(10,2), CHECK (q < p * 2)) STRICT;
+    INSERT INTO t1 VALUES (1, '1.50', '3.00');
+}
+expect error {
+    CHECK constraint failed
+}
+
+@requires strict "uses STRICT tables"
+test check-constraint-still-refuses-integer-compared-with-text {
+    CREATE TABLE t1(a INTEGER CHECK (a > 'x')) STRICT;
+}
+expect error {
+    type mismatch in CHECK constraint: cannot compare INTEGER with TEXT
+}

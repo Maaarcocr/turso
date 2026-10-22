@@ -16,7 +16,9 @@ use crate::translate::emitter::{
     emit_cdc_autocommit_commit, emit_cdc_full_record, emit_cdc_insns, prepare_cdc_if_necessary,
     OperationMode, Resolver,
 };
-use crate::translate::expr::{walk_expr, WalkControl};
+use crate::translate::expr::{
+    resolve_typed_operator, walk_expr, DynamicClass, ExprType, NamedType, TypeEnv, WalkControl,
+};
 use crate::translate::fkeys::emit_fk_drop_table_check;
 use crate::translate::plan::{compound_column_affinity, Plan, QueryDestination};
 use crate::translate::planner::ROWID_STRS;
@@ -297,6 +299,11 @@ fn resolve_check_expr_type(
                 Operator::Add | Operator::Subtract | Operator::Multiply | Operator::Divide => {
                     let lty = resolve_check_expr_type(lhs, columns, resolver)?;
                     let rty = resolve_check_expr_type(rhs, columns, resolver)?;
+                    if let Some(result) =
+                        typed_check_operator(op, (lhs, &lty), (rhs, &rty), resolver)?
+                    {
+                        return Ok(result);
+                    }
                     if lty == CheckExprType::Null || rty == CheckExprType::Null {
                         return Ok(CheckExprType::Null);
                     }
@@ -336,13 +343,13 @@ fn resolve_check_expr_type(
                 | Operator::GreaterEquals => {
                     let lty = resolve_check_expr_type(lhs, columns, resolver)?;
                     let rty = resolve_check_expr_type(rhs, columns, resolver)?;
-                    if !lty.is_compatible_with(&rty) {
-                        bail_parse_error!(
-                            "type mismatch in CHECK constraint: cannot compare {} with {}",
-                            lty.display_name(),
-                            rty.display_name()
-                        );
-                    }
+                    ensure_check_comparable(
+                        op,
+                        (lhs, &lty),
+                        (rhs, &rty),
+                        "CHECK constraint",
+                        resolver,
+                    )?;
                     Ok(CheckExprType::Integer)
                 }
                 // IS/IS NOT are NULL-checking operators, skip type validation
@@ -647,13 +654,13 @@ fn validate_check_types_in_expr(
                 | Operator::GreaterEquals => {
                     let lty = resolve_check_expr_type(lhs, columns, resolver)?;
                     let rty = resolve_check_expr_type(rhs, columns, resolver)?;
-                    if !lty.is_compatible_with(&rty) {
-                        bail_parse_error!(
-                            "type mismatch in CHECK constraint: cannot compare {} with {}",
-                            lty.display_name(),
-                            rty.display_name()
-                        );
-                    }
+                    ensure_check_comparable(
+                        op,
+                        (lhs, &lty),
+                        (rhs, &rty),
+                        "CHECK constraint",
+                        resolver,
+                    )?;
                 }
                 Operator::And | Operator::Or => {
                     validate_check_types_in_expr(lhs, columns, resolver)?;
@@ -672,32 +679,32 @@ fn validate_check_types_in_expr(
             let lty = resolve_check_expr_type(lhs, columns, resolver)?;
             let sty = resolve_check_expr_type(start, columns, resolver)?;
             let ety = resolve_check_expr_type(end, columns, resolver)?;
-            if !lty.is_compatible_with(&sty) {
-                bail_parse_error!(
-                    "type mismatch in CHECK BETWEEN: cannot compare {} with {}",
-                    lty.display_name(),
-                    sty.display_name()
-                );
-            }
-            if !lty.is_compatible_with(&ety) {
-                bail_parse_error!(
-                    "type mismatch in CHECK BETWEEN: cannot compare {} with {}",
-                    lty.display_name(),
-                    ety.display_name()
-                );
-            }
+            ensure_check_comparable(
+                &Operator::GreaterEquals,
+                (lhs, &lty),
+                (start, &sty),
+                "CHECK BETWEEN",
+                resolver,
+            )?;
+            ensure_check_comparable(
+                &Operator::LessEquals,
+                (lhs, &lty),
+                (end, &ety),
+                "CHECK BETWEEN",
+                resolver,
+            )?;
         }
         ast::Expr::InList { lhs, rhs, .. } => {
             let lty = resolve_check_expr_type(lhs, columns, resolver)?;
             for item in rhs {
                 let ity = resolve_check_expr_type(item, columns, resolver)?;
-                if !lty.is_compatible_with(&ity) {
-                    bail_parse_error!(
-                        "type mismatch in CHECK IN list: cannot compare {} with {}",
-                        lty.display_name(),
-                        ity.display_name()
-                    );
-                }
+                ensure_check_comparable(
+                    &Operator::Equals,
+                    (lhs, &lty),
+                    (item, &ity),
+                    "CHECK IN list",
+                    resolver,
+                )?;
             }
         }
         ast::Expr::Parenthesized(exprs) => {
@@ -733,6 +740,65 @@ fn validate_check_types_in_expr(
         _ => {}
     }
     Ok(())
+}
+
+fn ensure_check_comparable(
+    op: &ast::Operator,
+    lhs: (&ast::Expr, &CheckExprType),
+    rhs: (&ast::Expr, &CheckExprType),
+    context: &str,
+    resolver: &Resolver,
+) -> Result<()> {
+    if lhs.1.is_compatible_with(rhs.1) || typed_check_operator(op, lhs, rhs, resolver)?.is_some() {
+        return Ok(());
+    }
+    bail_parse_error!(
+        "type mismatch in {}: cannot compare {} with {}",
+        context,
+        lhs.1.display_name(),
+        rhs.1.display_name()
+    );
+}
+
+fn typed_check_operator(
+    op: &ast::Operator,
+    lhs: (&ast::Expr, &CheckExprType),
+    rhs: (&ast::Expr, &CheckExprType),
+    resolver: &Resolver,
+) -> Result<Option<CheckExprType>> {
+    let is_custom = |ty: &CheckExprType| matches!(ty, CheckExprType::CustomType(_));
+    if !is_custom(lhs.1) && !is_custom(rhs.1) {
+        return Ok(None);
+    }
+    let expr_type = |ty: &CheckExprType| match ty {
+        CheckExprType::CustomType(name) => match resolver.schema().get_type_def_unchecked(name) {
+            Some(def) => ExprType::Named(NamedType {
+                def: Arc::clone(def),
+                params: None,
+            }),
+            None => ExprType::Dynamic(DynamicClass::Unknown),
+        },
+        CheckExprType::Integer => ExprType::Dynamic(DynamicClass::Integer),
+        CheckExprType::Real => ExprType::Dynamic(DynamicClass::Real),
+        CheckExprType::Text => ExprType::Dynamic(DynamicClass::Text),
+        CheckExprType::Blob => ExprType::Dynamic(DynamicClass::Blob),
+        CheckExprType::Any | CheckExprType::Null => ExprType::Dynamic(DynamicClass::Unknown),
+    };
+    let (lhs_type, rhs_type) = (expr_type(lhs.1), expr_type(rhs.1));
+    let env = TypeEnv::from_resolver(resolver);
+    let resolved = resolve_typed_operator(
+        op,
+        [(&lhs_type, Some(lhs.0)), (&rhs_type, Some(rhs.0))],
+        &env,
+    )?;
+    Ok(resolved.map(|resolved| match resolved.result {
+        ExprType::Named(named) => CheckExprType::CustomType(named.def.name.clone()),
+        ExprType::Dynamic(DynamicClass::Integer) => CheckExprType::Integer,
+        ExprType::Dynamic(DynamicClass::Real) => CheckExprType::Real,
+        ExprType::Dynamic(DynamicClass::Text) => CheckExprType::Text,
+        ExprType::Dynamic(DynamicClass::Blob) => CheckExprType::Blob,
+        ExprType::Dynamic(DynamicClass::Unknown) => CheckExprType::Any,
+    }))
 }
 
 fn validate(
