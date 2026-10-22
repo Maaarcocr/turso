@@ -10,8 +10,6 @@ use sqlparser::ast::{
 use sqlparser::tokenizer::Token;
 use turso_parser::ast;
 
-/// A MySQL column definition after its type and options are lowered. Table
-/// constraints can still mark it as part of the primary key.
 pub(crate) struct Column {
     pub(crate) name: ast::Name,
     pub(crate) column_type: ColumnType,

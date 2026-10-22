@@ -251,8 +251,6 @@ fn option_word(value: &Expr) -> Result<ObjectName, MysqlParserError> {
     Ok(ObjectName(vec![ObjectNamePart::Identifier(word)]))
 }
 
-/// The columns and constraints of a CREATE TABLE while table constraints are
-/// lowered, with the key names MySQL requires to be distinct.
 struct Table {
     columns: Vec<Column>,
     constraints: Vec<ast::NamedTableConstraint>,
