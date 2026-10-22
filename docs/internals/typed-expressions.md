@@ -4,41 +4,207 @@ Status: design proposal for review. Nothing here is implemented yet.
 
 ## Problem
 
-The compiler never computes the type of an expression. Custom type operators
-are chosen by expression *shape*: `expr_custom_type_info`
-(`core/translate/expr/custom_types.rs`) sees only a bare column, and a literal
-operand goes through the *column's* ENCODE with the column's parameters.
-Operator dispatch, wire metadata (`infer_expression_primitive`) and affinity
-(`get_expr_affinity`) are three separate inferences.
+### Background
 
-`p numeric(10,2)` (rows 1.505, 1.55), `q numeric(10,0)` = 2, `i INTEGER` = 3.
-"Today" checked with tursopg and `tursodb --experimental-custom-types`, "After"
-with PostgreSQL 17:
+Turso compiles SQL from several frontends (the SQLite dialect, and the
+PostgreSQL frontend `tursopg`) into the same bytecode. On top of SQLite's
+four storage classes (INTEGER, REAL, TEXT, BLOB), Turso has **custom types**,
+defined with `CREATE TYPE` (experimental: `tursodb
+--experimental-custom-types`; `tursopg` always enables them):
 
-| Expression | Today | After (= PostgreSQL) |
-|---|---|---|
-| stored 1.505 | 1.50 (truncated) | 1.51 |
-| `(p+1)+2`, `coalesce(p,0)+1` | 4.5, 2.5 (REAL) | 4.51, 2.51 |
-| `-p`, `abs(p)` | -1.5, 1.5 | -1.51, 1.51 |
-| `p + i` | 4.5 | 4.51 |
-| `q * 1.5` | 2 (1.5 encoded with scale 0) | 3.0 |
-| `p < 1.555` | loses 1.55 | 1.51, 1.55 |
-| `p = 1.555` | matches 1.55 | no row |
-| `p < 100000`, `p numeric(5,2)` | error: out of range | 1.50 |
-| `CAST(1.505 AS numeric(10,2))` | blob (tursodb), 1.505 (tursopg) | 1.51 |
-| `sum(p)` | 3.05 REAL | 3.06 |
-| `p / 3` (p = 1.55) | 100 digits | 0.51666666666666666667 |
-| index on `p*1`, `WHERE p*1 > 5` | returns 1.50 (text keys) | no 1.50 |
+```sql
+CREATE TYPE name(value any, param integer, ...) BASE blob
+  ENCODE expr DECODE expr OPERATOR '+' function ...
+```
+
+- `BASE` is the storage class used on disk.
+- `ENCODE` turns a value into its stored form when a row is written; `DECODE`
+  turns the stored form back into the value that queries see. In both, `value`
+  is the input.
+- `OPERATOR '+' numeric_add` makes `+` call the function `numeric_add`.
+  Choosing which function implements an operator is called *dispatch* below.
+- Custom types apply only to columns of STRICT tables (SQLite tables that
+  enforce column types). `tursopg` creates every table as STRICT.
+
+The built-in type `numeric(precision, scale)` is an exact decimal number, like
+PostgreSQL's NUMERIC and MySQL's DECIMAL. `numeric(10,2)` has at most 10
+digits, 2 of them after the decimal point (for example 12345678.90). Turso
+stores it as a blob, DECODE returns text such as `'1.50'`, and `+ - * / < =`
+call `numeric_add`, `numeric_sub`, and so on. REAL, by contrast, is a 64-bit
+floating-point number that keeps only about 16 significant digits.
+
+The compiler never works out the type of an expression. For each operator it
+only asks: "is one operand a bare column of a custom type, and the other a
+column of the same type or a literal?" (`expr_custom_type_info` and
+`find_custom_type_operator` in `core/translate/expr/custom_types.rs`; for
+arithmetic on types whose DECODE returns the value unchanged, such as `date`,
+any other operand is accepted). In
+`(p + 1) + 2` the inner `+` has the bare column `p`, so it calls `numeric_add`;
+the outer `+` has `p + 1` on its left, which is not a column, so Turso does not
+know it is a numeric and uses SQLite's `+`, which computes with REAL. Types are
+also guessed in two other unrelated places: the column types `tursopg` reports
+to PostgreSQL clients (*wire metadata*, `infer_expression_primitive` in
+`core/statement.rs`), and SQLite *affinity*, the per-column rule that converts
+values to INTEGER, REAL or TEXT before storing or comparing them
+(`get_expr_affinity`).
+
+### Examples
+
+Each example is complete and starts from an empty database. "Turso today" is
+`tursodb --experimental-custom-types`;
+`tursopg` prints the same unless noted. PostgreSQL 17 runs the same statements
+without `STRICT`.
+
+**1. Values are cut off instead of rounded.**
+
+```sql
+CREATE TABLE t(p numeric(10,2)) STRICT;
+INSERT INTO t VALUES ('1.505');
+SELECT p FROM t;
+-- Turso today:   1.50
+-- PostgreSQL 17: 1.51
+```
+
+Fitting a value to 2 digits after the point drops the extra digits
+(`with_scale` in `core/numeric/decimal.rs`) instead of rounding. The other
+examples use values that need no rounding, so each shows one bug.
+
+Examples 2 to 4 use one table with one row:
+
+```sql
+CREATE TABLE t(p numeric(20,2), i INTEGER) STRICT;
+INSERT INTO t VALUES ('12345678901234567.89', 3);
+SELECT p + 1 FROM t;
+-- Turso today and PostgreSQL 17: 12345678901234568.89 (correct)
+```
+
+**2. Only a bare column gets numeric arithmetic.**
+
+```sql
+SELECT (p + 1) + 2 FROM t;
+-- Turso today:   1.23456789012346e+16
+-- PostgreSQL 17: 12345678901234570.89
+SELECT coalesce(p, 0) + 1 FROM t;
+-- Turso today:   1.23456789012346e+16
+-- PostgreSQL 17: 12345678901234568.89
+```
+
+`p + 1` and `coalesce(p, 0)` are not bare columns, so the outer `+` is SQLite's,
+which converts the text `'12345678901234568.89'` to REAL and loses digits.
+
+**3. Unary minus, functions and aggregates do not know numeric.**
+
+```sql
+SELECT -p FROM t;      -- Turso today: -1.23456789012346e+16
+                       -- PostgreSQL 17: -12345678901234567.89
+SELECT abs(p) FROM t;  -- Turso today: 1.23456789012346e+16
+                       -- PostgreSQL 17: 12345678901234567.89
+SELECT sum(p) FROM t;  -- Turso today: 1.23456789012346e+16
+                       -- PostgreSQL 17: 12345678901234567.89
+SELECT avg(p) FROM t;  -- Turso today: 1.23456789012346e+16
+                       -- PostgreSQL 17: 12345678901234567.8900
+```
+
+Custom types cannot declare a unary operator, and `abs`, `sum` and `avg` are
+SQLite's, which convert text to REAL.
+
+**4. A numeric plus an INTEGER column is computed as REAL.**
+
+```sql
+SELECT p + i FROM t;
+-- Turso today:   1.23456789012346e+16
+-- PostgreSQL 17: 12345678901234570.89
+```
+
+Numeric `+` is used only when the other operand is a numeric column or a
+literal, so an INTEGER column gets SQLite's `+`.
+
+**5. A literal is converted with the column's own precision and scale.**
+
+```sql
+CREATE TABLE t(p numeric(5,2), q numeric(5,0)) STRICT;
+INSERT INTO t VALUES ('1.55', '2');
+SELECT q * 1.5 FROM t;                -- Turso today: 2
+                                      -- PostgreSQL 17: 3.0
+SELECT p FROM t WHERE p < 1.555;      -- Turso today: (no row)
+                                      -- PostgreSQL 17: 1.55
+SELECT p FROM t WHERE p = 1.555;      -- Turso today: 1.55
+                                      -- PostgreSQL 17: (no row)
+SELECT p FROM t WHERE p < 100000;     -- Turso today: error: numeric value
+                                      --   out of range: precision 5, scale 2
+                                      -- PostgreSQL 17: 1.55
+```
+
+Before calling the operator, Turso passes the literal through the column's
+ENCODE with the column's parameters: 1.5 becomes 1 for `q numeric(5,0)` (2
+with rounding, still not 1.5), 1.555 becomes 1.55 for `p numeric(5,2)`, and
+100000 does not fit in 5 digits.
+
+**6. Division keeps 100 digits.** (Same table as example 5.)
+
+```sql
+SELECT p / 3 FROM t;
+-- Turso today:   0.5166666666666666 ... 6667  (100 digits after the point)
+-- PostgreSQL 17: 0.51666666666666666667
+```
+
+`numeric_div` uses the decimal library's default of 100 digits; PostgreSQL
+chooses at least 16 significant digits (20 after the point here).
+
+**7. The result of a numeric operator is compared as text.**
+
+```sql
+CREATE TABLE t(p numeric(10,2)) STRICT;
+INSERT INTO t VALUES ('1.50');
+SELECT p FROM t WHERE p * 1 > 5;
+-- Turso today:   1.50
+-- PostgreSQL 17: (no row)
+```
+
+`numeric_mul` returns the text `'1.50'`, Turso does not know it is a number,
+and in SQLite's rules any text is greater than any number. Sorting has the same
+problem; with two rows, `9.00` and `10.00`:
+
+```sql
+CREATE TABLE t(p numeric(10,2)) STRICT;
+INSERT INTO t VALUES ('9.00'), ('10.00');
+SELECT max(p * 1) FROM t;
+-- Turso today:   9.00
+-- PostgreSQL 17: 10.00
+```
+
+Only a bare numeric column is sorted with the numeric comparison
+(`custom_type_comparator` in `core/translate/order_by.rs`).
+
+**8. CAST returns the stored form.**
+
+```sql
+SELECT CAST('1.50' AS numeric(10,2));
+-- Turso today:   tursodb: an 18-byte blob (typeof returns 'blob');
+--                tursopg: 1.5 (it translates the CAST to REAL)
+-- PostgreSQL 17: 1.50
+```
+
+CAST to a custom type only applies ENCODE, so the result is the storage bytes.
+
+Indexes have a related limit: values are stored as blobs whose byte order is
+not numeric order, so an index on a numeric column is used only for `=`, never
+for `<`, `>` or ORDER BY (Phase B).
 
 ## Model
 
-Types exist only at compile time. A register contains an ordinary SQLite
-value; for a typed expression, the type's *in-memory form* (what DECODE
-returns; numeric: canonical text such as `'1.50'`). ENCODE runs only when a row,
-an index key or a seek key is built. No new `Value` variants, no B-tree or
-file format change for plain SQLite databases.
+Types exist only at compile time. At run time a register (a value slot of
+Turso's bytecode machine) contains an ordinary SQLite value; for an expression
+of a custom type, it is the type's *in-memory form*: what DECODE returns
+(numeric: text such as `'1.50'`). ENCODE runs only when a row or index entry is
+written, and when a *seek key* (the value looked up in an index, e.g. 1.555 in
+`WHERE p = 1.555`) is built. No new kinds of runtime values, no B-tree change,
+no file format change for plain SQLite databases.
 
-New module `core/translate/expr/types.rs`:
+Every expression gets a type: **Named** (a registered type: built-in or made
+with CREATE TYPE) or **Dynamic** (SQLite's rules: each value's storage class
+decides at run time; the compiler records integer, real, text, blob or
+unknown). New module `core/translate/expr/types.rs`:
 
 ```rust
 pub(crate) enum ExprType { Named(NamedType), Dynamic(DynamicClass) }
@@ -49,10 +215,11 @@ pub(crate) fn expr_type(expr: &ast::Expr, tables: Option<&TableReferences>,
 ```
 
 - Column: `Named` when its declared type is registered and the table allows
-  custom types, else `Dynamic` from its affinity. Also self-table columns
-  (CHECK, generated columns, expression indexes), `Expr::Register` (a
-  `register_types` map like `register_affinities`) and subquery, CTE and view
-  columns (the type of the inner result expression).
+  custom types, else `Dynamic` from its affinity. This also covers columns
+  read by CHECK constraints, generated columns and expression indexes, column
+  references that UPDATE and UPSERT rewrite into registers (a `register_types`
+  map like today's `register_affinities`), and subquery, CTE and view columns
+  (the type of the inner result expression).
 - `CAST(x AS T)`: `Named(T)` when T is registered and its required
   parameters are given (today's rule), else `Dynamic`.
 - Operators: the result type of the operator chosen below.
@@ -64,10 +231,11 @@ pub(crate) fn expr_type(expr: &ast::Expr, tables: Option<&TableReferences>,
   that wants a typed literal emits a CAST.
 - Otherwise `Dynamic`, with `infer_expression_primitive`'s classes.
 
-`expr_type` runs on demand during emission and returns `Dynamic` at once when
-the registry is empty (custom types off). Result column types are computed
-once and stored in `Program`, so `get_column_type_info` reports `numeric` for
-`p + 1`; Dynamic columns keep today's output.
+`expr_type` runs on demand while bytecode is generated, and returns `Dynamic`
+at once when no types are registered (custom types off). Result column types
+are computed once and stored in `Program`, so the wire metadata
+(`get_column_type_info`) reports `numeric` for `p + 1`; Dynamic columns keep
+today's output.
 
 ## Declarations
 
@@ -106,7 +274,8 @@ type's in-memory form, not the column's storage form.
 
 ## Operator resolution
 
-For `a OP b` (or `OP a`):
+*Resolution* chooses the function that implements an operator. For `a OP b`
+(or `OP a`), where a *signature* is one declared `(left, right)` pair:
 
 1. No `Named` operand: today's SQLite operator; bytecode unchanged.
 2. Candidates are OP's signatures from the operands' types. An operand fits a
@@ -154,21 +323,24 @@ changing that mapping would reinterpret existing tables.
 ## Phase B
 
 **Aggregates.** `SUM`/`AVG` use the type's `FUNCTION sum(T)`/`avg(T)` (native
-exact `numeric_sum`, `numeric_avg`). Without one, a new fold accumulator applies
-the type's `+` (AVG: `+`, then `/` by the count). `MIN`, `MAX`, ORDER BY,
+exact `numeric_sum`, `numeric_avg`). Without one, a new kind of accumulator
+adds each value with the type's `+` (AVG: `+`, then `/` by the count). `MIN`, `MAX`, ORDER BY,
 GROUP BY, DISTINCT and compound selects take the comparator from `expr_type`,
 not only for bare columns (`custom_type_comparator`). `TOTAL` stays REAL.
 
-**Order-preserving numeric storage (v2).** Byte 0: 0x10 negative, 0x20 zero,
-0x30 positive (v1 starts with 0x01). Then the exponent E (value = 0.d1d2… ×
+**Order-preserving numeric storage (v2).** Today's stored format (v1) is a
+version byte 0x01, a sign byte, the scale, and the digits as little-endian
+32-bit words, so comparing two stored blobs byte by byte does not compare the
+numbers. v2: byte 0 is 0x10
+negative, 0x20 zero, 0x30 positive. Then the exponent E (value = 0.d1d2… ×
 10^E, d1 ≠ 0) as 4 bytes big-endian with the sign bit flipped, then the digits
 without trailing zeros in base-100 pairs (byte = pair + 1). Negative values
 invert the exponent bytes, use byte = 100 − pair and end with 0xFF. Byte order
 equals numeric order and equal values have equal bytes. DECODE becomes
 `numeric_decode(value, scale)`.
 
-`ORDERED` declares that base-type comparison of encoded values matches the
-type's `<`. `optimizer/constraints.rs` and `optimizer/order.rs` then allow
+`ORDERED` declares that comparing stored values the way SQLite compares their
+BASE storage class gives the same order as the type's `<`. `optimizer/constraints.rs` and `optimizer/order.rs` then allow
 ranges and index order for ORDERED types (numeric v2, uuid, date, time,
 timestamp, varchar, smallint, bigint, bytea) when the comparison resolved to
 the type's operator, and check typed expressions, not only columns
@@ -183,17 +355,17 @@ with numeric columns and no marker keep v1 and today's index limits.
 
 ## SQLite dialect is untouched
 
-Custom types off: the registry is empty, `expr_type` is always Dynamic and
-step 1 always applies, so the emitter takes today's path. Custom types on:
-non-STRICT columns never resolve, SQLite type names cannot be registered, and
-a CAST to a registered name is already Turso-specific today. Verification:
+Custom types off: no types are registered, so every expression is Dynamic,
+step 1 always applies and code generation takes today's path. Custom types on:
+non-STRICT columns never get a type, SQLite type names cannot be registered,
+and a CAST to a registered name is already Turso-specific. Verification:
 
 - `CI=1 make -C sqlite/conformance run-rust CARGO_PROFILE=` (debug build): all
-  427 EXPLAIN snapshots unchanged.
+  427 EXPLAIN snapshots (saved bytecode listings that the tests compare)
+  unchanged.
 - A one-off script diffs `EXPLAIN` of every `sqlite-sqltests` statement between
   `main` and the branch, custom types off and on; result in the PR.
-- `make test`, the sqltest corpora and the PostgreSQL wire metadata tests
-  pass.
+- `make test`, the sqltest suites and the wire metadata tests pass.
 
 ## Test plan
 
@@ -202,11 +374,11 @@ recorded).
 
 - Rust unit tests: rounding; v2 encoding (quickcheck: byte order equals
   numeric order; v1 still decodes).
-- `sqlite/conformance/turso-sqltests/typed_expressions.sqltest`: every row of
-  the table, user types with signatures, old syntax, `EXPLAIN QUERY PLAN`.
-- `tests/integration/`: a database written by today's `main` (v1 numeric data,
-  an index, a user type with old OPERATOR syntax) as a fixture: reads, equality
-  seeks, writes stay v1, `integrity_check`; close/reopen for v2.
+- `sqlite/conformance/turso-sqltests/typed_expressions.sqltest`: every
+  example above, user types with signatures, old syntax, `EXPLAIN QUERY PLAN`.
+- `tests/integration/`: a database file written by today's `main` (v1
+  numeric data, an index, a user type with old OPERATOR syntax): reads,
+  equality lookups, new writes stay v1, `integrity_check`; close/reopen for v2.
 - `postgres/conformance/pg-sqltests/numeric.sqltest`: `make -C
   postgres/conformance run`; expected values checked with `run-postgres`.
 
@@ -236,7 +408,8 @@ recorded).
 2. v2 drops the display scale of unconstrained numeric values (PostgreSQL
    keeps it). Acceptable while PostgreSQL maps bare `NUMERIC` to REAL?
 3. SQLite dialect division/AVG scale: today's 100 digits or PostgreSQL's rule?
-4. Fold accumulator (a VDBE change) or only type-declared aggregates?
+4. The generic SUM/AVG accumulator (a new VDBE accumulator kind) or only
+   type-declared aggregates?
 5. Persisted expressions whose result changes (expression indexes, generated
    columns, CHECK, PostgreSQL table SQL translated at load): require
    `REINDEX`, detect, or accept?
