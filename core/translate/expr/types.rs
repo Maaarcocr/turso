@@ -480,6 +480,68 @@ pub(crate) fn branch_conversions(
         .then_some(conversions)
 }
 
+pub(crate) fn emit_cast_into_type(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    named: &NamedType,
+    resolver: &Resolver,
+) -> Result<()> {
+    let Some(resolved) = resolver.schema().resolve_type_unchecked(&named.def.name)? else {
+        return Err(LimboError::InternalError(format!(
+            "type {} is not registered",
+            named.def.name
+        )));
+    };
+    let column = conversion_column(named);
+    let stored = program.allocate_label();
+    program.emit_insn(Insn::IsNull {
+        reg,
+        target_pc: stored,
+    });
+    emit_input_type_check(program, reg, named);
+    for def in &resolved.chain {
+        if let Some(encode) = def.encode() {
+            emit_type_expr(program, encode, reg, reg, &column, def, resolver)?;
+        }
+    }
+    let primitive = resolved.primitive.to_uppercase();
+    if let Some(expected) = strict_value_type(&primitive) {
+        let stored_ok = program.allocate_label();
+        program.emit_column_affinity(reg, Affinity::affinity(&primitive));
+        program.emit_insn(Insn::IsType {
+            reg,
+            target_pc: stored_ok,
+            value_type: expected,
+        });
+        program.emit_insn(Insn::Halt {
+            err_code: crate::error::SQLITE_CONSTRAINT,
+            description: format!(
+                "cannot convert to type {}: the encoded value is not {}",
+                named.def.name, resolved.primitive
+            ),
+            on_error: None,
+            description_reg: None,
+        });
+        program.preassign_label_to_next_insn(stored_ok);
+    }
+    program.preassign_label_to_next_insn(stored);
+    if resolved.is_domain() {
+        emit_domain_cast_constraints(program, &resolved.chain, reg, resolver)?;
+    }
+    let done = program.allocate_label();
+    program.emit_insn(Insn::IsNull {
+        reg,
+        target_pc: done,
+    });
+    for def in resolved.chain.iter().rev() {
+        if let Some(decode) = def.decode() {
+            emit_type_expr(program, decode, reg, reg, &column, def, resolver)?;
+        }
+    }
+    program.preassign_label_to_next_insn(done);
+    Ok(())
+}
+
 pub(crate) fn emit_conversion_into_type(
     program: &mut ProgramBuilder,
     source_reg: usize,
@@ -500,23 +562,7 @@ pub(crate) fn emit_conversion_into_type(
         target_pc: done,
     });
     let column = conversion_column(named);
-    let input_type = named.def.value_input_type().to_uppercase();
-    if let Some(expected) = strict_value_type(&input_type) {
-        let input_ok = program.allocate_label();
-        program.emit_column_affinity(dest_reg, Affinity::affinity(&input_type));
-        program.emit_insn(Insn::IsType {
-            reg: dest_reg,
-            target_pc: input_ok,
-            value_type: expected,
-        });
-        program.emit_insn(Insn::Halt {
-            err_code: crate::error::SQLITE_CONSTRAINT,
-            description: format!("invalid input for type {}", named.def.name),
-            on_error: None,
-            description_reg: None,
-        });
-        program.preassign_label_to_next_insn(input_ok);
-    }
+    emit_input_type_check(program, dest_reg, named);
     let Some(resolved) = resolver.schema().resolve_type_unchecked(&named.def.name)? else {
         return Err(LimboError::InternalError(format!(
             "type {} is not registered",
@@ -645,6 +691,27 @@ pub(crate) fn emit_type_key(
     Ok(())
 }
 
+fn emit_input_type_check(program: &mut ProgramBuilder, reg: usize, named: &NamedType) {
+    let input_type = named.def.value_input_type().to_uppercase();
+    let Some(expected) = strict_value_type(&input_type) else {
+        return;
+    };
+    let input_ok = program.allocate_label();
+    program.emit_column_affinity(reg, Affinity::affinity(&input_type));
+    program.emit_insn(Insn::IsType {
+        reg,
+        target_pc: input_ok,
+        value_type: expected,
+    });
+    program.emit_insn(Insn::Halt {
+        err_code: crate::error::SQLITE_CONSTRAINT,
+        description: format!("invalid input for type {}", named.def.name),
+        on_error: None,
+        description_reg: None,
+    });
+    program.preassign_label_to_next_insn(input_ok);
+}
+
 pub(crate) fn conversion_column(named: &NamedType) -> Column {
     let mut column = Column::new(
         None,
@@ -725,11 +792,14 @@ fn cast_type(type_name: Option<&ast::Type>, env: &TypeEnv) -> ExprType {
         return ExprType::Dynamic(affinity_class(Affinity::of_written_type(&name)));
     }
     let params = cast_type_params(type_name);
+    let uses_defaults = env.schema.type_rules.cast_uses_parameter_defaults;
     match env.schema.get_type_def_unchecked(&name) {
-        Some(def) if is_typed_cast(def, params.len()) => ExprType::Named(NamedType {
-            def: Arc::clone(def),
-            params: Some(params),
-        }),
+        Some(def) if is_typed_cast(def, params.len(), uses_defaults) => {
+            ExprType::Named(NamedType {
+                def: Arc::clone(def),
+                params: Some(params),
+            })
+        }
         _ => ExprType::Dynamic(affinity_class(Affinity::of_written_type(&name))),
     }
 }
@@ -744,12 +814,16 @@ fn cast_type_params(type_name: &ast::Type) -> Vec<ast::Expr> {
     }
 }
 
-fn is_typed_cast(def: &TypeDef, param_count: usize) -> bool {
+fn is_typed_cast(def: &TypeDef, param_count: usize, uses_defaults: bool) -> bool {
     if def.is_domain {
         return true;
     }
     let user_param_count = def.user_params().count();
-    user_param_count == 0 || param_count == user_param_count
+    user_param_count == 0
+        || param_count == user_param_count
+        || (uses_defaults
+            && param_count >= def.required_user_param_count()
+            && param_count <= user_param_count)
 }
 
 fn binary_type(

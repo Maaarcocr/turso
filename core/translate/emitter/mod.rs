@@ -2551,6 +2551,16 @@ fn emit_check_constraint_bytecode(
     Ok(())
 }
 
+fn column_has_decode(column: &Column, table: &JoinedTable, resolver: &Resolver) -> bool {
+    !column.is_array()
+        && resolver
+            .schema()
+            .resolve_type(&column.ty_str, table.table.is_strict())
+            .ok()
+            .flatten()
+            .is_some_and(|resolved| resolved.chain.iter().any(|def| def.decode().is_some()))
+}
+
 /// Returns true if the CHECK constraint expression references any column whose
 /// normalized name is in `column_names`. This is used during UPDATE to skip
 /// CHECK constraints that only reference columns not in the SET clause, matching
@@ -2580,9 +2590,37 @@ pub(crate) fn emit_check_constraints<'a>(
         return Ok(());
     }
 
-    let column_mappings: Vec<(&str, usize)> = column_mappings.collect();
-    let initial_cache_size = resolver.expr_to_reg_cache.len();
     let joined_table = referenced_tables.and_then(|tables| tables.joined_tables().first());
+    let column_mappings: Vec<(&str, usize)> = column_mappings
+        .map(|(col_name, register)| {
+            let column = joined_table.and_then(|table| {
+                table.columns().iter().find(|col| {
+                    !col.is_rowid_alias()
+                        && col
+                            .name
+                            .as_ref()
+                            .is_some_and(|name| name.eq_ignore_ascii_case(col_name))
+                })
+            });
+            let decoded = match (joined_table, column) {
+                (Some(table), Some(column)) if column_has_decode(column, table, resolver) => {
+                    let decoded = program.alloc_register();
+                    crate::translate::expr::emit_user_facing_column_value(
+                        program,
+                        register,
+                        decoded,
+                        column,
+                        table.table.is_strict(),
+                        resolver,
+                    )?;
+                    decoded
+                }
+                _ => register,
+            };
+            Ok((col_name, decoded))
+        })
+        .collect::<Result<_>>()?;
+    let initial_cache_size = resolver.expr_to_reg_cache.len();
 
     // Map rowid aliases to the actual rowid register.
     // We cache both unqualified (Expr::Id) and qualified (Expr::Qualified) forms

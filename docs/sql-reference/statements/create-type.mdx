@@ -256,22 +256,26 @@ CREATE TYPE email BASE text
 
 ## CAST Support
 
-The CAST expression applies a custom type's ENCODE logic:
+`CAST(x AS type)` gives the value that storing `x` in a STRICT column of that type and reading it back would give: the value is checked against the type's input type, passed through ENCODE, checked against the BASE type, checked by the constraints of a domain, and passed through DECODE. A value that INSERT would reject is an error.
 
 ```sql
 CREATE TYPE cents BASE integer
     ENCODE value * 100
     DECODE value / 100;
 
-SELECT CAST(42.5 AS cents);
--- 4250
+SELECT CAST(42 AS cents);                -- 42
+SELECT CAST('1.505' AS numeric(10,2));   -- 1.51 (text)
+SELECT CAST('12' AS bigint);             -- 12 (integer)
+SELECT CAST('12abc' AS bigint);          -- error: invalid input for type bigint
 ```
 
-This is useful for converting values to the encoded form outside of INSERT/UPDATE, such as in WHERE clauses and CHECK constraints.
+The result has the type, so the type's operators apply to it: `CAST(x AS numeric(10,2)) + 1` is `numeric` arithmetic.
+
+A type with parameters is used only when the CAST gives all of them. Otherwise, and for type names that are not registered, CAST keeps SQLite's meaning: `CAST(x AS NUMERIC)` and `CAST(x AS INTEGER)` convert by type affinity, so `CAST('12abc' AS INTEGER)` is `12`. In the PostgreSQL frontend, missing parameters take their defaults, so `x::numeric` is an unconstrained `numeric`.
 
 ## CHECK Constraints with Custom Types
 
-In STRICT tables with custom types, CHECK constraints operate on the **decoded** (presentation) values. When comparing a column of a custom type against a literal, use CAST to encode the literal:
+In STRICT tables with custom types, CHECK constraints operate on the **decoded** (presentation) values, the same values a SELECT returns. Compare them with a value of the same type, for example a CAST:
 
 ```sql
 CREATE TYPE cents BASE integer

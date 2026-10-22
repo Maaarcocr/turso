@@ -477,3 +477,36 @@ test create-type-function-clause-is-called-for-typed-arguments {
 expect {
     1.50|1.50|blob|3
 }
+
+@requires strict "uses STRICT tables"
+test cast-returns-the-value-read-back-from-a-strict-column {
+    SELECT CAST('1.505' AS numeric(10,2)), typeof(CAST('1.505' AS numeric(10,2)));
+    SELECT CAST('12' AS bigint), typeof(CAST('12' AS bigint)), CAST(1 AS varchar(10)), typeof(CAST(1 AS varchar(10)));
+    SELECT CAST('12abc' AS INTEGER), CAST('1.5' AS NUMERIC), typeof(CAST('1.5' AS NUMERIC));
+    SELECT CAST('2.50' AS numeric(10,2)) + 1, CAST(NULL AS numeric(10,2)) IS NULL;
+}
+expect {
+    1.51|text
+    12|integer|1|text
+    12|1.5|real
+    3.50|1
+}
+
+@requires strict "uses STRICT tables"
+test cast-rejects-what-a-strict-column-rejects {
+    SELECT CAST('12abc' AS bigint);
+}
+expect error {
+    invalid input for type bigint
+}
+
+@requires strict "uses STRICT tables"
+test check-constraint-sees-decoded-values {
+    CREATE TYPE cents BASE integer ENCODE value * 100 DECODE value / 100;
+    CREATE TABLE t1(amount cents CHECK (amount < CAST(50 AS cents)), code cents CHECK (length(code) <= 3)) STRICT;
+    INSERT INTO t1 VALUES (42, 999);
+    SELECT amount, code FROM t1;
+}
+expect {
+    42|999
+}
