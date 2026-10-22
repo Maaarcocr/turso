@@ -544,3 +544,14 @@ test varchar-longer-than-utf8mb4-allows-is-rejected {
 expect error {
 }
 
+
+# MySQL 8.4.10: virtual generated columns are computed on read.
+test virtual-generated-columns-are-computed {
+    CREATE TABLE gc (a INT, b INT AS (a * 2), c INT GENERATED ALWAYS AS (a + 1) VIRTUAL);
+    INSERT INTO gc (a) VALUES (1), (5);
+    SELECT a, b, c FROM gc ORDER BY a;
+}
+expect {
+    1|2|2
+    5|10|6
+}
