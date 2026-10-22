@@ -13,8 +13,8 @@ use turso_parser::ast;
 use super::{
     emitter::{LimitCtx, Resolver},
     expr::{
-        emit_array_decode, expr_is_array, translate_expr, translate_expr_no_constant_opt,
-        NoConstantOptReason,
+        emit_array_decode, emit_type_keys, expr_is_array, translate_expr,
+        translate_expr_no_constant_opt, NoConstantOptReason,
     },
     plan::{Distinctness, QueryDestination, ResultSetColumn, SelectPlan, TableReferences},
 };
@@ -122,7 +122,15 @@ pub fn emit_select_result(
     if let Distinctness::Distinct { ctx } = &plan.distinctness {
         let distinct_ctx = ctx.as_ref().expect("distinct context must exist");
         let num_regs = plan.result_columns.len();
-        distinct_ctx.emit_deduplication_insns(program, num_regs, start_reg);
+        let result_exprs: Vec<&ast::Expr> = plan.result_columns.iter().map(|rc| &rc.expr).collect();
+        let key_start = emit_type_keys(
+            program,
+            &result_exprs,
+            Some(&plan.table_references),
+            start_reg,
+            resolver,
+        )?;
+        distinct_ctx.emit_deduplication_insns(program, num_regs, key_start);
     }
 
     if has_distinct {

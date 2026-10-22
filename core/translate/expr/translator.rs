@@ -2067,6 +2067,7 @@ fn translate_function_call_expr(
                 | ScalarFunc::NumericDiv
                 | ScalarFunc::NumericLt
                 | ScalarFunc::NumericEq
+                | ScalarFunc::NumericKey
                 | ScalarFunc::DatePlus
                 | ScalarFunc::DateMinus => translate_function(
                     program,

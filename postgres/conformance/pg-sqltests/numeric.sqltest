@@ -109,3 +109,14 @@ expect {
     10.00
     9.00
 }
+
+test numeric-distinct-ignores-scale {
+    CREATE TABLE t (id integer, p numeric(10,2), q numeric(10,1));
+    INSERT INTO t VALUES (1, '2.00', '9.0'), (2, '7.00', '2.0');
+    SELECT count(DISTINCT CASE WHEN id = 1 THEN p ELSE q END) FROM t;
+    SELECT count(*) FROM (SELECT DISTINCT CASE WHEN id = 1 THEN p ELSE q END FROM t) s;
+}
+expect {
+    1
+    1
+}

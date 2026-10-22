@@ -344,3 +344,23 @@ expect {
     1|10.00
     10.00
 }
+
+@requires strict "uses STRICT tables"
+test distinct-compares-numeric-values-by-key {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric, q numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES (1, '2', '2.00'), (2, '2.00', '2'), (3, '2.0', '3.00'), (4, NULL, NULL), (5, NULL, NULL);
+    SELECT count(*) FROM (SELECT DISTINCT p FROM t1);
+    SELECT count(DISTINCT p), count(p), count(DISTINCT q * 1) FROM t1;
+    SELECT count(*) FROM (SELECT DISTINCT p * 1 FROM t1 WHERE p IS NOT NULL);
+    SELECT DISTINCT p, q FROM t1 ORDER BY q, id;
+    SELECT hex(numeric_key(1.5)) = hex(numeric_key('1.50')), numeric_key(-2) < numeric_key(0.5), numeric_key(NULL) IS NULL;
+}
+expect {
+    2
+    1|3|2
+    1
+    |
+    2|2.00
+    2.0|3.00
+    1|1|1
+}

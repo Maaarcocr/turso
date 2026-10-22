@@ -10,6 +10,10 @@ const MAX_SCALE_MAGNITUDE: i64 = 1_000_000;
 const DIVISION_MIN_SIGNIFICANT_DIGITS: i64 = 16;
 const DIVISION_MAX_SCALE: i64 = 1000;
 const DECIMAL_DIGITS_PER_BASE_10000_DIGIT: i64 = 4;
+const KEY_NEGATIVE: u8 = 0x10;
+const KEY_ZERO: u8 = 0x20;
+const KEY_POSITIVE: u8 = 0x30;
+const KEY_NEGATIVE_END: u8 = 0xFF;
 
 /// Serialize a BigDecimal to our portable blob format.
 ///
@@ -169,6 +173,42 @@ pub fn format_numeric(bd: &BigDecimal) -> String {
     }
 }
 
+pub fn numeric_key(value: &BigDecimal) -> crate::Result<Vec<u8>> {
+    use bigdecimal::Zero;
+
+    if value.is_zero() {
+        return Ok(vec![KEY_ZERO]);
+    }
+    let (digits, scale) = value.as_bigint_and_exponent();
+    let negative = digits.sign() == Sign::Minus;
+    let digit_text = digits.magnitude().to_string();
+    let exponent = i32::try_from(digit_text.len() as i64 - scale)
+        .map_err(|_| LimboError::Constraint("numeric value out of range".to_string()))?;
+    let significant = digit_text.trim_end_matches('0').as_bytes();
+    let mut key = Vec::with_capacity(6 + significant.len().div_ceil(2));
+    key.push(if negative { KEY_NEGATIVE } else { KEY_POSITIVE });
+    let exponent_bytes = ((exponent as u32) ^ 0x8000_0000).to_be_bytes();
+    key.extend(
+        exponent_bytes
+            .iter()
+            .map(|byte| if negative { !byte } else { *byte }),
+    );
+    for pair in significant.chunks(2) {
+        let high = pair[0] - b'0';
+        let low = pair.get(1).map_or(0, |digit| digit - b'0');
+        let pair_value = high * 10 + low;
+        key.push(if negative {
+            100 - pair_value
+        } else {
+            pair_value + 1
+        });
+    }
+    if negative {
+        key.push(KEY_NEGATIVE_END);
+    }
+    Ok(key)
+}
+
 pub fn divide(dividend: &BigDecimal, divisor: &BigDecimal) -> crate::Result<BigDecimal> {
     use bigdecimal::Zero;
 
@@ -293,6 +333,31 @@ mod tests {
     use super::*;
     use bigdecimal::Zero;
     use std::str::FromStr;
+
+    #[test]
+    fn test_numeric_key_is_equal_for_equal_values() {
+        let key = |text: &str| numeric_key(&BigDecimal::from_str(text).unwrap()).unwrap();
+        assert_eq!(key("1.5"), key("1.50"));
+        assert_eq!(key("100"), key("1e2"));
+        assert_eq!(key("0"), key("-0.000"));
+        assert_ne!(key("1.5"), key("1.51"));
+    }
+
+    #[test]
+    fn test_numeric_key_sorts_like_the_numbers() {
+        let mut values: Vec<BigDecimal> = [
+            "-1000", "-99.99", "-1.23", "-1.2", "-1", "-0.5", "-0.05", "0", "0.05", "0.5", "1",
+            "1.2", "1.23", "99.99", "100", "1e40", "-1e40", "1e-40", "-1e-40",
+        ]
+        .iter()
+        .map(|text| BigDecimal::from_str(text).unwrap())
+        .collect();
+        values.sort();
+        let keys: Vec<Vec<u8>> = values.iter().map(|v| numeric_key(v).unwrap()).collect();
+        for pair in keys.windows(2) {
+            assert!(pair[0] < pair[1], "{:?} < {:?}", pair[0], pair[1]);
+        }
+    }
 
     #[test]
     fn test_divide_chooses_postgres_scale() {
@@ -457,6 +522,12 @@ mod tests {
         let parsed = BigDecimal::from_str(&formatted).unwrap();
         // Numerically equal (may differ in internal scale representation)
         parsed == arb.0
+    }
+
+    #[quickcheck]
+    fn prop_numeric_key_order_equals_numeric_order(a: ArbDecimal, b: ArbDecimal) -> bool {
+        let key_order = numeric_key(&a.0).unwrap().cmp(&numeric_key(&b.0).unwrap());
+        key_order == a.0.cmp(&b.0)
     }
 
     // P3: validate_precision_scale idempotence — applying it twice gives same result.

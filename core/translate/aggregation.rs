@@ -15,8 +15,8 @@ use crate::{
 use super::{
     emitter::{OperationMode, Resolver, TranslateCtx},
     expr::{
-        resolve_expr, translate_condition_expr, translate_expr, translate_expr_no_constant_opt,
-        ConditionMetadata, NoConstantOptReason,
+        emit_type_keys, resolve_expr, translate_condition_expr, translate_expr,
+        translate_expr_no_constant_opt, ConditionMetadata, NoConstantOptReason,
     },
     plan::{
         Aggregate, Distinctness, EvalAt, NonFromClauseSubquery, SelectPlan, SubqueryEvalPhase,
@@ -258,25 +258,36 @@ pub(crate) fn agg_arg_collation(
 /// the AggStep that would otherwise accumulate the same value multiple times.
 pub fn handle_distinct(
     program: &mut ProgramBuilder,
-    distinctness: &Distinctness,
+    agg_arg_source: &AggArgumentSource,
+    arg_idx: usize,
     agg_arg_reg: usize,
-) {
-    let Distinctness::Distinct { ctx } = distinctness else {
-        return;
+    referenced_tables: &TableReferences,
+    resolver: &Resolver,
+) -> Result<()> {
+    let Distinctness::Distinct { ctx } = agg_arg_source.distinctness() else {
+        return Ok(());
     };
     let distinct_ctx = ctx
         .as_ref()
         .expect("distinct aggregate context not populated");
     let num_regs = 1;
+    let key_start_reg = emit_type_keys(
+        program,
+        &[agg_arg_source.arg_at(arg_idx)],
+        Some(referenced_tables),
+        agg_arg_reg,
+        resolver,
+    )?;
     program.emit_insn(Insn::HashDistinct {
         data: Box::new(HashDistinctData {
             hash_table_id: distinct_ctx.hash_table_id,
-            key_start_reg: agg_arg_reg,
+            key_start_reg,
             num_keys: num_regs,
             collations: distinct_ctx.collations.clone(),
             target_pc: distinct_ctx.label_on_conflict,
         }),
     });
+    Ok(())
 }
 
 /// Source of aggregate function arguments during bytecode emission.
@@ -395,7 +406,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("avg bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -411,7 +429,14 @@ pub fn translate_aggregation_step(
         AggFunc::Count0 => {
             let expr = ast::Expr::Literal(ast::Literal::Numeric("1".to_string()));
             let expr_reg = translate_const_arg(program, referenced_tables, resolver, &expr)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -429,7 +454,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("count bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -456,7 +488,14 @@ pub fn translate_aggregation_step(
             };
 
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
 
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
@@ -476,7 +515,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("max bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             let expr = &agg_arg_source.arg_at(0);
             let arg_collation = agg_arg_collation(referenced_tables, expr, resolver);
             let comparator =
@@ -498,7 +544,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("min bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             let expr = &agg_arg_source.arg_at(0);
             let arg_collation = agg_arg_collation(referenced_tables, expr, resolver);
             let comparator =
@@ -521,7 +574,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("max bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             let value_reg = agg_arg_source.translate(program, referenced_tables, resolver, 1)?;
 
             program.emit_insn(Insn::AggStep {
@@ -542,7 +602,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("max bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -582,7 +649,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("sum bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -600,7 +674,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("total bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -619,7 +700,14 @@ pub fn translate_aggregation_step(
                 crate::bail_parse_error!("array_agg bad number of arguments");
             }
             let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
-            handle_distinct(program, agg_arg_source.distinctness(), expr_reg);
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
             program.emit_insn(Insn::AggStep {
                 data: Box::new(AggStepData {
                     acc_reg: target_register,
@@ -701,7 +789,14 @@ pub fn translate_aggregation_step(
                 }
                 // invariant: distinct aggregates are only supported for single-argument functions
                 if argc == 1 {
-                    handle_distinct(program, agg_arg_source.distinctness(), expr_reg + i);
+                    handle_distinct(
+                        program,
+                        &agg_arg_source,
+                        i,
+                        expr_reg + i,
+                        referenced_tables,
+                        resolver,
+                    )?;
                 }
             }
             program.emit_insn(Insn::AggStep {
