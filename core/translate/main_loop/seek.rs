@@ -423,7 +423,7 @@ impl<'a, 'plan> SeekEmitter<'a, 'plan> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn emit_typed_seek_keys(
+pub(super) fn emit_typed_seek_keys(
     program: &mut ProgramBuilder,
     tables: &TableReferences,
     seek_index: &Arc<Index>,

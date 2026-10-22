@@ -70,6 +70,8 @@ pub(super) fn translate_in_list(
     // This follows SQLite's exprINAffinity() approach
     let affinity = in_expr_affinity(lhs, referenced_tables, Some(resolver));
     let cmp_flags = CmpInsFlags::default().with_affinity(affinity);
+    let env = TypeEnv::from_resolver(resolver);
+    let lhs_type = expr_type(lhs, referenced_tables, &env);
 
     if lhs_arity == 1 && false_null_jump_targets_differ {
         check_null_reg = program.alloc_register();
@@ -112,7 +114,39 @@ pub(super) fn translate_in_list(
                 });
             }
 
-            if !last_condition || false_null_jump_targets_differ {
+            let typed_equality = resolve_typed_operator(
+                &ast::Operator::Equals,
+                [
+                    (&lhs_type, Some(lhs)),
+                    (&expr_type(expr, referenced_tables, &env), Some(expr)),
+                ],
+                &env,
+            )?;
+            if let Some(resolved) = typed_equality {
+                let equal_reg = program.alloc_register();
+                emit_typed_comparison(
+                    program,
+                    referenced_tables,
+                    &ast::Operator::Equals,
+                    &resolved,
+                    [(lhs_reg, Some(lhs)), (rhs_reg, Some(expr))],
+                    equal_reg,
+                    resolver,
+                )?;
+                if !last_condition || false_null_jump_targets_differ {
+                    program.emit_insn(Insn::If {
+                        reg: equal_reg,
+                        target_pc: label_ok,
+                        jump_if_null: false,
+                    });
+                } else {
+                    program.emit_insn(Insn::IfNot {
+                        reg: equal_reg,
+                        target_pc: condition_metadata.jump_target_when_false,
+                        jump_if_null: true,
+                    });
+                }
+            } else if !last_condition || false_null_jump_targets_differ {
                 if lhs_reg != rhs_reg {
                     program.emit_insn(Insn::Eq {
                         lhs: lhs_reg,
@@ -154,6 +188,18 @@ pub(super) fn translate_in_list(
 
                 // Check for unequal values and skip if one is found.
                 for j in 0..lhs_arity {
+                    if emit_typed_row_component_equality(
+                        program,
+                        referenced_tables,
+                        [lhs, expr],
+                        [lhs_reg + j, rhs_reg + j],
+                        j,
+                        skip_label,
+                        false,
+                        resolver,
+                    )? {
+                        continue;
+                    }
                     let (aff, collation) = row_component_affinity_collation(
                         lhs,
                         expr,
@@ -211,6 +257,18 @@ pub(super) fn translate_in_list(
             } else {
                 // Last condition, simple case: jump to false if any component doesn't match
                 for j in 0..lhs_arity {
+                    if emit_typed_row_component_equality(
+                        program,
+                        referenced_tables,
+                        [lhs, expr],
+                        [lhs_reg + j, rhs_reg + j],
+                        j,
+                        condition_metadata.jump_target_when_false,
+                        true,
+                        resolver,
+                    )? {
+                        continue;
+                    }
                     let (aff, collation) = row_component_affinity_collation(
                         lhs,
                         expr,
@@ -266,6 +324,47 @@ pub(super) fn translate_in_list(
     // todo: deallocate check_null_reg
 
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_typed_row_component_equality(
+    program: &mut ProgramBuilder,
+    referenced_tables: Option<&TableReferences>,
+    rows: [&ast::Expr; 2],
+    regs: [usize; 2],
+    component: usize,
+    target_when_not_equal: BranchOffset,
+    jump_if_null: bool,
+    resolver: &Resolver,
+) -> Result<bool> {
+    let (Some(lhs), Some(rhs)) = (
+        row_value_component_expr(rows[0], component)?,
+        row_value_component_expr(rows[1], component)?,
+    ) else {
+        return Ok(false);
+    };
+    let env = TypeEnv::from_resolver(resolver);
+    let Some(resolved) =
+        resolve_operator(&ast::Operator::Equals, lhs, rhs, referenced_tables, &env)?
+    else {
+        return Ok(false);
+    };
+    let equal_reg = program.alloc_register();
+    emit_typed_comparison(
+        program,
+        referenced_tables,
+        &ast::Operator::Equals,
+        &resolved,
+        [(regs[0], Some(lhs)), (regs[1], Some(rhs))],
+        equal_reg,
+        resolver,
+    )?;
+    program.emit_insn(Insn::IfNot {
+        reg: equal_reg,
+        target_pc: target_when_not_equal,
+        jump_if_null,
+    });
+    Ok(true)
 }
 
 #[instrument(skip(program, referenced_tables, expr, resolver), level = Level::DEBUG)]

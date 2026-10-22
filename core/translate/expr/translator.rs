@@ -667,7 +667,16 @@ fn translate_case_expr(
             resolver,
         )?;
     };
-    for (when_expr, then_expr) in when_then_pairs {
+    let env = TypeEnv::from_resolver(resolver);
+    let base_type = base
+        .as_deref()
+        .map(|base_expr| expr_type(base_expr, referenced_tables, &env));
+    let conversions = branch_conversions(
+        &case_branches(when_then_pairs, else_expr.as_deref()),
+        referenced_tables,
+        resolver,
+    );
+    for (branch, (when_expr, then_expr)) in when_then_pairs.iter().enumerate() {
         translate_expr_no_constant_opt(
             program,
             referenced_tables,
@@ -676,9 +685,41 @@ fn translate_case_expr(
             resolver,
             NoConstantOptReason::RegisterReuse,
         )?;
-        match base_reg {
+        let typed_equality = match (base.as_deref(), &base_type) {
+            (Some(base_expr), Some(base_type)) => resolve_typed_operator(
+                &ast::Operator::Equals,
+                [
+                    (base_type, Some(base_expr)),
+                    (
+                        &expr_type(when_expr, referenced_tables, &env),
+                        Some(when_expr),
+                    ),
+                ],
+                &env,
+            )?
+            .map(|resolved| (base_expr, resolved)),
+            _ => None,
+        };
+        match (base_reg, typed_equality) {
+            (Some(base_reg), Some((base_expr, resolved))) => {
+                let equal_reg = program.alloc_register();
+                emit_typed_comparison(
+                    program,
+                    referenced_tables,
+                    &ast::Operator::Equals,
+                    &resolved,
+                    [(base_reg, Some(base_expr)), (expr_reg, Some(when_expr))],
+                    equal_reg,
+                    resolver,
+                )?;
+                program.emit_insn(Insn::IfNot {
+                    reg: equal_reg,
+                    target_pc: next_case_label,
+                    jump_if_null: true,
+                });
+            }
             // CASE 1 WHEN 0 THEN 0 ELSE 1 becomes 1==0, Ne branch to next clause
-            Some(base_reg) => program.emit_insn(Insn::Ne {
+            (Some(base_reg), None) => program.emit_insn(Insn::Ne {
                 lhs: base_reg,
                 rhs: expr_reg,
                 target_pc: next_case_label,
@@ -687,7 +728,7 @@ fn translate_case_expr(
                 collation: program.curr_collation(),
             }),
             // CASE WHEN 0 THEN 0 ELSE 1 becomes ifnot 0 branch to next clause
-            None => program.emit_insn(Insn::IfNot {
+            (None, _) => program.emit_insn(Insn::IfNot {
                 reg: expr_reg,
                 target_pc: next_case_label,
                 jump_if_null: true,
@@ -702,6 +743,14 @@ fn translate_case_expr(
             resolver,
             NoConstantOptReason::RegisterReuse,
         )?;
+        if let Some(conversions) = &conversions {
+            emit_value_conversion_in_place(
+                program,
+                target_register,
+                &conversions[branch],
+                resolver,
+            )?;
+        }
         program.emit_insn(Insn::Goto {
             target_pc: return_label,
         });
@@ -720,6 +769,14 @@ fn translate_case_expr(
                 resolver,
                 NoConstantOptReason::RegisterReuse,
             )?;
+            if let Some(conversions) = &conversions {
+                emit_value_conversion_in_place(
+                    program,
+                    target_register,
+                    &conversions[when_then_pairs.len()],
+                    resolver,
+                )?;
+            }
         }
         // If ELSE isn't specified, it means ELSE null.
         None => {
@@ -1225,6 +1282,8 @@ fn translate_function_call_expr(
                     // coalesce function is implemented as a series of not null checks
                     // whenever a not null check succeeds, we jump to the end of the series
                     let label_coalesce_end = program.allocate_label();
+                    let branches: Vec<&ast::Expr> = args.iter().map(|arg| arg.as_ref()).collect();
+                    let conversions = branch_conversions(&branches, referenced_tables, resolver);
                     for (index, arg) in args.iter().enumerate() {
                         let reg = translate_expr_no_constant_opt(
                             program,
@@ -1234,6 +1293,14 @@ fn translate_function_call_expr(
                             resolver,
                             NoConstantOptReason::RegisterReuse,
                         )?;
+                        if let Some(conversions) = &conversions {
+                            emit_value_conversion_in_place(
+                                program,
+                                reg,
+                                &conversions[index],
+                                resolver,
+                            )?;
+                        }
                         if index < args.len() - 1 {
                             program.emit_insn(Insn::NotNull {
                                 reg,
@@ -1316,6 +1383,8 @@ fn translate_function_call_expr(
                         );
                     }
 
+                    let conversions =
+                        branch_conversions(&[&args[0], &args[1]], referenced_tables, resolver);
                     let temp_reg = program.alloc_register();
                     translate_expr_no_constant_opt(
                         program,
@@ -1325,6 +1394,14 @@ fn translate_function_call_expr(
                         resolver,
                         NoConstantOptReason::RegisterReuse,
                     )?;
+                    if let Some(conversions) = &conversions {
+                        emit_value_conversion_in_place(
+                            program,
+                            temp_reg,
+                            &conversions[0],
+                            resolver,
+                        )?;
+                    }
                     let before_copy_label = program.allocate_label();
                     program.emit_insn(Insn::NotNull {
                         reg: temp_reg,
@@ -1339,6 +1416,14 @@ fn translate_function_call_expr(
                         resolver,
                         NoConstantOptReason::RegisterReuse,
                     )?;
+                    if let Some(conversions) = &conversions {
+                        emit_value_conversion_in_place(
+                            program,
+                            temp_reg,
+                            &conversions[1],
+                            resolver,
+                        )?;
+                    }
                     program.preassign_label_to_next_insn(before_copy_label);
                     program.emit_insn(Insn::Copy {
                         src_reg: temp_reg,
@@ -1353,8 +1438,10 @@ fn translate_function_call_expr(
 
                     let iif_end_label = program.allocate_label();
                     let condition_reg = program.alloc_register();
+                    let conversions =
+                        branch_conversions(&iif_branches(args), referenced_tables, resolver);
 
-                    for pair in args.chunks_exact(2) {
+                    for (branch, pair) in args.chunks_exact(2).enumerate() {
                         let condition_expr = &pair[0];
                         let value_expr = &pair[1];
                         let next_check_label = program.allocate_label();
@@ -1382,6 +1469,14 @@ fn translate_function_call_expr(
                             resolver,
                             NoConstantOptReason::RegisterReuse,
                         )?;
+                        if let Some(conversions) = &conversions {
+                            emit_value_conversion_in_place(
+                                program,
+                                target_register,
+                                &conversions[branch],
+                                resolver,
+                            )?;
+                        }
                         program.emit_insn(Insn::Goto {
                             target_pc: iif_end_label,
                         });
@@ -1398,6 +1493,14 @@ fn translate_function_call_expr(
                             resolver,
                             NoConstantOptReason::RegisterReuse,
                         )?;
+                        if let Some(conversions) = &conversions {
+                            emit_value_conversion_in_place(
+                                program,
+                                target_register,
+                                &conversions[args.len() / 2],
+                                resolver,
+                            )?;
+                        }
                     } else {
                         program.emit_insn(Insn::Null {
                             dest: target_register,
@@ -1644,6 +1747,17 @@ fn translate_function_call_expr(
                     if args.is_empty() {
                         crate::bail_parse_error!("min function with no arguments");
                     }
+                    if translate_typed_min_max(
+                        program,
+                        referenced_tables,
+                        args,
+                        false,
+                        func_ctx.clone(),
+                        target_register,
+                        resolver,
+                    )? {
+                        return Ok(target_register);
+                    }
                     let start_reg = program.alloc_registers(args.len());
                     for (i, arg) in args.iter().enumerate() {
                         translate_expr(program, referenced_tables, arg, start_reg + i, resolver)?;
@@ -1660,6 +1774,17 @@ fn translate_function_call_expr(
                 ScalarFunc::Max => {
                     if args.is_empty() {
                         crate::bail_parse_error!("min function with no arguments");
+                    }
+                    if translate_typed_min_max(
+                        program,
+                        referenced_tables,
+                        args,
+                        true,
+                        func_ctx.clone(),
+                        target_register,
+                        resolver,
+                    )? {
+                        return Ok(target_register);
                     }
                     let start_reg = program.alloc_registers(args.len());
                     for (i, arg) in args.iter().enumerate() {
@@ -1680,6 +1805,17 @@ fn translate_function_call_expr(
                             "{} function must have two argument",
                             srf.to_string()
                         );
+                    }
+                    if matches!(srf, ScalarFunc::Nullif)
+                        && translate_typed_nullif(
+                            program,
+                            referenced_tables,
+                            args,
+                            target_register,
+                            resolver,
+                        )?
+                    {
+                        return Ok(target_register);
                     }
 
                     // Allocate both registers first to ensure they're consecutive,

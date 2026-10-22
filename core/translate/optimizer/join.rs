@@ -18,7 +18,10 @@ use crate::{
     schema::Schema,
     stats::AnalyzeStats,
     translate::{
-        expr::expr_references_subquery_id,
+        expr::{
+            as_binary_components, expr_references_subquery_id, hash_join_can_compare_values,
+            TypeEnv,
+        },
         optimizer::{
             access_method::{
                 estimate_hash_join_cost, tables_in_equal_test, try_hash_join_access_method,
@@ -1297,7 +1300,7 @@ pub(crate) fn compute_best_join_order_with_context<'a>(
     // The DP algorithm has O(2^n) complexity which becomes prohibitively slow
     // beyond ~12 tables. The greedy algorithm is O(n²) and produces good
     // (though not always optimal) plans.
-    let where_terms = build_where_term_info(where_clause, table_references, subqueries)?;
+    let where_terms = build_where_term_info(where_clause, table_references, subqueries, schema)?;
     if num_tables > GREEDY_JOIN_THRESHOLD {
         return compute_greedy_join_order(
             joined_tables,
@@ -2277,7 +2280,9 @@ fn build_where_term_info(
     where_clause: &[WhereTerm],
     table_references: &TableReferences,
     subqueries: &[NonFromClauseSubquery],
+    schema: &Schema,
 ) -> Result<Vec<WhereTermInfo>> {
+    let env = TypeEnv::new(schema);
     where_clause
         .iter()
         .map(|term| {
@@ -2289,6 +2294,9 @@ fn build_where_term_info(
                 equal_tables: (!term.consumed)
                     .then(|| tables_in_equal_test(&term.expr))
                     .flatten()
+                    .filter(|_| {
+                        hash_join_can_compare_term_values(&term.expr, table_references, &env)
+                    })
                     .map(|(left, right)| {
                         (
                             left,
@@ -2299,6 +2307,19 @@ fn build_where_term_info(
             })
         })
         .collect()
+}
+
+fn hash_join_can_compare_term_values(
+    expr: &turso_parser::ast::Expr,
+    table_references: &TableReferences,
+    env: &TypeEnv,
+) -> bool {
+    match as_binary_components(expr) {
+        Ok(Some((lhs, _, rhs))) => {
+            hash_join_can_compare_values(lhs, rhs, Some(table_references), env)
+        }
+        _ => false,
+    }
 }
 
 /// Return the extra `WHERE` work that can run after this table.
@@ -2576,7 +2597,8 @@ mod tests {
             Operator::Or,
             Box::new(check(second_id)),
         ))];
-        let where_terms = build_where_term_info(&two_table_where, &table_references, &[])?;
+        let where_terms =
+            build_where_term_info(&two_table_where, &table_references, &[], &Schema::default())?;
 
         let mut joined_mask = TableMask::default();
         joined_mask.set(0)?;
@@ -2594,7 +2616,12 @@ mod tests {
         ));
         term.origin = WhereTermOrigin::Join(JoinOrigin::Outer(second_id));
         let outer_join_where = vec![term];
-        let where_terms = build_where_term_info(&outer_join_where, &table_references, &[])?;
+        let where_terms = build_where_term_info(
+            &outer_join_where,
+            &table_references,
+            &[],
+            &Schema::default(),
+        )?;
 
         let mut joined_mask = TableMask::default();
         joined_mask.set(0)?;

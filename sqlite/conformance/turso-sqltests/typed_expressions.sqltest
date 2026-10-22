@@ -204,3 +204,106 @@ test numeric-division-keeps-at-least-16-significant-digits {
 expect {
     0.51666666666666666667|1550.0000000000000000|0.000064516129032258064516
 }
+
+@requires strict "uses STRICT tables"
+test in-case-nullif-is-and-row-values-use-the-type-equality {
+    CREATE TABLE t1(p numeric(10,2), q numeric(10,0)) STRICT;
+    INSERT INTO t1 VALUES ('2.00', '10');
+    SELECT p IN (2), p IN (3, 2.0), p NOT IN (2), p IN (q, 5) FROM t1;
+    SELECT CASE p WHEN 2 THEN 'yes' ELSE 'no' END FROM t1;
+    SELECT nullif(p, 2) IS NULL, nullif(p, 3) FROM t1;
+    SELECT p IS 2, p IS NOT 2, p IS NULL FROM t1;
+    SELECT (p, q) = (2, 10), (p, q) < (2, 11), (p, q) IN ((2, 10)) FROM t1;
+    SELECT count(*) FROM t1 WHERE p IN (2, 3);
+    SELECT count(*) FROM t1 WHERE p IS 2;
+    SELECT count(*) FROM t1 WHERE (p, q) = (2, 10);
+}
+expect {
+    1|1|0|0
+    yes
+    1|2.00
+    1|0|0
+    1|1|1
+    1
+    1
+    1
+}
+
+@requires strict "uses STRICT tables"
+test scalar-min-max-use-the-type-order {
+    CREATE TABLE t1(p numeric(10,2), q numeric(10,0)) STRICT;
+    INSERT INTO t1 VALUES ('2.00', '10');
+    SELECT max(p, q), min(p, q), max(p, 1), min(p, 3), max(p, NULL) IS NULL FROM t1;
+}
+expect {
+    10|2.00|2.00|2.00|1
+}
+
+@requires strict "uses STRICT tables"
+test coalesce-iif-and-case-results-have-the-branch-type {
+    CREATE TABLE t1(p numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES ('2.00'), (NULL);
+    SELECT coalesce(p, 0) + 1, ifnull(p, 0) * 1, iif(p IS NULL, 0, p) + 1, CASE WHEN p > 0 THEN p ELSE 0 END + 1 FROM t1;
+}
+expect {
+    3.00|2.00|3.00|3.00
+    1|0|1|1
+}
+
+@requires strict "uses STRICT tables"
+test coalesce-with-text-literal-is-not-converted {
+    CREATE TABLE t1(p numeric(10,2), d date) STRICT;
+    INSERT INTO t1 VALUES (NULL, NULL);
+    SELECT coalesce(p, 'none'), coalesce(d, 'none'), CASE WHEN p IS NULL THEN 'none' ELSE p END FROM t1;
+}
+expect {
+    none|none|none
+}
+
+@requires strict "uses STRICT tables"
+test typed-in-list-index-and-scan-agree {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(5,2), s smallint, v varchar(3), u uuid) STRICT;
+    CREATE INDEX t1_p ON t1(p);
+    CREATE INDEX t1_s ON t1(s);
+    CREATE INDEX t1_v ON t1(v);
+    CREATE INDEX t1_u ON t1(u);
+    INSERT INTO t1 VALUES (1, '1.55', 1, 'abc', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'), (2, '1.50', 2, 'abd', NULL);
+    SELECT 'index', id FROM t1 WHERE p IN (1.5, 1.555, 100000);
+    SELECT 'scan', id FROM t1 NOT INDEXED WHERE p IN (1.5, 1.555, 100000);
+    SELECT 'index', id FROM t1 WHERE s IN (1, 100000);
+    SELECT 'scan', id FROM t1 NOT INDEXED WHERE s IN (1, 100000);
+    SELECT 'index', id FROM t1 WHERE v IN ('abc', 'abcdef');
+    SELECT 'scan', id FROM t1 NOT INDEXED WHERE v IN ('abc', 'abcdef');
+    SELECT 'index', id FROM t1 WHERE u IN ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11');
+    SELECT 'scan', id FROM t1 NOT INDEXED WHERE u IN ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11');
+}
+expect {
+    index|2
+    scan|2
+    index|1
+    scan|1
+    index|1
+    scan|1
+    index|1
+    scan|1
+}
+
+@requires strict "uses STRICT tables"
+test typed-join-uses-the-type-equality {
+    CREATE TABLE t1(q numeric(10,0)) STRICT;
+    CREATE TABLE t2(y numeric(10,1)) STRICT;
+    CREATE TABLE t3(q numeric(10,3)) STRICT;
+    INSERT INTO t1 VALUES ('10'), ('20');
+    INSERT INTO t2 VALUES ('10.0'), ('30.0');
+    INSERT INTO t3 VALUES ('10.000'), ('20.0');
+    SELECT t1.q, t2.y FROM t1 JOIN t2 ON t1.q = t2.y;
+    SELECT q FROM t1 JOIN t3 USING (q) ORDER BY 1;
+    SELECT q FROM t1 NATURAL JOIN t3 ORDER BY 1;
+}
+expect {
+    10|10.0
+    10
+    20
+    10
+    20
+}

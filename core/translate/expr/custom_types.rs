@@ -39,9 +39,6 @@ pub(super) fn emit_typed_operator(
         )?;
         return Ok(());
     };
-    let func = resolver
-        .resolve_function(func_name, 2)?
-        .ok_or_else(|| LimboError::ParseError(format!("no such function: {func_name}")))?;
     let lhs = emit_converted_operand(
         program,
         referenced_tables,
@@ -56,6 +53,113 @@ pub(super) fn emit_typed_operator(
         &resolved.conversions[1],
         resolver,
     )?;
+    emit_operator_function(
+        program,
+        op,
+        func_name,
+        resolved,
+        lhs,
+        rhs,
+        target_register,
+        resolver,
+    )?;
+    if let BinaryEmitMode::Condition(condition_metadata) = emit_mode {
+        emit_cond_jump(program, condition_metadata, target_register);
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn emit_typed_comparison(
+    program: &mut ProgramBuilder,
+    referenced_tables: Option<&TableReferences>,
+    op: &ast::Operator,
+    resolved: &ResolvedOperator,
+    operands: [(usize, Option<&ast::Expr>); 2],
+    dest: usize,
+    resolver: &Resolver,
+) -> Result<()> {
+    let lhs = emit_value_conversion(program, operands[0].0, &resolved.conversions[0], resolver)?;
+    let rhs = emit_value_conversion(program, operands[1].0, &resolved.conversions[1], resolver)?;
+    if let Some(func_name) = &resolved.function {
+        return emit_operator_function(program, op, func_name, resolved, lhs, rhs, dest, resolver);
+    }
+    let operand_expr = |i: usize, reg: usize| match operands[i].1 {
+        Some(expr) if resolved.conversions[i].is_none() => expr.clone(),
+        _ => ast::Expr::Register(reg),
+    };
+    let lhs_expr = operand_expr(0, lhs);
+    let rhs_expr = operand_expr(1, rhs);
+    let collation = comparison_collation(&lhs_expr, &rhs_expr, referenced_tables, Some(resolver))?;
+    program.set_collation(collation.map(|collation| (collation, false)));
+    emit_binary_insn(
+        program,
+        op,
+        lhs,
+        rhs,
+        dest,
+        &lhs_expr,
+        &rhs_expr,
+        referenced_tables,
+        Some(resolver),
+    )?;
+    program.reset_collation();
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_operator_function(
+    program: &mut ProgramBuilder,
+    op: &ast::Operator,
+    func_name: &str,
+    resolved: &ResolvedOperator,
+    lhs: usize,
+    rhs: usize,
+    dest: usize,
+    resolver: &Resolver,
+) -> Result<()> {
+    let func = resolver
+        .resolve_function(func_name, 2)?
+        .ok_or_else(|| LimboError::ParseError(format!("no such function: {func_name}")))?;
+    if !matches!(op, ast::Operator::Is | ast::Operator::IsNot) {
+        emit_function_call(program, func, resolved, lhs, rhs, dest);
+        return Ok(());
+    }
+    let done = program.allocate_label();
+    let lhs_not_null = program.allocate_label();
+    program.emit_insn(Insn::NotNull {
+        reg: lhs,
+        target_pc: lhs_not_null,
+    });
+    program.emit_insn(Insn::Integer { value: 1, dest });
+    program.emit_insn(Insn::IsNull {
+        reg: rhs,
+        target_pc: done,
+    });
+    program.emit_insn(Insn::Integer { value: 0, dest });
+    program.emit_insn(Insn::Goto { target_pc: done });
+    program.preassign_label_to_next_insn(lhs_not_null);
+    program.emit_insn(Insn::Integer { value: 0, dest });
+    program.emit_insn(Insn::IsNull {
+        reg: rhs,
+        target_pc: done,
+    });
+    emit_function_call(program, func, resolved, lhs, rhs, dest);
+    program.preassign_label_to_next_insn(done);
+    if matches!(op, ast::Operator::IsNot) {
+        program.emit_insn(Insn::Not { reg: dest, dest });
+    }
+    Ok(())
+}
+
+fn emit_function_call(
+    program: &mut ProgramBuilder,
+    func: Func,
+    resolved: &ResolvedOperator,
+    lhs: usize,
+    rhs: usize,
+    dest: usize,
+) {
     let (first, second) = if resolved.swap_args {
         (rhs, lhs)
     } else {
@@ -75,19 +179,12 @@ pub(super) fn emit_typed_operator(
     program.emit_insn(Insn::Function {
         constant_mask: 0,
         start_reg: args,
-        dest: target_register,
+        dest,
         func: FuncCtx { func, arg_count: 2 },
     });
     if resolved.negate {
-        program.emit_insn(Insn::Not {
-            reg: target_register,
-            dest: target_register,
-        });
+        program.emit_insn(Insn::Not { reg: dest, dest });
     }
-    if let BinaryEmitMode::Condition(condition_metadata) = emit_mode {
-        emit_cond_jump(program, condition_metadata, target_register);
-    }
-    Ok(())
 }
 
 fn emit_converted_operand(
@@ -114,6 +211,145 @@ fn converted_operand_expr(
     }
     let reg = emit_converted_operand(program, referenced_tables, expr, conversion, resolver)?;
     Ok(ast::Expr::Register(reg))
+}
+
+pub(super) fn translate_typed_nullif(
+    program: &mut ProgramBuilder,
+    referenced_tables: Option<&TableReferences>,
+    args: &[Box<ast::Expr>],
+    target_register: usize,
+    resolver: &Resolver,
+) -> Result<bool> {
+    let env = TypeEnv::from_resolver(resolver);
+    let Some(resolved) = resolve_operator(
+        &ast::Operator::Equals,
+        &args[0],
+        &args[1],
+        referenced_tables,
+        &env,
+    )?
+    else {
+        return Ok(false);
+    };
+    let first_reg = program.alloc_register();
+    let second_reg = program.alloc_register();
+    translate_expr(program, referenced_tables, &args[0], first_reg, resolver)?;
+    translate_expr(program, referenced_tables, &args[1], second_reg, resolver)?;
+    let equal_reg = program.alloc_register();
+    emit_typed_comparison(
+        program,
+        referenced_tables,
+        &ast::Operator::Equals,
+        &resolved,
+        [(first_reg, Some(&args[0])), (second_reg, Some(&args[1]))],
+        equal_reg,
+        resolver,
+    )?;
+    program.emit_insn(Insn::Copy {
+        src_reg: first_reg,
+        dst_reg: target_register,
+        extra_amount: 0,
+    });
+    let done = program.allocate_label();
+    program.emit_insn(Insn::IfNot {
+        reg: equal_reg,
+        target_pc: done,
+        jump_if_null: true,
+    });
+    program.emit_insn(Insn::Null {
+        dest: target_register,
+        dest_end: None,
+    });
+    program.preassign_label_to_next_insn(done);
+    Ok(true)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn translate_typed_min_max(
+    program: &mut ProgramBuilder,
+    referenced_tables: Option<&TableReferences>,
+    args: &[Box<ast::Expr>],
+    is_max: bool,
+    func_ctx: FuncCtx,
+    target_register: usize,
+    resolver: &Resolver,
+) -> Result<bool> {
+    let env = TypeEnv::from_resolver(resolver);
+    let arg_exprs: Vec<&ast::Expr> = args.iter().map(|arg| arg.as_ref()).collect();
+    let Some((common, conversions)) = common_type_conversions(&arg_exprs, referenced_tables, &env)
+    else {
+        return Ok(false);
+    };
+    let common = ExprType::Named(common);
+    let less = resolve_typed_operator(
+        &ast::Operator::Less,
+        [(&common, None), (&common, None)],
+        &env,
+    )?;
+    let start_reg = program.alloc_registers(args.len());
+    for (i, arg) in args.iter().enumerate() {
+        translate_expr(program, referenced_tables, arg, start_reg + i, resolver)?;
+        emit_value_conversion_in_place(program, start_reg + i, &conversions[i], resolver)?;
+    }
+    let Some(less) = less.filter(|less| less.function.is_some()) else {
+        program.emit_insn(Insn::Function {
+            constant_mask: 0,
+            start_reg,
+            dest: target_register,
+            func: func_ctx,
+        });
+        return Ok(true);
+    };
+    let null_result = program.allocate_label();
+    let done = program.allocate_label();
+    for i in 0..args.len() {
+        program.emit_insn(Insn::IsNull {
+            reg: start_reg + i,
+            target_pc: null_result,
+        });
+    }
+    program.emit_insn(Insn::Copy {
+        src_reg: start_reg,
+        dst_reg: target_register,
+        extra_amount: 0,
+    });
+    let less_reg = program.alloc_register();
+    for candidate in start_reg + 1..start_reg + args.len() {
+        let operands = if is_max {
+            [(target_register, None), (candidate, None)]
+        } else {
+            [(candidate, None), (target_register, None)]
+        };
+        emit_typed_comparison(
+            program,
+            referenced_tables,
+            &ast::Operator::Less,
+            &less,
+            operands,
+            less_reg,
+            resolver,
+        )?;
+        let keep_current = program.allocate_label();
+        program.emit_insn(Insn::IfNot {
+            reg: less_reg,
+            target_pc: keep_current,
+            jump_if_null: true,
+        });
+        program.emit_insn(Insn::Copy {
+            src_reg: candidate,
+            dst_reg: target_register,
+            extra_amount: 0,
+        });
+        program.preassign_label_to_next_insn(keep_current);
+    }
+    program.emit_insn(Insn::Goto { target_pc: done });
+    program.preassign_label_to_next_insn(null_result);
+    program.emit_insn(Insn::Null {
+        dest: target_register,
+        dest_end: None,
+    });
+    program.preassign_label_to_next_insn(done);
+    Ok(true)
 }
 
 /// Evaluate an expression-index expression in a DML context (INSERT/UPDATE/UPSERT).

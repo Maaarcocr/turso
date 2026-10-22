@@ -1,3 +1,4 @@
+use super::seek::emit_typed_seek_keys;
 use super::*;
 
 /// Emit the start of the two-level loop for an `IN` search.
@@ -144,6 +145,19 @@ pub(super) fn open_in_seek_source_cursor(
                     resolver,
                     NoConstantOptReason::InListEphemeral,
                 )?;
+                let next_value = program.allocate_label();
+                if let Some(index) = index {
+                    emit_typed_seek_keys(
+                        program,
+                        table_references,
+                        index,
+                        val_reg,
+                        &[Some(value)],
+                        0,
+                        next_value,
+                        resolver,
+                    )?;
+                }
                 program.emit_insn(Insn::MakeRecord {
                     start_reg: to_u32(val_reg),
                     count: 1,
@@ -158,6 +172,7 @@ pub(super) fn open_in_seek_source_cursor(
                     unpacked_count: Some(1),
                     flags: IdxInsertFlags::new().no_op_duplicate(),
                 });
+                program.preassign_label_to_next_insn(next_value);
             }
             if let Some(label_once_end) = label_once_end {
                 program.preassign_label_to_next_insn(label_once_end);
