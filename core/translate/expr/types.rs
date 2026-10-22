@@ -1380,6 +1380,59 @@ pub(crate) fn plan_column_types(plan: &Plan, env: &TypeEnv) -> Vec<Option<NamedT
         .collect()
 }
 
+pub(crate) fn plan_result_types(plan: &Plan, env: &TypeEnv) -> Vec<ExprType> {
+    plan_column_types(plan, env)
+        .into_iter()
+        .enumerate()
+        .map(|(column, named)| match named {
+            Some(named) => ExprType::Named(named),
+            None => ExprType::Dynamic(plan_column_class(plan, column, env)),
+        })
+        .collect()
+}
+
+fn plan_column_class(plan: &Plan, column: usize, env: &TypeEnv) -> DynamicClass {
+    let arms: Vec<&crate::translate::plan::SelectPlan> = match plan {
+        Plan::Select(select) => vec![select],
+        Plan::CompoundSelect {
+            left, right_most, ..
+        } => left
+            .iter()
+            .map(|(arm, _)| arm)
+            .chain(std::iter::once(right_most.as_ref()))
+            .collect(),
+        _ => return DynamicClass::Unknown,
+    };
+    let mut classes = arms.iter().map(|arm| {
+        match arm
+            .result_columns
+            .get(column)
+            .map(|result| expr_type(&result.expr, Some(&arm.table_references), env))
+        {
+            Some(ExprType::Dynamic(class)) => class,
+            _ => DynamicClass::Unknown,
+        }
+    });
+    let first = classes.next().unwrap_or(DynamicClass::Unknown);
+    if classes.all(|class| class == first) {
+        first
+    } else {
+        DynamicClass::Unknown
+    }
+}
+
+pub(crate) fn class_column_type(
+    class: DynamicClass,
+    rules: &crate::dialect::TypeRules,
+) -> Option<&'static str> {
+    let class = class_name(class);
+    rules
+        .class_column_types
+        .iter()
+        .find(|(name, _)| *name == class)
+        .map(|(_, type_name)| *type_name)
+}
+
 pub(crate) fn select_column_types(
     select: &crate::translate::plan::SelectPlan,
     env: &TypeEnv,

@@ -200,6 +200,7 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
     string_literals_are_text: false,
     result_parameters: None,
     zero_generates_key: false,
+    class_column_types: &[],
 };
 
 pub fn encode_pg_schema_sql(sql: &str) -> String {

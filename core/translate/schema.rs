@@ -1049,6 +1049,26 @@ fn derive_ctas_schema(
     let mut sql_parts = Vec::with_capacity(result_columns.len());
     let mut col_defs = Vec::with_capacity(result_columns.len());
 
+    if resolver.dialect.marks_tables() && !is_system_table(table_name) {
+        let env = TypeEnv::from_resolver(resolver);
+        let result_types = crate::translate::expr::plan_result_types(&plan, &env);
+        for (result_type, name) in result_types.into_iter().zip(names) {
+            let col_type = declared_column_type(result_type, &name, resolver)?;
+            col_defs.push(ColumnDefinition {
+                col_name: ast::Name::exact(name),
+                col_type: Some(col_type),
+                constraints: vec![],
+            });
+        }
+        return Ok((
+            CtasInfo {
+                plan,
+                schema_sql: String::new(),
+            },
+            col_defs,
+        ));
+    }
+
     for (column_index, (col, name)) in result_columns.iter().zip(names).enumerate() {
         // Names come from the leftmost arm, but compound affinity can weaken its type.
         let ty = compound_arms
@@ -1084,6 +1104,45 @@ fn derive_ctas_schema(
         schema_sql: format!("CREATE TABLE {table_name}({})", sql_parts.join(",")),
     };
     Ok((info, col_defs))
+}
+
+fn declared_column_type(
+    result_type: ExprType,
+    column_name: &str,
+    resolver: &Resolver,
+) -> Result<ast::Type> {
+    let (name, params) = match result_type {
+        ExprType::Named(named) => (named.def.name.clone(), named.params.unwrap_or_default()),
+        ExprType::Dynamic(class) => {
+            let Some(type_name) =
+                crate::translate::expr::class_column_type(class, resolver.schema().type_rules)
+            else {
+                bail_parse_error!(
+                    "the type of column {column_name} is not known; CAST it to a type"
+                );
+            };
+            (type_name.to_string(), Vec::new())
+        }
+    };
+    let numbers = params
+        .iter()
+        .all(|param| matches!(param, ast::Expr::Literal(ast::Literal::Numeric(_))));
+    let mut params = params.into_iter().map(Box::new);
+    let size = match (params.len(), numbers) {
+        (0, _) => None,
+        (1, true) => params.next().map(ast::TypeSize::MaxSize),
+        (2, true) => {
+            let first = params.next().expect("two parameters");
+            let second = params.next().expect("two parameters");
+            Some(ast::TypeSize::TypeSize(first, second))
+        }
+        _ => Some(ast::TypeSize::List(params.collect())),
+    };
+    Ok(ast::Type {
+        name,
+        size,
+        array_dimensions: 0,
+    })
 }
 
 /// Emit bytecode to populate a newly-created CTAS table from the SELECT.
@@ -1145,7 +1204,11 @@ fn emit_ctas_insert(
     program.preassign_label_to_next_insn(jump_on_definition_label);
 
     // Open the new table for writing using the root page from CreateBtree.
-    let ctas_btree = Arc::new(create_table(table_name, body, 0)?);
+    let mut ctas_btree = create_table(table_name, body, 0)?;
+    if ctas_btree.is_strict {
+        ctas_btree.resolve_custom_type_affinities(resolver.schema());
+    }
+    let ctas_btree = Arc::new(ctas_btree);
     // SQLite applies the derived CTAS affinity in MakeRecord. This keeps each
     // stored value consistent with the declared type of the CTAS column.
     let affinity_str = ctas_btree
@@ -1153,7 +1216,8 @@ fn emit_ctas_insert(
         .iter()
         .map(|column| column.affinity().aff_mask())
         .collect();
-    let new_table_cursor_id = program.alloc_cursor_id(CursorType::BTreeTable(ctas_btree));
+    let new_table_cursor_id =
+        program.alloc_cursor_id(CursorType::BTreeTable(Arc::clone(&ctas_btree)));
     program.emit_insn(Insn::OpenWrite {
         cursor_id: new_table_cursor_id,
         root_page: RegisterOrLiteral::Register(table_root_reg),
@@ -1177,6 +1241,9 @@ fn emit_ctas_insert(
             "CTAS internal error: result column start register not set".into(),
         )
     })?;
+    if ctas_btree.is_strict {
+        emit_ctas_conversions(program, resolver, &ctas_btree, result_start_reg)?;
+    }
     let record_reg = program.alloc_register();
     program.emit_insn(Insn::MakeRecord {
         start_reg: to_u32(result_start_reg),
@@ -1213,6 +1280,54 @@ fn emit_ctas_insert(
     Ok(())
 }
 
+fn emit_ctas_conversions(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    table: &Arc<crate::schema::BTreeTable>,
+    start_reg: usize,
+) -> Result<()> {
+    let row_number_reg = crate::translate::expr::emit_row_number_counter(program);
+    let layout = crate::schema::ColumnLayout::Identity {
+        column_count: table.columns().len(),
+    };
+    crate::translate::expr::emit_custom_type_assign_columns(
+        program,
+        resolver,
+        table.columns(),
+        start_reg,
+        None,
+        &layout,
+        Some(row_number_reg),
+    )?;
+    program.emit_insn(Insn::TypeCheck {
+        start_reg,
+        count: table.columns().len(),
+        check_generated: false,
+        table_reference: crate::schema::BTreeTable::input_type_check_table_ref(
+            table,
+            resolver.schema(),
+            None,
+        )?,
+    });
+    crate::translate::expr::emit_custom_type_encode_columns(
+        program,
+        resolver,
+        table.columns(),
+        start_reg,
+        None,
+        &table.name,
+        &layout,
+        Some(row_number_reg),
+    )?;
+    program.emit_insn(Insn::TypeCheck {
+        start_reg,
+        count: table.columns().len(),
+        check_generated: false,
+        table_reference: crate::schema::BTreeTable::type_check_table_ref(table, resolver.schema()),
+    });
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn translate_create_table(
     tbl_name: ast::QualifiedName,
@@ -1235,10 +1350,20 @@ pub fn translate_create_table(
                 program,
                 connection,
             )?;
+            let options = if resolver.dialect.marks_tables()
+                && !is_system_table(&normalize_ident(tbl_name.name.as_str()))
+            {
+                ast::TableOptions {
+                    without_rowid_text: None,
+                    strict_text: Some("STRICT".to_string()),
+                }
+            } else {
+                ast::TableOptions::empty()
+            };
             let body = ast::CreateTableBody::ColumnsAndConstraints {
                 columns: col_defs,
                 constraints: vec![],
-                options: ast::TableOptions::empty(),
+                options,
             };
             (body, Some(info))
         }
@@ -1253,13 +1378,7 @@ pub fn translate_create_table(
     let schema_cookie = resolver.with_schema(database_id, |s| s.schema_version);
     program.begin_write_on_database(database_id, schema_cookie)?;
     let normalized_tbl_name = normalize_ident(tbl_name.name.as_str());
-    let table_marker = new_table_marker(
-        resolver,
-        &normalized_tbl_name,
-        &body,
-        ctas_info.is_some(),
-        input,
-    )?;
+    let table_marker = new_table_marker(resolver, &normalized_tbl_name, &body, input)?;
     validate(
         &body,
         &normalized_tbl_name,
@@ -1447,10 +1566,10 @@ pub fn translate_create_table(
     // the schema dialect format the SQL to store (the SQLite dialect renders
     // canonical text from the AST, a frontend dialect preserves its own
     // input text).
-    let sql = if let Some(ref info) = ctas_info {
-        info.schema_sql.clone()
-    } else if let Some(marker) = &table_marker {
+    let sql = if let Some(marker) = &table_marker {
         marker.write(&crate::dialect::SqliteDialect.format_table_sql(input, &tbl_name, &body)?)
+    } else if let Some(ref info) = ctas_info {
+        info.schema_sql.clone()
     } else if bound_sequence_names {
         connection
             .dialect()
@@ -1661,18 +1780,11 @@ fn new_table_marker(
     resolver: &Resolver,
     table_name: &str,
     body: &ast::CreateTableBody,
-    is_create_table_as_select: bool,
     input: &str,
 ) -> Result<Option<TableMarker>> {
     let dialect = resolver.dialect.as_ref();
     if !dialect.marks_tables() || is_system_table(table_name) {
         return Ok(None);
-    }
-    if is_create_table_as_select {
-        bail_parse_error!(
-            "CREATE TABLE AS SELECT is not supported in the {} dialect",
-            dialect.name()
-        );
     }
     let ast::CreateTableBody::ColumnsAndConstraints { options, .. } = body else {
         bail_parse_error!(

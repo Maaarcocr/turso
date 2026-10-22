@@ -42,6 +42,12 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
     string_literals_are_text: true,
     result_parameters: Some(test_result_parameters),
     zero_generates_key: true,
+    class_column_types: &[
+        ("integer", "integer"),
+        ("real", "double"),
+        ("text", "text"),
+        ("blob", "longblob"),
+    ],
     dialect_types: &[
         DialectType {
             name: "decimal",
@@ -152,6 +158,12 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
             storage: StorageType::Real,
             parameters: "",
             behaviour: "OPERATOR '<' (double, double) OPERATOR '=' (double, double)",
+        },
+        DialectType {
+            name: "longblob",
+            storage: StorageType::Blob,
+            parameters: "",
+            behaviour: "",
         },
         DialectType {
             name: "varbinary",

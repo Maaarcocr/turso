@@ -226,6 +226,7 @@ pub struct TypeRules {
     pub string_literals_are_text: bool,
     pub result_parameters: Option<ResultParameters>,
     pub zero_generates_key: bool,
+    pub class_column_types: &'static [(&'static str, &'static str)],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -261,6 +262,7 @@ impl TypeRules {
         string_literals_are_text: false,
         result_parameters: None,
         zero_generates_key: false,
+        class_column_types: &[],
     };
 
     pub(crate) fn behaviour_override(&self, type_name: &str) -> Option<&'static str> {

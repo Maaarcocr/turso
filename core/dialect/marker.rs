@@ -431,10 +431,10 @@ mod tests {
         let conn = db.connect(ConnectOpts::new()).unwrap();
         let error = conn.execute("CREATE TABLE t(x INT)").unwrap_err();
         assert!(error.to_string().contains("must be STRICT"), "{error}");
-        let error = conn.execute("CREATE TABLE c AS SELECT 1 AS x").unwrap_err();
-        assert!(
-            error.to_string().contains("CREATE TABLE AS SELECT"),
-            "{error}"
+        conn.execute("CREATE TABLE c AS SELECT 1 AS x").unwrap();
+        assert_eq!(
+            stored_sql(&conn, "c"),
+            "/* turso_dialect:marking */ CREATE TABLE c (x integer) STRICT"
         );
     }
 

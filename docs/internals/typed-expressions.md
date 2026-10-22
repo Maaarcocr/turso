@@ -759,8 +759,7 @@ Core now writes and checks the marker of marked tables:
   TABLE is an error). Engine tables are never marked: they are recognised by
   their name and by the origin of the statement (a CREATE TABLE prepared by the
   engine itself, `StatementOrigin::InternalHelper`, is not marked).
-  CREATE TABLE AS SELECT is refused in such a dialect until commit 25 makes it
-  create a marked table.
+  CREATE TABLE AS SELECT creates a marked STRICT table (commit 25).
 - **Writing.** Core writes the marker on CREATE TABLE and on every rewrite of a
   marked table: RENAME TABLE, ADD, DROP and RENAME COLUMN, ALTER COLUMN, and
   bound sequence names. The dialect's `format_table_sql` and
@@ -1152,6 +1151,17 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Declared types and CREATE TABLE AS SELECT (commit 25).** Column metadata
+  already reported the declared name and parameters of a typed result through
+  views, subqueries, CTEs and compound selects (commit 21's typed results); a
+  test now covers it. In a marking dialect, CREATE TABLE AS SELECT creates a
+  marked STRICT table. A result column of a type gets that type with its
+  parameters; a column of a Dynamic class gets the name that
+  `TypeRules::class_column_types` gives the class; a column of unknown class
+  (NULL, `?`, a function without a typed result, or a compound select whose
+  arms differ) is an error that asks for a CAST. The rows go through ASSIGN,
+  the input check, ENCODE and the STRICT check, as INSERT does. In a compound
+  select the class is used only when every arm has the same class.
 - **Integer keys (commit 24).** At CREATE TABLE in a marking dialect, core
   parses the table once with every single primary key column as the rowid
   candidate (`RowidDecision::AnyDeclaredType`, which keeps SQLite's other

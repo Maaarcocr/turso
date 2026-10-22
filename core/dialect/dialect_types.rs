@@ -737,6 +737,130 @@ mod tests {
         assert_eq!(query(&conn, "SELECT j FROM t"), ints(&[&[9]]));
     }
 
+    fn declared_types(
+        conn: &Arc<crate::Connection>,
+        sql: &str,
+    ) -> Vec<Option<(String, Vec<String>)>> {
+        let stmt = conn.prepare(sql).unwrap();
+        (0..stmt.num_columns())
+            .map(|column| {
+                stmt.get_column_type_info(column)
+                    .unwrap()
+                    .map(|info| (info.declared_name.to_lowercase(), info.parameters))
+            })
+            .collect()
+    }
+
+    fn declared(name: &str, parameters: &[&str]) -> Option<(String, Vec<String>)> {
+        Some((
+            name.to_string(),
+            parameters.iter().map(|p| p.to_string()).collect(),
+        ))
+    }
+
+    #[test]
+    fn declared_types_reach_metadata_through_views_and_unions() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "metadata-views.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, i INT, d DECIMAL(3,1), tiny TINYINT(1)) STRICT",
+        )
+        .unwrap();
+        conn.execute("CREATE VIEW v AS SELECT i, d, d / 3 AS q, tiny FROM t")
+            .unwrap();
+        let expected = vec![
+            declared("int", &[]),
+            declared("decimal", &["3", "1"]),
+            declared("decimal", &["7", "5"]),
+            declared("tinyint", &["1"]),
+        ];
+        assert_eq!(
+            declared_types(&conn, "SELECT i, d, d / 3, tiny FROM t"),
+            expected
+        );
+        assert_eq!(declared_types(&conn, "SELECT * FROM v"), expected);
+        assert_eq!(
+            declared_types(
+                &conn,
+                "SELECT * FROM (SELECT i, d, d / 3 AS q, tiny FROM t)"
+            ),
+            expected
+        );
+        assert_eq!(
+            declared_types(
+                &conn,
+                "SELECT i, d, d / 3, tiny FROM t UNION SELECT i, d, d / 3, tiny FROM t"
+            ),
+            expected
+        );
+        assert_eq!(
+            declared_types(
+                &conn,
+                "WITH c AS (SELECT i, d, d / 3 AS q, tiny FROM t) SELECT * FROM c"
+            ),
+            expected
+        );
+    }
+
+    #[test]
+    fn create_table_as_select_creates_a_marked_table_with_declared_types() {
+        use crate::dialect::test_dialect::stored_sql;
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let text = |value: &str| Value::build_text(value.to_string());
+        let expected_rows = vec![vec![
+            Value::from_i64(7),
+            text("0.83333"),
+            Value::from_i64(8),
+            Value::from_i64(1),
+            text("18446744073709551615"),
+            text("x"),
+            Value::from_f64(0.5),
+        ]];
+        {
+            let db = open_db(&io, "ctas.db", marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "CREATE TABLE t(id INTEGER PRIMARY KEY, i INT, d DECIMAL(3,1), tiny TINYINT(1), \
+                 u UBIGINT) STRICT",
+            )
+            .unwrap();
+            conn.execute("INSERT INTO t VALUES (1, 7, 2.5, 1, '18446744073709551615')")
+                .unwrap();
+            conn.execute(
+                "CREATE TABLE c AS SELECT i, d / 3 AS q, i + 1 AS s, tiny, u, 'x' AS x, \
+                 i / 14e0 AS r FROM t",
+            )
+            .unwrap();
+            assert_eq!(
+                stored_sql(&conn, "c"),
+                "/* turso_dialect:marking */ CREATE TABLE c (i int, q decimal (7, 5), \
+                 s integer, tiny tinyint (1), u ubigint, x text, r double) STRICT"
+            );
+            assert_eq!(query(&conn, "SELECT * FROM c"), expected_rows);
+            assert_eq!(
+                declared_types(&conn, "SELECT * FROM c"),
+                vec![
+                    declared("int", &[]),
+                    declared("decimal", &["7", "5"]),
+                    declared("integer", &[]),
+                    declared("tinyint", &["1"]),
+                    declared("ubigint", &[]),
+                    declared("text", &[]),
+                    declared("double", &[]),
+                ]
+            );
+            let error = conn
+                .execute("CREATE TABLE n AS SELECT NULL AS z")
+                .unwrap_err();
+            assert!(error.to_string().contains("CAST it"), "{error}");
+            conn.close().unwrap();
+        }
+        let db = open_db(&io, "ctas.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(query(&conn, "SELECT * FROM c"), expected_rows);
+    }
+
     #[test]
     fn affinity_comes_from_the_storage_type() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
