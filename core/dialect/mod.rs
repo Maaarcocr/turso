@@ -10,8 +10,10 @@
 //! build (`pragma_*`, `json_each`/`json_tree`, `sqlite_dbpage`,
 //! `btree_dump`, `sqlite_turso_types`).
 
+pub mod marker;
 pub mod sqlite;
 
+pub use marker::TableMarker;
 pub use sqlite::SqliteDialect;
 
 /// Prefix the PostgreSQL frontend puts before the `CREATE TABLE` text it
@@ -188,6 +190,10 @@ pub trait Dialect: Send + Sync + 'static {
 
     fn type_rules(&self) -> &'static TypeRules {
         &TypeRules::SQLITE
+    }
+
+    fn marks_tables(&self) -> bool {
+        false
     }
 }
 

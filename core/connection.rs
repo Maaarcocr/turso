@@ -1778,7 +1778,7 @@ impl Connection {
     }
 
     pub(crate) fn parse_sql(&self, sql: &str) -> Result<(Option<Cmd>, usize)> {
-        self.db.dialect().parse(sql)
+        crate::dialect::marker::parse_statement(self.db.dialect().as_ref(), sql)
     }
 
     #[cfg(feature = "fs")]

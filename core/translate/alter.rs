@@ -1847,6 +1847,15 @@ pub fn translate_alter_table(
                 )));
             };
 
+            if let Some(marker) = &btree.dialect_marker {
+                if !rename && btree.columns()[column_index].is_rowid_alias() {
+                    return Err(LimboError::ParseError(format!(
+                        "cannot alter the rowid column \"{from}\" of a table created in the {} dialect",
+                        marker.dialect
+                    )));
+                }
+            }
+
             if definition
                 .constraints
                 .iter()

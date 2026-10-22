@@ -1117,7 +1117,7 @@ fn prepare_on_target(
 }
 
 fn table_sql_for_vacuum_replay(target_conn: &Arc<Connection>, sql: &str) -> Result<String> {
-    target_conn.dialect().table_sql_for_replay(sql)
+    crate::dialect::marker::stored_table_sql_for_replay(target_conn.dialect().as_ref(), sql)
 }
 
 // Build the SELECT and INSERT SQL strings for copying a table's data.

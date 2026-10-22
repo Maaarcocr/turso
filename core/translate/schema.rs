@@ -2,11 +2,13 @@ use crate::sync::Arc;
 use crate::HashMap;
 use crate::LimboError;
 
+use crate::dialect::{Dialect, TableMarker};
 use crate::ext::VTabImpl;
 use crate::function::{Deterministic, Func, MathFunc, ScalarFunc};
 use crate::schema::{
-    create_table, translate_ident_to_string_literal, type_registry_key, BTreeCharacteristics,
-    BTreeTable, ColDef, Column, SchemaObjectType, Table, Type, RESERVED_TABLE_PREFIXES,
+    create_table, create_table_with_rowid_decision, is_system_table,
+    translate_ident_to_string_literal, type_registry_key, BTreeCharacteristics, BTreeTable, ColDef,
+    Column, RowidDecision, SchemaObjectType, Table, Type, RESERVED_TABLE_PREFIXES,
     SQLITE_SEQUENCE_TABLE_NAME, TURSO_TYPES_TABLE_NAME,
 };
 use crate::stats::STATS_TABLE;
@@ -806,6 +808,7 @@ fn validate(
     table_name: &str,
     resolver: &Resolver,
     conn: &Connection,
+    rowid_decision: RowidDecision,
 ) -> Result<()> {
     if let ast::CreateTableBody::ColumnsAndConstraints {
         options,
@@ -954,7 +957,7 @@ fn validate(
             }
         }
 
-        let table = create_table(table_name, body, 0)?;
+        let table = create_table_with_rowid_decision(table_name, body, 0, rowid_decision)?;
         if !table.has_rowid {
             if table.has_autoincrement {
                 bail_parse_error!("AUTOINCREMENT is not allowed on WITHOUT ROWID tables");
@@ -1245,7 +1248,24 @@ pub fn translate_create_table(
     let schema_cookie = resolver.with_schema(database_id, |s| s.schema_version);
     program.begin_write_on_database(database_id, schema_cookie)?;
     let normalized_tbl_name = normalize_ident(tbl_name.name.as_str());
-    validate(&body, &normalized_tbl_name, resolver, connection)?;
+    let table_marker = new_table_marker(
+        resolver,
+        &normalized_tbl_name,
+        &body,
+        ctas_info.is_some(),
+        input,
+    )?;
+    let rowid_decision = match &table_marker {
+        Some(marker) => RowidDecision::FromMarker(marker.rowid_alias),
+        None => RowidDecision::BySqliteRule,
+    };
+    validate(
+        &body,
+        &normalized_tbl_name,
+        resolver,
+        connection,
+        rowid_decision,
+    )?;
     let bound_sequence_names = resolver.dialect.binds_names_at_create()
         && bind_default_sequence_names(&mut body, resolver)?;
 
@@ -1428,6 +1448,8 @@ pub fn translate_create_table(
     // input text).
     let sql = if let Some(ref info) = ctas_info {
         info.schema_sql.clone()
+    } else if let Some(marker) = &table_marker {
+        marker.write(&crate::dialect::SqliteDialect.format_table_sql(input, &tbl_name, &body)?)
     } else if bound_sequence_names {
         connection
             .dialect()
@@ -1488,7 +1510,7 @@ pub fn translate_create_table(
     // https://github.com/sqlite/sqlite/blob/95f6df5b8d55e67d1e34d2bff217305a2f21b1fb/src/build.c#L2856-L2871
     // https://github.com/sqlite/sqlite/blob/95f6df5b8d55e67d1e34d2bff217305a2f21b1fb/src/build.c#L1334C5-L1336C65
 
-    let index_regs = collect_autoindexes(&body, program, &normalized_tbl_name)?;
+    let index_regs = collect_autoindexes(&body, program, &normalized_tbl_name, rowid_decision)?;
     if let Some(index_regs) = index_regs.as_ref() {
         for index_reg in index_regs.iter() {
             program.emit_insn(Insn::CreateBtree {
@@ -1629,6 +1651,47 @@ pub fn translate_create_table(
     Ok(())
 }
 
+fn new_table_marker(
+    resolver: &Resolver,
+    table_name: &str,
+    body: &ast::CreateTableBody,
+    is_create_table_as_select: bool,
+    input: &str,
+) -> Result<Option<TableMarker>> {
+    let dialect = resolver.dialect.as_ref();
+    if !dialect.marks_tables() || is_system_table(table_name) {
+        return Ok(None);
+    }
+    if is_create_table_as_select {
+        bail_parse_error!(
+            "CREATE TABLE AS SELECT is not supported in the {} dialect",
+            dialect.name()
+        );
+    }
+    let ast::CreateTableBody::ColumnsAndConstraints { options, .. } = body else {
+        bail_parse_error!(
+            "CREATE TABLE AS SELECT is not supported in the {} dialect",
+            dialect.name()
+        );
+    };
+    if !options.contains_strict() {
+        bail_parse_error!("tables in the {} dialect must be STRICT", dialect.name());
+    }
+    let rowid_alias = match TableMarker::read(input.trim_start())? {
+        Some((marker, _)) if marker.dialect == dialect.name() => marker.rowid_alias,
+        Some((marker, _)) => bail_parse_error!(
+            "a table marked for the {} dialect cannot be created in the {} dialect",
+            marker.dialect,
+            dialect.name()
+        ),
+        None => create_table(table_name, body, 0)?
+            .columns()
+            .iter()
+            .any(Column::is_rowid_alias),
+    };
+    Ok(Some(TableMarker::new(dialect.name(), rowid_alias)))
+}
+
 /// Binds the sequences named in the column defaults of `body` to the
 /// schemas they resolve to now. See [`bind_sequence_names`].
 fn bind_default_sequence_names(
@@ -1765,8 +1828,9 @@ fn collect_autoindexes(
     body: &ast::CreateTableBody,
     program: &mut ProgramBuilder,
     tbl_name: &str,
+    rowid_decision: RowidDecision,
 ) -> Result<Option<Vec<usize>>> {
-    let table = create_table(tbl_name, body, 0)?;
+    let table = create_table_with_rowid_decision(tbl_name, body, 0, rowid_decision)?;
 
     let mut regs: Vec<usize> = Vec::new();
 

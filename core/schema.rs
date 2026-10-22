@@ -2493,6 +2493,7 @@ impl Schema {
                 unique_sets: vec![],
                 has_virtual_columns: false,
                 logical_to_physical_map,
+                dialect_marker: None,
                 column_dependencies: Default::default(),
             })));
 
@@ -2706,7 +2707,8 @@ impl Schema {
                     };
                     self.add_virtual_table(vtab)?;
                 } else {
-                    let table = dialect.parse_table_sql(sql, root_page)?;
+                    let table =
+                        crate::dialect::marker::parse_stored_table(dialect, sql, root_page)?;
 
                     if table.has_virtual_columns && !self.generated_columns_enabled {
                         return Err(LimboError::ParseError(format!(
@@ -3299,6 +3301,7 @@ impl TryClone for BTreeTable {
             rowid_alias_conflict_clause: self.rowid_alias_conflict_clause,
             has_virtual_columns: self.has_virtual_columns,
             logical_to_physical_map: self.logical_to_physical_map.try_clone()?,
+            dialect_marker: self.dialect_marker.clone(),
             column_dependencies: Default::default(),
         })
     }
@@ -3912,6 +3915,7 @@ pub struct BTreeTable {
     pub rowid_alias_conflict_clause: Option<ResolveType>,
     pub has_virtual_columns: bool,
     pub logical_to_physical_map: Vec<usize>,
+    pub dialect_marker: Option<crate::dialect::TableMarker>,
     column_dependencies: ResetOnClone<OnceLock<GeneratedColGraph>>,
 }
 
@@ -3976,6 +3980,7 @@ impl BTreeTable {
             rowid_alias_conflict_clause,
             has_virtual_columns,
             logical_to_physical_map,
+            dialect_marker: None,
             column_dependencies: Default::default(),
         }
     }
@@ -4125,11 +4130,39 @@ impl BTreeTable {
     }
 
     pub fn from_sql(sql: &str, root_page: i64) -> Result<BTreeTable> {
+        Self::from_sql_with_rowid_decision(sql, root_page, RowidDecision::BySqliteRule)
+    }
+
+    pub(crate) fn from_marked_sql(
+        sql: &str,
+        root_page: i64,
+        marker: crate::dialect::TableMarker,
+    ) -> Result<BTreeTable> {
+        let mut table = Self::from_sql_with_rowid_decision(
+            sql,
+            root_page,
+            RowidDecision::FromMarker(marker.rowid_alias),
+        )
+        .map_err(|err| LimboError::Corrupt(format!("malformed database schema: {err}: {sql}")))?;
+        table.dialect_marker = Some(marker);
+        Ok(table)
+    }
+
+    fn from_sql_with_rowid_decision(
+        sql: &str,
+        root_page: i64,
+        rowid_decision: RowidDecision,
+    ) -> Result<BTreeTable> {
         let mut parser = Parser::new(sql.as_bytes());
         let cmd = parser.next_cmd()?;
         match cmd {
             Some(Cmd::Stmt(Stmt::CreateTable { tbl_name, body, .. })) => {
-                Self::from_create_table_ast(&tbl_name, &body, root_page)
+                create_table_with_rowid_decision(
+                    tbl_name.name.as_str(),
+                    &body,
+                    root_page,
+                    rowid_decision,
+                )
             }
             Some(Cmd::Stmt(Stmt::CreateVirtualTable(vtab))) => Err(LimboError::Corrupt(format!(
                 "sqlite_schema root_page must be 0 for virtual table {}, got {root_page}",
@@ -4158,6 +4191,14 @@ impl BTreeTable {
     /// For example, if a user creates a table like: `CREATE TABLE t              (x)`, we store it as
     /// `CREATE TABLE t (x)`, whereas sqlite stores it with the original extra whitespace.
     pub fn to_sql(&self) -> String {
+        let table_sql = self.to_table_sql();
+        match &self.dialect_marker {
+            Some(marker) => marker.write(&table_sql),
+            None => table_sql,
+        }
+    }
+
+    fn to_table_sql(&self) -> String {
         let mut sql = format!("CREATE TABLE {} (", quote_ident(&self.name));
         let needs_pk_inline = self.primary_key_columns.len() == 1
             && self
@@ -5168,7 +5209,31 @@ fn constraint_column_collation(expr: &Expr) -> Result<(&Expr, Option<CollationSe
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RowidDecision {
+    BySqliteRule,
+    FromMarker(bool),
+}
+
+impl RowidDecision {
+    fn makes_rowid_alias(self, typename_exactly_integer: bool) -> bool {
+        match self {
+            RowidDecision::BySqliteRule => typename_exactly_integer,
+            RowidDecision::FromMarker(rowid_alias) => rowid_alias,
+        }
+    }
+}
+
 pub fn create_table(tbl_name: &str, body: &CreateTableBody, root_page: i64) -> Result<BTreeTable> {
+    create_table_with_rowid_decision(tbl_name, body, root_page, RowidDecision::BySqliteRule)
+}
+
+pub(crate) fn create_table_with_rowid_decision(
+    tbl_name: &str,
+    body: &CreateTableBody,
+    root_page: i64,
+    rowid_decision: RowidDecision,
+) -> Result<BTreeTable> {
     let table_name = normalize_ident(tbl_name);
     trace!("Creating table {}", table_name);
     let has_rowid;
@@ -5602,7 +5667,7 @@ pub fn create_table(tbl_name: &str, body: &CreateTableBody, root_page: i64) -> R
                     .with(ColDefFlags::PrimaryKey, primary_key)
                     .with(
                         ColDefFlags::RowIdAlias,
-                        typename_exactly_integer
+                        rowid_decision.makes_rowid_alias(typename_exactly_integer)
                             && primary_key
                             && !primary_key_desc_columns_constraint,
                     )
@@ -5649,6 +5714,17 @@ pub fn create_table(tbl_name: &str, body: &CreateTableBody, root_page: i64) -> R
         for col in cols.iter_mut() {
             col.set_rowid_alias(false);
         }
+    }
+
+    if rowid_decision == RowidDecision::FromMarker(true)
+        && !cols
+            .iter()
+            .any(|col| col.is_rowid_alias() && col.ty() == Type::Integer)
+    {
+        crate::bail_parse_error!(
+            "table {} is marked rowid_alias but its primary key cannot be the rowid",
+            table_name
+        );
     }
 
     if has_autoincrement {
@@ -5755,6 +5831,7 @@ pub fn create_table(tbl_name: &str, body: &CreateTableBody, root_page: i64) -> R
         rowid_alias_conflict_clause,
         has_virtual_columns: false,
         logical_to_physical_map: vec![],
+        dialect_marker: None,
         column_dependencies: Default::default(),
     };
     table.prepare_generated_columns()?;
@@ -6472,6 +6549,7 @@ pub fn sqlite_schema_table() -> Result<BTreeTable> {
         unique_sets: try_vec![]?,
         has_virtual_columns: false,
         logical_to_physical_map,
+        dialect_marker: None,
         column_dependencies: Default::default(),
     })
 }
@@ -7715,6 +7793,7 @@ mod tests {
             rowid_alias_conflict_clause: None,
             has_virtual_columns: false,
             logical_to_physical_map,
+            dialect_marker: None,
             column_dependencies: Default::default(),
         };
 

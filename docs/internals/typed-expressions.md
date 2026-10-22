@@ -1152,6 +1152,15 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Marker (commit 14).** `core/dialect/marker.rs` reads and writes the
+  marker; schema loading, ALTER TABLE, VACUUM and `Connection::parse_sql` go
+  through it, and the table keeps it in `BTreeTable::dialect_marker`. The
+  check that refuses PostgreSQL tables outside PostgreSQL moved there from the
+  SQLite dialect. ALTER COLUMN of the rowid column of a marked table is refused
+  until commit 24: Turso's ALTER COLUMN removes PRIMARY KEY from the column,
+  which would leave a `rowid_alias` marker on a table without a key. (In every
+  dialect, ALTER COLUMN of an INTEGER PRIMARY KEY column also loses the
+  column's values; that is a separate bug.)
 
 ## Proposal 3: PostgreSQL frontend
 
