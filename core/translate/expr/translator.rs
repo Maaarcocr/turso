@@ -2724,7 +2724,12 @@ fn translate_column_expr(
                             },
                         )?;
 
-                        program.emit_column_affinity(target_register, table_column.affinity());
+                        super::emit_generated_value_conversion(
+                            program,
+                            target_register,
+                            table_column,
+                            resolver,
+                        )?;
                         // The virtual column's declared collation must override
                         // whatever collation the inner expression resolved to.
                         program.set_collation(Some((table_column.collation(), false)));

@@ -19,8 +19,10 @@ CREATE TYPE [IF NOT EXISTS] type-name [(parameters)]
     BASE base-type
     ENCODE encode-expr
     DECODE decode-expr
+    [ASSIGN assign-expr]
+    [CAST cast-expr]
     [OPERATOR 'op' [([left-type,] right-type)] [RETURNS type] [function-name] ...]
-    [CAST {FROM | TO} type [, ...] AS IMPLICIT ...]
+    [CAST {FROM | TO} type [, ...] AS IMPLICIT [function-name] ...]
     [FUNCTION name(arg-type [, ...]) RETURNS type function-name ...]
     [KEY key-expr]
     [DEFAULT default-expr];
@@ -76,6 +78,23 @@ CREATE TYPE reversed_text BASE text
 ```
 
 The ENCODE expression is the place to put validation logic. If the ENCODE expression raises an error, the INSERT or UPDATE is aborted.
+
+### ASSIGN / CAST
+
+The ASSIGN expression converts a value that is stored in a column of this type, before ENCODE. It runs for INSERT, UPDATE, UPSERT and REPLACE, for column DEFAULTs, for ALTER TABLE rewrites, and for the value of a virtual generated column. It runs before BEFORE triggers, so a trigger sees the converted value. It is not called for NULL. It must return a value that is already of the type unchanged.
+
+The CAST expression is what `CAST(x AS type)` uses instead of ASSIGN, so the two conversions can differ. Without a CAST expression, `CAST` uses ASSIGN. Both expressions see `value` and the type's parameters, like ENCODE.
+
+```sql
+CREATE TYPE whole(value any) BASE integer
+    ASSIGN CAST(round(value) AS INTEGER)
+    CAST CAST(value AS INTEGER)
+    OPERATOR '<' OPERATOR '=';
+
+CREATE TABLE t(id INTEGER PRIMARY KEY, v whole) STRICT;
+INSERT INTO t VALUES (1, 1.5);   -- stores 2
+SELECT CAST(2.7 AS whole);       -- 2
+```
 
 ### Parameters
 
@@ -165,6 +184,16 @@ CREATE TYPE money(value any) BASE text
     OPERATOR '+' (money, money) RETURNS money money_add;
 
 -- money_column + 1 calls money_add with 1 converted to money.
+```
+
+A function name after `AS IMPLICIT` makes the conversion call that function instead of converting the value as `CAST` does. The function receives the value and then each of the target type's parameters: those of the other operand when it has the same type, otherwise their defaults. It applies to values whose storage class is known, such as a `TEXT` column; a literal string takes the type of the other operand as before.
+
+```sql
+CREATE TYPE whole(value any) BASE integer
+    CAST FROM text AS IMPLICIT length
+    OPERATOR '<' OPERATOR '=';
+
+-- whole_column = text_column compares whole_column with length(text_column).
 ```
 
 #### Ordering with OPERATOR '<'

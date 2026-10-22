@@ -1371,8 +1371,23 @@ fn emit_update_insns<'a>(
     // For non-STRICT tables, apply column affinity to the NEW values early.
     // This must happen before index operations and triggers so that all operations
     // use the converted values.
+    let row_number_reg = target_table
+        .table
+        .btree()
+        .filter(|btree_table| btree_table.dialect_marker.is_some())
+        .map(|_| crate::translate::expr::emit_row_number_counter(program));
     if let Some(btree_table) = target_table.table.btree() {
-        if !btree_table.is_strict {
+        if btree_table.is_strict {
+            crate::translate::expr::emit_custom_type_assign_columns(
+                program,
+                &t_ctx.resolver,
+                btree_table.columns(),
+                start,
+                Some(&updated_column_indices),
+                &layout,
+                row_number_reg,
+            )?;
+        } else {
             let affinity = btree_table
                 .columns()
                 .iter()
@@ -1736,10 +1751,6 @@ fn emit_update_insns<'a>(
     // This ensures that if a constraint fails, indexes remain consistent.
     if let Some(btree_table) = target_table.table.btree() {
         if btree_table.is_strict {
-            let row_number_reg = btree_table
-                .dialect_marker
-                .is_some()
-                .then(|| crate::translate::expr::emit_row_number_counter(program));
             crate::translate::expr::emit_custom_type_encode_columns(
                 program,
                 &t_ctx.resolver,

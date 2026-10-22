@@ -8,9 +8,9 @@ use super::{
         update::emit_program_for_update,
     },
     expr::{
-        bind_and_rewrite_expr, emit_stored_column, emit_table_column,
-        translate_expr_no_constant_opt, walk_expr, BindingBehavior, NoConstantOptReason,
-        WalkControl,
+        bind_and_rewrite_expr, emit_generated_value_conversion, emit_stored_column,
+        emit_table_column, translate_expr_no_constant_opt, walk_expr, BindingBehavior,
+        NoConstantOptReason, WalkControl,
     },
     group_by::GroupByMetadata,
     main_loop::{LeftJoinMetadata, LoopLabels, RightJoinMetadata, SemiAntiJoinMetadata},
@@ -2319,10 +2319,10 @@ pub(crate) fn emit_index_column_value_old_image(
         // For virtual generated column references, apply the column's
         // declared affinity to the computed expression result.
         if idx_col.pos_in_table != EXPR_INDEX_SENTINEL {
-            if let Some(table) = program.btree_table_from_cursor(table_cursor_id) {
+            if let Some(table) = program.btree_table_from_cursor(table_cursor_id).cloned() {
                 let column = &table.columns()[idx_col.pos_in_table];
                 if column.is_virtual_generated() {
-                    program.emit_column_affinity(dest_reg, column.affinity());
+                    emit_generated_value_conversion(program, dest_reg, column, resolver)?;
                 }
             }
         }
@@ -2452,7 +2452,7 @@ fn emit_index_column_value_new_image(
                     layout,
                     table,
                 )?;
-                program.emit_column_affinity(dest_reg, col_in_table.affinity());
+                emit_generated_value_conversion(program, dest_reg, col_in_table, resolver)?;
             }
             GeneratedType::NotGenerated => {
                 let src_reg = if col_in_table.is_rowid_alias() {

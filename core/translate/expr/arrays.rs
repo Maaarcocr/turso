@@ -200,6 +200,53 @@ pub(crate) fn emit_array_decode(
     Ok(())
 }
 
+pub(crate) fn emit_custom_type_assign_columns(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    columns: &[Column],
+    start_reg: usize,
+    only_columns: Option<&ColumnMask>,
+    layout: &ColumnLayout,
+    row_number_reg: Option<usize>,
+) -> Result<()> {
+    for (i, col) in columns.iter().enumerate() {
+        if only_columns.is_some_and(|filter| !filter.get(i)) || col.is_virtual_generated() {
+            continue;
+        }
+        let Ok(Some(resolved)) = resolver.schema().column_resolved_type(col, true) else {
+            continue;
+        };
+        let Some((def, assign)) = resolved
+            .chain
+            .iter()
+            .find_map(|def| def.assign().map(|assign| (def, assign)))
+        else {
+            continue;
+        };
+        if let (Some(row_reg), Some(name)) = (row_number_reg, col.name.as_deref()) {
+            program.emit_insn(Insn::TypeConversionContext {
+                column: Some(std::sync::Arc::from(name)),
+                row_reg,
+            });
+        }
+        let reg = layout.to_register(start_reg, i);
+        let skip_null = program.allocate_label();
+        program.emit_insn(Insn::IsNull {
+            reg,
+            target_pc: skip_null,
+        });
+        emit_type_expr(program, assign, reg, reg, col, def, resolver)?;
+        program.preassign_label_to_next_insn(skip_null);
+    }
+    if let Some(row_reg) = row_number_reg {
+        program.emit_insn(Insn::TypeConversionContext {
+            column: None,
+            row_reg,
+        });
+    }
+    Ok(())
+}
+
 /// Emit encode expressions for columns with custom types in a contiguous register range.
 /// Used by INSERT, UPDATE, and UPSERT paths to encode values before TypeCheck.
 ///

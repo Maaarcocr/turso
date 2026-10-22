@@ -1152,6 +1152,29 @@ and after VACUUM. For each commit, `EXPLAIN` of every statement in
   TYPE text, also for each base type of a domain). Otherwise the column is
   untyped in expressions: its decoded values are compared and sorted with
   SQLite's rules, and a main type of the same name is never used for it.
+- **Assignment conversions (commit 23).** CREATE TYPE takes `ASSIGN expr`,
+  `CAST expr` and a function name after `CAST FROM ... AS IMPLICIT`, also for
+  user types; the stored CREATE TYPE text keeps them. ASSIGN runs where SQLite
+  applies affinity for non-STRICT tables (INSERT before BEFORE triggers,
+  UPDATE, UPSERT DO UPDATE, ALTER COLUMN rewrites), for DEFAULTs (also the
+  default read for rows written before ADD COLUMN) and for virtual generated
+  columns, everywhere their value is computed (reads, index keys, the INSERT
+  check). A virtual generated column of a type without ASSIGN keeps today's
+  affinity, so PostgreSQL types are unchanged. CAST uses the type's CAST
+  expression, or else its ASSIGN, then ENCODE and DECODE. An implicit
+  conversion function receives the value and every declared parameter of the
+  target type: the other operand's parameters when it has the same type,
+  otherwise the defaults (NULL without a default). Values of unknown class
+  (string literals in the SQLite dialect, `?`) still take the other operand's
+  type without the function. In a marked table, ADD COLUMN does not apply
+  SQLite's check of the DEFAULT against the names INT, REAL, TEXT and BLOB;
+  when the table has rows it converts the DEFAULT into the column's type
+  once, so an invalid DEFAULT fails the ALTER TABLE instead of every later
+  read. Turso has no stored generated columns. ASSIGN does not run for the
+  rowid yet (commit 24). In INSERT, a virtual generated column is computed
+  from the already-encoded values of the other columns, so one that reads an
+  encoded column (`numeric`, `uint64`) fails the STRICT check; this is older
+  than this commit and not fixed here.
 - **Error kinds (commit 22).** A conversion error is
   `LimboError::TypeConversion` with a `ConversionErrorKind`, the message, and
   the column and row when known; its text is the message, followed by the

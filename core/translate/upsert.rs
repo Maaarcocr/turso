@@ -736,6 +736,15 @@ pub fn emit_upsert(
 
     if let Some(bt) = table.btree() {
         if bt.is_strict {
+            crate::translate::expr::emit_custom_type_assign_columns(
+                program,
+                resolver,
+                bt.columns(),
+                new_start,
+                None,
+                &layout,
+                None,
+            )?;
             // Pre-encode TypeCheck: all columns are decoded (user-facing) at this point.
             // We need to do this before regenerating virtual columns, because TypeCheck applies
             // affinity in-place to its registers, which could affect virtual columns.

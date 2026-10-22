@@ -230,6 +230,8 @@ pub enum TypeDefKind {
         base: String,
         encode: Option<Box<ast::Expr>>,
         decode: Option<Box<ast::Expr>>,
+        assign: Option<Box<ast::Expr>>,
+        cast: Option<Box<ast::Expr>>,
         operators: std::vec::Vec<TypeOperator>,
         casts: std::vec::Vec<ast::TypeCast>,
         functions: std::vec::Vec<ast::TypeFunction>,
@@ -335,6 +337,20 @@ impl TypeDef {
         }
     }
 
+    pub fn assign(&self) -> Option<&ast::Expr> {
+        match &self.kind {
+            TypeDefKind::Custom { assign, .. } => assign.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn cast_expr(&self) -> Option<&ast::Expr> {
+        match &self.kind {
+            TypeDefKind::Custom { cast, .. } => cast.as_deref(),
+            _ => None,
+        }
+    }
+
     /// True when stored values are read back unchanged (no DECODE, or `DECODE value`).
     pub fn decode_returns_value_unchanged(&self) -> bool {
         self.decode().is_none_or(
@@ -434,6 +450,8 @@ impl TypeDef {
                 base,
                 encode,
                 decode,
+                assign,
+                cast,
                 operators,
                 casts,
                 functions,
@@ -452,6 +470,8 @@ impl TypeDef {
                     base: base.clone(),
                     encode: encode.clone(),
                     decode: decode.clone(),
+                    assign: assign.clone(),
+                    cast: cast.clone(),
                     operators: operators.clone(),
                     casts: casts.clone(),
                     functions: functions.clone(),
@@ -546,6 +566,8 @@ impl TypeDef {
                 base: base_type.to_string(),
                 encode: None,
                 decode: None,
+                assign: None,
+                cast: None,
                 operators: std::vec::Vec::new(),
                 casts: std::vec::Vec::new(),
                 functions: std::vec::Vec::new(),

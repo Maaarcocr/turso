@@ -76,7 +76,7 @@ pub(super) fn do_emit_table_column(
                 translate_expr(program, referenced_tables, expr, target_register, resolver)?;
                 Ok(())
             })?;
-            program.emit_column_affinity(target_register, column.affinity());
+            emit_generated_value_conversion(program, target_register, column, resolver)?;
         }
         _ => {
             emit_stored_column(program, cursor_id, column_index, target_register, resolver)?;
@@ -104,7 +104,7 @@ pub fn emit_stored_column(
         resolved
             .chain
             .iter()
-            .any(|td| td.encode().is_some())
+            .any(|td| td.encode().is_some() || td.assign().is_some())
             .then_some((table, column, default_expr))
     });
     let Some((table, column, default_expr)) = encoded_default else {
@@ -122,6 +122,15 @@ pub fn emit_stored_column(
         target_register,
         resolver,
         NoConstantOptReason::RegisterReuse,
+    )?;
+    emit_custom_type_assign_columns(
+        program,
+        resolver,
+        std::slice::from_ref(column),
+        target_register,
+        None,
+        &ColumnLayout::Identity { column_count: 1 },
+        None,
     )?;
     emit_custom_type_encode_columns(
         program,

@@ -84,8 +84,8 @@ pub(crate) use affinity::{
     comparison_affinity, expr_data_type, get_expr_affinity, StorageClassMask,
 };
 pub(crate) use arrays::{
-    emit_array_decode, emit_custom_type_decode_columns, emit_custom_type_encode_columns,
-    emit_row_number_counter,
+    emit_array_decode, emit_custom_type_assign_columns, emit_custom_type_decode_columns,
+    emit_custom_type_encode_columns, emit_row_number_counter,
 };
 pub(crate) use binary::expr_is_array;
 pub use binding::{bind_and_rewrite_expr, BindingBehavior};
@@ -108,13 +108,14 @@ pub use translator::{
     resolve_expr, translate_expr, translate_expr_no_constant_opt, NoConstantOptReason,
 };
 pub(crate) use types::{
-    branch_type, column_named_type, common_branch_type, emit_type_key, emit_type_keys,
-    emit_value_conversion, emit_value_conversion_in_place, expr_type, hash_join_can_compare_values,
-    hash_join_key_form, in_subquery_comparison, operator_type, plan_column_types,
-    recursive_cte_column_types, recursive_cte_conversions, recursive_cte_row_keys,
-    resolve_operator, resolve_typed_operator, select_column_types, type_key, type_keys, Conversion,
-    DynamicClass, ExprType, HashKeyForm, InSubqueryComparison, IndexRowKey, IndexRowKeys,
-    NamedType, ResolvedOperator, SubqueryColumnTypes, TypeEnv, TypeKey,
+    branch_type, column_named_type, common_branch_type, emit_assign_into_type,
+    emit_generated_value_conversion, emit_type_key, emit_type_keys, emit_value_conversion,
+    emit_value_conversion_in_place, expr_type, hash_join_can_compare_values, hash_join_key_form,
+    in_subquery_comparison, operator_type, plan_column_types, recursive_cte_column_types,
+    recursive_cte_conversions, recursive_cte_row_keys, resolve_operator, resolve_typed_operator,
+    select_column_types, type_key, type_keys, Conversion, DynamicClass, ExprType, HashKeyForm,
+    InSubqueryComparison, IndexRowKey, IndexRowKeys, NamedType, ResolvedOperator,
+    SubqueryColumnTypes, TypeEnv, TypeKey,
 };
 pub use utils::{
     as_binary_components, maybe_apply_affinity, sanitize_string, truth_test_rhs, unwrap_parens,

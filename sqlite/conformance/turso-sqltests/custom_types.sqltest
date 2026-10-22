@@ -86,6 +86,41 @@ expect {
 }
 
 @requires strict "uses STRICT tables"
+test create-type-assign-converts-written-values-and-cast-may-differ {
+    CREATE TYPE whole(value any) BASE integer
+        ASSIGN CAST(round(value) AS INTEGER)
+        CAST CAST(value AS INTEGER)
+        OPERATOR '<' OPERATOR '=';
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, v whole) STRICT;
+    INSERT INTO t1 VALUES (1, 1.5), (2, '2.6'), (3, NULL);
+    UPDATE t1 SET v = 7.5 WHERE id = 2;
+    SELECT id, v, typeof(v) FROM t1 ORDER BY id;
+    SELECT CAST(2.7 AS whole);
+}
+expect {
+    1|2|integer
+    2|8|integer
+    3||null
+    2
+}
+
+@requires strict "uses STRICT tables"
+test create-type-implicit-cast-through-a-function {
+    CREATE TYPE whole(value any) BASE integer
+        CAST FROM text AS IMPLICIT length
+        OPERATOR '<' OPERATOR '=';
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, v whole) STRICT;
+    CREATE TABLE t2(s TEXT) STRICT;
+    INSERT INTO t1 VALUES (1, 3), (2, 4);
+    INSERT INTO t2 VALUES ('abc'), ('wxyz');
+    SELECT id, s FROM t1 JOIN t2 ON v = s ORDER BY id;
+}
+expect {
+    1|abc
+    2|wxyz
+}
+
+@requires strict "uses STRICT tables"
 test returning-shows-decoded-values {
     -- RETURNING clauses for INSERT, UPDATE, and DELETE must return the
     -- user-facing (decoded) values, not the raw encoded storage values.

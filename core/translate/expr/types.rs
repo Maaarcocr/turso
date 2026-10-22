@@ -172,6 +172,7 @@ pub(crate) enum Conversion {
     IntoType(NamedType),
     IntoClass(DynamicClass),
     Function(String),
+    TypeFunction { function: String, target: NamedType },
 }
 
 impl Conversion {
@@ -702,6 +703,11 @@ pub(crate) fn emit_value_conversion(
             emit_conversion_function(program, source_reg, dest, function, resolver)?;
             Ok(dest)
         }
+        Conversion::TypeFunction { function, target } => {
+            let dest = program.alloc_register();
+            emit_type_conversion_function(program, source_reg, dest, function, target, resolver)?;
+            Ok(dest)
+        }
     }
 }
 
@@ -732,7 +738,53 @@ pub(crate) fn emit_value_conversion_in_place(
             });
             emit_conversion_function(program, source, reg, function, resolver)
         }
+        Conversion::TypeFunction { function, target } => {
+            emit_type_conversion_function(program, reg, reg, function, target, resolver)
+        }
     }
+}
+
+fn emit_type_conversion_function(
+    program: &mut ProgramBuilder,
+    source_reg: usize,
+    dest: usize,
+    function: &str,
+    target: &NamedType,
+    resolver: &Resolver,
+) -> Result<()> {
+    let given = target.params.as_deref().unwrap_or_default();
+    let declared: Vec<_> = target.def.user_params().collect();
+    let arg_count = 1 + declared.len();
+    let func = resolver
+        .resolve_function(function, arg_count)?
+        .ok_or_else(|| LimboError::ParseError(format!("no such function: {function}")))?;
+    let start_reg = program.alloc_registers(arg_count);
+    program.emit_insn(Insn::Copy {
+        src_reg: source_reg,
+        dst_reg: start_reg,
+        extra_amount: 0,
+    });
+    for (i, param) in declared.iter().enumerate() {
+        let reg = start_reg + 1 + i;
+        match given.get(i).or(param.default.as_deref()) {
+            Some(value) => {
+                translate_expr(program, None, value, reg, resolver)?;
+            }
+            None => {
+                program.emit_insn(Insn::Null {
+                    dest: reg,
+                    dest_end: None,
+                });
+            }
+        }
+    }
+    program.emit_insn(Insn::Function {
+        constant_mask: 0,
+        start_reg,
+        dest,
+        func: crate::function::FuncCtx { func, arg_count },
+    });
+    Ok(())
 }
 
 fn emit_conversion_function(
@@ -773,6 +825,49 @@ pub(crate) fn emit_cast_into_type(
     named: &NamedType,
     resolver: &Resolver,
 ) -> Result<()> {
+    emit_store_and_read_back(program, reg, named, ValueConversion::Cast, resolver)
+}
+
+pub(crate) fn emit_assign_into_type(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    named: &NamedType,
+    resolver: &Resolver,
+) -> Result<()> {
+    emit_store_and_read_back(program, reg, named, ValueConversion::Assignment, resolver)
+}
+
+pub(crate) fn emit_generated_value_conversion(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    column: &crate::schema::Column,
+    resolver: &Resolver,
+) -> Result<()> {
+    let assigns = column
+        .resolved_type()
+        .is_some_and(|resolved| resolved.chain.iter().any(|def| def.assign().is_some()));
+    match column_named_type(column, true, resolver.schema()).filter(|_| assigns) {
+        Some(named) => emit_assign_into_type(program, reg, &named, resolver),
+        None => {
+            program.emit_column_affinity(reg, column.affinity());
+            Ok(())
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValueConversion {
+    Cast,
+    Assignment,
+}
+
+fn emit_store_and_read_back(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    named: &NamedType,
+    conversion: ValueConversion,
+    resolver: &Resolver,
+) -> Result<()> {
     let Some(resolved) = resolver.schema().resolve_type_unchecked(&named.def.name)? else {
         return Err(LimboError::InternalError(format!(
             "type {} is not registered",
@@ -785,6 +880,22 @@ pub(crate) fn emit_cast_into_type(
         reg,
         target_pc: stored,
     });
+    let cast = match conversion {
+        ValueConversion::Cast => resolved
+            .chain
+            .iter()
+            .find_map(|def| def.cast_expr().map(|expr| (def, expr))),
+        ValueConversion::Assignment => None,
+    };
+    let first_conversion = cast.or_else(|| {
+        resolved
+            .chain
+            .iter()
+            .find_map(|def| def.assign().map(|expr| (def, expr)))
+    });
+    if let Some((def, expr)) = first_conversion {
+        emit_type_expr(program, expr, reg, reg, &column, def, resolver)?;
+    }
     emit_input_type_check(program, reg, named);
     for def in &resolved.chain {
         if let Some(encode) = def.encode() {
@@ -1862,7 +1973,13 @@ fn fit_operand(
                 class_conversion(rules, *operand_class, *class).map(Fit::Convert)
             }
             ExprType::Named(named) if declares_cast_to_class(&named.def, *class) => {
-                Some(Fit::Convert(Conversion::IntoClass(*class)))
+                Some(Fit::Convert(
+                    match cast_function(&named.def, ast::TypeCastDirection::To, class_name(*class))
+                    {
+                        Some(function) => Conversion::Function(function),
+                        None => Conversion::IntoClass(*class),
+                    },
+                ))
             }
             _ => None,
         },
@@ -1872,7 +1989,13 @@ fn fit_operand(
                 if declares_cast(target, ast::TypeCastDirection::From, &named.def.name)
                     || declares_cast(&named.def, ast::TypeCastDirection::To, &target.name) =>
             {
-                conversion_into(target, other).map(Fit::Convert)
+                let function = cast_function(target, ast::TypeCastDirection::From, &named.def.name)
+                    .or_else(|| {
+                        cast_function(&named.def, ast::TypeCastDirection::To, &target.name)
+                    });
+                conversion_into(target, other)
+                    .map(|conversion| through_function(conversion, function, other))
+                    .map(Fit::Convert)
             }
             ExprType::Dynamic(DynamicClass::Unknown) => {
                 conversion_into(target, other).map(Fit::Convert)
@@ -1880,7 +2003,11 @@ fn fit_operand(
             ExprType::Dynamic(class)
                 if declares_cast(target, ast::TypeCastDirection::From, class_name(*class)) =>
             {
-                conversion_into(target, other).map(Fit::Convert)
+                let function =
+                    cast_function(target, ast::TypeCastDirection::From, class_name(*class));
+                conversion_into(target, other)
+                    .map(|conversion| through_function(conversion, function, other))
+                    .map(Fit::Convert)
             }
             ExprType::Dynamic(_) if legacy && legacy_literal_converts(operand_expr, target) => {
                 conversion_into(target, other).map(Fit::Convert)
@@ -1939,6 +2066,31 @@ fn declares_cast(def: &TypeDef, direction: ast::TypeCastDirection, name: &str) -
     def.casts().iter().any(|cast| {
         cast.direction == direction && cast.types.iter().any(|ty| ty.eq_ignore_ascii_case(name))
     })
+}
+
+fn cast_function(def: &TypeDef, direction: ast::TypeCastDirection, name: &str) -> Option<String> {
+    def.casts().iter().find_map(|cast| {
+        (cast.direction == direction && cast.types.iter().any(|ty| ty.eq_ignore_ascii_case(name)))
+            .then(|| cast.function.clone())
+            .flatten()
+    })
+}
+
+fn through_function(
+    conversion: Conversion,
+    function: Option<String>,
+    other: Option<&NamedType>,
+) -> Conversion {
+    match (conversion, function) {
+        (Conversion::IntoType(target), Some(function)) => Conversion::TypeFunction {
+            function,
+            target: other
+                .filter(|other| other.is(&target.def) && other.params.is_some())
+                .cloned()
+                .unwrap_or(target),
+        },
+        (conversion, _) => conversion,
+    }
 }
 
 fn declares_cast_to_class(def: &TypeDef, class: DynamicClass) -> bool {

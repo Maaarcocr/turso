@@ -632,6 +632,104 @@ mod tests {
     }
 
     #[test]
+    fn assignment_converts_values_before_triggers_and_storage() {
+        use crate::ConversionErrorKind;
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "assignment.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, i INT) STRICT")
+            .unwrap();
+        conn.execute("CREATE TABLE seen(i INTEGER, kind TEXT) STRICT")
+            .unwrap();
+        conn.execute(
+            "CREATE TRIGGER log BEFORE INSERT ON t BEGIN \
+             INSERT INTO seen VALUES (NEW.i, typeof(NEW.i)); END",
+        )
+        .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 1.5), (2, '7')")
+            .unwrap();
+        conn.execute("UPDATE t SET i = 2.5 WHERE id = 2").unwrap();
+        assert_eq!(
+            query(&conn, "SELECT id, i FROM t ORDER BY id"),
+            ints(&[&[1, 2], &[2, 3]])
+        );
+        let text = |value: &str| Value::build_text(value.to_string());
+        assert_eq!(
+            query(&conn, "SELECT i, kind FROM seen ORDER BY i"),
+            vec![
+                vec![Value::from_i64(2), text("integer")],
+                vec![Value::from_i64(7), text("integer")],
+            ]
+        );
+        let error = conversion_error(
+            conn.execute("INSERT INTO t VALUES (3, 1), (4, '12abc')")
+                .unwrap_err(),
+        );
+        assert_eq!(error.kind, ConversionErrorKind::InvalidValue);
+        assert_eq!((error.column.as_deref(), error.row), (Some("i"), Some(2)));
+        assert_eq!(query(&conn, "SELECT CAST('12abc' AS INT)"), ints(&[&[12]]));
+    }
+
+    #[test]
+    fn assignment_and_implicit_conversions_receive_the_type_parameters() {
+        use crate::ConversionErrorKind;
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "assignment-parameters.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, d DECIMAL(4,2)) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 2.349), (2, 12.5)")
+            .unwrap();
+        let text = |value: &str| Value::build_text(value.to_string());
+        assert_eq!(
+            query(&conn, "SELECT d FROM t ORDER BY id"),
+            vec![vec![text("2.35")], vec![text("12.50")]]
+        );
+        let error = conversion_error(conn.execute("INSERT INTO t VALUES (3, 123.4)").unwrap_err());
+        assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+        assert!(error.message.contains("decimal(4,2)"), "{}", error.message);
+        assert_eq!(
+            query(&conn, "SELECT id FROM t WHERE d = '2.349'"),
+            ints(&[&[1]])
+        );
+    }
+
+    #[test]
+    fn virtual_generated_columns_and_defaults_are_assigned_to_the_column_type() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let file = io
+            .open_file("assignment-generated.db", crate::OpenFlags::Create, true)
+            .unwrap();
+        let db = crate::Database::open(
+            io.clone(),
+            "assignment-generated.db",
+            crate::OpenOptions::new(marking())
+                .storage(Arc::new(crate::storage::database::DatabaseFile::new(file)))
+                .db_opts(crate::DatabaseOpts::new().with_generated_columns(true)),
+        )
+        .unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, d DOUBLE, g INT AS (d) VIRTUAL, \
+             i INT DEFAULT 4.5) STRICT",
+        )
+        .unwrap();
+        conn.execute("INSERT INTO t(id, d) VALUES (1, 2.5)")
+            .unwrap();
+        assert_eq!(query(&conn, "SELECT g, i FROM t"), ints(&[&[3, 5]]));
+        conn.execute("UPDATE t SET d = 6.5").unwrap();
+        assert_eq!(query(&conn, "SELECT g, i FROM t"), ints(&[&[7, 5]]));
+        conn.execute("ALTER TABLE t ADD COLUMN j INT DEFAULT 8.5")
+            .unwrap();
+        assert_eq!(query(&conn, "SELECT j FROM t"), ints(&[&[9]]));
+        let error = conn
+            .execute("ALTER TABLE t ADD COLUMN k INT DEFAULT 'abc'")
+            .unwrap_err();
+        assert!(error.to_string().contains("invalid value"), "{error}");
+        assert_eq!(query(&conn, "SELECT j FROM t"), ints(&[&[9]]));
+    }
+
+    #[test]
     fn affinity_comes_from_the_storage_type() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let db = open_db(&io, "types-affinity.db", marking()).unwrap();

@@ -1,5 +1,5 @@
 use crate::schema::{BTreeTable, ColumnLayout, ColumnsTopologicalSort, GeneratedType};
-use crate::translate::expr::translate_expr;
+use crate::translate::expr::{emit_generated_value_conversion, translate_expr};
 use crate::vdbe::builder::{DmlColumnContext, SelfTableContext};
 use crate::{Arc, Result};
 use turso_parser::ast;
@@ -27,7 +27,7 @@ pub fn compute_virtual_columns(
             };
             let target_reg = dml_ctx.to_column_reg(idx);
             translate_expr(program, None, expr, target_reg, resolver)?;
-            program.emit_column_affinity(target_reg, column.affinity());
+            emit_generated_value_conversion(program, target_reg, column, resolver)?;
         }
         Ok(())
     })

@@ -47,6 +47,8 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
             storage: StorageType::Numeric,
             parameters: "",
             behaviour: "CAST FROM integer, int, tinyint AS IMPLICIT \
+                CAST FROM text AS IMPLICIT test_text_to_decimal \
+                ASSIGN test_assign_decimal(value, precision, scale) \
                 OPERATOR '+' (decimal, decimal) RETURNS decimal numeric_add \
                 OPERATOR '-' (decimal, decimal) RETURNS decimal numeric_sub \
                 OPERATOR '*' (decimal, decimal) RETURNS decimal numeric_mul \
@@ -69,8 +71,10 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 max: 2147483647,
             },
             parameters: "",
-            behaviour:
-                "CAST TO integer AS IMPLICIT OPERATOR '<' (int, int) OPERATOR '=' (int, int)",
+            behaviour: "CAST TO integer AS IMPLICIT \
+                ASSIGN test_assign_integer(value) \
+                CAST test_cast_integer(value) \
+                OPERATOR '<' (int, int) OPERATOR '=' (int, int)",
         },
         DialectType {
             name: "tinyint",
@@ -203,10 +207,16 @@ impl Dialect for MarkingDialect {
         name: &str,
         arg_count: usize,
     ) -> Result<Option<crate::function::Func>> {
-        if name.eq_ignore_ascii_case("test_text_length") && arg_count == 1 {
-            return Ok(Some(crate::function::Func::Dialect(
-                "test_text_length".to_string(),
-            )));
+        for (function, arity) in [
+            ("test_text_length", 1),
+            ("test_assign_integer", 1),
+            ("test_cast_integer", 1),
+            ("test_assign_decimal", 3),
+            ("test_text_to_decimal", 3),
+        ] {
+            if name.eq_ignore_ascii_case(function) && arg_count == arity {
+                return Ok(Some(crate::function::Func::Dialect(function.to_string())));
+            }
         }
         if name.eq_ignore_ascii_case("test_argument_types") {
             return Ok(Some(crate::function::Func::Dialect(
@@ -222,10 +232,16 @@ impl Dialect for MarkingDialect {
         name: &str,
         args: &[Value],
     ) -> Result<Value> {
-        assert_eq!(name, "test_text_length");
-        match &args[0] {
-            Value::Text(text) => Ok(Value::from_f64(text.as_str().chars().count() as f64)),
-            other => Ok(other.clone()),
+        match name {
+            "test_text_length" => match &args[0] {
+                Value::Text(text) => Ok(Value::from_f64(text.as_str().chars().count() as f64)),
+                other => Ok(other.clone()),
+            },
+            "test_assign_integer" => assign_integer(&args[0]),
+            "test_cast_integer" => cast_integer(&args[0]),
+            "test_assign_decimal" => assign_decimal(&args[0], &args[1], &args[2]),
+            "test_text_to_decimal" => round_decimal_text(&args[0], &args[2]),
+            other => panic!("unknown test function {other}"),
         }
     }
 
@@ -263,6 +279,75 @@ impl Dialect for MarkingDialect {
     fn marks_tables(&self) -> bool {
         true
     }
+}
+
+fn assign_integer(value: &Value) -> Result<Value> {
+    let text = value.to_string();
+    let number = match value {
+        Value::Numeric(crate::numeric::Numeric::Integer(_)) => return Ok(value.clone()),
+        Value::Numeric(crate::numeric::Numeric::Float(float)) => f64::from(*float),
+        _ => text.trim().parse::<f64>().map_err(|_| {
+            crate::TypeConversionError::raise(
+                crate::ConversionErrorKind::InvalidValue,
+                format!("invalid value for int: {text}"),
+            )
+        })?,
+    };
+    Ok(Value::from_i64(number.round() as i64))
+}
+
+fn cast_integer(value: &Value) -> Result<Value> {
+    match value {
+        Value::Text(text) => {
+            let digits: String = text
+                .as_str()
+                .trim()
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            Ok(Value::from_i64(digits.parse().unwrap_or(0)))
+        }
+        other => assign_integer(other),
+    }
+}
+
+fn assign_decimal(value: &Value, precision: &Value, scale: &Value) -> Result<Value> {
+    let rounded = round_decimal_text(value, scale)?;
+    let (
+        Value::Numeric(crate::numeric::Numeric::Integer(precision)),
+        Value::Numeric(crate::numeric::Numeric::Integer(scale)),
+    ) = (precision, scale)
+    else {
+        return Ok(rounded);
+    };
+    let whole_digits = rounded
+        .to_string()
+        .trim_start_matches('-')
+        .split('.')
+        .next()
+        .map_or(0, |whole| whole.trim_start_matches('0').len()) as i64;
+    if whole_digits > precision - scale {
+        return Err(crate::TypeConversionError::raise(
+            crate::ConversionErrorKind::OutOfRange,
+            format!("too many digits for decimal({precision},{scale}): {value}"),
+        ));
+    }
+    Ok(rounded)
+}
+
+fn round_decimal_text(value: &Value, scale: &Value) -> Result<Value> {
+    let crate::Value::Numeric(crate::numeric::Numeric::Integer(scale)) = scale else {
+        return Ok(value.clone());
+    };
+    let number: f64 = value.to_string().trim().parse().map_err(|_| {
+        crate::TypeConversionError::raise(
+            crate::ConversionErrorKind::InvalidValue,
+            format!("invalid value for decimal: {value}"),
+        )
+    })?;
+    let factor = 10_f64.powi(*scale as i32);
+    let rounded = (number * factor).round() / factor;
+    Ok(Value::build_text(format!("{rounded:.*}", *scale as usize)))
 }
 
 fn test_result_parameters(operator: &str, operands: [Option<&[i64]>; 2]) -> Option<Vec<i64>> {

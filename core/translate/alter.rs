@@ -530,6 +530,38 @@ fn strict_default_type_mismatch(column: &Column) -> Result<bool> {
     Ok(!ok)
 }
 
+fn emit_add_column_default_conversion(
+    program: &mut ProgramBuilder,
+    original_btree: &Arc<BTreeTable>,
+    column: &Column,
+    resolver: &Resolver,
+    database_id: usize,
+) -> Result<()> {
+    let Some(default_expr) = column.default.as_ref() else {
+        return Ok(());
+    };
+    let Some(named) = crate::translate::expr::column_named_type(column, true, resolver.schema())
+    else {
+        return Ok(());
+    };
+    let check_cursor_id = program.alloc_cursor_id(CursorType::BTreeTable(original_btree.clone()));
+    program.emit_insn(Insn::OpenRead {
+        cursor_id: check_cursor_id,
+        root_page: original_btree.root_page,
+        db: database_id,
+    });
+    let no_rows = program.allocate_label();
+    program.emit_insn(Insn::Rewind {
+        cursor_id: check_cursor_id,
+        pc_if_empty: no_rows,
+    });
+    let reg = program.alloc_register();
+    translate_expr(program, None, default_expr, reg, resolver)?;
+    crate::translate::expr::emit_assign_into_type(program, reg, &named, resolver)?;
+    program.preassign_label_to_next_insn(no_rows);
+    Ok(())
+}
+
 fn emit_add_column_default_type_validation(
     program: &mut ProgramBuilder,
     original_btree: &Arc<BTreeTable>,
@@ -1327,7 +1359,9 @@ pub fn translate_alter_table(
                     }
                 }
 
-                default_type_mismatch = btree.is_strict && strict_default_type_mismatch(&column)?;
+                default_type_mismatch = btree.is_strict
+                    && btree.dialect_marker.is_none()
+                    && strict_default_type_mismatch(&column)?;
             }
 
             // If a column has no explicit DEFAULT but its custom type defines
@@ -1527,6 +1561,15 @@ pub fn translate_alter_table(
 
                 if default_type_mismatch {
                     emit_add_column_default_type_validation(program, &original_btree, database_id)?;
+                }
+                if btree.dialect_marker.is_some() {
+                    emit_add_column_default_conversion(
+                        program,
+                        &original_btree,
+                        &column,
+                        resolver,
+                        database_id,
+                    )?;
                 }
 
                 emit_add_column_check_validation(
@@ -2754,6 +2797,15 @@ fn emit_strict_column_conversion(
         start_reg,
         Some(&column_mask),
         layout,
+    )?;
+    crate::translate::expr::emit_custom_type_assign_columns(
+        program,
+        resolver,
+        rewritten_table.columns(),
+        start_reg,
+        Some(&column_mask),
+        layout,
+        None,
     )?;
     program.emit_insn(Insn::TypeCheck {
         start_reg,

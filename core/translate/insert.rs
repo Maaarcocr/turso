@@ -500,7 +500,14 @@ pub fn translate_insert(
     // This must happen before BEFORE triggers (matching SQLite's order) so that
     // trigger bodies see affinity-applied values. Affinity is idempotent, so
     // applying it here means we can skip the per-trigger Copy+Affinity in fire_trigger.
-    if !ctx.table.is_strict {
+    let row_number_reg = ctx
+        .table
+        .dialect_marker
+        .is_some()
+        .then(|| crate::translate::expr::emit_row_number_counter(program));
+    if ctx.table.is_strict {
+        emit_custom_type_assign(program, resolver, &insertion, row_number_reg)?;
+    } else {
         let affinity = insertion
             .col_mappings
             .iter()
@@ -677,7 +684,7 @@ pub fn translate_insert(
         });
 
         // Encode values for columns with custom types.
-        emit_custom_type_encode(program, resolver, &insertion, ctx.table)?;
+        emit_custom_type_encode(program, resolver, &insertion, ctx.table, row_number_reg)?;
 
         // Post-encode TypeCheck: validate that encode produced the correct storage type (BASE).
         // We don't check generated columns in this initial pass because their dependencies could
@@ -3422,7 +3429,9 @@ fn emit_index_column_value_for_insert(
         if idx_col.pos_in_table != EXPR_INDEX_SENTINEL {
             let column = &table.columns()[idx_col.pos_in_table];
             if column.is_virtual_generated() {
-                program.emit_column_affinity(dest_reg, column.affinity());
+                crate::translate::expr::emit_generated_value_conversion(
+                    program, dest_reg, column, resolver,
+                )?;
             }
         }
     } else {
@@ -4198,6 +4207,29 @@ pub fn emit_parent_side_fk_decrement_on_insert(
     Ok(())
 }
 
+fn emit_custom_type_assign(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    insertion: &Insertion,
+    row_number_reg: Option<usize>,
+) -> Result<()> {
+    let columns: Vec<_> = insertion
+        .col_mappings
+        .iter()
+        .map(|m| m.column.clone())
+        .collect();
+    let layout = ColumnLayout::from_columns(&columns)?;
+    crate::translate::expr::emit_custom_type_assign_columns(
+        program,
+        resolver,
+        &columns,
+        insertion.first_col_register(),
+        None,
+        &layout,
+        row_number_reg,
+    )
+}
+
 /// Emit encode expressions for columns with custom types.
 /// For each column that has a custom type with an encode expression,
 /// evaluates the expression with `value` bound to the column register.
@@ -4206,6 +4238,7 @@ fn emit_custom_type_encode(
     resolver: &Resolver,
     insertion: &Insertion,
     table: &BTreeTable,
+    row_number_reg: Option<usize>,
 ) -> Result<()> {
     let columns: Vec<_> = insertion
         .col_mappings
@@ -4213,10 +4246,6 @@ fn emit_custom_type_encode(
         .map(|m| m.column.clone())
         .collect();
     let layout = ColumnLayout::from_columns(&columns)?;
-    let row_number_reg = table
-        .dialect_marker
-        .is_some()
-        .then(|| crate::translate::expr::emit_row_number_counter(program));
     crate::translate::expr::emit_custom_type_encode_columns(
         program,
         resolver,

@@ -197,6 +197,38 @@ mod tests {
     }
 
     #[test]
+    fn test_assign_cast_and_implicit_functions_persist_across_reopen() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("custom_types_assign_reopen.db");
+        let opts = turso_core::DatabaseOpts::new().with_custom_types(true);
+        {
+            let db = TempDatabase::new_with_existent_with_opts(&path, opts);
+            let conn = db.connect_limbo();
+            conn.execute(
+                "CREATE TYPE whole(value any) BASE integer \
+                 ASSIGN CAST(round(value) AS INTEGER) CAST CAST(value AS INTEGER) \
+                 CAST FROM text AS IMPLICIT length OPERATOR '<' OPERATOR '='",
+            )
+            .unwrap();
+            conn.execute("CREATE TABLE t1(id INTEGER PRIMARY KEY, v whole) STRICT")
+                .unwrap();
+            conn.execute("CREATE TABLE t2(s TEXT) STRICT").unwrap();
+            conn.execute("INSERT INTO t2 VALUES ('abcd')").unwrap();
+            conn.close().unwrap();
+        }
+        let db = TempDatabase::new_with_existent_with_opts(&path, opts);
+        let conn = db.connect_limbo();
+        conn.execute("INSERT INTO t1 VALUES (1, 2.5), (2, 4)")
+            .unwrap();
+        let rows: Vec<(i64, i64)> = conn.exec_rows("SELECT id, v FROM t1 ORDER BY id");
+        assert_eq!(rows, vec![(1, 3), (2, 4)]);
+        let rows: Vec<(i64,)> = conn.exec_rows("SELECT id FROM t1 JOIN t2 ON v = s");
+        assert_eq!(rows, vec![(2,)]);
+        let rows: Vec<(i64,)> = conn.exec_rows("SELECT CAST(2.7 AS whole)");
+        assert_eq!(rows, vec![(2,)]);
+    }
+
+    #[test]
     fn test_reopen_fails_when_stored_custom_type_does_not_parse() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("custom_types_bad_type_sql.db");

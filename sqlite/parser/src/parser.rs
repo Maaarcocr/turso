@@ -4998,6 +4998,8 @@ impl<'a> Parser<'a> {
 
         let mut encode = None;
         let mut decode = None;
+        let mut assign = None;
+        let mut cast = None;
         let mut default = None;
         let mut key = None;
         let mut operators = Vec::new();
@@ -5019,6 +5021,10 @@ impl<'a> Parser<'a> {
                             let expr = self.parse_expr(0)?;
                             decode = Some(expr);
                         }
+                        "ASSIGN" => {
+                            eat_assert!(self, TK_ID);
+                            assign = Some(self.parse_expr(0)?);
+                        }
                         "OPERATOR" => {
                             eat_assert!(self, TK_ID);
                             operators.push(self.parse_type_operator_clause()?);
@@ -5032,7 +5038,12 @@ impl<'a> Parser<'a> {
                 }
                 Some(tok) if tok.token_type == TK_CAST => {
                     eat_assert!(self, TK_CAST);
-                    casts.push(self.parse_type_cast_clause()?);
+                    if matches!(self.peek()?, Some(t) if t.token_type == TK_FROM || t.token_type == TK_TO)
+                    {
+                        casts.push(self.parse_type_cast_clause()?);
+                    } else {
+                        cast = Some(self.parse_expr(0)?);
+                    }
                 }
                 Some(tok) if tok.token_type == TK_KEY => {
                     eat_assert!(self, TK_KEY);
@@ -5055,6 +5066,8 @@ impl<'a> Parser<'a> {
                 base,
                 encode,
                 decode,
+                assign,
+                cast,
                 operators,
                 casts,
                 functions,
@@ -5180,7 +5193,17 @@ impl<'a> Parser<'a> {
                 ))
             }
         }
-        Ok(TypeCast { direction, types })
+        let next_is_id = matches!(self.peek()?, Some(t) if t.token_type == TK_ID);
+        let function = if next_is_id && !self.peek_type_clause_keyword_any()? {
+            Some(self.eat_type_clause_function_name()?)
+        } else {
+            None
+        };
+        Ok(TypeCast {
+            direction,
+            types,
+            function,
+        })
     }
 
     fn parse_type_function_clause(&mut self) -> Result<TypeFunction> {
@@ -5247,7 +5270,9 @@ impl<'a> Parser<'a> {
     }
 
     fn peek_type_clause_keyword_any(&mut self) -> Result<bool> {
-        for keyword in ["ENCODE", "DECODE", "OPERATOR", "FUNCTION", "RETURNS"] {
+        for keyword in [
+            "ENCODE", "DECODE", "ASSIGN", "OPERATOR", "FUNCTION", "RETURNS",
+        ] {
             if self.peek_type_clause_keyword(keyword)? {
                 return Ok(true);
             }
@@ -13553,6 +13578,46 @@ mod tests {
     }
 
     #[test]
+    fn test_create_type_with_assignment_cast_and_implicit_functions() {
+        let sql = "CREATE TYPE dec(value any, precision integer DEFAULT NULL) BASE blob \
+                   CAST FROM text AS IMPLICIT text_to_dec \
+                   CAST FROM integer AS IMPLICIT \
+                   ASSIGN dec_assign(value, precision) \
+                   CAST dec_cast(value) \
+                   OPERATOR '='";
+        let body = parse_custom_type_body(sql);
+        let CreateTypeBody::CustomType {
+            assign,
+            cast,
+            casts,
+            operators,
+            ..
+        } = &body
+        else {
+            panic!("expected CustomType body");
+        };
+        assert_eq!(
+            assign.as_ref().map(|expr| expr.to_string()),
+            Some("dec_assign (value, precision)".to_owned())
+        );
+        assert_eq!(
+            cast.as_ref().map(|expr| expr.to_string()),
+            Some("dec_cast (value)".to_owned())
+        );
+        assert_eq!(
+            casts
+                .iter()
+                .map(|cast| (cast.types.clone(), cast.function.clone()))
+                .collect::<Vec<_>>(),
+            vec![
+                (vec!["text".to_owned()], Some("text_to_dec".to_owned())),
+                (vec!["integer".to_owned()], None),
+            ]
+        );
+        assert_eq!(operators.len(), 1);
+    }
+
+    #[test]
     fn test_create_type_with_signatures_casts_functions_and_key() {
         let sql = "CREATE TYPE money(value any, scale integer DEFAULT NULL) BASE blob \
                    ENCODE money_encode(value, scale) DECODE money_decode(value) \
@@ -13587,10 +13652,12 @@ mod tests {
                 TypeCast {
                     direction: TypeCastDirection::From,
                     types: vec!["integer".to_owned(), "real".to_owned()],
+                    function: None,
                 },
                 TypeCast {
                     direction: TypeCastDirection::To,
                     types: vec!["real".to_owned()],
+                    function: None,
                 },
             ]
         );

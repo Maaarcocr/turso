@@ -1462,6 +1462,7 @@ pub enum TypeCastDirection {
 pub struct TypeCast {
     pub direction: TypeCastDirection,
     pub types: Vec<String>,
+    pub function: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1508,6 +1509,8 @@ pub enum CreateTypeBody {
         encode: Option<Box<Expr>>,
         /// decode expression (called on read), uses `value` placeholder for input
         decode: Option<Box<Expr>>,
+        assign: Option<Box<Expr>>,
+        cast: Option<Box<Expr>>,
         /// operator-to-function mappings
         operators: Vec<TypeOperator>,
         casts: Vec<TypeCast>,

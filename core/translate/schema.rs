@@ -3030,6 +3030,8 @@ fn build_create_type_sql(name: &str, body: &ast::CreateTypeBody) -> String {
             base,
             encode,
             decode,
+            assign,
+            cast,
             default,
             operators,
             casts,
@@ -3069,6 +3071,12 @@ fn build_create_type_sql(name: &str, body: &ast::CreateTypeBody) -> String {
             if let Some(ref decode) = decode {
                 sql.push_str(&format!(" DECODE {decode}"));
             }
+            if let Some(ref assign) = assign {
+                sql.push_str(&format!(" ASSIGN {assign}"));
+            }
+            if let Some(ref cast) = cast {
+                sql.push_str(&format!(" CAST {cast}"));
+            }
             if let Some(ref key) = key {
                 sql.push_str(&format!(" KEY {key}"));
             }
@@ -3084,6 +3092,9 @@ fn build_create_type_sql(name: &str, body: &ast::CreateTypeBody) -> String {
                     " CAST {direction} {} AS IMPLICIT",
                     cast.types.join(", ")
                 ));
+                if let Some(function) = &cast.function {
+                    sql.push_str(&format!(" {}", quote_ident(function)));
+                }
             }
             for op in operators {
                 sql.push_str(&format!(" OPERATOR '{}'", quote_string_literal(&op.op)));

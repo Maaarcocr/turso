@@ -717,6 +717,8 @@ impl ToTokens for Stmt {
                         base,
                         encode,
                         decode,
+                        assign,
+                        cast,
                         operators,
                         casts,
                         functions,
@@ -754,6 +756,14 @@ impl ToTokens for Stmt {
                             s.append(TK_ID, Some("DECODE"))?;
                             decode.to_tokens(s, context)?;
                         }
+                        if let Some(ref assign) = assign {
+                            s.append(TK_ID, Some("ASSIGN"))?;
+                            assign.to_tokens(s, context)?;
+                        }
+                        if let Some(ref cast) = cast {
+                            s.append(TK_CAST, None)?;
+                            cast.to_tokens(s, context)?;
+                        }
                         if let Some(ref key) = key {
                             s.append(TK_KEY, None)?;
                             key.to_tokens(s, context)?;
@@ -777,6 +787,9 @@ impl ToTokens for Stmt {
                             }
                             s.append(TK_AS, None)?;
                             s.append(TK_ID, Some("IMPLICIT"))?;
+                            if let Some(ref function) = cast.function {
+                                s.append(TK_ID, Some(function))?;
+                            }
                         }
                         // OPERATOR clauses
                         for op in operators {
