@@ -1,6 +1,8 @@
 # Typed expressions
 
-Status: design proposal for review. Nothing here is implemented yet.
+Status: Proposal 1 is implemented (see
+[Implementation notes](#implementation-notes-proposal-1)); Proposals 2 to 4
+are design proposals for review.
 
 ## Problem
 
@@ -233,8 +235,9 @@ Four proposals, each reviewed and merged on its own:
    and uses it for operators, comparisons, keys, index use and CAST; numeric
    values are rounded instead of cut off.
 2. **Dialect-defined types.** What a frontend such as MySQL needs to put its
-   own types on STRICT tables: type names mapped onto core storage types,
-   assignment conversions, and integer rowid aliases.
+   own types on STRICT tables: a table marker that core writes and checks,
+   type names mapped onto core storage types, assignment conversions, and
+   integer rowid aliases.
 3. **PostgreSQL frontend.** Exact numeric literals and casts (a separate
    PostgreSQL PR).
 4. **Typed aggregates and ordered numeric storage.** SUM/AVG for types, and a
@@ -349,9 +352,10 @@ Named operand compiles exactly as today. The MySQL frontend must be expressible
 with these rules alone, with no MySQL code in core.
 
 A table records the dialect that created it with today's table-SQL markers:
-unmarked SQL is the SQLite dialect, `POSTGRES_TABLE_SQL_PREFIX` is PostgreSQL,
-and the MySQL frontend will add its own. The SQLite dialect refuses tables of
-other dialects; `tursopg` opens unmarked tables. Expressions stored with a
+unmarked SQL is the SQLite dialect, `POSTGRES_TABLE_SQL_PREFIX` is PostgreSQL.
+The SQLite dialect refuses tables of other dialects; `tursopg` opens unmarked
+tables. Proposal 2 adds a marker that core writes and checks for dialects with
+their own type names. Expressions stored with a
 table (index expressions, partial-index WHERE, generated columns, CHECK,
 DEFAULT) compile with the rules of the dialect that opened the database, so
 writing typed expressions into one database with both `tursodb` and `tursopg`
@@ -572,26 +576,363 @@ recorded).
 - `postgres/conformance/pg-sqltests/numeric.sqltest`, values checked with
   `make -C postgres/conformance run-postgres`.
 
+### Implementation notes (Proposal 1)
+
+Where the implementation differs from the text above:
+
+- **Types of attached databases (commit 2) are deferred** to Proposal 2
+  (commit 13). It needs the database id at about 40 call sites, and its main
+  reason left with the per-database numeric format flag. Until then an
+  attached database's own types are ignored and an INSERT through ATTACH
+  stores values without ENCODE, as before.
+- **Signatures over Dynamic classes and result-parameter rules** ([Dialect
+  type rules](#dialect-type-rules)) are not implemented: no dialect in this
+  repository uses them. They moved to Proposal 2 (commit 21), where the test
+  dialect and later the MySQL frontend use them.
+- **Custom types without `=`** (and not domains) compare with SQLite's `=` on
+  the decoded values, after converting a literal or parameter to the type.
+- **Conversions are emitted where the value is used**, not hoisted before the
+  loop; hoisting constant conversions is a possible later optimization. A
+  conversion emits the same code as a CAST, including the STRICT check of the
+  encoded value and domain checks.
+- **Column type metadata** is computed on demand in
+  `Statement::get_column_type_info`, not stored in `Program`.
+- **Types are cached during one call.** `expr_type` stores the type of every
+  node it computes while one outer call is running, keyed by node address, and
+  forgets them when it returns; a function's argument types and the columns of
+  compound subqueries are each computed once. Typing is linear in the size of
+  the expression for each call, and translation is at most quadratic in the
+  nesting depth. The rule of skipping typing for statements without typed
+  values is not implemented: skipping a single expression would lose the
+  literal classes that resolution needs when the other operand is typed
+  (`smallint_col = 100000` must compare as integers, not convert 100000), and
+  skipping a whole statement needs a walk over its views and triggers.
+- **CASE, coalesce, ifnull, iif, min and max** convert a branch to the common
+  type only when it is a `?` parameter or its class has a declared `CAST FROM`;
+  a text literal or a value of unknown type is not converted and the result
+  is Dynamic, so `coalesce(p, 'none')` keeps working.
+- **Sorting**: ORDER BY, GROUP BY and window PARTITION BY and ORDER BY sort
+  a value whose type has a KEY by the key: the sorter stores the key in the
+  sort column and the value in a separate column. min and max, and types
+  without a KEY, still use the fixed table of known `<` functions in
+  `order_by.rs`; the generic comparator and the CREATE TYPE check of
+  decision 7 are not done.
+- **Scalar subqueries and aggregate min and max** have the type of their
+  value, so `(SELECT min(p) FROM t) > 9.5` and `max(p) + 1` use numeric's
+  operators.
+- **Domains** resolve operators, type functions and sort comparators through
+  their base type: `price_col * 2` for `CREATE DOMAIN price AS numeric` calls
+  `numeric_mul`.
+- **IN (SELECT ...)** resolves `=` between the left value and the subquery
+  column. Without a function or a conversion, values are probed as bytes, as
+  for untyped values, and an index on a typed column is used when its stored
+  values are read unchanged. When the type has a KEY, the subquery converts its
+  values and stores their keys, and the left value is converted and keyed
+  before the probe. Only a type whose `=` is a function and that has no KEY
+  scans the subquery rows and compares each with `=`; for a row value, and for
+  a compound subquery, that case compares bytes.
+- **Hash joins** on a typed `=` hash the keys of both sides (converted as the
+  operator requires); a typed `=` without a KEY is not hashed. Bloom filters
+  are only used on encoded seek keys, which are already canonical.
+- **UNION, INTERSECT and EXCEPT** store keys followed by the keyed values in
+  the dedupe index and check duplicates with `Found` on the key prefix. VALUES
+  branches get keys without a conversion; a compound that writes into an
+  IN (SELECT ...) index keeps the byte comparison.
+- **Expression indexes do not store keys yet.** The planner does not use an
+  index on an expression with a named type (commit 5), so results stay
+  correct.
+- **CHECK constraints** now see decoded column values, consistent with CAST
+  returning the read-back value; before they saw the stored form.
+- **Windows**: a `RANGE` frame with an offset on a typed ORDER BY value is an
+  error. **Materialized views** reject aggregates over typed values and
+  GROUP BY on types with a KEY.
+- **Recursive CTEs** convert the rows of the recursive part to the anchor's
+  type when they are queued, and a recursive UNION removes rows whose keys are
+  equal.
+- **Numeric values** read by the numeric functions are limited to
+  PostgreSQL's 131072 digits before the decimal point and 16383 after it;
+  larger values and results are an `out of range` error. `numeric_key`,
+  `numeric_neg` and `numeric_abs` exist only with custom types on. The other
+  numeric functions can be called with custom types off, so two changes reach
+  plain SQLite databases and go in the PR description: `numeric_encode` rounds
+  (`numeric_decode(numeric_encode('1.505', 10, 2))` is `1.51`, before `1.50`),
+  and `numeric_div` uses PostgreSQL's scale (`numeric_div('1', '3')` has 20
+  digits after the point, before 100).
+- **Errors of a typed CAST** are reported as datatype constraint errors
+  (`invalid input for type bigint`).
+- **`PRAGMA list_types`** shows parameter defaults, operator signatures, casts,
+  type functions and keys.
+- **Tests**: operator resolution is tested through
+  `turso-sqltests/typed_expressions.sqltest` (and PostgreSQL's
+  `pg-sqltests/numeric.sqltest`) rather than Rust unit tests; numeric keys
+  have unit tests and a quickcheck property. The attached-database test waits
+  for the deferred commit 2. The prepare-time tests nest 60 functions and 12
+  compound subqueries; before the type cache each took more than a minute.
+
 ## Proposal 2: dialect-defined types
 
-The MySQL frontend will create STRICT tables and needs three things that are
-not MySQL-specific. All three apply only to tables marked by a dialect other
-than SQLite, so SQLite-dialect tables are unchanged.
+A MySQL 8.4 frontend, developed in a fork, will run on Turso. It needs its own
+column types on STRICT tables: TINYINT to BIGINT, each optionally UNSIGNED;
+DECIMAL(p,s); FLOAT and DOUBLE; CHAR, VARCHAR and TEXT; BINARY, VARBINARY and
+BLOB; DATE, DATETIME, TIMESTAMP, TIME and YEAR; JSON; ENUM and SET; BOOL.
+Ordinary application schemas must work, such as the table Laravel creates for
+every model:
 
-**Type names mapped onto core storage types.** The dialect's type rules map
-its type names onto neutral storage types in core, for example a ranged
-integer (`INT` is `ranged_integer(-2147483648, 2147483647)`), an unsigned
-64-bit integer, numeric (`DECIMAL(p,s)`), and an ordered time or interval
-form. The column keeps the declared name (`INT`) for column metadata, while
-storage, KEY and behaviour come from the mapped type. The table has the
-dialect's table-SQL marker, so the SQLite dialect refuses it.
+```sql
+create table `users` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `name` varchar(255) not null,
+  `created_at` timestamp null
+)
+```
 
-**Assignment conversion is behaviour.** Converting a value into a column
-(INSERT, UPDATE, and CAST in that dialect) is part of a type's behaviour, run
-before the storage ENCODE: a type may declare `ASSIGN function`; without it,
-today's path applies (ENCODE, then the STRICT check). This matters because
-the dialects disagree. Checked with Turso STRICT tables and MySQL 8.4.10 in its
-default strict mode:
+This proposal adds what such a frontend needs, with no MySQL code in core:
+
+- a table marker that core writes and checks, so a table keeps its dialect
+  through ALTER TABLE and VACUUM;
+- a *name table* in the dialect's type rules that maps type names onto
+  storage types defined in core, and new core storage types;
+- assignment conversions, separate from CAST and from the conversions used in
+  comparisons;
+- integer primary keys that are rowids;
+- declared types in column metadata, sorting by KEY, and error kinds.
+
+The MySQL frontend lowers the table above to a Turso AST, and core stores it
+as:
+
+```sql
+/* turso_dialect:mysql rowid_alias */ CREATE TABLE users (id BIGINT UNSIGNED NOT NULL PRIMARY KEY AUTOINCREMENT, name VARCHAR (255) NOT NULL, created_at TIMESTAMP) STRICT
+```
+
+`id` is the rowid. `BIGINT UNSIGNED` is stored as the core type `uint64`,
+`VARCHAR(255)` as TEXT whose length is checked by MySQL's rule when a value is
+stored, and `TIMESTAMP` as integer microseconds.
+
+Scope:
+
+- Nearly everything here applies only to *marked tables*: tables created in a
+  dialect that has a name table. SQLite-dialect tables, PostgreSQL tables and
+  engine tables (`sqlite_sequence`, `__turso_internal_*`) are unchanged.
+- Three changes apply to every STRICT table with custom types, because they
+  fix gaps left by Proposal 1: the types of attached databases, CHECK
+  constraints that compare typed values, and sorting by KEY. With custom types
+  off nothing changes.
+- Tests use a test dialect in core, as `core/dialect/mod.rs` does today,
+  because the MySQL frontend is not in this repository.
+
+MySQL behaviour quoted below was recorded with MySQL 8.4.10 in its default
+strict mode.
+
+### Marked tables
+
+Today the PostgreSQL frontend stores `/* turso_frontend:postgres */` followed
+by the PostgreSQL DDL, and each dialect checks markers itself. That is not
+enough for a dialect whose tables are laid out differently:
+
+- ALTER TABLE loses the marker: PostgreSQL's `format_rewritten_table_sql`
+  stores plain SQLite text, so after an ALTER the SQLite dialect opens the
+  table.
+- Core does not know which tables are marked (`BTreeTable` has no field for
+  it).
+- A dialect refuses only the markers it knows: the SQLite dialect checks for
+  the PostgreSQL prefix, and `tursopg` reads the text of an unknown marker as
+  SQLite.
+
+If a MySQL table lost its marker, an `INT PRIMARY KEY` would stop being the
+rowid after the database is reopened, and its rows would be read with the
+wrong layout.
+
+Core now writes and checks the marker of marked tables:
+
+- **Format.** `/* turso_dialect:NAME */ ` or
+  `/* turso_dialect:NAME rowid_alias */ ` (see
+  [Rowid aliases](#rowid-aliases)), followed by canonical SQLite text: the
+  CREATE TABLE statement printed by core. NAME is `Dialect::name()`. The
+  prefix is new because PostgreSQL's existing rows have PostgreSQL DDL after
+  `turso_frontend:postgres`, which core must not read as SQLite.
+- **Which tables.** A dialect opts in with `Dialect::marks_tables()`; a dialect
+  with a name table must. Every CREATE TABLE in it is marked, including TEMP
+  tables and CREATE TABLE AS SELECT, and must be STRICT (a non-STRICT CREATE
+  TABLE is an error). Engine tables are never marked.
+- **Writing.** Core writes the marker on CREATE TABLE and on every rewrite of a
+  marked table: RENAME TABLE, ADD, DROP and RENAME COLUMN, ALTER COLUMN, and
+  bound sequence names. The dialect's `format_table_sql` and
+  `format_rewritten_table_sql` are not called for marked tables.
+- **Loading.** Core reads the marker of every table row before it calls a
+  dialect hook. It refuses with a Corrupt error, naming the dialect, a
+  `turso_dialect:` marker with another dialect's name, any marker in the
+  SQLite dialect (this replaces `reject_postgres_table_sql`), and
+  `turso_frontend:postgres` outside PostgreSQL. For its own marker, core strips
+  it, parses the rest with core's parser, and records on `BTreeTable` that the
+  table is marked and whether its primary key is the rowid.
+- **VACUUM** recreates a marked table from the parsed statement
+  (`prepare_translated_stmt`), not by sending the text through the frontend's
+  parser, which could read canonical SQLite text differently (MySQL reads
+  `"x"` as a string).
+
+### Rowid aliases
+
+Today a column is the rowid only when its declared type is exactly `INTEGER`
+and it is the only primary key column of a rowid table, without `DESC` in its
+column constraint (`is_rowid_alias_type`). MySQL keys are declared `INT`,
+`BIGINT UNSIGNED` and so on; as ordinary columns they need a second index and
+a second lookup for every row.
+
+**Decided once and stored.** At CREATE TABLE, the primary key of a marked table
+is the rowid when SQLite's other conditions are met (one primary key column,
+a rowid table, no column-level `DESC`) and its storage type is an integer type:
+INTEGER, `ranged_integer` or `uint64`. Core writes the result into the marker
+(`rowid_alias`) and later reads it from there, never from the name table, so a
+new version of a dialect that maps a name differently cannot move existing keys
+into or out of the rowid. At load, a table marked `rowid_alias` must have one
+primary key column with an integer storage type, or it is a Corrupt error.
+ALTER COLUMN cannot give the rowid column a storage type that is not an
+integer type.
+
+**Writing a key.** Today an explicit key goes straight to `MustBeInt`, and the
+column's register in the record is NULL, so ENCODE never sees the key; a
+generated key is only checked against the largest i64; and NOT NULL is not
+checked for the rowid. In a marked table, INSERT, UPDATE of the key, UPSERT DO
+UPDATE and REPLACE do this instead:
+
+1. An explicit key goes through the column's assignment conversion and ENCODE,
+   which checks the range, before `MustBeInt`. `2147483648` into an INT key is
+   an out-of-range error, as in MySQL.
+2. A key is generated only for a column declared AUTOINCREMENT (the MySQL
+   frontend writes it for AUTO_INCREMENT), when the value is NULL, or 0 when
+   the dialect's rules set `zero_generates_key` (MySQL does, unless
+   `NO_AUTO_VALUE_ON_ZERO`). AUTOINCREMENT is allowed on the rowid column of
+   any marked table, not only on `INTEGER`.
+3. Without AUTOINCREMENT, a NULL key is checked against NOT NULL like any other
+   column. The MySQL frontend writes NOT NULL on primary keys, so a NULL into
+   `id INT PRIMARY KEY` fails as in MySQL (error 1048). A rowid column that is
+   neither NOT NULL nor AUTOINCREMENT gets a generated key, as in SQLite.
+4. A generated key goes through ENCODE too: after `2147483647`, an INT key
+   cannot get `2147483648`. Turso reports out of range; MySQL's counter stops
+   at the largest value and reports a duplicate key (1062).
+5. A `uint64` rowid accepts 0 to 9223372036854775807. A larger key is an
+   out-of-range error, where MySQL accepts up to 18446744073709551615; this is
+   a documented limit. Laravel's `BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
+   is a rowid under these rules.
+
+AUTOINCREMENT keeps SQLite's rules (`sqlite_sequence`; a key is never reused).
+MySQL does not reuse keys either, but it does not give back the keys of a
+rolled-back insert, so MySQL can leave gaps where Turso does not.
+
+### Type names
+
+The dialect's type rules gain a *name table*: a function from a declared type
+(name and parameters, as in `ast::Type`) to a *dialect type*, which has:
+
+- the core storage type and its parameters (next section): `INT` is
+  `ranged_integer(-2147483648, 2147483647)`, `DECIMAL(10,2)` is
+  `numeric(10, 2)`;
+- the behaviour, in CREATE TYPE clause syntax as in today's
+  `builtin_behaviour_overrides`: ASSIGN, CAST, OPERATOR, FUNCTION and implicit
+  casts;
+- the declared type for column metadata: name, parameters, and flags that the
+  dialect defines (MySQL: UNSIGNED, ZEROFILL, display width), so `TINYINT(1)`
+  keeps its 1.
+
+In a marked table every declared type goes through the name table:
+
+- The dialect's names come first. Core's built-in types `date`, `time`,
+  `timestamp`, `json`, `varchar`, `smallint`, `bigint`, `numeric` and
+  `boolean` have PostgreSQL meanings and are not used, and neither are
+  SQLite's `INT`, `INTEGER`, `TEXT`, `BLOB` and `REAL`, which core handles
+  today before any lookup.
+- A name that the table does not know is an error at CREATE TABLE.
+- A column's affinity comes from its storage type, not from SQLite's rules on
+  the declared name. Today a STRICT column declared `JSON`, `ENUM` or
+  `DATETIME` gets NUMERIC affinity, which is applied when it is read.
+
+Declared types are spelled so that SQLite's type-name grammar accepts them:
+words first, then parameters (`DECIMAL UNSIGNED(10,2)`, `INT UNSIGNED(11)`).
+ENUM and SET need parameter lists of any length with string values
+(`ENUM('small','large')`), but `ast::TypeSize` has room for at most two
+numbers. The parser gains a list form that is accepted in two places only:
+when core parses a marked table's text, and in an AST that a frontend builds.
+The SQLite parser keeps reporting a syntax error for `foo(1,2,3)`.
+
+**Resolved once per database.** Today about 60 call sites look up `col.ty_str`
+in the main database's type registry each time a column is used
+(`get_type_def`, `resolve_type`). This is why an attached database's own types
+are ignored and why an INSERT through ATTACH stores values without ENCODE
+(Proposal 1's deferred commit 2). Column types are now resolved when a
+database's schema is loaded or changed, from that database's types table (or
+the name table, for marked tables), and stored on `Column`; call sites read the
+column. This applies to every STRICT table with custom types.
+
+### Core storage types
+
+Storage decides what is written to the file, so it is defined once in core and
+is the same in every dialect. These core types are added. They are reached only
+through a dialect's name table, never by name from the SQLite dialect.
+
+| Core type | Stored as | In memory | KEY |
+|---|---|---|---|
+| `ranged_integer(min, max)` | INTEGER; ENCODE refuses values outside min..max | INTEGER | the stored value |
+| `uint64` | INTEGER up to 9223372036854775807, above it an 8-byte big-endian BLOB | INTEGER, or canonical TEXT above 9223372036854775807 | the stored value |
+| `date_days` | INTEGER days since 1970-01-01 | `'2024-05-01'` | the stored value |
+| `datetime_micros(fsp)` | INTEGER microseconds since 1970-01-01 00:00:00, without a time zone | `'2024-05-01 10:30:00.25'`, with fsp digits after the point | the stored value |
+| `time_micros(fsp)` | INTEGER microseconds, possibly negative | `'-01:00:00'`, `'100:00:00'`; hours may exceed 24 | the stored value |
+| `enumeration(label, ...)` | INTEGER position of the label, from 1 | the label | the position |
+| `label_set(label, ...)` | the `uint64` form of a bit mask; bit n is label n + 1 | the labels in declared order, joined by `,` | the bit mask |
+
+- "The stored value" as KEY means the type is `ORDERED` (Proposal 4's flag,
+  moved here): the stored form sorts like the values, so DISTINCT, GROUP BY
+  and joins compare stored forms, and an index can be used for ranges and
+  ORDER BY. `uint64` sorts correctly because a record sorts INTEGER before
+  BLOB, and BLOBs byte by byte.
+- For `date_days` and `datetime_micros`, the smallest i64 is reserved for the
+  zero date (`'0000-00-00'`, sorted first as in MySQL), so a dialect that
+  allows it later needs no new format. MySQL's default mode refuses it. Dates
+  with a zero month or day (`'2024-00-10'`) cannot be stored.
+- Core provides `uint64_lt`, `uint64_eq`, and `uint64_add`, `uint64_sub` and
+  `uint64_mul`, which report out of range instead of wrapping (MySQL: error
+  1690); `time_micros_lt`; and the functions behind each type's ENCODE and
+  DECODE. A dialect chooses which ones its operators use.
+- `numeric(p, s)` and the four SQLite classes are used as they are.
+
+### The MySQL types
+
+How the MySQL frontend is expected to use this. The mapping is in the fork,
+not in core; ASSIGN is the dialect's assignment conversion (next section).
+
+| MySQL | Core storage | Done by the dialect (in ASSIGN unless noted) |
+|---|---|---|
+| TINYINT to BIGINT | `ranged_integer` with the type's range | accept text and decimals: `'12'` is 12, `1.5` and `'1.5'` are 2, `'12abc'` and `'abc'` are errors |
+| the same, UNSIGNED | `ranged_integer(0, max)`; BIGINT UNSIGNED is `uint64` | as above |
+| BOOL, BOOLEAN | as `TINYINT(1)` | written as `TINYINT(1)` when the table is created |
+| DECIMAL(p,s) | `numeric(p, s)`; DECIMAL alone is (10,0) | accept text; UNSIGNED refuses negatives |
+| FLOAT, DOUBLE | REAL | FLOAT rounds to 32 bits |
+| CHAR(n), VARCHAR(n), TINYTEXT to LONGTEXT | TEXT | lengths in characters (CHAR, VARCHAR) or bytes (TEXT types); CHAR removes trailing spaces |
+| BINARY(n), VARBINARY(n), TINYBLOB to LONGBLOB | BLOB | lengths in bytes; BINARY pads with zero bytes |
+| DATE | `date_days` | parse, check the range |
+| DATETIME(fsp), TIMESTAMP(fsp) | `datetime_micros(fsp)` | parse, round to fsp digits, check the range (TIMESTAMP: 1970 to 2038, UTC) |
+| TIME(fsp) | `time_micros(fsp)` | parse, check the range (±838:59:59) |
+| YEAR | `ranged_integer(0, 2155)` | `69` is 2069, `70` is 1970, `'0'` is 2000, `0` is 0 |
+| JSON | TEXT | normalise: `{"b":1,"a":[1,2]}` is stored as `{"a": [1, 2], "b": 1}` |
+| ENUM(...), SET(...) | `enumeration`, `label_set` | match labels case-insensitively |
+
+Collations (MySQL's default `utf8mb4_0900_ai_ci` compares text
+case-insensitively) are column COLLATE clauses with Turso's existing
+collations; they are outside this proposal.
+
+### Assignment, CAST and comparison conversions
+
+Converting a value to a column's type happens in three places, and MySQL
+treats each one differently:
+
+| Value, type | Stored in a column | CAST | Compared with a column |
+|---|---|---|---|
+| `'12abc'`, INT | error 1265 | `CAST('12abc' AS SIGNED)` is 12, with a warning | `int_col = '1abc'` is true when int_col is 1, with a warning |
+| `1.5`, INT | 2 | `CAST(1.5 AS SIGNED)` is 2 | `int_col = 1.5` is false for 1 and for 2 |
+| `1000`, TINYINT | error 1264 | no such CAST | `tiny_col = 1000` is false, without an error |
+| `1000`, DECIMAL(3,1) | error 1264 | `CAST(1000 AS DECIMAL(3,1))` is 99.9, with a warning | |
+
+Turso today has one conversion for all of them, the STRICT check, and it
+differs from MySQL's assignment:
 
 | Value into column | Turso STRICT | MySQL 8.4 |
 |---|---|---|
@@ -602,19 +943,142 @@ default strict mode:
 | `12`, `1.5` into VARCHAR | `'12'`, `'1.5'` | `'12'`, `'1.5'` |
 | `1e20` into VARCHAR | `'1.0e+20'` | `'1e20'` |
 
-**Integer rowid aliases.** Today only a column declared exactly `INTEGER
-PRIMARY KEY` is the rowid (`is_rowid_alias_type`). A primary key whose mapped
-storage type is a ranged integer is a rowid alias too, so `INT AUTO_INCREMENT
-PRIMARY KEY` keeps the fast rowid path; the range check is the assignment
-conversion's.
+A type's behaviour therefore has three separate conversions:
 
-Not blocking: type functions return structured error kinds (out of range,
-invalid input, too long) instead of only a message, so a frontend can map them
-to its own codes (MySQL 1264, 1366, 1406; PostgreSQL 22003, 22P02, 22001).
-Out of scope: unique constraints under case-insensitive collations.
+- **`ASSIGN function`** runs when a value is stored in a column of the type,
+  before ENCODE, and returns the in-memory form or an error. It runs where
+  SQLite applies column affinity for non-STRICT tables: after the row's new
+  values are computed, before BEFORE triggers, the STRICT input check
+  (`TypeCheck`) and the rowid's `MustBeInt`. It is used by INSERT,
+  INSERT ... SELECT, UPDATE, UPSERT DO UPDATE and REPLACE, for column DEFAULTs
+  (also the default that is read for rows written before ADD COLUMN), for
+  stored generated columns and for ALTER COLUMN rewrites. A virtual generated
+  column's value is converted when it is read, as if it were stored and read
+  back (today only its affinity is applied). ASSIGN is not called for NULL. It
+  must return an in-memory value unchanged, because VACUUM and ALTER TABLE
+  copy rows through it. Without ASSIGN, today's path applies: ENCODE, then the
+  STRICT check.
+- **`CAST function`** is what `CAST(x AS T)` calls instead of ASSIGN, before
+  ENCODE and DECODE. Without it, CAST is Proposal 1's "store and read back",
+  which now includes ASSIGN.
+- **Implicit conversions** used by operator resolution can name their own
+  function: `CAST FROM text AS IMPLICIT mysql_text_to_double`. Without one, the
+  conversion is the CAST, as in Proposal 1. The MySQL rules let every integer
+  type widen to the integer class, and compare integers with decimals as
+  decimals, so `tiny_col = 1000` and `int_col = 1.5` never convert a value into
+  the column's type.
 
-Tests use a test dialect in core (as `core/dialect/mod.rs` does today), since
-the MySQL frontend is not in this repository.
+These functions may be dialect functions (`Func::Dialect`, which receive the
+connection). Proposal 1's rule that a function must be deterministic and must
+not need the connection applies only to `<` and KEY, which sorting calls.
+
+MySQL's warnings, and lenient assignment (INSERT IGNORE and non-strict modes
+store a clipped value with a warning instead of failing), are left for later;
+conversion functions will then get a `lenient` argument and a way to add a
+warning.
+
+### Expression types and metadata
+
+The parts of Proposal 1's type rules that only a dialect with its own types
+uses are implemented here:
+
+- **Signatures over Dynamic classes**, and implicit casts between classes:
+  MySQL `integer / integer` returns DECIMAL; text compared with a number is
+  compared as DOUBLE.
+- **Result-parameter rules**: functions in the type rules that compute the
+  result's parameters from the operands' parameters. MySQL `/` adds 4 to the
+  scale (`7/2` is `3.5000`), and `VARCHAR(10)` and `VARCHAR(20)` in a UNION or
+  CASE give `VARCHAR(20)`. They are used for metadata, keys and CREATE TABLE AS
+  SELECT; the operator's function still computes the value.
+- **Literal types**: a kind of literal can have a dialect type; MySQL `1.5` is
+  `DECIMAL(2,1)`.
+
+The Named type of a column of a marked table includes the declared type (name,
+parameters, flags), and so does the result type of a dialect signature, with
+the parameters from its rule. The declared type is kept through views,
+subqueries, CTEs and compound selects, and `ColumnTypeInfo` gains its
+parameters and flags, so a frontend can report `TINYINT(1)` for a BOOL column
+and `DECIMAL(7,5)` for `d / 3` when `d` is `DECIMAL(3,1)`.
+
+CREATE TABLE AS SELECT in a dialect with a name table creates a marked STRICT
+table whose columns have the declared types of the result columns. A Dynamic
+column gets the type that the dialect's rules name for its class (MySQL:
+BIGINT, DOUBLE, LONGTEXT, LONGBLOB). In MySQL, `CREATE TABLE c AS SELECT i,
+d / 3 AS q, i + 1 AS s FROM t` with `i INT, d DECIMAL(3,1)` gives `i int`,
+`q decimal(7,5)` and `s bigint`. Today CREATE TABLE AS SELECT writes a
+non-STRICT table without parameters.
+
+### Sorting and index ranges
+
+Sorting the in-memory form is wrong for TIME (as text, `'100:00:00'` sorts
+before `'20:00:00'`, and `'-01:00:00'` before `'-02:00:00'`), for `uint64`
+values above i64::MAX (canonical TEXT), and for ENUM, which MySQL sorts by
+position (`small` before `large` for `ENUM('small','large')`).
+
+- Proposal 1 already sorts ORDER BY, GROUP BY and window PARTITION BY and
+  ORDER BY by the type's KEY when it has one, so every core storage type here
+  sorts correctly there.
+- min and max compare with the type's `<` through the table of known `<`
+  functions in `order_by.rs`, as comparisons do. MySQL declares no `<` for
+  ENUM, so min and max compare ENUM values as text, which is MySQL's rule
+  (`max(e)` is `small`). The core functions `uint64_lt` and `time_micros_lt`
+  are added to that table by the commits that add their types.
+- A comparator that calls any `<` function (decision 7) is not needed by any
+  type here and stays open.
+
+The optimizer change of Proposal 4 that uses an index for ranges and ORDER BY
+on an `ORDERED` type moves here. Without it, `WHERE created_at > ?` with an
+index on `created_at` reads the whole table.
+
+### CHECK constraints
+
+Proposal 1 made CHECK see in-memory values, but CREATE TABLE still checks CHECK
+expressions of STRICT tables with its own validator (`validate_check_expr`),
+which refuses `CHECK (p > 0)` on a `numeric(10,2)` column: "cannot compare
+numeric with INTEGER". A comparison with a Named operand is now accepted when
+operator resolution finds an operator for it, as it would be in a WHERE clause.
+Comparisons between SQLite classes keep today's checks, which also run with
+custom types off (`CHECK (a > 'x')` on an INTEGER column is still refused).
+
+### Errors
+
+An error from a type function has a kind: out of range, invalid value, or too
+long. A RAISE inside ENCODE or ASSIGN states its kind with the new function
+`conversion_error(kind, message)`. When such an error stops an INSERT or UPDATE
+of a marked table, core adds the column name and the row number, counted from
+1, which MySQL's messages include ("Out of range value for column 'i' at row
+1"). The frontend maps kinds to its codes (MySQL 1264, 1366, 1406; PostgreSQL
+22003, 22P02, 22001). Existing messages do not change. NOT NULL failures keep
+their error; MySQL reports 1364 when the column was left out and 1048 when NULL
+was given, which the frontend knows when it lowers the INSERT.
+
+### Later, outside this proposal
+
+Neutral core features that MySQL applications need, each its own proposal:
+
+- LAST_INSERT_ID: the first key generated by the last statement that generated
+  one (`last_insert_rowid()` also counts explicit keys).
+- AUTO_INCREMENT on a column that is not the rowid, such as part of a composite
+  key, using core sequences.
+- `ON UPDATE CURRENT_TIMESTAMP` on columns.
+- The session time zone for TIMESTAMP (the target runs in UTC).
+- Warnings and lenient assignment (above).
+- BIT(n) (`uint64` storage); JSON comparison and sorting rules.
+- Unique constraints under case-insensitive collations.
+- Indexes on expressions of these types: the planner ignores them, as in
+  Proposal 1, so results are correct but such an index is not used.
+- Keys above 9223372036854775807 in a `uint64` rowid; dates with a zero month
+  or day.
+
+### Tests (Proposal 2)
+
+A test dialect in core (`core/dialect/mod.rs` tests and `tests/integration/`)
+has a name table with one name for each core storage type, ASSIGN functions
+with MySQL-like rules, and `zero_generates_key`. Each commit's test runs
+through it. Changes to stored data (marker, rowid alias, name table, storage
+types) are tested after closing and reopening the database, after ALTER TABLE
+and after VACUUM. For each commit, `EXPLAIN` of every statement in
+`sqlite-sqltests` is compared with custom types off, as for Proposal 1.
 
 ## Proposal 3: PostgreSQL frontend
 
@@ -623,6 +1087,12 @@ A separate PostgreSQL PR. `postgres/parser/translator.rs` emits
 casts for `x::numeric` and `x::numeric(p,s)`. PostgreSQL's numeric parameters
 default to NULL (unconstrained). Bare `NUMERIC` columns stay REAL, so existing
 tables keep their storage.
+
+The same PR keeps the marker of a rewritten PostgreSQL table. Today ALTER
+TABLE stores it as plain SQLite text, so the SQLite dialect opens it
+afterwards. Rewritten tables will use the marker of Proposal 2
+(`/* turso_dialect:postgres */` with canonical SQLite text and today's rowid
+rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
 
 ## Proposal 4: typed aggregates and ordered numeric storage
 
@@ -649,10 +1119,10 @@ numeric values are written in v2; there is no per-database format flag.
 Reading still accepts v1 (the decoder already exists and the first byte tells
 the formats apart), but indexes need rebuilding (see [Upgrading](#upgrading)).
 DECODE becomes `numeric_decode(value, scale)`; unconstrained values lose their
-display scale (decision 2). `ORDERED` declares that the stored form is the
-canonical key, so the optimizer (`optimizer/constraints.rs`,
-`optimizer/order.rs`) allows ranges and ORDER BY on the index, and seek keys
-follow the rule of Proposal 1.
+display scale (decision 2). Numeric is then declared `ORDERED` (Proposal 2):
+its stored form is its canonical key, so the optimizer allows ranges and ORDER
+BY on an index of a numeric column, and seek keys follow the rule of
+Proposal 1.
 
 ## Upgrading
 
@@ -685,37 +1155,105 @@ without changing the rest of the design.
 
 Each commit has its own test that fails before it and passes after it.
 
-Proposal 1:
+Proposal 1, as implemented (commit 2 is deferred, commits 8 and 11 were
+split, and one fix was added; see [Implementation notes](#implementation-notes-proposal-1)):
 1. `core/numeric: round half away from zero when applying a scale`
-2. `core/schema: look up column types in the database that owns the table`
+2. (deferred) `core/schema: look up column types in the database that owns the
+   table`
 3. `core/types: compute expression types and report them in column metadata`
 4. `parser: parse operator signatures, implicit casts, type functions, keys and
    parameter defaults`
 5. `core/types: resolve operators with dialect type rules and choose seek keys
-   from the result` (storage and behaviour split; SQLite and PostgreSQL rules;
-   error-to-label seek keys; index and scan agreement tests)
+   from the result`
 6. `core/numeric: use PostgreSQL's scale rule for division`
 7. `core/types: use resolved operators in IN, row values, CASE, IS, nullif,
    min/max and joins`
-8. `core/types: canonical keys and comparators for hash, sort and duplicate
-   checks` (adds the numeric key function)
+   - `core/types: compute operand types once per operator`
+8. keys and comparators, in five commits:
+   - `core/types: sort typed expressions by their type's order`
+   - `core/types: compare DISTINCT values by the type's key` (adds
+     `numeric_key`)
+   - `core/types: group typed values by the type's key`
+   - `core/types: hash joins and IN (SELECT ...) compare typed values with the
+     type's '='`
+   - `core/types: remove duplicates in UNION, INTERSECT and EXCEPT by the
+     type's key`
 9. `core/types: unary operators and type functions`
 10. `core/types: CAST returns the value read back from a STRICT column`
-11. `core/types: types for recursive CTEs, windows and materialized views`
+11. in three commits:
+    - `core/types: recursive CTE columns have the anchor's type`
+    - `core/types: window partitions and peer groups compare typed values by
+      key`
+    - `core/incremental: reject materialized views that aggregate typed values`
 
-Proposal 2:
-12. `core/types: map dialect type names onto core storage types`
-13. `core/types: dialect assignment conversions`
-14. `core/schema: ranged-integer primary keys are rowid aliases in dialect
-    tables`
-15. `core/types: structured error kinds from type functions`
+Proposal 2, with the test that fails before each commit. Commits 14 to 26 are
+tested with the test dialect described in [Tests](#tests-proposal-2); commits
+12 and 13 use the SQLite dialect with custom types on.
 
-Proposal 3: 16. `postgres: exact numeric literals and casts`
+12. `core/schema: accept CHECK comparisons that operator resolution accepts`.
+    `CHECK (p > 0)` on `numeric(10,2)` is accepted and refuses `-1`;
+    `CHECK (a > 'x')` on INTEGER is still refused.
+13. `core/schema: resolve column types once per database when the schema
+    loads` (commit 2 of Proposal 1). An attached database with its own CREATE
+    TYPE: an INSERT through ATTACH encodes and a SELECT decodes, also after
+    reopening.
+14. `core/dialect: write and check the marker of dialect tables in core`. The
+    marker is kept after CREATE TABLE, each kind of ALTER TABLE, VACUUM, and
+    closing and reopening; the SQLite dialect and a second test dialect refuse
+    the table.
+15. `core/types: map dialect type names onto core storage types` (name table,
+    `ranged_integer`, affinity from storage, STRICT required, declared type in
+    Named). A column of a range -128..127 refuses 200; a column declared
+    `date` uses the dialect's type, not the built-in one; both after
+    reopening.
+16. `core/types: unsigned 64-bit storage`. 18446744073709551615 and
+    9223372036854775808 are stored, read, sorted, deduplicated and found
+    through an index; `uint64_add` reports out of range.
+17. `core/types: date, date-time and time storage`. Values with fraction
+    digits are stored and read back; the zero date's reserved value
+    (unit test of ENCODE and DECODE).
+18. `parser: type parameter lists of any length`. Parser unit test: the list
+    form parses where it is allowed, and `foo(1,2,3)` stays a syntax error in
+    the SQLite parser.
+19. `core/types: enumeration and label-set storage`. Labels are stored as
+    positions and bit masks, read back as text, after reopening and VACUUM.
+20. (done in Proposal 1 after its code review: ORDER BY, GROUP BY and window
+    partitions sort by the type's key; commits 16, 17 and 19 add their `<`
+    functions for min and max, with tests that `'100:00:00'`, `'20:00:00'`,
+    `'-01:00:00'`, `'-02:00:00'` sort as times, enumerations sort by
+    position, and min and max of an enumeration compare text.)
+21. `core/types: Dynamic-class signatures, result-parameter rules and literal
+    types` (moved from Proposal 1). `integer / integer` returns a decimal
+    with scale + 4, in values and in column metadata; `tiny_col = 1000` is
+    false without an error; `int_col = 1.5` is false; an implicit conversion
+    calls its own function.
+22. `core/types: conversion error kinds with column and row`. A multi-row
+    INSERT reports the kind, the column and row 2.
+23. `core/types: dialect assignment conversions` (ASSIGN, the CAST function,
+    virtual generated columns). `1.5` into a 32-bit column stores 2, `'12abc'`
+    fails with invalid value, a BEFORE trigger sees the converted value, a
+    virtual generated column is converted, and CAST calls the CAST function.
+24. `core/schema: integer primary keys of marked tables are rowids`. Key
+    conversion; generation only with AUTOINCREMENT, also for 0 with
+    `zero_generates_key`; NOT NULL; the range of generated keys; the `uint64`
+    limit; `rowid_alias` in the marker; after reopening, ALTER TABLE and
+    VACUUM; a table marked `rowid_alias` whose key no longer maps to an
+    integer type is a Corrupt error.
+25. `core/types: declared types in column metadata, views and CREATE TABLE AS
+    SELECT`. `ColumnTypeInfo` reports declared names and parameters through
+    a view and a UNION; CREATE TABLE AS SELECT creates a marked STRICT table
+    with declared types.
+26. `core/optimizer: index ranges and ORDER BY for ORDERED types` (moved from
+    Proposal 4). A range on an indexed `datetime_micros` column uses the
+    index, and the index and a scan return the same rows.
+
+Proposal 3:
+27. `postgres: exact numeric literals and casts`
+28. `postgres: keep the marker of rewritten tables`
 
 Proposal 4:
-17. `core/types: type-declared SUM and AVG`
-18. `core/numeric: store numeric values in the ordered format`
-19. `core/optimizer: index ranges and ORDER BY for ORDERED types`
+29. `core/types: type-declared SUM and AVG`
+30. `core/numeric: store numeric values in the ordered format`
 
 ## Decisions
 
@@ -728,8 +1266,10 @@ Proposal 4:
 5. Objects built with older rules: no detection; release note and the PR
    trade-off section above.
 6. REAL and numeric: each dialect's `CAST FROM`/`CAST TO` declarations.
-7. Sorting: by canonical key; types without a key use a comparator that calls
-   their `<`, checked when the type is created; the fixed name table goes.
+7. Sorting: ORDER BY, GROUP BY and window partitions and peers by canonical
+   key; min and max by the type's `<`, through the table of core `<` functions
+   in `order_by.rs`. A comparator that calls any `<` function, checked when
+   the type is created, is left open until a type needs it.
 8. `smallint_col = 100000`: fixed by the error-to-label seek-key rule.
 9. Missing CAST parameters: declared parameter DEFAULTs (PostgreSQL numeric
    NULL, MySQL DECIMAL (10,0)). The SQLite dialect keeps the affinity cast when
@@ -740,10 +1280,24 @@ Proposal 4:
 11. Types without `KEY`: no hash join, Bloom filter or IN ephemeral index when
     they declare `=`; DISTINCT, UNION and GROUP BY keep comparing the in-memory
     form.
-
-## Open questions
-
-1. The in-memory form of an unsigned 64-bit integer above 2^63 − 1 (SQLite
-   integers are signed): text, or a REAL that loses precision?
-2. The ordered time and interval storage: canonical text, or integer
-   microseconds?
+12. Unsigned 64-bit values are always exact, never REAL: the in-memory form is
+    an INTEGER when the value fits in an i64, otherwise canonical TEXT. They
+    are stored as INTEGER up to 9223372036854775807 and as an 8-byte
+    big-endian BLOB above it, which sorts correctly. As a rowid they are
+    limited to 0..9223372036854775807.
+13. Time storage: dates are integer days, date-times and times integer
+    microseconds; the in-memory form is canonical text; the smallest i64 is
+    reserved for the zero date.
+14. Table marker: core writes and checks `/* turso_dialect:NAME */` followed by
+    canonical SQLite text. It is a new prefix so that PostgreSQL's existing
+    rows are never read as SQLite; every dialect refuses another dialect's
+    marker.
+15. Rowids in marked tables: decided at CREATE TABLE and recorded in the
+    marker; keys are converted and range-checked; keys are generated only
+    with AUTOINCREMENT.
+16. Type names in marked tables: the dialect's name table first; unknown names
+    are errors. Column types are resolved once per database when the schema
+    loads.
+17. Conversions: ASSIGN, CAST and implicit conversions are separate functions;
+    warnings and lenient assignment come later.
+18. Core storage types are reached only through a dialect's name table.
