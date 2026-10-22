@@ -1315,11 +1315,15 @@ fn function_arguments(
     list: &FunctionArgumentList,
     context: &mut TranslationContext,
 ) -> Result<Vec<ast::Expr>, MysqlParserError> {
-    unnamed_arguments(list)?
-        .into_iter()
+    let args = unnamed_arguments(list)?;
+    args.iter()
         .enumerate()
         .map(|(position, arg)| {
-            if is_json_cast(arg) && evaluates_arguments_lazily(upper_name) {
+            if is_json_cast(arg)
+                && !upper_name.starts_with("JSON_")
+                && (evaluates_arguments_lazily(upper_name)
+                    || !other_arguments_are_present_values(&args, position))
+            {
                 return Err(json_outside_a_value_position(arg));
             }
             if is_json_value_position(upper_name, position) {
@@ -1345,6 +1349,32 @@ fn unnamed_arguments(list: &FunctionArgumentList) -> Result<Vec<&Expr>, MysqlPar
 
 fn evaluates_arguments_lazily(upper_name: &str) -> bool {
     matches!(upper_name, "CONCAT_WS" | "ELT" | "MAKE_SET")
+}
+
+fn other_arguments_are_present_values(args: &[&Expr], position: usize) -> bool {
+    args.iter()
+        .enumerate()
+        .all(|(other, arg)| other == position || is_present_value(arg))
+}
+
+fn is_present_value(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::Number(..)
+                | Value::SingleQuotedString(_)
+                | Value::DoubleQuotedString(_)
+                | Value::NationalStringLiteral(_)
+                | Value::Boolean(_)
+        ),
+        Expr::TypedString(_) => true,
+        Expr::Nested(inner)
+        | Expr::UnaryOp {
+            op: UnaryOperator::Minus | UnaryOperator::Plus,
+            expr: inner,
+        } => is_present_value(inner),
+        _ => false,
+    }
 }
 
 fn is_json_value_position(upper_name: &str, position: usize) -> bool {
