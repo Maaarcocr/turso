@@ -425,3 +425,32 @@ expect {
     10.0|10
     30.0|30
 }
+
+@requires strict "uses STRICT tables"
+test union-intersect-and-except-compare-typed-values-by-key {
+    CREATE TABLE t1(p numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES ('2.00');
+    CREATE TABLE t2(y numeric(10,1)) STRICT;
+    INSERT INTO t2 VALUES ('2.0'), ('3.0'), (NULL);
+    SELECT * FROM (SELECT p FROM t1 UNION SELECT 2);
+    SELECT * FROM (SELECT p FROM t1 UNION SELECT y FROM t2) ORDER BY 1;
+    SELECT count(*) FROM (SELECT p FROM t1 UNION SELECT y FROM t2 UNION SELECT 2 UNION SELECT NULL);
+    SELECT * FROM (SELECT y FROM t2 INTERSECT SELECT p FROM t1);
+    SELECT * FROM (SELECT y FROM t2 EXCEPT SELECT p FROM t1) ORDER BY 1;
+    SELECT count(*) FROM (SELECT p FROM t1 UNION VALUES (2), (2.0), (5));
+    SELECT count(*) FROM (SELECT p FROM t1 UNION ALL SELECT 2 UNION SELECT y FROM t2);
+    SELECT count(*) FROM (SELECT p, 'a' FROM t1 UNION SELECT y, 'a' FROM t2);
+}
+expect {
+    2.00
+    
+    2.00
+    3.0
+    3
+    2.0
+    
+    3.0
+    2
+    3
+    3
+}

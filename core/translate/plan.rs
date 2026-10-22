@@ -11,7 +11,7 @@ use crate::{
         emitter::{Resolver, UpdateRowSource},
         expr::{
             as_binary_components, expr_data_type, find_unqualified_column, get_expr_affinity,
-            lookup_unqualified_column, StorageClassMask,
+            lookup_unqualified_column, IndexRowKeys, StorageClassMask,
         },
         expression_index::{normalize_expr_for_index_matching, single_table_column_usage},
         optimizer::constraints::{BinaryExprSide, SeekRangeConstraint},
@@ -663,6 +663,8 @@ pub enum QueryDestination {
         affinity_str: Option<Arc<String>>,
         /// Whether this is a delete operation that will remove the index entries
         is_delete: bool,
+        /// Keys that decide duplicates when values of a type compare by key.
+        keys: Option<Arc<IndexRowKeys>>,
     },
     /// The results of the query are stored in an ephemeral table,
     /// later used by the parent query.

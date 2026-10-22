@@ -13,8 +13,9 @@ use turso_parser::ast;
 use super::{
     emitter::{LimitCtx, Resolver},
     expr::{
-        emit_array_decode, emit_type_keys, expr_is_array, translate_expr,
-        translate_expr_no_constant_opt, NoConstantOptReason,
+        emit_array_decode, emit_type_key, emit_type_keys, emit_value_conversion_in_place,
+        expr_is_array, translate_expr, translate_expr_no_constant_opt, IndexRowKeys,
+        NoConstantOptReason,
     },
     plan::{Distinctness, QueryDestination, ResultSetColumn, SelectPlan, TableReferences},
 };
@@ -139,7 +140,14 @@ pub fn emit_select_result(
         }
     }
 
-    emit_result_row_and_limit(program, plan, start_reg, limit_ctx, label_on_limit_reached)?;
+    emit_result_row_and_limit(
+        program,
+        plan,
+        start_reg,
+        limit_ctx,
+        label_on_limit_reached,
+        resolver,
+    )?;
     Ok(())
 }
 
@@ -156,8 +164,25 @@ pub fn emit_columns_to_destination(
     destination: &QueryDestination,
     start_reg: usize,
     num_columns: usize,
+    resolver: &Resolver,
 ) -> Result<()> {
     match destination {
+        QueryDestination::EphemeralIndex {
+            cursor_id,
+            keys: Some(keys),
+            is_delete,
+            ..
+        } => {
+            emit_keyed_index_row(
+                program,
+                *cursor_id,
+                keys,
+                *is_delete,
+                start_reg,
+                num_columns,
+                resolver,
+            )?;
+        }
         QueryDestination::ResultRows => {
             program.emit_insn(Insn::ResultRow {
                 start_reg,
@@ -169,6 +194,7 @@ pub fn emit_columns_to_destination(
             index: dedupe_index,
             affinity_str,
             is_delete,
+            keys: None,
         } => {
             if *is_delete {
                 program.emit_insn(Insn::IdxDelete {
@@ -460,6 +486,72 @@ pub fn emit_columns_to_destination(
     Ok(())
 }
 
+fn emit_keyed_index_row(
+    program: &mut ProgramBuilder,
+    cursor_id: usize,
+    keys: &IndexRowKeys,
+    is_delete: bool,
+    start_reg: usize,
+    num_columns: usize,
+    resolver: &Resolver,
+) -> Result<()> {
+    turso_assert_eq!(num_columns, keys.columns.len());
+    for (i, key) in keys.columns.iter().enumerate() {
+        if let Some(key) = key {
+            emit_value_conversion_in_place(program, start_reg + i, &key.conversion, resolver)?;
+        }
+    }
+    let row_reg = program.alloc_registers(keys.index_column_count());
+    for (i, key) in keys.columns.iter().enumerate() {
+        program.emit_insn(Insn::Copy {
+            src_reg: start_reg + i,
+            dst_reg: row_reg + i,
+            extra_amount: 0,
+        });
+        if let Some(key) = key {
+            emit_type_key(program, row_reg + i, &key.key, resolver)?;
+            program.emit_insn(Insn::Copy {
+                src_reg: start_reg + i,
+                dst_reg: row_reg + keys.value_index_column(i),
+                extra_amount: 0,
+            });
+        }
+    }
+    if is_delete {
+        program.emit_insn(Insn::IdxDelete {
+            start_reg: row_reg,
+            num_regs: num_columns,
+            cursor_id,
+            raise_error_if_no_matching_entry: false,
+        });
+        return Ok(());
+    }
+    let duplicate = program.allocate_label();
+    program.emit_insn(Insn::Found {
+        cursor_id,
+        target_pc: duplicate,
+        record_reg: row_reg,
+        num_regs: num_columns,
+    });
+    let record_reg = program.alloc_register();
+    program.emit_insn(Insn::MakeRecord {
+        start_reg: to_u32(row_reg),
+        count: to_u32(keys.index_column_count()),
+        dest_reg: to_u32(record_reg),
+        index_name: None,
+        affinity_str: None,
+    });
+    program.emit_insn(Insn::IdxInsert {
+        cursor_id,
+        record_reg,
+        unpacked_start: None,
+        unpacked_count: None,
+        flags: IdxInsertFlags::new().no_op_duplicate(),
+    });
+    program.preassign_label_to_next_insn(duplicate);
+    Ok(())
+}
+
 /// Emits the bytecode for:
 /// - result row (or if a subquery, yields to the parent query)
 /// - limit
@@ -469,12 +561,14 @@ pub fn emit_result_row_and_limit(
     result_columns_start_reg: usize,
     limit_ctx: Option<LimitCtx>,
     label_on_limit_reached: Option<BranchOffset>,
+    resolver: &Resolver,
 ) -> Result<()> {
     emit_columns_to_destination(
         program,
         &plan.query_destination,
         result_columns_start_reg,
         plan.result_columns.len(),
+        resolver,
     )?;
 
     if plan.limit.is_some() {

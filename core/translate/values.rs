@@ -203,6 +203,9 @@ fn emit_values_to_destination(
                 subtype_clear_count: row_len,
             });
         }
+        destination @ QueryDestination::EphemeralIndex { keys: Some(_), .. } => {
+            emit_columns_to_destination(program, destination, start_reg, row_len, &t_ctx.resolver)?;
+        }
         QueryDestination::EphemeralIndex { .. } => {
             emit_values_to_index(program, plan, start_reg, row_len)?;
         }
@@ -210,7 +213,7 @@ fn emit_values_to_destination(
             emit_values_to_table(program, plan, start_reg, row_len);
         }
         destination @ QueryDestination::RecursiveCteQueue { .. } => {
-            emit_columns_to_destination(program, destination, start_reg, row_len)?;
+            emit_columns_to_destination(program, destination, start_reg, row_len, &t_ctx.resolver)?;
         }
         QueryDestination::ExistsSubqueryResult { result_reg } => {
             program.emit_insn(Insn::Integer {
@@ -219,7 +222,14 @@ fn emit_values_to_destination(
             });
         }
         QueryDestination::RowValueSubqueryResult { .. } => {
-            emit_result_row_and_limit(program, plan, start_reg, t_ctx.limit_ctx, Some(end_label))?;
+            emit_result_row_and_limit(
+                program,
+                plan,
+                start_reg,
+                t_ctx.limit_ctx,
+                Some(end_label),
+                &t_ctx.resolver,
+            )?;
         }
         QueryDestination::RowSet { .. } => {
             unreachable!("RowSet query destination should not be used in values emission")
@@ -241,6 +251,7 @@ fn emit_values_to_index(
             index,
             affinity_str,
             is_delete,
+            keys: None,
         } => (cursor_id, index, affinity_str, is_delete),
         _ => unreachable!(),
     };

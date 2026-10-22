@@ -1,4 +1,4 @@
-use crate::alloc::TursoIteratorExt;
+use crate::alloc::{TursoIteratorExt, TursoVecExt};
 use crate::schema::{Index, IndexColumn, PseudoCursorType};
 use crate::sync::Arc;
 use crate::translate::collate::get_collseq_from_expr;
@@ -7,7 +7,10 @@ use crate::translate::emitter::{
     LimitCtx, Resolver, TranslateCtx,
 };
 use crate::translate::eqp::{EqpCompoundOp, EqpDetail, EqpSortMethod};
-use crate::translate::expr::translate_expr;
+use crate::translate::expr::{
+    branch_type, common_branch_type, translate_expr, type_key, Conversion, IndexRowKey,
+    IndexRowKeys, TypeEnv, TypeKey,
+};
 use crate::translate::order_by::{custom_type_comparator, sorter_insert};
 use crate::translate::plan::{CompoundOrderByKey, Plan, QueryDestination, SelectPlan};
 use crate::translate::result_row::emit_columns_to_destination;
@@ -148,6 +151,7 @@ pub fn emit_program_for_compound_select(
             index: index.clone(),
             affinity_str: None,
             is_delete: false,
+            keys: None,
         };
         (dest, Some(cursor_id), Some(index))
     } else {
@@ -201,6 +205,12 @@ pub fn emit_program_for_compound_select(
         unreachable!()
     };
 
+    let compound_keys = compound_type_keys(
+        left,
+        right_most,
+        &real_query_destination,
+        &right_most_ctx.resolver,
+    )?;
     program.with_scoped_result_cols_start(|program| {
         emit_compound_select(
             program,
@@ -213,6 +223,7 @@ pub fn emit_program_for_compound_select(
             offset_reg,
             reg_result_cols_start,
             &query_destination,
+            compound_keys.as_ref(),
         )
     })?;
     program.pop_current_parent_explain();
@@ -256,6 +267,97 @@ pub fn emit_program_for_compound_select(
     Ok(program.reg_result_cols_start)
 }
 
+struct CompoundKeys {
+    columns: Vec<Option<(TypeKey, Vec<Conversion>)>>,
+    layout: IndexRowKeys,
+}
+
+fn compound_type_keys(
+    left: &[(SelectPlan, CompoundOperator)],
+    right_most: &SelectPlan,
+    real_destination: &QueryDestination,
+    resolver: &Resolver,
+) -> crate::Result<Option<CompoundKeys>> {
+    if left
+        .iter()
+        .all(|(_, operator)| matches!(operator, CompoundOperator::UnionAll))
+    {
+        return Ok(None);
+    }
+    if matches!(real_destination, QueryDestination::EphemeralIndex { index, .. } if !index.has_rowid)
+    {
+        return Ok(None);
+    }
+    let env = TypeEnv::from_resolver(resolver);
+    let arms: Vec<&SelectPlan> = left
+        .iter()
+        .map(|(arm, _)| arm)
+        .chain(std::iter::once(right_most))
+        .collect();
+    let mut columns = Vec::with_capacity(right_most.result_columns.len());
+    for column in 0..right_most.result_columns.len() {
+        let mut branches = Vec::new();
+        let mut arm_branch = Vec::with_capacity(arms.len());
+        for arm in &arms {
+            if arm.values.is_empty() {
+                let expr = &arm.result_columns[column].expr;
+                arm_branch.push(Some(branches.len()));
+                branches.push((expr, branch_type(expr, Some(&arm.table_references), &env)));
+            } else {
+                arm_branch.push(None);
+                for row in &arm.values {
+                    branches.push((&row[column], branch_type(&row[column], None, &env)));
+                }
+            }
+        }
+        let key = match common_branch_type(&branches) {
+            Some((named, conversions)) => type_key(&named, resolver.schema())?.map(|key| {
+                let arm_conversions = arm_branch
+                    .iter()
+                    .map(|branch| match branch {
+                        Some(branch) => conversions[*branch].clone(),
+                        None => Conversion::None,
+                    })
+                    .collect();
+                (key, arm_conversions)
+            }),
+            None => None,
+        };
+        columns.push(key);
+    }
+    if columns.iter().all(Option::is_none) {
+        return Ok(None);
+    }
+    let layout = IndexRowKeys {
+        columns: columns
+            .iter()
+            .map(|column| {
+                column.as_ref().map(|(key, _)| IndexRowKey {
+                    key: key.clone(),
+                    conversion: Conversion::None,
+                })
+            })
+            .collect(),
+    };
+    Ok(Some(CompoundKeys { columns, layout }))
+}
+
+fn arm_keys(keys: Option<&CompoundKeys>, arm: usize) -> Option<Arc<IndexRowKeys>> {
+    let keys = keys?;
+    Some(Arc::new(IndexRowKeys {
+        columns: keys
+            .columns
+            .iter()
+            .map(|column| {
+                column.as_ref().map(|(key, conversions)| IndexRowKey {
+                    key: key.clone(),
+                    conversion: conversions[arm].clone(),
+                })
+            })
+            .collect(),
+    }))
+}
+
 // Emits bytecode for a compound SELECT statement. This function processes the rightmost part of
 // the compound SELECT and handles the left parts recursively based on the compound operator type.
 #[allow(clippy::too_many_arguments)]
@@ -270,7 +372,9 @@ fn emit_compound_select(
     offset_reg: Option<usize>,
     reg_result_cols_start: Option<usize>,
     query_destination: &QueryDestination,
+    keys: Option<&CompoundKeys>,
 ) -> crate::Result<()> {
+    let right_most_index = left.len();
     let compound_select_end = program.allocate_label();
     if let Some(limit_ctx) = &limit_ctx {
         program.emit_insn(Insn::IfNot {
@@ -297,6 +401,13 @@ fn emit_compound_select(
                         | QueryDestination::RecursiveCteQueue { .. }
                 ) {
                     plan.query_destination = right_most.query_destination.clone();
+                    if let QueryDestination::EphemeralIndex {
+                        keys: arm_destination_keys @ Some(_),
+                        ..
+                    } = &mut plan.query_destination
+                    {
+                        *arm_destination_keys = arm_keys(keys, left.len());
+                    }
                 }
                 emit_compound_select(
                     program,
@@ -309,6 +420,7 @@ fn emit_compound_select(
                     offset_reg,
                     reg_result_cols_start,
                     query_destination,
+                    keys,
                 )?;
 
                 let label_next_select = program.allocate_label();
@@ -352,7 +464,7 @@ fn emit_compound_select(
                     } if !index.has_rowid => (*cursor_id, index.clone()),
                     _ => {
                         new_dedupe_index = true;
-                        create_dedupe_index(program, left, plan, right_most)?
+                        create_dedupe_index(program, left, plan, right_most, keys)?
                     }
                 };
                 plan.query_destination = QueryDestination::EphemeralIndex {
@@ -360,6 +472,7 @@ fn emit_compound_select(
                     index: dedupe_index.1.clone(),
                     affinity_str: affinity_str.clone(),
                     is_delete: false,
+                    keys: arm_keys(keys, left.len()),
                 };
                 emit_compound_select(
                     program,
@@ -372,6 +485,7 @@ fn emit_compound_select(
                     None,
                     reg_result_cols_start,
                     query_destination,
+                    keys,
                 )?;
 
                 right_most.query_destination = QueryDestination::EphemeralIndex {
@@ -379,6 +493,7 @@ fn emit_compound_select(
                     index: dedupe_index.1.clone(),
                     affinity_str,
                     is_delete: false,
+                    keys: arm_keys(keys, right_most_index),
                 };
 
                 emit_explain!(
@@ -403,6 +518,8 @@ fn emit_compound_select(
                         offset_reg,
                         reg_result_cols_start,
                         query_destination,
+                        keys,
+                        resolver,
                     )?;
                 }
             }
@@ -413,21 +530,23 @@ fn emit_compound_select(
                 let intersect_destination = right_most.query_destination.clone();
 
                 let (left_cursor_id, left_index) =
-                    create_dedupe_index(program, left, plan, right_most)?;
+                    create_dedupe_index(program, left, plan, right_most, keys)?;
                 plan.query_destination = QueryDestination::EphemeralIndex {
                     cursor_id: left_cursor_id,
                     index: left_index.clone(),
                     affinity_str: None,
                     is_delete: false,
+                    keys: arm_keys(keys, left.len()),
                 };
 
                 let (right_cursor_id, right_index) =
-                    create_dedupe_index(program, left, plan, right_most)?;
+                    create_dedupe_index(program, left, plan, right_most, keys)?;
                 right_most.query_destination = QueryDestination::EphemeralIndex {
                     cursor_id: right_cursor_id,
                     index: right_index,
                     affinity_str: None,
                     is_delete: false,
+                    keys: arm_keys(keys, right_most_index),
                 };
                 emit_compound_select(
                     program,
@@ -440,6 +559,7 @@ fn emit_compound_select(
                     None,
                     reg_result_cols_start,
                     query_destination,
+                    keys,
                 )?;
 
                 emit_explain!(
@@ -463,6 +583,8 @@ fn emit_compound_select(
                     offset_reg,
                     reg_result_cols_start,
                     &intersect_destination,
+                    keys,
+                    resolver,
                 )?;
             }
             CompoundOperator::Except => {
@@ -473,7 +595,7 @@ fn emit_compound_select(
                     } if !index.has_rowid => (*cursor_id, index.clone()),
                     _ => {
                         new_index = true;
-                        create_dedupe_index(program, left, plan, right_most)?
+                        create_dedupe_index(program, left, plan, right_most, keys)?
                     }
                 };
                 plan.query_destination = QueryDestination::EphemeralIndex {
@@ -481,6 +603,7 @@ fn emit_compound_select(
                     index: index.clone(),
                     affinity_str: None,
                     is_delete: false,
+                    keys: arm_keys(keys, left.len()),
                 };
                 emit_compound_select(
                     program,
@@ -493,12 +616,14 @@ fn emit_compound_select(
                     None,
                     reg_result_cols_start,
                     query_destination,
+                    keys,
                 )?;
                 right_most.query_destination = QueryDestination::EphemeralIndex {
                     cursor_id,
                     index: index.clone(),
                     affinity_str: None,
                     is_delete: true,
+                    keys: arm_keys(keys, right_most_index),
                 };
                 emit_explain!(
                     program,
@@ -521,6 +646,8 @@ fn emit_compound_select(
                         offset_reg,
                         reg_result_cols_start,
                         query_destination,
+                        keys,
+                        resolver,
                     )?;
                 }
             }
@@ -560,6 +687,7 @@ fn create_dedupe_index(
     preceding: &[(SelectPlan, CompoundOperator)],
     left_select: &SelectPlan,
     right_select: &SelectPlan,
+    keys: Option<&CompoundKeys>,
 ) -> crate::Result<(usize, Arc<Index>)> {
     let mut dedupe_columns = right_select
         .result_columns
@@ -589,6 +717,16 @@ fn create_dedupe_index(
         }
     }
 
+    if let Some(keys) = keys {
+        for column in 0..keys.columns.len() {
+            if keys.columns[column].is_some() {
+                let value_column =
+                    IndexColumn::new(dedupe_columns[column].name.clone(), dedupe_columns.len());
+                dedupe_columns.try_push(value_column)?;
+            }
+        }
+    }
+
     let dedupe_index = Arc::new(Index {
         columns: dedupe_columns,
         name: "compound_dedupe".to_string(),
@@ -612,6 +750,7 @@ fn create_dedupe_index(
 /// Emits the bytecode for reading deduplicated rows from the ephemeral index created for
 /// UNION or EXCEPT operators.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn read_deduplicated_union_or_except_rows(
     program: &mut ProgramBuilder,
     dedupe_cursor_id: usize,
@@ -620,14 +759,17 @@ fn read_deduplicated_union_or_except_rows(
     offset_reg: Option<usize>,
     reg_result_cols_start: Option<usize>,
     query_destination: &QueryDestination,
+    keys: Option<&CompoundKeys>,
+    resolver: &Resolver,
 ) -> crate::Result<()> {
+    let column_count = keys.map_or(dedupe_index.columns.len(), |keys| keys.columns.len());
     let label_close = program.allocate_label();
     let label_dedupe_next = program.allocate_label();
     let label_dedupe_loop_start = program.allocate_label();
     // When in coroutine mode or emitting to index/table, use the pre-allocated result column registers.
     // Otherwise, allocate new registers for reading from the dedupe index.
-    let dedupe_cols_start_reg = reg_result_cols_start
-        .unwrap_or_else(|| program.alloc_registers(dedupe_index.columns.len()));
+    let dedupe_cols_start_reg =
+        reg_result_cols_start.unwrap_or_else(|| program.alloc_registers(column_count));
     program.emit_insn(Insn::Rewind {
         cursor_id: dedupe_cursor_id,
         pc_if_empty: label_dedupe_next,
@@ -640,10 +782,10 @@ fn read_deduplicated_union_or_except_rows(
             decrement_by: 1,
         });
     }
-    for col_idx in 0..dedupe_index.columns.len() {
+    for col_idx in 0..column_count {
         program.emit_insn(Insn::Column {
             cursor_id: dedupe_cursor_id,
-            column: col_idx,
+            column: value_index_column(keys, col_idx),
             dest: dedupe_cols_start_reg + col_idx,
             default: None,
         });
@@ -652,7 +794,8 @@ fn read_deduplicated_union_or_except_rows(
         program,
         query_destination,
         dedupe_cols_start_reg,
-        dedupe_index.columns.len(),
+        column_count,
+        resolver,
     )?;
 
     if let Some(limit_ctx) = limit_ctx {
@@ -686,6 +829,8 @@ fn read_intersect_rows(
     offset_reg: Option<usize>,
     reg_result_cols_start: Option<usize>,
     query_destination: &QueryDestination,
+    keys: Option<&CompoundKeys>,
+    resolver: &Resolver,
 ) -> crate::Result<()> {
     let label_close = program.allocate_label();
     let label_loop_start = program.allocate_label();
@@ -695,18 +840,39 @@ fn read_intersect_rows(
     });
 
     program.preassign_label_to_next_insn(label_loop_start);
-    let row_content_reg = program.alloc_register();
-    program.emit_insn(Insn::RowData {
-        cursor_id: left_cursor_id,
-        dest: row_content_reg,
-    });
     let label_next = program.allocate_label();
-    program.emit_insn(Insn::NotFound {
-        cursor_id: right_cursor_id,
-        target_pc: label_next,
-        record_reg: row_content_reg,
-        num_regs: 0,
-    });
+    match keys {
+        Some(keys) => {
+            let key_regs = program.alloc_registers(keys.columns.len());
+            for column in 0..keys.columns.len() {
+                program.emit_insn(Insn::Column {
+                    cursor_id: left_cursor_id,
+                    column,
+                    dest: key_regs + column,
+                    default: None,
+                });
+            }
+            program.emit_insn(Insn::NotFound {
+                cursor_id: right_cursor_id,
+                target_pc: label_next,
+                record_reg: key_regs,
+                num_regs: keys.columns.len(),
+            });
+        }
+        None => {
+            let row_content_reg = program.alloc_register();
+            program.emit_insn(Insn::RowData {
+                cursor_id: left_cursor_id,
+                dest: row_content_reg,
+            });
+            program.emit_insn(Insn::NotFound {
+                cursor_id: right_cursor_id,
+                target_pc: label_next,
+                record_reg: row_content_reg,
+                num_regs: 0,
+            });
+        }
+    }
     if let Some(reg) = offset_reg {
         program.emit_insn(Insn::IfPos {
             reg,
@@ -714,7 +880,7 @@ fn read_intersect_rows(
             decrement_by: 1,
         });
     }
-    let column_count = index.columns.len();
+    let column_count = keys.map_or(index.columns.len(), |keys| keys.columns.len());
     // When in coroutine mode, use the pre-allocated result column registers.
     // Otherwise, allocate new registers for reading from the index.
     let cols_start_reg =
@@ -722,13 +888,19 @@ fn read_intersect_rows(
     for i in 0..column_count {
         program.emit_insn(Insn::Column {
             cursor_id: left_cursor_id,
-            column: i,
+            column: value_index_column(keys, i),
             dest: cols_start_reg + i,
             default: None,
         });
     }
 
-    emit_columns_to_destination(program, query_destination, cols_start_reg, column_count)?;
+    emit_columns_to_destination(
+        program,
+        query_destination,
+        cols_start_reg,
+        column_count,
+        resolver,
+    )?;
 
     if let Some(limit_ctx) = limit_ctx {
         program.emit_insn(Insn::DecrJumpZero {
@@ -752,6 +924,13 @@ fn read_intersect_rows(
         cursor_id: left_cursor_id,
     });
     Ok(())
+}
+
+fn value_index_column(keys: Option<&CompoundKeys>, column: usize) -> usize {
+    match keys {
+        Some(keys) => keys.layout.value_index_column(column),
+        None => column,
+    }
 }
 
 /// Sets where a SELECT plan writes its rows, including each query in a compound SELECT.
@@ -1140,7 +1319,13 @@ fn emit_compound_order_by(
     }
 
     // Emit to real destination
-    emit_columns_to_destination(program, real_destination, result_start_reg, num_result_cols)?;
+    emit_columns_to_destination(
+        program,
+        real_destination,
+        result_start_reg,
+        num_result_cols,
+        &right_most_ctx.resolver,
+    )?;
 
     // Apply LIMIT
     if let Some(limit_reg) = limit_ctx {

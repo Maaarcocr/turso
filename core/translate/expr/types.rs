@@ -148,7 +148,7 @@ pub(crate) enum HashKeyForm {
     Values,
     Keys {
         conversions: [Conversion; 2],
-        key: TypeKey,
+        key: Box<TypeKey>,
     },
 }
 
@@ -175,7 +175,7 @@ pub(crate) fn hash_join_key_form(
             let key = type_key(&named, env.schema).ok()??;
             Some(HashKeyForm::Keys {
                 conversions: resolved.conversions,
-                key,
+                key: Box::new(key),
             })
         }
         Err(_) => None,
@@ -190,14 +190,31 @@ pub(crate) fn common_type_conversions(
     if env.schema.type_registry.is_empty() {
         return None;
     }
-    let types: Vec<Option<ExprType>> = exprs
+    let branches: Vec<(&ast::Expr, Option<ExprType>)> = exprs
         .iter()
-        .map(|expr| (!is_null_literal(expr)).then(|| expr_type(expr, tables, env)))
+        .map(|expr| {
+            let ty = (!is_null_literal(expr)).then(|| expr_type(expr, tables, env));
+            (*expr, ty)
+        })
         .collect();
+    common_branch_type(&branches)
+}
+
+pub(crate) fn branch_type(
+    expr: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> Option<ExprType> {
+    (!is_null_literal(expr)).then(|| expr_type(expr, tables, env))
+}
+
+pub(crate) fn common_branch_type(
+    branches: &[(&ast::Expr, Option<ExprType>)],
+) -> Option<(NamedType, Vec<Conversion>)> {
     let mut common: Option<NamedType> = None;
-    for named in types.iter().flatten().filter_map(|ty| match ty {
-        ExprType::Named(named) => Some(named),
-        ExprType::Dynamic(_) => None,
+    for named in branches.iter().filter_map(|(_, ty)| match ty {
+        Some(ExprType::Named(named)) => Some(named),
+        Some(ExprType::Dynamic(_)) | None => None,
     }) {
         common = match common {
             None => Some(named.clone()),
@@ -215,8 +232,8 @@ pub(crate) fn common_type_conversions(
         };
     }
     let mut common = common?;
-    let mut conversions = Vec::with_capacity(types.len());
-    for (expr, ty) in exprs.iter().zip(&types) {
+    let mut conversions = Vec::with_capacity(branches.len());
+    for (expr, ty) in branches {
         let conversion = match ty {
             None | Some(ExprType::Named(_)) => Conversion::None,
             Some(ExprType::Dynamic(class)) => {
@@ -428,6 +445,31 @@ pub(crate) fn type_keys(
         .collect()
 }
 
+#[derive(Debug, Clone)]
+pub struct IndexRowKeys {
+    pub(crate) columns: Vec<Option<IndexRowKey>>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct IndexRowKey {
+    pub(crate) key: TypeKey,
+    pub(crate) conversion: Conversion,
+}
+
+impl IndexRowKeys {
+    pub(crate) fn index_column_count(&self) -> usize {
+        self.columns.len() + self.columns.iter().flatten().count()
+    }
+
+    pub(crate) fn value_index_column(&self, column: usize) -> usize {
+        match self.columns[column] {
+            Some(_) => self.columns.len() + self.columns[..column].iter().flatten().count(),
+            None => column,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct TypeKey {
     def: Arc<TypeDef>,
     expr: ast::Expr,
