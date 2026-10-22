@@ -213,6 +213,36 @@ fn converted_operand_expr(
     Ok(ast::Expr::Register(reg))
 }
 
+pub(super) fn emit_type_function_call(
+    program: &mut ProgramBuilder,
+    referenced_tables: Option<&TableReferences>,
+    resolved: &ResolvedFunction,
+    args: &[&ast::Expr],
+    target_register: usize,
+    resolver: &Resolver,
+) -> Result<usize> {
+    let func = resolver
+        .resolve_function(&resolved.function, args.len())?
+        .ok_or_else(|| {
+            LimboError::ParseError(format!("no such function: {}", resolved.function))
+        })?;
+    let start_reg = program.alloc_registers(args.len());
+    for (i, arg) in args.iter().enumerate() {
+        translate_expr(program, referenced_tables, arg, start_reg + i, resolver)?;
+        emit_value_conversion_in_place(program, start_reg + i, &resolved.conversions[i], resolver)?;
+    }
+    program.emit_insn(Insn::Function {
+        constant_mask: 0,
+        start_reg,
+        dest: target_register,
+        func: FuncCtx {
+            func,
+            arg_count: args.len(),
+        },
+    });
+    Ok(target_register)
+}
+
 pub(super) struct TypedInTargets {
     pub(super) found: BranchOffset,
     pub(super) not_found: BranchOffset,

@@ -985,6 +985,18 @@ fn translate_function_call_expr(
         unreachable!("translate_function_call_expr expects Expr::FunctionCall");
     };
     let args_count = args.len();
+    let env = TypeEnv::from_resolver(resolver);
+    if let Some(resolved) = resolve_type_function(name.as_str(), args, referenced_tables, &env)? {
+        let arg_exprs: Vec<&ast::Expr> = args.iter().map(|arg| arg.as_ref()).collect();
+        return emit_type_function_call(
+            program,
+            referenced_tables,
+            &resolved,
+            &arg_exprs,
+            target_register,
+            resolver,
+        );
+    }
     let func_type = resolver.resolve_function(name.as_str(), args_count)?;
 
     if func_type.is_none() {
@@ -2104,6 +2116,8 @@ fn translate_function_call_expr(
                 | ScalarFunc::NumericLt
                 | ScalarFunc::NumericEq
                 | ScalarFunc::NumericKey
+                | ScalarFunc::NumericNeg
+                | ScalarFunc::NumericAbs
                 | ScalarFunc::DatePlus
                 | ScalarFunc::DateMinus => translate_function(
                     program,
@@ -3360,6 +3374,17 @@ fn translate_unary_expr(
     let ast::Expr::Unary(op, expr) = expr else {
         unreachable!("translate_unary_expr expects Expr::Unary");
     };
+    let env = TypeEnv::from_resolver(resolver);
+    if let Some(resolved) = resolve_unary_operator(op, expr, referenced_tables, &env) {
+        return emit_type_function_call(
+            program,
+            referenced_tables,
+            &resolved,
+            &[expr.as_ref()],
+            target_register,
+            resolver,
+        );
+    }
     match (op, expr.as_ref()) {
         (UnaryOperator::Positive, expr) => {
             translate_expr(program, referenced_tables, expr, target_register, resolver)

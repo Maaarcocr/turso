@@ -531,6 +531,7 @@ fn resolve_scalar_func_return_type(
         | ScalarFunc::NumericMul
         | ScalarFunc::NumericDiv
         | ScalarFunc::NumericKey => Ok(CheckExprType::Blob),
+        ScalarFunc::NumericNeg | ScalarFunc::NumericAbs => Ok(CheckExprType::Text),
 
         // Remaining functions — treat as ANY
         _ => Ok(CheckExprType::Any),
