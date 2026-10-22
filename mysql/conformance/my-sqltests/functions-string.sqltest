@@ -538,6 +538,69 @@ expect {
     64|ab|5|1.5
 }
 
+test hex-literals-used-as-numbers-are-their-value {
+    SELECT ELT(0x2, 'a', 'b'), ELT(X'', 'a', 'b'), INTERVAL(0x5, 1, 10), INTERVAL(5, 0x1, 0xA), INTERVAL(0x61, 'a', 100), MAKE_SET(0x5, 'a', 'b', 'c'), EXPORT_SET(0x5, 'Y', 'N', ',', 0x4);
+}
+expect {
+    b|NULL|1|1|1|a,c|Y,N,Y,N
+}
+
+test hex-literal-counts-and-positions-are-their-value {
+    SELECT LEFT('abcdef', 0x2), RIGHT('abcdef', 0x2), SUBSTRING('abcdef', 0x2, 0x3), SUBSTRING('abcdef' FROM 0x2), MID('abcdef', b'10', 0x3), INSERT('abcdef', 0x2, 0x2, 'X'), LOCATE('b', 'abcabc', 0x3), SUBSTRING_INDEX('a,b,c', ',', 0x2);
+}
+expect {
+    ab|ef|bcd|bcdef|bcd|aXdef|5|a,b
+}
+
+test hex-literal-lengths-are-their-value {
+    SELECT LPAD('a', 0x3, 'x'), RPAD('a', 0x3, 'x'), REPEAT('ab', 0x3), CONCAT('[', SPACE(0x3), ']');
+}
+expect {
+    xxa|axx|ababab|[   ]
+}
+
+test sha2-length-from-a-hex-literal {
+    SELECT SHA2('a', 0x100);
+}
+expect {
+    ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb
+}
+
+test field-compares-hex-literals-as-numbers-beside-a-number {
+    SELECT FIELD(0x61, 97), FIELD(97, 0x61), FIELD(0x31, '1', 1), FIELD(0x1, TRUE), FIELD(X'', 0), FIELD('foobar', 0x1, 0), FIELD(1.0e0, 0x1, 13);
+}
+expect {
+    1|1|0|1|1|2|1
+}
+
+test field-compares-hex-literals-as-bytes-among-strings {
+    SELECT FIELD(0x61, 'a', 'b'), FIELD('b', 0x61, 0x62), FIELD(0x01, '1'), FIELD(0x31, '1');
+}
+expect {
+    1|2|0|1
+}
+
+test conv-reads-a-hex-literal-as-its-value-in-any-base {
+    SELECT CONV(0x10, 7, 10), CONV(0x10, -10, -10), CONV(0xFFFFFFFFFFFFFFFF, 10, 10), CONV(0xFFFFFFFFFFFFFFFF, -10, -10), CONV(b'101', 10, 10), CONV(0x10, 0x10, 0x10), CONV(_binary '101', 2, 10);
+}
+expect {
+    16|16|18446744073709551615|-1|5|10|5
+}
+
+test conv-of-a-hex-literal-checks-bases-and-length {
+    SELECT CONV(0x10, 1, 10), CONV(0x10, 2, 37), CONV(0x10, NULL, 10), CONV(X'', 10, 10), CONV(0x010203040506070809, 10, 16), CONV(0x000000000000000001, 10, 10);
+}
+expect {
+    NULL|NULL|NULL|NULL|0|1
+}
+
+test bin-and-oct-of-hex-literals {
+    SELECT BIN(0x10), OCT(0x10), BIN(X''), OCT(b'1010'), BIN(0xFFFFFFFFFFFFFFFF);
+}
+expect {
+    10000|20|NULL|12|1111111111111111111111111111111111111111111111111111111111111111
+}
+
 test numeric-functions-parse-string-prefixes {
     SELECT ABS('-12abc'), MOD('10abc', 3), POW('2', 3), CEIL('1.5'), FLOOR('-1.5x'), SIGN('-3');
 }

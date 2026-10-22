@@ -114,22 +114,37 @@ fn power_of_ten(exponent: u64) -> f64 {
         .expect("a power of ten is valid float syntax")
 }
 
+type ReadNumber = fn(&[u8], i32) -> u64;
+
 pub(super) fn conv(args: &[Value]) -> Result<Value> {
+    conv_with(args, parse_in_base)
+}
+
+pub(super) fn conv_binary_literal(args: &[Value]) -> Result<Value> {
+    conv_with(args, |bytes, _| binary_literal_number(bytes))
+}
+
+fn conv_with(args: &[Value], read_number: ReadNumber) -> Result<Value> {
     let (Some(from), Some(to)) = (integer(&args[1]), integer(&args[2])) else {
         return Ok(Value::Null);
     };
-    Ok(convert_base(&args[0], from.value as i32, to.value as i32))
+    Ok(convert_base(
+        &args[0],
+        from.value as i32,
+        to.value as i32,
+        read_number,
+    ))
 }
 
 pub(super) fn bin(args: &[Value]) -> Result<Value> {
-    Ok(convert_base(&args[0], 10, 2))
+    Ok(convert_base(&args[0], 10, 2, parse_in_base))
 }
 
 pub(super) fn oct(args: &[Value]) -> Result<Value> {
-    Ok(convert_base(&args[0], 10, 8))
+    Ok(convert_base(&args[0], 10, 8, parse_in_base))
 }
 
-fn convert_base(number: &Value, from: i32, to: i32) -> Value {
+fn convert_base(number: &Value, from: i32, to: i32, read_number: ReadNumber) -> Value {
     let is_valid_base = |base: i32| base != i32::MIN && (2..=36).contains(&base.abs());
     let Some(digits) = string(number) else {
         return Value::Null;
@@ -137,12 +152,29 @@ fn convert_base(number: &Value, from: i32, to: i32) -> Value {
     if !is_valid_base(from) || !is_valid_base(to) || digits.len() == 0 {
         return Value::Null;
     }
-    let value = if from < 0 {
-        parse_signed_in_base(digits.as_bytes(), from.unsigned_abs()) as u64
+    Value::build_text(format_in_base(read_number(digits.as_bytes(), from), to))
+}
+
+fn parse_in_base(bytes: &[u8], base: i32) -> u64 {
+    if base < 0 {
+        parse_signed_in_base(bytes, base.unsigned_abs()) as u64
     } else {
-        parse_unsigned_in_base(digits.as_bytes(), from.unsigned_abs())
-    };
-    Value::build_text(format_in_base(value, to))
+        parse_unsigned_in_base(bytes, base.unsigned_abs())
+    }
+}
+
+fn binary_literal_number(bytes: &[u8]) -> u64 {
+    let start = bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(bytes.len());
+    let significant = &bytes[start..];
+    if significant.len() > 8 {
+        return 0;
+    }
+    significant
+        .iter()
+        .fold(0, |value, byte| (value << 8) | u64::from(*byte))
 }
 
 fn parse_unsigned_in_base(bytes: &[u8], base: u32) -> u64 {

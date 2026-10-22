@@ -1,7 +1,7 @@
 use crate::dialect::TEMPORAL_UNITS;
 use crate::literal::{
-    translate_introduced_string, translate_temporal_text, translate_typed_string, translate_value,
-    Context,
+    translate_as_bytes, translate_introduced_string, translate_temporal_text,
+    translate_typed_string, translate_value, Context,
 };
 use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
@@ -731,7 +731,11 @@ fn translate_single_argument_call(
 ) -> Result<ast::Expr, MysqlParserError> {
     Ok(function_call(
         name,
-        vec![translate_in(expr, argument_context(name, 0), context)?],
+        vec![translate_in(
+            expr,
+            argument_context(name, 0, &[expr]),
+            context,
+        )?],
     ))
 }
 
@@ -752,11 +756,15 @@ fn translate_substring(
     shorthand: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let mut args = vec![translate_expr(expr, context)?];
-    for part in [from, length].into_iter().flatten() {
-        args.push(translate_expr(part, context)?);
-    }
     let name = if shorthand { "SUBSTR" } else { "SUBSTRING" };
+    let parts: Vec<&Expr> = [Some(expr), from, length].into_iter().flatten().collect();
+    let args = parts
+        .iter()
+        .enumerate()
+        .map(|(position, part)| {
+            translate_in(part, argument_context(name, position, &parts), context)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(function_call(name, args))
 }
 
@@ -1257,9 +1265,39 @@ fn translate_special_function(
             let format = translate_expr(format, context)?;
             Ok(Some(function_call("GET_FORMAT", vec![kind, format])))
         }
+        ("CONV", [value, from, to]) => {
+            let Some(literal) = hex_or_bit_literal(value) else {
+                return Ok(None);
+            };
+            let from = translate_in(from, argument_context(upper_name, 1, &args), context)?;
+            let to = translate_in(to, argument_context(upper_name, 2, &args), context)?;
+            Ok(Some(translate_conv_of_literal(literal, from, to)?))
+        }
+        ("BIN" | "OCT", [value]) => {
+            let Some(literal) = hex_or_bit_literal(value) else {
+                return Ok(None);
+            };
+            let to = if upper_name == "BIN" { 2 } else { 8 };
+            Ok(Some(translate_conv_of_literal(
+                literal,
+                number(10),
+                number(to),
+            )?))
+        }
         (_, []) => Ok(current_time_literal(upper_name)),
         _ => Ok(None),
     }
+}
+
+fn translate_conv_of_literal(
+    literal: &Value,
+    from: ast::Expr,
+    to: ast::Expr,
+) -> Result<ast::Expr, MysqlParserError> {
+    Ok(function_call(
+        "__mysql_conv_binary_literal",
+        vec![translate_as_bytes(literal)?, from, to],
+    ))
 }
 
 fn translate_interval(
@@ -1329,7 +1367,7 @@ fn function_arguments(
             if is_json_value_position(upper_name, position) {
                 translate_json_value(arg, context)
             } else {
-                translate_in(arg, argument_context(upper_name, position), context)
+                translate_in(arg, argument_context(upper_name, position, &args), context)
             }
         })
         .collect()
@@ -1388,7 +1426,7 @@ fn is_json_value_position(upper_name: &str, position: usize) -> bool {
     }
 }
 
-fn argument_context(upper_name: &str, position: usize) -> Context {
+fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Context {
     match upper_name {
         "ABS" | "ACOS" | "ASIN" | "ATAN" | "ATAN2" | "CEIL" | "CEILING" | "CHAR" | "COS"
         | "COT" | "DEGREES" | "EXP" | "FLOOR" | "LN" | "LOG" | "LOG10" | "LOG2" | "MOD" | "POW"
@@ -1397,7 +1435,42 @@ fn argument_context(upper_name: &str, position: usize) -> Context {
         }
         "IF" if position == 0 => Context::Number,
         "CONCAT_WS" if position == 0 => Context::Text,
+        _ if hex_or_bit_literal(args[position]).is_some()
+            && reads_number(upper_name, position, args) =>
+        {
+            Context::Number
+        }
         _ => Context::Value,
+    }
+}
+
+fn reads_number(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
+    match upper_name {
+        "ELT" | "MAKE_SET" | "SPACE" => position == 0,
+        "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
+        "CONV" | "INSERT" | "MID" | "SUBSTR" | "SUBSTRING" => matches!(position, 1 | 2),
+        "LOCATE" | "SUBSTRING_INDEX" => position == 2,
+        "EXPORT_SET" => matches!(position, 0 | 4),
+        "INTERVAL" => true,
+        "FIELD" => args
+            .iter()
+            .any(|arg| comparison_context(arg) == Context::Number),
+        _ => false,
+    }
+}
+
+fn hex_or_bit_literal(expr: &Expr) -> Option<&Value> {
+    match expr {
+        Expr::Value(value)
+            if matches!(
+                value.value,
+                Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_)
+            ) =>
+        {
+            Some(&value.value)
+        }
+        Expr::Nested(inner) => hex_or_bit_literal(inner),
+        _ => None,
     }
 }
 

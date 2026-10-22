@@ -695,6 +695,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD(7, 0xFF), IF(0x01, 'yes', 'no'), CONCAT(0x41)",
             "SELECT MOD (7, 255), \"IF\" (1, 'yes', 'no'), CONCAT (x'41')",
         ),
+        (
+            "SELECT ELT(0x2, 0x41), FIELD(0x61, 97), FIELD(0x61, 'a'), BIN(0x5), CONV(0xFF, 7, 0x10)",
+            "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
+        ),
     ];
 
     for (sql, expected) in cases {
