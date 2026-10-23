@@ -1029,6 +1029,13 @@ fn lowering_rejects_unsupported_statement_families() {
         "EXPLAIN SELECT 1",
         "USE app",
         "SET @answer = 42",
+        "SET NAMES latin1",
+        "SET GLOBAL time_zone = 'UTC'",
+        "SET time_zone = '+01:00'",
+        "SET sql_mode = ''",
+        "SET autocommit = 0",
+        "SET FOREIGN_KEY_CHECKS = 2",
+        "SET FOREIGN_KEY_CHECKS = 0, FOREIGN_KEY_CHECKS = 1",
         "START TRANSACTION",
         "COMMIT",
         "ROLLBACK",
@@ -1040,6 +1047,26 @@ fn lowering_rejects_unsupported_statement_families() {
             matches!(error, MysqlParserError::Unsupported(_)),
             "SQL: {sql}\nerror: {error}"
         );
+    }
+}
+
+#[test]
+fn lowers_session_settings_of_the_target_profile() {
+    let cases = [
+        ("SET NAMES utf8mb4", "SELECT 0 WHERE 0"),
+        ("SET @@session.time_zone = 'UTC', autocommit = ON", "SELECT 0 WHERE 0"),
+        (
+            "SET sql_mode = 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO'",
+            "SELECT 0 WHERE 0",
+        ),
+        ("SET FOREIGN_KEY_CHECKS = 0", "PRAGMA foreign_keys = 0"),
+        ("SET time_zone = '+00:00', foreign_key_checks = ON", "PRAGMA foreign_keys = 1"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
     }
 }
 

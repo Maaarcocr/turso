@@ -191,6 +191,24 @@ leading number rather than MySQL's 20000101, and a decimal literal reaches the
 cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
 `.125000`).
 
+## Session settings (`SET`)
+
+`mysql/parser/session.rs` lowers `SET` statements (session scope, with or
+without `SESSION`, `LOCAL`, `@@`, `@@session.` or `@@local.`; several
+assignments in one statement are allowed):
+
+| Statement | Lowering |
+|---|---|
+| `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON`, `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
+| `FOREIGN_KEY_CHECKS` set to 0, 1, `ON`, `OFF`, `TRUE` or `FALSE` | `PRAGMA foreign_keys = 0/1`, which Turso applies at once, also inside a transaction, as MySQL does. Turso then checks foreign keys like SQLite: an `UPDATE` that writes the same key value is checked too, where InnoDB skips it |
+
+Everything else falls back to the SQLite parser and fails: user variables
+(`SET @a = 1`, Turso has no session variables yet), other values of these
+variables (`sql_mode`, `time_zone`, `autocommit = 0` and character sets
+change the semantics of later statements), `GLOBAL` scope, and other
+variables. Turso does not check foreign keys until `FOREIGN_KEY_CHECKS` is
+set to 1, while MySQL checks them by default.
+
 ## JSON functions
 
 `mysql/frontend/functions/json/` implements MySQL's JSON functions for the

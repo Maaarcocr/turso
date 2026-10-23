@@ -188,3 +188,39 @@ test create-table-backtick-identifiers-duplicate-fails {
 }
 expect error {
 }
+
+test set-to-the-target-profile-has-no-effect {
+    SET NAMES utf8mb4;
+    SET time_zone = '+00:00';
+    SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
+    SET autocommit = 1, @@session.collation_connection = 'utf8mb4_0900_ai_ci';
+    SELECT 1;
+}
+expect {
+    1
+}
+
+setup child-without-parent {
+    SET FOREIGN_KEY_CHECKS = 0;
+    CREATE TABLE child(id INT PRIMARY KEY, parent_id INT, FOREIGN KEY (parent_id) REFERENCES parent(id));
+    CREATE TABLE parent(id INT PRIMARY KEY);
+    INSERT INTO child VALUES (1, 10);
+}
+
+@setup child-without-parent
+test foreign-key-checks-off-allow-a-missing-parent {
+    SET FOREIGN_KEY_CHECKS = 1;
+    SELECT * FROM child;
+}
+expect {
+    1|10
+}
+
+# mysql-error: 1452 Cannot add or update a child row: a foreign key constraint fails (...)
+@setup child-without-parent
+test foreign-key-checks-on-reject-a-missing-parent {
+    SET FOREIGN_KEY_CHECKS = 1;
+    INSERT INTO child VALUES (2, 20);
+}
+expect error {
+}

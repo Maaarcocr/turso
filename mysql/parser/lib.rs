@@ -17,6 +17,7 @@ mod invalid_json;
 mod literal;
 mod names;
 mod query;
+mod session;
 mod split;
 
 pub use split::{first_statement, split_statements, StatementSpan};
@@ -68,6 +69,7 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
         Statement::AlterTable(alter_table) => ddl_alter::translate_alter_table(alter_table),
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement),
+        Statement::Set(set) => session::translate_set(set),
         _ => Err(MysqlParserError::Unsupported(
             "only SELECT projections and DDL are available in the bootstrap frontend".to_string(),
         )),
