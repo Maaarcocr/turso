@@ -8,10 +8,12 @@ use turso_parser::ast;
 use turso_parser::token::TokenType;
 
 mod errors;
+mod format;
 mod functions;
 mod types;
 
 pub use errors::{mysql_error, MysqlError};
+pub use format::format_text;
 
 #[derive(Debug)]
 pub struct MySqlDialect;
