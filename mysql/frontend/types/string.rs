@@ -69,7 +69,7 @@ pub(super) fn assign_text(args: &[Value]) -> Result<Value> {
     Ok(Value::build_text(fitted.to_string()))
 }
 
-pub(super) fn text_of(value: &Value) -> Result<Option<Cow<'_, str>>> {
+fn text_of(value: &Value) -> Result<Option<Cow<'_, str>>> {
     Ok(Some(match value {
         Value::Null => return Ok(None),
         Value::Text(text) => Cow::Borrowed(text.as_str()),
