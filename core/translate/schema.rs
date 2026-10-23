@@ -836,6 +836,9 @@ fn validate(
                             "Generated columns require --experimental-generated-columns flag"
                         );
                     }
+                    ast::ColumnConstraint::Generated { expr, .. } => {
+                        crate::schema::validate_generated_expr(expr, resolver)?;
+                    }
                     ast::ColumnConstraint::Default(expr) => {
                         let expr =
                             translate_ident_to_string_literal(expr).unwrap_or_else(|| expr.clone());

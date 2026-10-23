@@ -817,6 +817,55 @@ mod tests {
         assert_eq!(query(&conn, "SELECT j FROM t"), ints(&[&[9]]));
     }
 
+    #[test]
+    fn generated_columns_can_call_dialect_functions() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let open = || {
+            let file = io
+                .open_file(
+                    "generated-dialect-function.db",
+                    crate::OpenFlags::Create,
+                    true,
+                )
+                .unwrap();
+            crate::Database::open(
+                io.clone(),
+                "generated-dialect-function.db",
+                crate::OpenOptions::new(marking())
+                    .storage(Arc::new(crate::storage::database::DatabaseFile::new(file)))
+                    .db_opts(crate::DatabaseOpts::new().with_generated_columns(true)),
+            )
+            .unwrap()
+        };
+        {
+            let db = open();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "CREATE TABLE t(id INTEGER PRIMARY KEY, j TEXT, \
+                 n DOUBLE AS (test_text_length(j)) VIRTUAL) STRICT",
+            )
+            .unwrap();
+            conn.execute("ALTER TABLE t ADD COLUMN m DOUBLE AS (test_text_length(j || 'x'))")
+                .unwrap();
+            conn.execute("INSERT INTO t(id, j) VALUES (1, 'abc')")
+                .unwrap();
+            let error = conn
+                .execute("CREATE TABLE u(a TEXT, b TEXT AS (no_such_function(a))) STRICT")
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("could not resolve function"),
+                "{error}"
+            );
+            conn.close().unwrap();
+        }
+        let db = open();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT n, m FROM t"),
+            vec![vec![Value::from_f64(3.0), Value::from_f64(4.0)]]
+        );
+    }
+
     fn declared_types(
         conn: &Arc<crate::Connection>,
         sql: &str,

@@ -5206,7 +5206,7 @@ fn string_literal_eq(value: &str, expected: &str) -> bool {
     value.trim_matches('\'').eq_ignore_ascii_case(expected)
 }
 
-pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
+pub(crate) fn validate_generated_expr(expr: &Expr, resolver: &Resolver) -> Result<()> {
     use ast::Expr;
     match expr {
         Expr::Qualified(_, _) => {
@@ -5234,7 +5234,7 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
                 bail_parse_error!("window functions prohibited in generated columns");
             }
             let arg_count = args.len();
-            let Some(func) = Func::resolve_function(name.as_str(), arg_count)? else {
+            let Some(func) = resolver.resolve_function(name.as_str(), arg_count)? else {
                 return Err(LimboError::ParseError(format!(
                     "could not resolve function {}",
                     name.as_str()
@@ -5247,7 +5247,7 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
                 bail_parse_error!("non-deterministic functions prohibited in generated columns");
             }
             for arg in args {
-                validate_generated_expr(arg)?;
+                validate_generated_expr(arg, resolver)?;
             }
         }
 
@@ -5255,7 +5255,7 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
             if filter_over.over_clause.is_some() {
                 bail_parse_error!("window functions prohibited in generated columns");
             }
-            let Some(func) = Func::resolve_function(name.as_str(), 0)? else {
+            let Some(func) = resolver.resolve_function(name.as_str(), 0)? else {
                 return Err(LimboError::ParseError(format!(
                     "could not resolve function {}",
                     name.as_str()
@@ -5271,15 +5271,15 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
         }
 
         Expr::Binary(lhs, _, rhs) => {
-            validate_generated_expr(lhs)?;
-            validate_generated_expr(rhs)?;
+            validate_generated_expr(lhs, resolver)?;
+            validate_generated_expr(rhs, resolver)?;
         }
         Expr::Unary(_, inner) => {
-            validate_generated_expr(inner)?;
+            validate_generated_expr(inner, resolver)?;
         }
         Expr::Parenthesized(exprs) => {
             for e in exprs {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Case {
@@ -5289,46 +5289,46 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
             ..
         } => {
             if let Some(b) = base {
-                validate_generated_expr(b)?;
+                validate_generated_expr(b, resolver)?;
             }
             for (w, t) in when_then_pairs {
-                validate_generated_expr(w)?;
-                validate_generated_expr(t)?;
+                validate_generated_expr(w, resolver)?;
+                validate_generated_expr(t, resolver)?;
             }
             if let Some(e) = else_expr {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Cast { expr, .. } => {
-            validate_generated_expr(expr)?;
+            validate_generated_expr(expr, resolver)?;
         }
         Expr::InList { lhs, rhs, .. } => {
-            validate_generated_expr(lhs)?;
+            validate_generated_expr(lhs, resolver)?;
             for e in rhs {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Between {
             lhs, start, end, ..
         } => {
-            validate_generated_expr(lhs)?;
-            validate_generated_expr(start)?;
-            validate_generated_expr(end)?;
+            validate_generated_expr(lhs, resolver)?;
+            validate_generated_expr(start, resolver)?;
+            validate_generated_expr(end, resolver)?;
         }
         Expr::Like {
             lhs, rhs, escape, ..
         } => {
-            validate_generated_expr(lhs)?;
-            validate_generated_expr(rhs)?;
+            validate_generated_expr(lhs, resolver)?;
+            validate_generated_expr(rhs, resolver)?;
             if let Some(e) = escape {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Collate(inner, _) => {
-            validate_generated_expr(inner)?;
+            validate_generated_expr(inner, resolver)?;
         }
         Expr::IsNull(inner) | Expr::NotNull(inner) => {
-            validate_generated_expr(inner)?;
+            validate_generated_expr(inner, resolver)?;
         }
         // CURRENT_TIME/DATE/TIMESTAMP parse as literals but evaluate to a
         // different value on every read; SQLite rejects them like any other
@@ -5642,7 +5642,6 @@ pub(crate) fn create_table_with_rowid_decision(
                             {
                                 bail_parse_error!("Stored generated columns are not supported");
                             }
-                            validate_generated_expr(expr)?;
                             generated = Some(expr.clone());
                         }
                         ast::ColumnConstraint::PrimaryKey {
