@@ -224,3 +224,39 @@ test foreign-key-checks-on-reject-a-missing-parent {
 }
 expect error {
 }
+
+setup keyed {
+    CREATE TABLE kv(id INT PRIMARY KEY, k INT UNIQUE, v INT);
+    INSERT INTO kv VALUES (1, 10, 0), (2, 20, 0);
+}
+
+@setup keyed
+test on-duplicate-key-update-changes-the-conflicting-row {
+    INSERT INTO kv VALUES (3, 20, 5) ON DUPLICATE KEY UPDATE v = v + 1;
+    INSERT INTO kv (id, k, v) VALUES (4, 40, 1), (4, 41, 2) ON DUPLICATE KEY UPDATE v = VALUES(v) * 10;
+    SELECT * FROM kv ORDER BY id;
+}
+expect {
+    1|10|0
+    2|20|1
+    4|40|20
+}
+
+@setup keyed
+test on-duplicate-key-update-reads-the-old-row-and-the-inserted-values {
+    INSERT INTO kv VALUES (1, 10, 7) ON DUPLICATE KEY UPDATE v = v + VALUES(v), kv.k = VALUES(k) + 1;
+    INSERT INTO kv VALUES (5, 50, "x" = 'x') ON DUPLICATE KEY UPDATE v = 9;
+    SELECT * FROM kv WHERE id IN (1, 5) ORDER BY id;
+}
+expect {
+    1|11|7
+    5|50|1
+}
+
+# mysql-error: 1062 Duplicate entry '20' for key 'kv.k'
+@setup keyed
+test on-duplicate-key-update-that-duplicates-another-key-fails {
+    INSERT INTO kv VALUES (3, 10, 0) ON DUPLICATE KEY UPDATE k = 20;
+}
+expect error {
+}

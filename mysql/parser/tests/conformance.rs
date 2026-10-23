@@ -1021,6 +1021,11 @@ fn lowering_rejects_unsupported_statement_families() {
         "CREATE INDEX name_key ON users (name(10))",
         "INSERT INTO users VALUES (1)",
         "INSERT IGNORE INTO users VALUES (1)",
+        "INSERT INTO a SELECT * FROM b ON DUPLICATE KEY UPDATE a.i = b.j",
+        "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = a + 1, b = a",
+        "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1, a = 2",
+        "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
+        "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
         "REPLACE INTO users VALUES (1)",
         "UPDATE users SET id = 2",
         "DELETE FROM users",
@@ -1047,6 +1052,26 @@ fn lowering_rejects_unsupported_statement_families() {
             matches!(error, MysqlParserError::Unsupported(_)),
             "SQL: {sql}\nerror: {error}"
         );
+    }
+}
+
+#[test]
+fn lowers_on_duplicate_key_update_to_an_upsert() {
+    let cases = [
+        (
+            "INSERT INTO t (a, b) VALUES (1, 'x'), (?, \"y\") ON DUPLICATE KEY UPDATE b = VALUES(b), t.c = c + ?",
+            "INSERT INTO t (a, b) VALUES (1, 'x'), (?1, 'y') ON CONFLICT DO UPDATE SET b = excluded.b, c = c + ?2",
+        ),
+        (
+            "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = a + 1, b = VALUES(a)",
+            "INSERT INTO t VALUES (1, 2) ON CONFLICT DO UPDATE SET a = a + 1, b = excluded.a",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
     }
 }
 

@@ -191,6 +191,28 @@ leading number rather than MySQL's 20000101, and a decimal literal reaches the
 cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
 `.125000`).
 
+## `INSERT ... ON DUPLICATE KEY UPDATE`
+
+`mysql/parser/insert.rs` lowers `INSERT INTO t [(columns)] VALUES (...),
+... ON DUPLICATE KEY UPDATE c = expr, ...` to Turso's upsert, `INSERT ...
+ON CONFLICT DO UPDATE SET ...` without a conflict target, which like MySQL
+updates the row whose primary or unique key the inserted row duplicates
+(also a row inserted earlier by the same statement). `VALUES(c)` is
+`excluded.c`, the value the row would have inserted, and `t.c` targets and
+references of the inserted table drop the qualifier. Every other `INSERT`
+still falls back to the SQLite parser.
+
+Falls back: `INSERT ... SELECT` (MySQL lets the update read the selected
+columns), the `AS alias` row alias, `IGNORE`, priorities, `INSERT ... SET`,
+assigning a column twice, and an assignment that reads a column an earlier
+assignment wrote (MySQL assigns left to right, so `a = a + 1, b = a` sets
+`b` to the new `a`, while the upsert reads the old row).
+
+Known differences: the affected-row count is SQLite's (1 per inserted or
+updated row) rather than MySQL's 2 for an update and 0 for an unchanged
+row; an update consumes no `AUTO_INCREMENT` value; and Turso checks foreign
+keys only after `SET FOREIGN_KEY_CHECKS = 1`.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or
