@@ -1132,6 +1132,11 @@ Neutral core features that MySQL applications need, each its own proposal:
 - Table attributes that a frontend does not lower (MySQL `COMMENT`, `ENGINE`,
   `CHARSET`) cannot be kept in canonical SQLite text; `SHOW CREATE TABLE` and
   ORM introspection need a place to keep them.
+- Materialized views read the stored value of a column with a custom type
+  without DECODE (this predates typed expressions): `SELECT p FROM v` over a
+  `numeric` column returns the stored blob, and expressions over it see the
+  value without its declared scale. Custom types are experimental, so this is
+  a known gap.
 
 ### Tests (Proposal 2)
 
@@ -1399,6 +1404,22 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
   not text, `sum` of a type without a declared sum), the dialect names a
   type with the key `any` in `class_column_types`; without that entry the
   error remains.
+- **Virtual columns over encoded values.** A row's registers hold
+  user-facing values until the ENCODE step and stored values after it.
+  INSERT computed virtual columns after ENCODE from the stored values (a
+  `g INTEGER AS (d) VIRTUAL` over a `numeric` column got the blob), and so
+  did AFTER triggers, UPSERT RETURNING, the old row of UPDATE and DELETE, and
+  the index keys of the old row. A `DmlColumnContext` now says when its
+  registers hold stored values (`with_encoded_values`); a reference to a
+  stored column then reads it through DECODE, and the computed virtual
+  columns are encoded too, so every register of the row holds stored values
+  again. A virtual column of a custom type therefore has a stored form like a
+  stored column: it is encoded wherever a stored value is expected (index
+  keys, `emit_table_column`, the post-ENCODE type check), and reading it is
+  ENCODE then DECODE, as for CAST. UPDATE on a table with custom types
+  computes virtual columns after ENCODE, and its BEFORE triggers see the
+  decoded values of the columns it does not set (they saw the stored values,
+  also without virtual columns). Bytecode without custom types is unchanged.
 - **Negated values (MySQL C1 item 5).** `-x` without a declared unary `-`
   used to have no type, so `u < -5.3` on an unsigned column converted
   `-5.3` into the column's type and failed, while `u < 5.3` compared by
@@ -1450,7 +1471,8 @@ Release note for databases written by older builds with custom types on (or
 by `tursopg`); databases used with custom types off are not affected:
 
 > After upgrading, run `REINDEX` on every expression index, partial index and
-> index on a virtual generated column whose expression uses a custom type, and
+> index on a virtual generated column whose expression or declared type uses a
+> custom type, and
 > drop and create again materialized views that use custom types: their
 > stored keys were computed with the old rules, so lookups can miss rows and
 > UPDATE or DELETE can fail to find the old entry (example 10). Numeric values

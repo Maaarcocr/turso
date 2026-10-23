@@ -952,6 +952,21 @@ pub(crate) fn emit_assign_into_type(
     emit_store_and_read_back(program, reg, named, ValueConversion::Assignment, resolver)
 }
 
+pub(crate) fn emit_generated_stored_value(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    column: &crate::schema::Column,
+    table_is_strict: bool,
+    table_name: &str,
+    resolver: &Resolver,
+) -> Result<()> {
+    emit_generated_value_conversion(program, reg, column, resolver)?;
+    if table_is_strict {
+        emit_column_encode(program, resolver, column, reg, table_name, None)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn emit_generated_value_conversion(
     program: &mut ProgramBuilder,
     reg: usize,

@@ -782,7 +782,7 @@ pub fn translate_insert(
         compute_virtual_columns(
             program,
             &ctx.table.columns_topo_sort()?,
-            &dml_ctx,
+            &dml_ctx.clone().with_encoded_values(),
             resolver,
             &btree_table,
         )?;
@@ -3537,8 +3537,13 @@ fn emit_index_column_value_for_insert(
         if idx_col.pos_in_table != EXPR_INDEX_SENTINEL {
             let column = &table.columns()[idx_col.pos_in_table];
             if column.is_virtual_generated() {
-                crate::translate::expr::emit_generated_value_conversion(
-                    program, dest_reg, column, resolver,
+                crate::translate::expr::emit_generated_stored_value(
+                    program,
+                    dest_reg,
+                    column,
+                    table.is_strict,
+                    &table.name,
+                    resolver,
                 )?;
             }
         }
@@ -4354,12 +4359,19 @@ fn emit_custom_type_encode(
         .map(|m| m.column.clone())
         .collect();
     let layout = ColumnLayout::from_columns(&columns)?;
+    use crate::alloc::TursoIteratorExt;
+    let stored_columns: crate::translate::plan::ColumnMask = columns
+        .iter()
+        .enumerate()
+        .filter(|(_, column)| !column.is_virtual_generated())
+        .map(|(i, _)| i)
+        .try_collect()?;
     crate::translate::expr::emit_custom_type_encode_columns(
         program,
         resolver,
         &columns,
         insertion.first_col_register(),
-        None,
+        Some(&stored_columns),
         &table.name,
         &layout,
         row_number_reg,
