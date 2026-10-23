@@ -1,4 +1,4 @@
-use super::invalid_value;
+use super::{invalid_value, NOT_A_GEOMETRY};
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{Result, Value};
 
@@ -28,8 +28,6 @@ pub(super) const TYPES: [DialectType; 8] = [
 pub(super) fn assign_geometry(args: &[Value]) -> Result<Value> {
     match &args[0] {
         Value::Null => Ok(Value::Null),
-        _ => Err(invalid_value(
-            "Cannot get geometry object from data you send to the GEOMETRY field".to_string(),
-        )),
+        _ => Err(invalid_value(NOT_A_GEOMETRY.to_string())),
     }
 }

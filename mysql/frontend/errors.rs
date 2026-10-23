@@ -1,3 +1,4 @@
+use crate::types::{DATA_TRUNCATED, NOT_A_GEOMETRY};
 use turso_core::{ConversionErrorKind, LimboError, TypeConversionError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,13 +17,11 @@ pub fn mysql_error(error: &LimboError) -> Option<MysqlError> {
         ConversionErrorKind::OutOfRange => (1264, "22003", format!("Out of range value{place}")),
         ConversionErrorKind::TooLong => (1406, "22001", format!("Data too long{place}")),
         ConversionErrorKind::NoMoreKeys => (1062, "23000", conversion.message.clone()),
-        ConversionErrorKind::InvalidValue if conversion.message.starts_with("Data truncated") => {
-            (1265, "01000", format!("Data truncated{place}"))
+        ConversionErrorKind::InvalidValue if conversion.message == DATA_TRUNCATED => {
+            (1265, "01000", format!("{DATA_TRUNCATED}{place}"))
         }
-        ConversionErrorKind::InvalidValue
-            if conversion.message.starts_with("Cannot get geometry object") =>
-        {
-            (1416, "22003", conversion.message.clone())
+        ConversionErrorKind::InvalidValue if conversion.message == NOT_A_GEOMETRY => {
+            (1416, "22003", NOT_A_GEOMETRY.to_string())
         }
         ConversionErrorKind::InvalidValue => {
             (1366, "HY000", format!("{}{place}", conversion.message))

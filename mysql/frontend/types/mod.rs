@@ -14,6 +14,11 @@ mod string;
 mod temporal;
 mod year;
 
+pub(crate) const DATA_TRUNCATED: &str = "Data truncated";
+
+pub(crate) const NOT_A_GEOMETRY: &str =
+    "Cannot get geometry object from data you send to the GEOMETRY field";
+
 pub(crate) fn rules() -> &'static TypeRules {
     &RULES
 }
@@ -103,7 +108,7 @@ fn out_of_range() -> LimboError {
 }
 
 fn data_truncated() -> LimboError {
-    TypeConversionError::raise(ConversionErrorKind::InvalidValue, "Data truncated")
+    TypeConversionError::raise(ConversionErrorKind::InvalidValue, DATA_TRUNCATED)
 }
 
 fn data_too_long() -> LimboError {
