@@ -832,10 +832,14 @@ UPDATE and REPLACE do this instead (only INSERT and REPLACE generate keys):
    cannot get `2147483648`. Turso reports the error kind "no more keys", which
    a frontend can report as MySQL does: its counter stops at the largest value
    and reports a duplicate key (1062).
-5. A `uint64` rowid accepts 0 to 9223372036854775807. A larger key is an
+5. A `uint64` key is the rowid only with AUTOINCREMENT, whose generated
+   keys stay small; without AUTOINCREMENT it is an ordinary primary key with
+   an index and holds every value up to 18446744073709551615, as in MySQL. A
+   `uint64` rowid accepts 0 to 9223372036854775807; a larger key is an
    out-of-range error, where MySQL accepts up to 18446744073709551615; this is
    a documented limit. Laravel's `BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
-   is a rowid under these rules.
+   is a rowid under these rules. Tables created before this rule keep their
+   marker, so a `uint64` key marked `rowid_alias` stays the rowid.
 
 AUTOINCREMENT keeps SQLite's rules (`sqlite_sequence`; a key is never reused).
 MySQL does not reuse keys either, but it does not give back the keys of a
@@ -1121,8 +1125,8 @@ Neutral core features that MySQL applications need, each its own proposal:
 - Unique constraints under case-insensitive collations.
 - Indexes on expressions of these types: the planner ignores them, as in
   Proposal 1, so results are correct but such an index is not used.
-- Keys above 9223372036854775807 in a `uint64` rowid; dates with a zero month
-  or day.
+- Keys above 9223372036854775807 in a `uint64` rowid (AUTOINCREMENT keys);
+  dates with a zero month or day.
 - Rounding typed values to their static parameters where they become keys of
   GROUP BY and DISTINCT (MySQL rounds a quotient's hidden digits there).
 - Table attributes that a frontend does not lower (MySQL `COMMENT`, `ENGINE`,

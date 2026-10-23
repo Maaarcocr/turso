@@ -116,6 +116,10 @@ impl StorageType {
         )
     }
 
+    pub(crate) fn every_value_fits_a_rowid(self) -> bool {
+        !matches!(self, StorageType::Uint64)
+    }
+
     pub(crate) fn largest_key(self) -> Option<i64> {
         match self {
             StorageType::Integer | StorageType::Uint64 => Some(i64::MAX),

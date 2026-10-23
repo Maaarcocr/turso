@@ -1255,6 +1255,12 @@ impl Schema {
         !self.type_rules.dialect_types.is_empty()
     }
 
+    pub(crate) fn every_value_fits_a_rowid(&self, type_name: &str) -> bool {
+        self.get_type_def_unchecked(type_name)
+            .and_then(|def| def.storage)
+            .is_none_or(crate::dialect::StorageType::every_value_fits_a_rowid)
+    }
+
     pub(crate) fn largest_key_of_type(&self, type_name: &str) -> Option<i64> {
         self.get_type_def_unchecked(type_name)?
             .storage?

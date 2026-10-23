@@ -571,7 +571,7 @@ mod tests {
         let conn = db.connect(ConnectOpts::new()).unwrap();
         conn.execute("CREATE TABLE a(id INT PRIMARY KEY, v TEXT) STRICT")
             .unwrap();
-        conn.execute("CREATE TABLE b(id UBIGINT PRIMARY KEY, v TEXT) STRICT")
+        conn.execute("CREATE TABLE b(id UBIGINT PRIMARY KEY AUTOINCREMENT, v TEXT) STRICT")
             .unwrap();
         conn.execute("CREATE TABLE c(id TINYINT(3) PRIMARY KEY, v TEXT) STRICT")
             .unwrap();
@@ -633,6 +633,46 @@ mod tests {
             .unwrap_err(),
         );
         assert_eq!(error.kind, ConversionErrorKind::OutOfRange);
+    }
+
+    #[test]
+    fn unsigned_64_bit_keys_are_the_rowid_only_with_autoincrement() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let text = |value: &str| Value::build_text(value.to_string());
+        {
+            let db = open_db(&io, "keys-uint64.db", marking()).unwrap();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute("CREATE TABLE u(id UBIGINT PRIMARY KEY, v TEXT) STRICT")
+                .unwrap();
+            assert!(stored_sql(&conn, "u").starts_with("/* turso_dialect:marking */"));
+            conn.execute(
+                "INSERT INTO u VALUES ('18446744073709551615', 'max'), (5, 'five'), \
+                 ('9223372036854775808', 'middle')",
+            )
+            .unwrap();
+            let error = conn
+                .execute("INSERT INTO u VALUES ('18446744073709551615', 'again')")
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("UNIQUE constraint failed"),
+                "{error}"
+            );
+            conn.close().unwrap();
+        }
+        let db = open_db(&io, "keys-uint64.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT id, v FROM u ORDER BY id"),
+            vec![
+                vec![Value::from_i64(5), text("five")],
+                vec![text("9223372036854775808"), text("middle")],
+                vec![text("18446744073709551615"), text("max")],
+            ]
+        );
+        assert_eq!(
+            query(&conn, "SELECT v FROM u WHERE id = '18446744073709551615'"),
+            vec![vec![text("max")]]
+        );
     }
 
     #[test]
