@@ -179,6 +179,64 @@ fn typed_tables_keep_their_marker_column_types_and_integer_keys_after_reopen(
     Ok(())
 }
 
+#[test]
+fn tables_made_by_create_table_as_select_keep_their_column_types_after_reopen(
+) -> turso_core::Result<()> {
+    let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+    let path = "mysql-create-table-as-select-persistence.db";
+
+    {
+        let connection = open_with_io(io.clone(), path)?;
+        connection.execute("CREATE TABLE s (k VARCHAR(3), n TINYINT, l BIT(3))")?;
+        connection.execute("INSERT INTO s VALUES ('a', 1, 5)")?;
+        connection.execute("CREATE TABLE t AS SELECT k, n, l, CONCAT(k, 'x') AS c FROM s")?;
+        connection.close()?;
+    }
+
+    {
+        let connection = open_with_io(io, path)?;
+        assert_eq!(
+            query(
+                &connection,
+                "SELECT sql FROM sqlite_schema WHERE name = 't'"
+            )?,
+            vec![vec![Value::build_text(
+                "/* turso_dialect:mysql */ CREATE TABLE t (k varchar (3), n tinyint, l bit (3), \
+                 c longtext) STRICT"
+            )]]
+        );
+        connection.execute("INSERT INTO t VALUES ('b', '2', 7, 12)")?;
+        assert_eq!(
+            query(&connection, "SELECT k, n, l, c FROM t ORDER BY k")?,
+            vec![
+                vec![
+                    Value::build_text("a"),
+                    Value::from_i64(1),
+                    Value::from_i64(5),
+                    Value::build_text("ax"),
+                ],
+                vec![
+                    Value::build_text("b"),
+                    Value::from_i64(2),
+                    Value::from_i64(7),
+                    Value::build_text("12"),
+                ],
+            ]
+        );
+        for rejected in [
+            "INSERT INTO t (k) VALUES ('abcd')",
+            "INSERT INTO t (n) VALUES (128)",
+            "INSERT INTO t (l) VALUES (8)",
+        ] {
+            connection
+                .execute(rejected)
+                .expect_err("the reopened table must keep the copied column types");
+        }
+        connection.close()?;
+    }
+    Ok(())
+}
+
 fn query(
     connection: &Arc<turso_core::Connection>,
     sql: &str,
