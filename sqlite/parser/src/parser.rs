@@ -5237,12 +5237,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_name_list(&mut self) -> Result<Vec<String>> {
-        let mut types = vec![self.eat_type_name()?];
+        let mut types = vec![self.eat_type_name_words()?];
         while matches!(self.peek()?, Some(t) if t.token_type == TK_COMMA) {
             eat_assert!(self, TK_COMMA);
-            types.push(self.eat_type_name()?);
+            types.push(self.eat_type_name_words()?);
         }
         Ok(types)
+    }
+
+    fn eat_type_name_words(&mut self) -> Result<String> {
+        let mut name = self.eat_type_name()?;
+        while matches!(self.peek()?, Some(t) if t.token_type == TK_ID) {
+            name.push(' ');
+            name.push_str(&self.eat_type_name()?);
+        }
+        Ok(name)
     }
 
     fn eat_type_name(&mut self) -> Result<String> {
@@ -13704,6 +13713,40 @@ mod tests {
             }]
         );
 
+        let formatted = Parser::new(sql.as_bytes())
+            .next()
+            .unwrap()
+            .unwrap()
+            .to_string();
+        assert_eq!(parse_custom_type_body(&formatted), body);
+    }
+
+    #[test]
+    fn test_create_type_lists_accept_type_names_of_several_words() {
+        let sql = "CREATE TYPE t(value any) BASE integer \
+            CAST FROM double precision, text AS IMPLICIT \
+            OPERATOR '<' (tinyint unsigned, integer) t_lt \
+            FUNCTION abs(tinyint unsigned) RETURNS t t_abs";
+        let body = parse_custom_type_body(sql);
+        let CreateTypeBody::CustomType {
+            operators,
+            casts,
+            functions,
+            ..
+        } = &body
+        else {
+            panic!("expected CustomType body");
+        };
+        assert_eq!(
+            casts[0].types,
+            vec!["double precision".to_owned(), "text".to_owned()]
+        );
+        assert_eq!(
+            operators[0].operands,
+            Some(vec!["tinyint unsigned".to_owned(), "integer".to_owned()])
+        );
+        assert_eq!(operators[0].func_name.as_deref(), Some("t_lt"));
+        assert_eq!(functions[0].args, vec!["tinyint unsigned".to_owned()]);
         let formatted = Parser::new(sql.as_bytes())
             .next()
             .unwrap()

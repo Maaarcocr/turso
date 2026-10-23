@@ -595,6 +595,9 @@ pub fn resolve_window_and_aggregate_functions(
                 let distinctness = Distinctness::from_ast(distinctness.as_ref());
 
                 match Func::resolve_function(name.as_str(), args_count)? {
+                    Some(Func::Agg(AggFunc::NumericSum)) if !resolver.enable_custom_types => {
+                        crate::bail_parse_error!("no such function: {}", name.as_str());
+                    }
                     Some(Func::Agg(f)) => {
                         if let Some(over_clause) = filter_over.over_clause.as_ref() {
                             link_with_window(
@@ -938,6 +941,7 @@ fn resolve_effective_frame(
         AccumulatorFunc::Agg(
             AggFunc::Sum
                 | AggFunc::Total
+                | AggFunc::NumericSum
                 | AggFunc::Count
                 | AggFunc::Count0
                 | AggFunc::Avg

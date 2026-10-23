@@ -836,6 +836,9 @@ fn validate(
                             "Generated columns require --experimental-generated-columns flag"
                         );
                     }
+                    ast::ColumnConstraint::Generated { expr, .. } => {
+                        crate::schema::validate_generated_expr(expr, resolver)?;
+                    }
                     ast::ColumnConstraint::Default(expr) => {
                         let expr =
                             translate_ident_to_string_literal(expr).unwrap_or_else(|| expr.clone());
@@ -1813,20 +1816,25 @@ fn new_table_marker(
         ),
         None => None,
     };
-    let integer_key = crate::schema::create_table_with_rowid_decision(
+    let table = crate::schema::create_table_with_rowid_decision(
         table_name,
         body,
         0,
         RowidDecision::AnyDeclaredType,
-    )?
-    .get_rowid_alias_column()
-    .is_some_and(|(_, column)| resolver.schema().is_integer_key_type(&column.ty_str));
+    )?;
+    let schema = resolver.schema();
+    let integer_key_type = table
+        .get_rowid_alias_column()
+        .map(|(_, column)| column.ty_str.as_str())
+        .filter(|key_type| schema.is_integer_key_type(key_type));
     let rowid_alias = match rowid_alias_of_statement {
-        Some(true) if !integer_key => bail_parse_error!(
+        Some(true) if integer_key_type.is_none() => bail_parse_error!(
             "table {table_name} is marked rowid_alias but its primary key is not of an integer type"
         ),
         Some(rowid_alias) => rowid_alias,
-        None => integer_key,
+        None => integer_key_type.is_some_and(|key_type| {
+            table.has_autoincrement || schema.every_value_fits_a_rowid(key_type)
+        }),
     };
     Ok(Some(TableMarker::new(dialect.name(), rowid_alias)))
 }

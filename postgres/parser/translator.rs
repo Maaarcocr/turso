@@ -5020,10 +5020,25 @@ fn numeric_constant(text: &str) -> ast::Expr {
         )))),
         type_name: Some(ast::Type {
             name: "numeric".to_string(),
-            size: None,
+            size: literal_precision_and_scale(text),
             array_dimensions: 0,
         }),
     }
+}
+
+fn literal_precision_and_scale(text: &str) -> Option<ast::TypeSize> {
+    let (whole, fraction) = text.split_once('.')?;
+    if !whole
+        .bytes()
+        .chain(fraction.bytes())
+        .all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let scale = fraction.len();
+    let precision = (whole.trim_start_matches('0').len() + scale).max(1);
+    let number = |n: usize| Box::new(ast::Expr::Literal(ast::Literal::Numeric(n.to_string())));
+    Some(ast::TypeSize::TypeSize(number(precision), number(scale)))
 }
 
 fn fraction_as_double(fraction: Box<ast::Expr>) -> Box<ast::Expr> {
@@ -6263,7 +6278,7 @@ mod tests {
                 }
 
                 if let ast::ResultColumn::Expr(expr, _) = &columns[2] {
-                    assert_eq!(expr.to_string(), "CAST ('3.14' AS numeric)");
+                    assert_eq!(expr.to_string(), "CAST ('3.14' AS numeric (3, 2))");
                 } else {
                     panic!("Expected expression result column");
                 }
