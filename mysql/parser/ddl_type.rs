@@ -216,21 +216,11 @@ impl ColumnType {
     pub(crate) fn value_check(&self, column: &ast::Name) -> Option<ast::Expr> {
         let id = || ast::Expr::Id(column.clone());
         match &self.family {
-            Family::Bit { width: 64 } => Some(ast::Expr::Binary(
-                Box::new(id()),
-                ast::Operator::GreaterEquals,
-                Box::new(number(0)),
-            )),
-            Family::Bit { width } => Some(ast::Expr::Between {
-                lhs: Box::new(id()),
-                not: false,
-                start: Box::new(number(0)),
-                end: Box::new(number((1_i128 << width) - 1)),
-            }),
             Family::Json => Some(call("json_valid", vec![id()])),
             Family::Enum(members) => Some(one_of(id(), members.iter().cloned())),
             Family::Set(members) => Some(one_of(id(), set_values(members))),
             Family::Integer { .. }
+            | Family::Bit { .. }
             | Family::Decimal { .. }
             | Family::Float { .. }
             | Family::Char { .. }

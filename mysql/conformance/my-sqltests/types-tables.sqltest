@@ -564,6 +564,32 @@ test create-table-as-select-keeps-column-rules {
 expect error {
 }
 
+# MySQL: ERROR 1406: Data too long for column 'l' at row 1
+test create-table-as-select-keeps-bit-widths {
+    CREATE TABLE s (l BIT(3));
+    INSERT INTO s VALUES (5);
+    CREATE TABLE t AS SELECT l FROM s;
+    INSERT INTO t VALUES (8);
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'l' at row 1
+test bit-columns-reject-values-above-their-width {
+    CREATE TABLE t (l BIT(3));
+    INSERT INTO t VALUES (8);
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'l' at row 1
+test bit-columns-reject-negative-values {
+    CREATE TABLE t (l BIT(3));
+    INSERT INTO t VALUES (-1);
+}
+expect error {
+}
+
 test create-table-select-without-as {
     CREATE TABLE s (i INT);
     INSERT INTO s VALUES (1), (2);

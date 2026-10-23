@@ -39,7 +39,7 @@ Typed tables are STRICT tables that core marks with `/* turso_dialect:mysql */` 
 | `DECIMAL(p,s)` [`UNSIGNED`] | integer when the value is a whole number in the signed 64-bit range, otherwise double (until exact decimals) | text is read as a number; other text fails with 1265 where MySQL reports 1366; negative `UNSIGNED` fails (1264) |
 | `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)` | text, as given (until temporal storage) | numbers become text |
 | `YEAR` | integer from 0 to 2155 | as the integer types |
-| `BIT(n)` | integer, `CHECK` against `0 .. 2^n - 1` | as the integer types |
+| `BIT(n)` | integer from 0 to 2^n - 1 (at most 9223372036854775807 for `BIT(64)`) | as the integer types; values outside the range fail (1406). MySQL reads text as a binary string, Turso as a number |
 | `JSON` | `LONGTEXT` with `CHECK (json_valid(...))` (until a JSON type) | as `LONGTEXT` |
 | `ENUM(...)` | text, `CHECK` against the members | numbers become text |
 | `SET(...)` (at most 6 members) | text, `CHECK` against the member combinations in definition order | numbers become text |
@@ -77,6 +77,7 @@ Known gaps:
 - Unlike InnoDB, a failed insert does not use up an `AUTO_INCREMENT` value.
 - `FOREIGN KEY` constraints are stored but Turso does not enforce them unless `PRAGMA foreign_keys` is on.
 - `CREATE TABLE ... AS SELECT` gives a result column the type of the column it reads (also through `MAX`/`MIN`), `BIGINT` to integer literals, `COUNT(...)` and integer arithmetic, `DOUBLE` to double literals and double arithmetic, and `LONGTEXT` to everything else (string literals, `CONCAT(...)`, `SUM(...)`, `AVG(...)`, arithmetic on `DECIMAL`), where MySQL picks a `VARCHAR(n)`, `INT` or `DECIMAL(p,s)` from the expression.
+- `CREATE TABLE ... AS SELECT` copies only the column type. `NOT NULL` and `DEFAULT` of the columns it reads are not copied, and neither are the `CHECK`s that hold the members of `ENUM` and `SET` columns and the validity of `JSON` columns, so the new table accepts any text there. MySQL keeps all of these.
 - Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, spatial `SRID` and `SPATIAL` keys, `FULLTEXT` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
 ## SELECT statements and expressions

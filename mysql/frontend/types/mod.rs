@@ -79,6 +79,7 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_BINARY", 2) => binary::assign_binary,
         ("__MYSQL_ASSIGN_VARBINARY", 2) => binary::assign_varbinary,
         ("__MYSQL_ASSIGN_DOUBLE", 4) => float::assign_double,
+        ("__MYSQL_ASSIGN_BIT", 2) => bit::assign_bit,
         ("__MYSQL_ASSIGN_DECIMAL", 2) => decimal::assign_decimal,
         ("__MYSQL_DECIMAL_TEXT", 1) => decimal::decimal_text_of,
         ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,

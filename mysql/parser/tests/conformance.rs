@@ -199,7 +199,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (a TINYINT(1) DEFAULT '1', b DECIMAL(10,2) UNSIGNED, c FLOAT(7,3), d BIT(3))",
-            "CREATE TABLE t (a TINYINT (1) DEFAULT 1, b DECIMAL UNSIGNED (10, 2), c FLOAT (7, 3), d BIT (3) CHECK (d BETWEEN 0 AND 7)) STRICT",
+            "CREATE TABLE t (a TINYINT (1) DEFAULT 1, b DECIMAL UNSIGNED (10, 2), c FLOAT (7, 3), d BIT (3)) STRICT",
         ),
         (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
