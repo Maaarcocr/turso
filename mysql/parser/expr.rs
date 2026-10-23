@@ -1442,6 +1442,7 @@ fn translate_special_function(
             let to = translate_in(to, argument_context(upper_name, 2, &args), context)?;
             Ok(Some(translate_conv_of_literal(literal, from, to)?))
         }
+        ("COLLATION", [value]) => Ok(collation_of(value).map(string_expr)),
         ("LTRIM" | "RTRIM", [text]) => {
             let ends = if upper_name == "LTRIM" {
                 TrimEnds::Leading
@@ -1464,6 +1465,80 @@ fn translate_special_function(
         (_, []) => Ok(current_time_literal(upper_name)),
         _ => Ok(None),
     }
+}
+
+fn collation_of(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::Nested(inner) => collation_of(inner),
+        Expr::Value(value) => match value.value {
+            Value::SingleQuotedString(_) | Value::DoubleQuotedString(_) => Some(DEFAULT_COLLATION),
+            Value::NationalStringLiteral(_) => Some("utf8mb3_general_ci"),
+            Value::Number(..)
+            | Value::Null
+            | Value::Boolean(_)
+            | Value::HexStringLiteral(_)
+            | Value::SingleQuotedByteStringLiteral(_) => Some("binary"),
+            _ => None,
+        },
+        Expr::Prefixed { prefix, value } if string_literal(value).is_some() => {
+            match prefix.value.to_ascii_lowercase().as_str() {
+                "_binary" => Some("binary"),
+                "_utf8mb4" => Some(DEFAULT_COLLATION),
+                "_utf8mb3" | "_utf8" => Some("utf8mb3_general_ci"),
+                "_latin1" => Some("latin1_swedish_ci"),
+                "_ascii" => Some("ascii_general_ci"),
+                _ => None,
+            }
+        }
+        Expr::Collate { expr, collation } if collation_of(expr) == Some(DEFAULT_COLLATION) => {
+            let name = single_name(collation).ok()?.to_ascii_lowercase();
+            UTF8MB4_COLLATIONS
+                .iter()
+                .find(|known| **known == name)
+                .copied()
+        }
+        Expr::UnaryOp { expr, .. } => collation_of(expr).map(|_| "binary"),
+        Expr::Function(function) => {
+            let (name, args) = function_shape(function)?;
+            match (name.as_str(), args.as_slice()) {
+                ("RANDOM_BYTES", [argument]) => collation_of(argument).map(|_| "binary"),
+                ("UUID", []) => Some("utf8mb3_general_ci"),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+const DEFAULT_COLLATION: &str = "utf8mb4_0900_ai_ci";
+
+const UTF8MB4_COLLATIONS: &[&str] = &[
+    "utf8mb4_0900_ai_ci",
+    "utf8mb4_0900_as_ci",
+    "utf8mb4_0900_as_cs",
+    "utf8mb4_0900_bin",
+    "utf8mb4_bin",
+    "utf8mb4_general_ci",
+    "utf8mb4_unicode_ci",
+];
+
+fn function_shape(function: &Function) -> Option<(String, Vec<&Expr>)> {
+    let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+        return None;
+    };
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    if name.quote_style.is_some()
+        || function.over.is_some()
+        || function.filter.is_some()
+        || list.duplicate_treatment.is_some()
+        || !list.clauses.is_empty()
+    {
+        return None;
+    }
+    let args = unnamed_arguments(list).ok()?;
+    Some((name.value.to_ascii_uppercase(), args))
 }
 
 #[derive(Clone, Copy)]

@@ -752,6 +752,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
         ),
         (
+            "SELECT COLLATION('a'), COLLATION(_latin1 'a' ), COLLATION(RANDOM_BYTES(1))",
+            "SELECT 'utf8mb4_0900_ai_ci', 'latin1_swedish_ci', 'binary'",
+        ),
+        (
             "SELECT s REGEXP CAST('[1]' AS JSON)",
             "SELECT s REGEXP __mysql_cast_as_json ('[1]')",
         ),
