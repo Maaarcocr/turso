@@ -13,6 +13,7 @@ mod ddl_index;
 mod ddl_type;
 mod dialect;
 mod expr;
+mod invalid_json;
 mod literal;
 mod names;
 mod query;

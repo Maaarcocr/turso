@@ -942,6 +942,10 @@ fn translate_cast_as_json(
     Ok(function_call(name, vec![value]))
 }
 
+pub(crate) fn failing_json_cast(text: &str) -> ast::Expr {
+    function_call("__mysql_cast_as_json", vec![string_expr(text)])
+}
+
 fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
     MysqlParserError::Unsupported(format!(
         "JSON value `{expr}` in a comparison, a computation or a function MySQL evaluates lazily is not lowered yet"

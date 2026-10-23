@@ -736,6 +736,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD (7, 255), \"IF\" (1, 'yes', 'no'), CONCAT (x'41')",
         ),
         (
+            "SELECT -1.5 - CAST('[1,' AS JSON) AS v, CAST(CAST('x' AS JSON) AS DATE)",
+            "SELECT __mysql_cast_as_json ('[1,') AS v, __mysql_cast_as_json ('x')",
+        ),
+        (
             "SELECT TRIM(LEADING 'ab' FROM s), TRIM(BOTH FROM s), TRIM(s), RTRIM(s)",
             "SELECT __mysql_ltrim (s, 'ab'), __mysql_trim (s, ' '), __mysql_trim (s, ' '), __mysql_rtrim (s, ' ')",
         ),
@@ -854,6 +858,14 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "caret over a function",
             sql: "SELECT a ^ RAND() FROM t",
+        },
+        SqlCase {
+            name: "invalid JSON cast MySQL does not evaluate",
+            sql: "SELECT 0 AND CAST('x' AS JSON)",
+        },
+        SqlCase {
+            name: "invalid JSON cast evaluated once per row",
+            sql: "SELECT CAST('x' AS JSON) + 1 FROM t",
         },
         SqlCase {
             name: "full-text search",
