@@ -105,6 +105,13 @@ fn data_too_long() -> LimboError {
     TypeConversionError::raise(ConversionErrorKind::TooLong, "Data too long")
 }
 
+fn binary_string_in_number_column(type_name: &str) -> LimboError {
+    invalid_value(format!(
+        "Incorrect {type_name} value: binary strings and hexadecimal literals \
+        cannot be stored in number columns yet"
+    ))
+}
+
 fn invalid_value(message: String) -> LimboError {
     TypeConversionError::raise(ConversionErrorKind::InvalidValue, message)
 }

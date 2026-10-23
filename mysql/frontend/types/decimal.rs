@@ -1,4 +1,4 @@
-use super::{float, integer_parameter, out_of_range};
+use super::{binary_string_in_number_column, float, integer_parameter, out_of_range};
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{LimboError, Numeric, Result, Value};
 
@@ -36,6 +36,7 @@ pub(super) fn assign_decimal(args: &[Value]) -> Result<Value> {
             Err(out_of_range())
         }
         Value::Numeric(Numeric::Integer(_)) => decimal_text(value),
+        Value::Blob(_) => Err(binary_string_in_number_column("decimal")),
         _ => {
             float::assign_double(&[value.clone(), Value::Null, Value::Null, unsigned.clone()])?;
             decimal_text(&value.exec_cast("NUMERIC")?)

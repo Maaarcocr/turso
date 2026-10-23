@@ -1,5 +1,5 @@
 use super::number_text::{self, Reading};
-use super::{data_truncated, invalid_value, out_of_range};
+use super::{binary_string_in_number_column, data_truncated, invalid_value, out_of_range};
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{Numeric, Result, Value};
 
@@ -58,7 +58,7 @@ pub(super) fn assign_integer(args: &[Value]) -> Result<Value> {
             return rounded_double(f64::from(*double)).map(Value::from_i64);
         }
         Value::Text(text) => read_integer(text.as_str().as_bytes())?,
-        Value::Blob(bytes) => read_integer(bytes)?,
+        Value::Blob(_) => return Err(binary_string_in_number_column("integer")),
     };
     i64::try_from(magnitude)
         .map(Value::from_i64)
@@ -81,7 +81,7 @@ pub(super) fn assign_unsigned_bigint(args: &[Value]) -> Result<Value> {
             i128::from(rounded as u64)
         }
         Value::Text(text) => read_integer(text.as_str().as_bytes())?,
-        Value::Blob(bytes) => read_integer(bytes)?,
+        Value::Blob(_) => return Err(binary_string_in_number_column("integer")),
     };
     let unsigned = u64::try_from(magnitude).map_err(|_| out_of_range())?;
     Ok(match i64::try_from(unsigned) {

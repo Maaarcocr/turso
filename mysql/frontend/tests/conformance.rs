@@ -260,6 +260,28 @@ fn storing_errors_map_to_mysql_error_codes() -> turso_core::Result<()> {
 }
 
 #[test]
+fn binary_strings_cannot_be_stored_in_number_columns_yet() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (i INT, u BIGINT UNSIGNED, d DOUBLE, e DECIMAL(10, 2), b BIT(16))",
+    )?;
+    for column in ["i", "u", "d", "e", "b"] {
+        let sql = format!("INSERT INTO t ({column}) VALUES (X'3132')");
+        let error = connection.execute(&sql).expect_err(&sql);
+        assert_eq!(
+            turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
+            Some(1366),
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM t")?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn create_table_the_mysql_lowering_refuses_reports_why_and_creates_nothing(
 ) -> turso_core::Result<()> {
     let connection = open_memory()?;

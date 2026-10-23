@@ -1,5 +1,5 @@
 use super::number_text::{self, Reading};
-use super::{data_truncated, integer_parameter, out_of_range};
+use super::{binary_string_in_number_column, data_truncated, integer_parameter, out_of_range};
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{LimboError, Numeric, Result, Value};
 
@@ -34,7 +34,7 @@ pub(super) fn assign_double(args: &[Value]) -> Result<Value> {
         Value::Numeric(Numeric::Integer(number)) => *number as f64,
         Value::Numeric(Numeric::Float(double)) => f64::from(*double),
         Value::Text(text) => read_double(text.as_str().as_bytes())?,
-        Value::Blob(bytes) => read_double(bytes)?,
+        Value::Blob(_) => return Err(binary_string_in_number_column("double")),
     };
     if !number.is_finite() {
         return Err(out_of_range());
