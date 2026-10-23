@@ -192,8 +192,85 @@ fn translate_value_expr(
         Value::Placeholder(placeholder) if placeholder == "?" => {
             Ok(ast::Expr::Variable(context.next_parameter()?))
         }
+        Value::Number(digits, false)
+            if literal_context != Context::Bitwise && exceeds_unsigned_bigint(digits) =>
+        {
+            Ok(exact_decimal(digits, false))
+        }
+        Value::Number(digits, false)
+            if literal_context != Context::Bitwise && is_decimal_literal(digits) =>
+        {
+            Ok(match kept_digits(digits) {
+                kept if exceeds_unsigned_bigint(&kept) => exact_decimal(&kept, false),
+                kept => ast::Expr::Literal(ast::Literal::Numeric(kept)),
+            })
+        }
         other => translate_value(other, literal_context),
     }
+}
+
+/// The digits MySQL keeps of an exact literal: nine groups of nine digits,
+/// the whole part first, so long fractions are cut off. A whole part longer
+/// than that is the largest DECIMAL, 65 nines.
+fn kept_digits(digits: &str) -> String {
+    let (whole, fraction) = match digits.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (digits, None),
+    };
+    let significant = whole.trim_start_matches('0');
+    let whole_digits = match (significant.len(), whole.is_empty()) {
+        (0, false) => 1,
+        (count, _) => count,
+    };
+    let whole_groups = whole_digits.div_ceil(DIGITS_PER_GROUP);
+    if whole_groups > GROUPS_PER_DECIMAL {
+        return "9".repeat(LARGEST_DECIMAL_DIGITS);
+    }
+    match fraction {
+        Some(fraction) => {
+            let kept = fraction
+                .len()
+                .min((GROUPS_PER_DECIMAL - whole_groups) * DIGITS_PER_GROUP);
+            format!("{whole}.{}", &fraction[..kept])
+        }
+        None => whole.to_string(),
+    }
+}
+
+const DIGITS_PER_GROUP: usize = 9;
+const GROUPS_PER_DECIMAL: usize = 9;
+const LARGEST_DECIMAL_DIGITS: usize = 65;
+
+/// A literal MySQL reads as an exact DECIMAL that core does not type from
+/// its digits: a negative decimal, or an integer above the BIGINT UNSIGNED
+/// range. It becomes a CAST of its text to a DECIMAL as wide as its digits.
+fn exact_decimal(digits: &str, negative: bool) -> ast::Expr {
+    let digits = &kept_digits(digits);
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    let scale = fraction.len() as u64;
+    let precision = (whole.trim_start_matches('0').len() as u64 + scale).max(1);
+    let sign = if negative { "-" } else { "" };
+    ast::Expr::cast(
+        ast::Expr::Literal(ast::Literal::String(quote_string(&format!(
+            "{sign}{digits}"
+        )))),
+        Some(sized_decimal_type(precision, scale)),
+    )
+}
+
+fn exceeds_unsigned_bigint(digits: &str) -> bool {
+    let significant = digits.trim_start_matches('0');
+    significant.bytes().all(|byte| byte.is_ascii_digit())
+        && (significant.len() > 20
+            || (significant.len() == 20 && significant > "18446744073709551615"))
+}
+
+fn is_decimal_literal(digits: &str) -> bool {
+    digits.split_once('.').is_some_and(|(whole, fraction)| {
+        !(whole.is_empty() && fraction.is_empty())
+            && whole.bytes().all(|byte| byte.is_ascii_digit())
+            && fraction.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 fn translate_nested(
@@ -257,8 +334,25 @@ fn translate_unary(
         Context::Arithmetic
     };
     let (op, operand_context) = match op {
+        UnaryOperator::Minus if sign_context != Context::Bitwise => {
+            if let Some(digits) = number_literal(expr) {
+                if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
+                    return Ok(exact_decimal(digits, true));
+                }
+                if digits.contains(['e', 'E']) {
+                    return Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
+                        "-{digits}"
+                    ))));
+                }
+            }
+            if number_literal(expr).is_none() {
+                let negated = translate_in(expr, sign_context, context)?;
+                return Ok(times_minus_one(negated));
+            }
+            (ast::UnaryOperator::Negative, sign_context)
+        }
         UnaryOperator::Minus => (ast::UnaryOperator::Negative, sign_context),
-        UnaryOperator::Plus => (ast::UnaryOperator::Positive, sign_context),
+        UnaryOperator::Plus => return translate_in(expr, sign_context, context),
         UnaryOperator::Not | UnaryOperator::BangNot => (ast::UnaryOperator::Not, Context::Number),
         UnaryOperator::BitwiseNot => (ast::UnaryOperator::BitwiseNot, Context::Arithmetic),
         other => {
@@ -271,6 +365,35 @@ fn translate_unary(
         op,
         translate_in(expr, operand_context, context)?,
     ))
+}
+
+/// `-x` as `x * -1`, which gives the same value, so that the product has
+/// the type and the scale of `x` when `x` is a DECIMAL.
+fn times_minus_one(expr: ast::Expr) -> ast::Expr {
+    let minus_one = ast::Expr::unary(
+        ast::UnaryOperator::Negative,
+        ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
+    );
+    parenthesized(ast::Expr::binary(
+        parenthesized(expr),
+        ast::Operator::Multiply,
+        minus_one,
+    ))
+}
+
+fn number_literal(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Value(value) => match &value.value {
+            Value::Number(digits, false) => Some(digits),
+            _ => None,
+        },
+        Expr::Nested(inner)
+        | Expr::UnaryOp {
+            op: UnaryOperator::Plus,
+            expr: inner,
+        } => number_literal(inner),
+        _ => None,
+    }
 }
 
 fn translate_binary(
@@ -631,6 +754,11 @@ fn translate_case(
         (Some(operand), None) => Some(Box::new(translate_expr(operand, context)?)),
         (None, _) => None,
     };
+    let doubles = conditions
+        .iter()
+        .map(|case| &case.result)
+        .chain(else_result)
+        .any(is_double_literal);
     let when_then_pairs = conditions
         .iter()
         .map(|case| {
@@ -638,18 +766,68 @@ fn translate_case(
                 Some(operand) => translate_compared(&case.condition, operand, context)?,
                 None => translate_condition(&case.condition, context)?,
             };
-            let then = translate_expr(&case.result, context)?;
+            let then = translate_result(&case.result, doubles, context)?;
             Ok((Box::new(when), Box::new(then)))
         })
         .collect::<Result<Vec<_>, MysqlParserError>>()?;
     let else_expr = else_result
-        .map(|result| translate_expr(result, context).map(Box::new))
+        .map(|result| translate_result(result, doubles, context).map(Box::new))
         .transpose()?;
     Ok(ast::Expr::Case {
         base,
         when_then_pairs,
         else_expr,
     })
+}
+
+/// Translates one result of a CASE, IF, IFNULL or COALESCE. When another
+/// result is a DOUBLE literal, MySQL computes them all as DOUBLE, so an exact
+/// number literal becomes the same number written as a DOUBLE.
+fn translate_result(
+    expr: &Expr,
+    doubles: bool,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    match signed_number_literal(expr) {
+        Some(digits) if doubles && !digits.contains(['e', 'E']) => {
+            let double = ast::Expr::Literal(ast::Literal::Numeric(format!("{digits}e0")));
+            Ok(if is_negated(expr) {
+                ast::Expr::unary(ast::UnaryOperator::Negative, double)
+            } else {
+                double
+            })
+        }
+        _ => translate_expr(expr, context),
+    }
+}
+
+fn is_double_literal(expr: &Expr) -> bool {
+    signed_number_literal(expr).is_some_and(|digits| digits.contains(['e', 'E']))
+}
+
+fn signed_number_literal(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => signed_number_literal(inner),
+        _ => number_literal(expr),
+    }
+}
+
+fn is_negated(expr: &Expr) -> bool {
+    match expr {
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => !is_negated(expr),
+        Expr::Nested(inner)
+        | Expr::UnaryOp {
+            op: UnaryOperator::Plus,
+            expr: inner,
+        } => is_negated(inner),
+        _ => false,
+    }
 }
 
 fn translate_exists(
@@ -949,19 +1127,28 @@ fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
 }
 
 fn decimal_type(precision: &ExactNumberInfo) -> ast::Type {
-    let size = match *precision {
-        ExactNumberInfo::None => None,
-        ExactNumberInfo::Precision(digits) => {
-            Some(ast::TypeSize::MaxSize(Box::new(number(digits))))
-        }
-        ExactNumberInfo::PrecisionAndScale(digits, scale) => Some(ast::TypeSize::TypeSize(
-            Box::new(number(digits)),
-            Box::new(number(scale.unsigned_abs())),
-        )),
+    let (digits, scale) = match *precision {
+        ExactNumberInfo::None => (0, 0),
+        ExactNumberInfo::Precision(digits) => (digits, 0),
+        ExactNumberInfo::PrecisionAndScale(digits, scale) => (digits, scale.unsigned_abs()),
     };
+    let digits = if digits == 0 {
+        DEFAULT_DECIMAL_PRECISION
+    } else {
+        digits
+    };
+    sized_decimal_type(digits, scale)
+}
+
+const DEFAULT_DECIMAL_PRECISION: u64 = 10;
+
+fn sized_decimal_type(precision: u64, scale: u64) -> ast::Type {
     ast::Type {
         name: "DECIMAL".to_string(),
-        size,
+        size: Some(ast::TypeSize::TypeSize(
+            Box::new(number(precision)),
+            Box::new(number(scale)),
+        )),
         array_dimensions: 0,
     }
 }
@@ -1126,11 +1313,6 @@ fn translate_function(
             return Ok(expr);
         }
     }
-    if matches!(upper_name.as_str(), "ROUND" | "TRUNCATE") && has_negative_precision(list) {
-        return Err(MysqlParserError::Unsupported(format!(
-            "{upper_name} to a negative number of decimals, which Turso does not round to tens, is not lowered yet"
-        )));
-    }
     let function_name = translate_identifier(identifier)?;
     let filter_over = ast::FunctionTail {
         filter_clause: None,
@@ -1186,16 +1368,6 @@ fn translate_function(
             ..filter_over
         },
     })
-}
-
-fn has_negative_precision(list: &FunctionArgumentList) -> bool {
-    matches!(
-        list.args.get(1),
-        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
-            op: UnaryOperator::Minus,
-            ..
-        })))
-    )
 }
 
 fn translate_function_without_parentheses(
@@ -1343,9 +1515,16 @@ fn function_arguments(
     context: &mut TranslationContext,
 ) -> Result<Vec<ast::Expr>, MysqlParserError> {
     let args = unnamed_arguments(list)?;
+    let results = result_positions(upper_name, args.len());
+    let doubles = results
+        .clone()
+        .any(|position| is_double_literal(args[position]));
     args.iter()
         .enumerate()
         .map(|(position, arg)| {
+            if doubles && results.clone().any(|result| result == position) {
+                return translate_result(arg, true, context);
+            }
             if is_json_cast(arg)
                 && !upper_name.starts_with("JSON_")
                 && (evaluates_arguments_lazily(upper_name)
@@ -1360,6 +1539,15 @@ fn function_arguments(
             }
         })
         .collect()
+}
+
+/// The arguments of IF, IFNULL and COALESCE that can be the result.
+fn result_positions(upper_name: &str, arg_count: usize) -> std::ops::Range<usize> {
+    match upper_name {
+        "IF" => 1.min(arg_count)..arg_count,
+        "IFNULL" | "COALESCE" => 0..arg_count,
+        _ => 0..0,
+    }
 }
 
 fn unnamed_arguments(list: &FunctionArgumentList) -> Result<Vec<&Expr>, MysqlParserError> {

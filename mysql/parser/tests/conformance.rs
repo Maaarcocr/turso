@@ -698,6 +698,14 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         ("SELECT 7 DIV 2", "SELECT CAST (7 / 2 AS INTEGER)"),
         ("SELECT 7 MOD 2", "SELECT 7 % 2"),
+        (
+            "SELECT -1.5, -.5, -a, - -2, +b, 18446744073709551616",
+            "SELECT CAST ('-1.5' AS DECIMAL (2, 1)), CAST ('-.5' AS DECIMAL (1, 1)), ((a) * - 1), ((- 2) * - 1), b, CAST ('18446744073709551616' AS DECIMAL (20, 0))",
+        ),
+        (
+            "SELECT CAST(a AS DECIMAL), CAST(a AS DECIMAL(5)), CONVERT(a, DECIMAL(0))",
+            "SELECT CAST (a AS DECIMAL (10, 0)), CAST (a AS DECIMAL (5, 0)), CAST (a AS DECIMAL (10, 0))",
+        ),
         ("SELECT a <=> b", "SELECT a IS b"),
         ("SELECT a && b || c", "SELECT a AND b OR c"),
         ("SELECT \"text\"", "SELECT 'text'"),
@@ -880,10 +888,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "regular expression over bytes",
             sql: "SELECT 'a' REGEXP _binary 'a'",
-        },
-        SqlCase {
-            name: "negative rounding",
-            sql: "SELECT ROUND(1234, -2)",
         },
         SqlCase {
             name: "nested row value",
