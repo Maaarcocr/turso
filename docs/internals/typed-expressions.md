@@ -1399,6 +1399,11 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
   not text, `sum` of a type without a declared sum), the dialect names a
   type with the key `any` in `class_column_types`; without that entry the
   error remains.
+- **Negated values (MySQL C1 item 5).** `-x` without a declared unary `-`
+  used to have no type, so `u < -5.3` on an unsigned column converted
+  `-5.3` into the column's type and failed, while `u < 5.3` compared by
+  SQLite's rules. `-x` now has the class of `x` when that class is INTEGER
+  or REAL (also for a dialect type that stores such values unchanged).
 - **Unsigned arithmetic with a signed operand (ask C).** `uint64_add`,
   `uint64_sub` and `uint64_mul` already computed with one signed operand
   (`uint64_add(5, -3)` is 2, a negative result is out of range). What

@@ -420,6 +420,25 @@ mod tests {
     }
 
     #[test]
+    fn a_negated_literal_keeps_the_class_of_the_literal() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "types-negated-literal.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, u UBIGINT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 5), (2, 7)").unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT (SELECT count(*) FROM t WHERE u > -5.3e0), \
+                 (SELECT count(*) FROM t WHERE u < -5.3e0), \
+                 (SELECT count(*) FROM t WHERE u > 5.3e0)"
+            ),
+            ints(&[&[2, 0, 1]])
+        );
+    }
+
+    #[test]
     fn dates_and_times_are_stored_as_integers_and_sorted_as_times() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let text = |value: &str| Value::build_text(value.to_string());

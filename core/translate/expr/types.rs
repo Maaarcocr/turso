@@ -329,7 +329,7 @@ fn compute_expr_type(
         ast::Expr::FunctionCallStar { name, .. } => function_star_type(name),
         ast::Expr::Unary(op, operand) => match resolve_unary_operator(op, operand, tables, env) {
             Some(resolved) => resolved.result,
-            None => ExprType::Dynamic(DynamicClass::Unknown),
+            None => untyped_unary_type(op, operand, tables, env),
         },
         ast::Expr::SubqueryResult {
             subquery_id,
@@ -340,6 +340,25 @@ fn compute_expr_type(
             Some(named) => ExprType::Named(named),
             None => ExprType::Dynamic(DynamicClass::Unknown),
         },
+        _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+fn untyped_unary_type(
+    op: &ast::UnaryOperator,
+    operand: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> ExprType {
+    if !matches!(op, ast::UnaryOperator::Negative) {
+        return ExprType::Dynamic(DynamicClass::Unknown);
+    }
+    let class = match expr_type(operand, tables, env) {
+        ExprType::Dynamic(class) => class,
+        ExprType::Named(named) => unchanged_value_class(&named.def),
+    };
+    match class {
+        DynamicClass::Integer | DynamicClass::Real => ExprType::Dynamic(class),
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
 }
