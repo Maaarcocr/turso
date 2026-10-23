@@ -12,6 +12,23 @@ pub(super) struct TextNumber<'a> {
 }
 
 pub(super) fn read(bytes: &[u8]) -> Reading<'_> {
+    let Some((number, rest)) = split_number(bytes) else {
+        return Reading::NoNumber;
+    };
+    if skip_spaces(rest).is_empty() {
+        Reading::Number(number)
+    } else {
+        Reading::NumberFollowedByText
+    }
+}
+
+/// The number at the start of the text, ignoring what follows it, as MySQL
+/// reads text in a numeric context.
+pub(super) fn leading_number(bytes: &[u8]) -> Option<TextNumber<'_>> {
+    split_number(bytes).map(|(number, _)| number)
+}
+
+fn split_number(bytes: &[u8]) -> Option<(TextNumber<'_>, &[u8])> {
     let rest = skip_spaces(bytes);
     let (negative, rest) = match rest.split_first() {
         Some((b'-', rest)) => (true, rest),
@@ -24,7 +41,7 @@ pub(super) fn read(bytes: &[u8]) -> Reading<'_> {
         _ => (&rest[..0], rest),
     };
     if whole.is_empty() && fraction.is_empty() {
-        return Reading::NoNumber;
+        return None;
     }
     let (exponent, rest) = read_exponent(rest);
     let number = TextNumber {
@@ -33,16 +50,16 @@ pub(super) fn read(bytes: &[u8]) -> Reading<'_> {
         fraction,
         exponent,
     };
-    if skip_spaces(rest).is_empty() {
-        Reading::Number(number)
-    } else {
-        Reading::NumberFollowedByText
-    }
+    Some((number, rest))
 }
 
 impl TextNumber<'_> {
     pub(super) fn is_negative(&self) -> bool {
         self.negative
+    }
+
+    pub(super) fn parts(&self) -> (bool, &[u8], &[u8], i64) {
+        (self.negative, self.whole, self.fraction, self.exponent)
     }
 
     pub(super) fn rounded_magnitude(&self) -> Option<u128> {

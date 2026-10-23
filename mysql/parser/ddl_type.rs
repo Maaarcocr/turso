@@ -483,6 +483,22 @@ fn custom(name: &ObjectName, modifiers: &[String]) -> Result<ColumnType, MysqlPa
             declared: simple_type(name),
             family: Family::Spatial,
         }),
+        ("FIXED", _) => {
+            let number = |text: &String| {
+                text.parse::<u64>()
+                    .map_err(|_| unsupported_type(name, modifiers))
+            };
+            let info = match modifiers {
+                [] => ExactNumberInfo::None,
+                [precision] => ExactNumberInfo::Precision(number(precision)?),
+                [precision, scale] => ExactNumberInfo::PrecisionAndScale(
+                    number(precision)?,
+                    i64::try_from(number(scale)?).map_err(|_| unsupported_type(name, modifiers))?,
+                ),
+                _ => return Err(unsupported_type(name, modifiers)),
+            };
+            decimal(&info, false)
+        }
         ("TEXT", [length]) => {
             let characters = length
                 .parse::<u64>()

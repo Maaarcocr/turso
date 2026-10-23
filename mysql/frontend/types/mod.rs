@@ -5,6 +5,7 @@ use turso_core::{ConversionErrorKind, Func, LimboError, Result, TypeConversionEr
 mod binary;
 mod bit;
 mod decimal;
+pub(crate) mod decimal_number;
 mod float;
 mod integer;
 mod labels;
@@ -31,11 +32,12 @@ static RULES: LazyLock<TypeRules> = LazyLock::new(|| TypeRules {
     builtin_behaviour_overrides: &[],
     cast_uses_parameter_defaults: false,
     dialect_types: dialect_types().leak(),
-    class_operators: "OPERATOR '=' (integer, integer) OPERATOR '<' (integer, integer)",
+    class_operators: "OPERATOR '=' (integer, integer) OPERATOR '<' (integer, integer) \
+        OPERATOR '/' (integer, integer) RETURNS decimal __mysql_divide_nn",
     class_conversions: &[],
-    decimal_literal_type: None,
+    decimal_literal_type: Some("decimal"),
     string_literals_are_text: false,
-    result_parameters: None,
+    result_parameters: Some(decimal::result_parameters),
     zero_generates_key: true,
     class_column_types: &[
         ("integer", "bigint"),
@@ -77,7 +79,7 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_VARBINARY", 2) => binary::assign_varbinary,
         ("__MYSQL_ASSIGN_DOUBLE", 4) => float::assign_double,
         ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,
-        _ => return None,
+        _ => return decimal::function(name, arg_count),
     };
     Some(conversion)
 }

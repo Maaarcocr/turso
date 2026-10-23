@@ -10,6 +10,7 @@ macro_rules! double {
             storage: StorageType::Real,
             parameters: "precision integer DEFAULT NULL, scale integer DEFAULT NULL",
             behaviour: concat!(
+                "CAST TO real AS IMPLICIT ",
                 "ASSIGN __mysql_assign_double(value, precision, scale, ",
                 $unsigned,
                 ") CAST __mysql_sqlite_cast(value, 'REAL')"
