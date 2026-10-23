@@ -15,6 +15,11 @@ mod string;
 mod temporal;
 mod year;
 
+pub(crate) const DATA_TRUNCATED: &str = "Data truncated";
+
+pub(crate) const NOT_A_GEOMETRY: &str =
+    "Cannot get geometry object from data you send to the GEOMETRY field";
+
 pub(crate) fn rules() -> &'static TypeRules {
     &RULES
 }
@@ -44,6 +49,7 @@ static RULES: LazyLock<TypeRules> = LazyLock::new(|| TypeRules {
         ("real", "double"),
         ("text", "longtext"),
         ("blob", "longblob"),
+        ("any", "longtext"),
     ],
 });
 
@@ -71,13 +77,17 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
     let conversion: Conversion = match (name, arg_count) {
         ("__MYSQL_SQLITE_CAST", 2) => sqlite_cast,
         ("__MYSQL_ASSIGN_INTEGER", 1) => integer::assign_integer,
+        ("__MYSQL_ASSIGN_UNSIGNED_INTEGER", 1) => integer::assign_unsigned_integer,
         ("__MYSQL_ASSIGN_UNSIGNED_BIGINT", 1) => integer::assign_unsigned_bigint,
+        ("__MYSQL_UNSIGNED_EQUALS_VALUE", 2) => integer::unsigned_equals_value,
+        ("__MYSQL_VALUE_EQUALS_UNSIGNED", 2) => integer::value_equals_unsigned,
         ("__MYSQL_ASSIGN_CHAR", 2) => string::assign_char,
         ("__MYSQL_ASSIGN_VARCHAR", 2) => string::assign_varchar,
         ("__MYSQL_ASSIGN_TEXT", 2) => string::assign_text,
         ("__MYSQL_ASSIGN_BINARY", 2) => binary::assign_binary,
         ("__MYSQL_ASSIGN_VARBINARY", 2) => binary::assign_varbinary,
         ("__MYSQL_ASSIGN_DOUBLE", 4) => float::assign_double,
+        ("__MYSQL_ASSIGN_BIT", 2) => bit::assign_bit,
         ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,
         _ => return decimal::function(name, arg_count),
     };
@@ -98,11 +108,18 @@ fn out_of_range() -> LimboError {
 }
 
 fn data_truncated() -> LimboError {
-    TypeConversionError::raise(ConversionErrorKind::InvalidValue, "Data truncated")
+    TypeConversionError::raise(ConversionErrorKind::InvalidValue, DATA_TRUNCATED)
 }
 
 fn data_too_long() -> LimboError {
     TypeConversionError::raise(ConversionErrorKind::TooLong, "Data too long")
+}
+
+fn binary_string_in_number_column(type_name: &str) -> LimboError {
+    invalid_value(format!(
+        "Incorrect {type_name} value: binary strings and hexadecimal literals \
+        cannot be stored in number columns yet"
+    ))
 }
 
 fn invalid_value(message: String) -> LimboError {

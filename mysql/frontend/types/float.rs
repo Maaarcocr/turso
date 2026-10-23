@@ -1,7 +1,7 @@
 use super::number_text::{self, Reading};
-use super::{data_truncated, integer_parameter, out_of_range};
+use super::{binary_string_in_number_column, data_truncated, integer_parameter, out_of_range};
 use turso_core::dialect::{DialectType, StorageType};
-use turso_core::{Numeric, Result, Value};
+use turso_core::{LimboError, Numeric, Result, Value};
 
 macro_rules! double {
     ($name:literal, $unsigned:literal) => {
@@ -35,7 +35,7 @@ pub(super) fn assign_double(args: &[Value]) -> Result<Value> {
         Value::Numeric(Numeric::Integer(number)) => *number as f64,
         Value::Numeric(Numeric::Float(double)) => f64::from(*double),
         Value::Text(text) => read_double(text.as_str().as_bytes())?,
-        Value::Blob(bytes) => read_double(bytes)?,
+        Value::Blob(_) => return Err(binary_string_in_number_column("double")),
     };
     if !number.is_finite() {
         return Err(out_of_range());
@@ -54,13 +54,19 @@ pub(super) fn assign_double(args: &[Value]) -> Result<Value> {
 }
 
 fn read_double(bytes: &[u8]) -> Result<f64> {
-    match number_text::read(bytes) {
+    match number_text::read_as_double(bytes) {
         Reading::Number(number) => Ok(number.to_f64()),
         Reading::NumberFollowedByText | Reading::NoNumber => Err(data_truncated()),
     }
 }
 
 fn rounded_to_scale(number: f64, precision: u64, scale: u64) -> Result<f64> {
+    if precision > 255 || scale > 30 || scale > precision {
+        return Err(LimboError::InvalidArgument(format!(
+            "DOUBLE({precision}, {scale}) needs at most 255 digits and at most 30 decimals, \
+            and no more decimals than digits"
+        )));
+    }
     let factor = 10_f64.powi(scale as i32);
     let whole = number.floor();
     let rounded = whole + ((number - whole) * factor).round_ties_even() / factor;

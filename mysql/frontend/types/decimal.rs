@@ -1,6 +1,6 @@
 use super::decimal_number::{Decimal, Rounding};
 use super::number_text::{self, Reading};
-use super::{integer_parameter, invalid_value, out_of_range};
+use super::{binary_string_in_number_column, integer_parameter, invalid_value, out_of_range};
 use std::cmp::Ordering;
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{LimboError, Numeric, Result, Value};
@@ -257,7 +257,7 @@ pub(super) fn assign_decimal(args: &[Value]) -> Result<Value> {
             Decimal::from_double(f64::from(*double)).ok_or_else(out_of_range)?
         }
         Value::Text(text) => read_decimal(text.as_str().as_bytes())?,
-        Value::Blob(bytes) => read_decimal(bytes)?,
+        Value::Blob(_) => return Err(binary_string_in_number_column("decimal")),
     };
     if integer_parameter(unsigned) == Some(1) && decimal.is_negative() {
         return Err(out_of_range());
@@ -273,7 +273,7 @@ pub(super) fn assign_decimal(args: &[Value]) -> Result<Value> {
 }
 
 fn read_decimal(bytes: &[u8]) -> Result<Decimal> {
-    match number_text::read(bytes) {
+    match number_text::read_as_double(bytes) {
         Reading::Number(number) => Decimal::from_text_number(&number).ok_or_else(out_of_range),
         Reading::NumberFollowedByText | Reading::NoNumber => Err(invalid_value(format!(
             "Incorrect decimal value: '{}'",

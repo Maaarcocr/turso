@@ -31,32 +31,41 @@ impl Dialect for MySqlDialect {
         let statement = match turso_mysql_parser::first_statement(sql) {
             Ok(Some(statement)) => statement,
             Ok(None) => return Ok((None, sql.len())),
-            Err(_) => return turso_core::dialect::sqlite::parse(sql),
+            Err(error) => {
+                let parsed = turso_core::dialect::sqlite::parse(sql)?;
+                if parsed.0.as_ref().is_some_and(creates_user_table) {
+                    return Err(LimboError::ParseError(error.to_string()));
+                }
+                return Ok(parsed);
+            }
         };
         let text = &sql[statement.text.clone()];
-        match turso_mysql_parser::parse_and_translate(text) {
+        let mysql_error = match turso_mysql_parser::parse_and_translate(text) {
             Ok(stmt) => return Ok((Some(ast::Cmd::Stmt(stmt)), statement.end)),
             Err(error @ turso_mysql_parser::MysqlParserError::Rejected(_)) => {
                 return Err(LimboError::ParseError(error.to_string()));
             }
-            Err(_) => {}
+            Err(error) => error,
+        };
+        if uses_array_operators(text) {
+            return Err(LimboError::ParseError(format!(
+                "SQLite reads `&&` and `@>` as array operators, which MySQL does not have: {text}"
+            )));
         }
         // Anything the MySQL frontend cannot lower yet falls back to SQLite
         // parsing of the same statement, mirroring the PostgreSQL frontend.
         // SQLite must see the same single statement: if it ended earlier
         // (its lexer disagrees about a quote or comment), resuming after its
         // end could run text that MySQL treats as part of a string.
-        if uses_array_operators(text) {
-            return Err(LimboError::ParseError(format!(
-                "SQLite reads `&&` and `@>` as array operators, which MySQL does not have: {text}"
-            )));
-        }
         let (cmd, consumed) = turso_core::dialect::sqlite::parse(text)?;
         let Some(cmd) = cmd else {
             return Err(LimboError::ParseError(format!(
                 "MySQL statement is empty when parsed as SQLite: {text}"
             )));
         };
+        if creates_user_table(&cmd) {
+            return Err(LimboError::ParseError(mysql_error.to_string()));
+        }
         if let (Some(_), _) = turso_core::dialect::sqlite::parse(&text[consumed..])? {
             return Err(LimboError::ParseError(format!(
                 "MySQL and SQLite disagree on where this statement ends: {text}"
@@ -134,6 +143,14 @@ impl Dialect for MySqlDialect {
     fn marks_tables(&self) -> bool {
         true
     }
+}
+
+fn creates_user_table(cmd: &ast::Cmd) -> bool {
+    matches!(
+        cmd,
+        ast::Cmd::Stmt(ast::Stmt::CreateTable { tbl_name, .. })
+            if !turso_core::schema::is_system_table(tbl_name.name.as_str())
+    )
 }
 
 fn uses_array_operators(sql: &str) -> bool {
