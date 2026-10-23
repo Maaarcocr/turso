@@ -78,7 +78,14 @@ pub(super) fn assign_unsigned_bigint(args: &[Value]) -> Result<Value> {
             if !(0.0..18_446_744_073_709_551_616.0).contains(&rounded) {
                 return Err(out_of_range());
             }
-            i128::from(rounded as u64)
+            if rounded >= 9_223_372_036_854_775_808.0 {
+                return Err(invalid_value(format!(
+                    "Incorrect integer value: {} is above 9223372036854775807 and arrives \
+                    as a double, so it cannot be stored exactly; write it as text",
+                    crate::functions::format_double(f64::from(*double))
+                )));
+            }
+            i128::from(rounded as i64)
         }
         Value::Text(text) => read_integer(text.as_str().as_bytes())?,
         Value::Blob(_) => return Err(binary_string_in_number_column("integer")),

@@ -282,6 +282,36 @@ fn binary_strings_cannot_be_stored_in_number_columns_yet() -> turso_core::Result
 }
 
 #[test]
+fn bigint_unsigned_refuses_doubles_it_cannot_store_exactly() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (n INT, u BIGINT UNSIGNED)")?;
+    for sql in [
+        "INSERT INTO t VALUES (1, 12345678901234567891)",
+        "INSERT INTO t VALUES (2, 9223372036854775808)",
+        "INSERT INTO t VALUES (3, 1e19)",
+    ] {
+        let error = connection.execute(sql).expect_err(sql);
+        assert_eq!(
+            turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
+            Some(1366),
+            "{sql}"
+        );
+    }
+    connection.execute("INSERT INTO t VALUES (4, '12345678901234567891'), (5, 1e18)")?;
+    assert_eq!(
+        query(&connection, "SELECT n, CAST(u AS CHAR) FROM t ORDER BY n")?,
+        vec![
+            vec![
+                Value::from_i64(4),
+                Value::build_text("12345678901234567891")
+            ],
+            vec![Value::from_i64(5), Value::build_text("1000000000000000000")],
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn create_table_the_mysql_lowering_refuses_reports_why_and_creates_nothing(
 ) -> turso_core::Result<()> {
     let connection = open_memory()?;
