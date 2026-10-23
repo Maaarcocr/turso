@@ -1,0 +1,19 @@
+#!/bin/bash
+# Run a command under the shared MySQL cargo lock, from a worktree root.
+# Touches every Rust source when the non-MySQL sources differ from the last
+# locked build, otherwise only mysql/ and testing/sqltest/ sources.
+set -eu
+export CARGO_TARGET_DIR=/home/user/turso/target CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0
+export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-2}
+exec flock /tmp/turso-cargo-mysql.lock bash -c '
+set -eu
+stamp=/tmp/turso-mysql-shared-key
+key=$( { git ls-files -s -- . ":!mysql" ":!testing/sqltest"; git diff HEAD -- . ":!mysql" ":!testing/sqltest"; } | sha1sum | cut -d" " -f1)
+if [ "$(cat $stamp 2>/dev/null)" != "$key" ]; then
+  git ls-files -z -- "*.rs" "*Cargo.toml" | xargs -0 touch
+  echo "$key" > $stamp
+  echo "mysql-locked: shared sources changed, rebuilding everything" >&2
+else
+  git ls-files -z -- "mysql/*.rs" "mysql/*Cargo.toml" "testing/sqltest/*.rs" "testing/sqltest/*Cargo.toml" | xargs -0 touch
+fi
+"$@"' mysql-locked "$@"

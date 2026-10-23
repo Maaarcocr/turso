@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+
+NEW = os.environ["EXPLAIN_NEW"]
+BASE = os.environ["EXPLAIN_BASE"]
+LOG = os.environ["EXPLAIN_LOG"]
+MODE = os.environ.get("EXPLAIN_MODE", "off")
+EXPLAINABLE = ("SELECT", "INSERT", "UPDATE", "DELETE", "WITH", "REPLACE", "VALUES")
+BEGIN = "@@EXPLAIN-BEGIN"
+END = "@@EXPLAIN-END"
+
+
+def split_statements(sql):
+    statements = []
+    current = ""
+    for ch in sql:
+        current += ch
+        if ch == ";" and sqlite3.complete_statement(current):
+            statements.append(current.strip())
+            current = ""
+    if current.strip():
+        statements.append(current.strip())
+    return statements
+
+
+def explain_script(sql):
+    out = []
+    for stmt in split_statements(sql):
+        lines = stmt.splitlines()
+        dot_lines = [l for l in lines if l.lstrip().startswith(".")]
+        body = "\n".join(l for l in lines if not l.lstrip().startswith("."))
+        out.extend(dot_lines)
+        head = body.lstrip().upper()
+        if head.startswith(EXPLAINABLE):
+            bare = body.strip().rstrip(";")
+            out.append(f"SELECT '{BEGIN}';")
+            out.append(f"EXPLAIN {bare};")
+            out.append(f"SELECT '{END}';")
+        if body.strip():
+            out.append(body if body.strip().endswith(";") else body + ";")
+    return "\n".join(out) + "\n"
+
+
+def explain_sections(output):
+    sections = []
+    current = None
+    for line in output.splitlines():
+        if line == BEGIN:
+            current = []
+        elif line == END:
+            if current is not None:
+                sections.append("\n".join(current))
+            current = None
+        elif current is not None:
+            current.append(line)
+    return sections
+
+
+def run(binary, args, script, db_copy):
+    run_args = list(args)
+    if db_copy is not None:
+        run_args[0] = db_copy
+    if MODE == "off":
+        run_args = [a for a in run_args if a != "--experimental-custom-types"]
+    result = subprocess.run(
+        [binary] + run_args, input=script.encode(), capture_output=True, timeout=80
+    )
+    return result.stdout.decode(errors="replace") + result.stderr.decode(errors="replace")
+
+
+def main():
+    args = sys.argv[1:]
+    sql = sys.stdin.read()
+    real = subprocess.run([NEW] + args, input=sql.encode(), capture_output=True, timeout=80)
+    sys.stdout.buffer.write(real.stdout)
+    sys.stderr.buffer.write(real.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        compare(args, sql)
+    except Exception as error:
+        with open(LOG, "a") as log:
+            log.write(json.dumps({"sql": sql, "wrapper_error": repr(error)}) + "\n")
+    sys.exit(real.returncode)
+
+
+def compare(args, sql):
+    script = explain_script(sql)
+    db = args[0] if args else ":memory:"
+    with tempfile.TemporaryDirectory() as tmp:
+        copies = [None, None]
+        if db != ":memory:" and os.path.exists(db):
+            for i in range(2):
+                copies[i] = os.path.join(tmp, f"db{i}.db")
+                shutil.copy(db, copies[i])
+                for suffix in ("-wal", "-shm"):
+                    if os.path.exists(db + suffix):
+                        shutil.copy(db + suffix, copies[i] + suffix)
+        base_out = run(BASE, args, script, copies[0])
+        new_out = run(NEW, args, script, copies[1])
+    base_sections = explain_sections(base_out)
+    new_sections = explain_sections(new_out)
+    with open(LOG, "a") as log:
+        log.write(json.dumps({"count": len(base_sections)}) + "\n")
+        if base_sections != new_sections:
+            log.write(
+                json.dumps(
+                    {"sql": sql, "base": base_sections, "new": new_sections}
+                )
+                + "\n"
+            )
+
+
+main()
