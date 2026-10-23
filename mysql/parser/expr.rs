@@ -596,8 +596,8 @@ fn translate_regexp(
                 .to_string(),
         ));
     }
-    let lhs = translate_in(expr, Context::Text, context)?;
-    let rhs = translate_in(pattern, Context::Text, context)?;
+    let lhs = translate_regexp_operand(expr, context)?;
+    let rhs = translate_regexp_operand(pattern, context)?;
     Ok(ast::Expr::like(
         lhs,
         negated,
@@ -605,6 +605,18 @@ fn translate_regexp(
         rhs,
         None,
     ))
+}
+
+fn translate_regexp_operand(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let literal_context = if is_json_cast(expr) {
+        Context::Value
+    } else {
+        Context::Text
+    };
+    translate_in(expr, literal_context, context)
 }
 
 fn is_binary_literal(expr: &Expr) -> bool {

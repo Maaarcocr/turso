@@ -678,6 +678,48 @@ test exp-overflow-is-out-of-range {
 expect error {
 }
 
+test regexp-intervals-and-braces-in-classes {
+    SELECT 'aa' REGEXP '^a\{2\}$', 'a' REGEXP 'a\{1,\}', 'a' REGEXP '[\{]', 'x\{' REGEXP '[\{]';
+}
+expect {
+    1|1|0|1
+}
+
+# mysql-error: 3688 Syntax error in regular expression on line 1, character 1.
+test regexp-brace-without-an-operand-is-an-error {
+    SELECT 'a' REGEXP '\{';
+}
+expect error {
+}
+
+# mysql-error: 3692 Incorrect description of a {min,max} interval.
+test regexp-incomplete-interval-is-an-error {
+    SELECT 'a\{' REGEXP 'a\{';
+}
+expect error {
+}
+
+# mysql-error: 3688 Syntax error in regular expression on line 1, character 2.
+test regexp-closing-brace-alone-is-an-error {
+    SELECT 'a\}' REGEXP 'a\}';
+}
+expect error {
+}
+
+test regexp-of-json-uses-its-text {
+    SELECT '"ab"' REGEXP CAST('"ab"' AS JSON), 'ab' REGEXP CAST('"ab"' AS JSON), CAST('\{"b": 1, "a": 2\}' AS JSON) REGEXP '^."a"';
+}
+expect {
+    1|0|1
+}
+
+# mysql-error: 3688 Syntax error in regular expression on line 1, character 1.
+test regexp-of-a-json-object-pattern-is-an-error {
+    SELECT 'a' REGEXP CAST('\{"a": 1\}' AS JSON);
+}
+expect error {
+}
+
 # mysql-error: 3685 Illegal argument to a regular expression.
 test regexp-empty-pattern-is-an-error {
     SELECT REGEXP_LIKE('a', '');

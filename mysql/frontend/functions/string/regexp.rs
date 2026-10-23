@@ -240,6 +240,7 @@ fn translate_pattern(pattern: &str, flags: &Flags) -> Result<String> {
     };
     let mut chars = pattern.chars().peekable();
     let mut class_depth = 0;
+    let mut can_repeat = false;
     while let Some(letter) = chars.next() {
         match letter {
             '\\' => match chars.next() {
@@ -253,6 +254,16 @@ fn translate_pattern(pattern: &str, flags: &Flags) -> Result<String> {
                         literal.push(next);
                     }
                     translated.push_str(&fancy_regex::escape(&literal));
+                }
+                Some(name @ ('p' | 'P' | 'N' | 'x')) if chars.peek() == Some(&'{') => {
+                    translated.push('\\');
+                    translated.push(name);
+                    for letter in chars.by_ref() {
+                        translated.push(letter);
+                        if letter == '}' {
+                            break;
+                        }
+                    }
                 }
                 Some(next) => {
                     translated.push('\\');
@@ -285,10 +296,73 @@ fn translate_pattern(pattern: &str, flags: &Flags) -> Result<String> {
                     "Syntax error in regular expression".to_string(),
                 ))
             }
+            '{' if class_depth == 0 => {
+                let position = pattern.chars().count() - chars.clone().count();
+                let interval = take_interval(&mut chars, can_repeat, position)?;
+                translated.push_str(&interval);
+            }
+            '}' if class_depth == 0 => {
+                let position = pattern.chars().count() - chars.clone().count();
+                return Err(regexp_syntax_error(position));
+            }
             other => translated.push(other),
+        }
+        if class_depth == 0 {
+            can_repeat = !matches!(letter, '(' | '|' | '*' | '+' | '?' | '{');
         }
     }
     Ok(translated)
+}
+
+fn take_interval(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    can_repeat: bool,
+    position: usize,
+) -> Result<String> {
+    let mut interval = String::from("{");
+    let mut bounds = vec![String::new()];
+    for letter in chars.by_ref() {
+        interval.push(letter);
+        match letter {
+            '}' => break,
+            ',' if bounds.len() == 1 && !bounds[0].is_empty() => bounds.push(String::new()),
+            digit if digit.is_ascii_digit() => bounds
+                .last_mut()
+                .expect("bounds start with one")
+                .push(digit),
+            _ => return Err(interval_error(can_repeat, position)),
+        }
+    }
+    if !interval.ends_with('}') || bounds[0].is_empty() {
+        return Err(interval_error(can_repeat, position));
+    }
+    if !can_repeat {
+        return Err(regexp_syntax_error(position));
+    }
+    if bounds
+        .iter()
+        .filter(|bound| !bound.is_empty())
+        .any(|bound| bound.parse::<i32>().is_err())
+    {
+        return Err(LimboError::InvalidArgument(
+            "Decimal number in regular expression is too large.".to_string(),
+        ));
+    }
+    Ok(interval)
+}
+
+fn interval_error(can_repeat: bool, position: usize) -> LimboError {
+    if can_repeat {
+        LimboError::InvalidArgument("Incorrect description of a {min,max} interval.".to_string())
+    } else {
+        regexp_syntax_error(position)
+    }
+}
+
+fn regexp_syntax_error(position: usize) -> LimboError {
+    LimboError::InvalidArgument(format!(
+        "Syntax error in regular expression on line 1, character {position}."
+    ))
 }
 
 fn pattern_continues_with(chars: &std::iter::Peekable<std::str::Chars>, expected: &str) -> bool {
