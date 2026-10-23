@@ -36,7 +36,7 @@ Typed tables are STRICT tables that core marks with `/* turso_dialect:mysql */` 
 | `TINYTEXT`/`TEXT`/`MEDIUMTEXT`/`LONGTEXT` | text | as `VARCHAR`, with the type's limit in bytes |
 | `BINARY(n)`/`VARBINARY(n)`, `TINYBLOB`/`BLOB`/`MEDIUMBLOB`/`LONGBLOB` | blob | at most the type's length in bytes, else 1406; `BINARY(n)` pads with zero bytes; text and numbers are stored as their bytes. Binary columns compare with text literals byte by byte |
 | `GEOMETRY`, `POINT`, `LINESTRING`, `POLYGON`, `MULTI*`, `GEOMETRYCOLLECTION` | blob | only `NULL`: every other value fails (1416) |
-| `DECIMAL(p,s)` [`UNSIGNED`] | double (until exact decimals) | text is read as a number; negative `UNSIGNED` fails |
+| `DECIMAL(p,s)` [`UNSIGNED`] | integer when the value is a whole number in the signed 64-bit range, otherwise double (until exact decimals) | text is read as a number; other text fails with 1265 where MySQL reports 1366; negative `UNSIGNED` fails (1264) |
 | `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)` | text, as given (until temporal storage) | numbers become text |
 | `YEAR` | integer from 0 to 2155 | as the integer types |
 | `BIT(n)` | integer, `CHECK` against `0 .. 2^n - 1` | as the integer types |
