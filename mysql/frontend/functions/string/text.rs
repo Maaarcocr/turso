@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use turso_core::{Result, Value};
+use turso_core::{LimboError, Result, Value};
 
 use super::collation::compare_bytes;
 
@@ -372,6 +372,43 @@ fn trim_ends(args: &[Value], ends: Ends) -> Result<Value> {
         }
     }
     text.slice(start, end).into_value()
+}
+
+pub(super) fn cast_as_char(args: &[Value]) -> Result<Value> {
+    cast_to_text(args, false)
+}
+
+pub(super) fn cast_as_nchar(args: &[Value]) -> Result<Value> {
+    cast_to_text(args, true)
+}
+
+fn cast_to_text(args: &[Value], national: bool) -> Result<Value> {
+    let Some(value) = string(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    let Ok(text) = std::str::from_utf8(value.as_bytes()) else {
+        return Ok(Value::Null);
+    };
+    let length = match integer(&args[1]) {
+        Some(length) if !length.is_negative() => length.as_unsigned() as usize,
+        _ => {
+            return Err(LimboError::InvalidArgument(
+                "the length of a CHAR cast must be a non-negative integer".to_string(),
+            ))
+        }
+    };
+    let converted: String = text
+        .chars()
+        .take(length)
+        .map(|ch| {
+            if national && ch.len_utf8() == 4 {
+                '?'
+            } else {
+                ch
+            }
+        })
+        .collect();
+    Ok(Value::build_text(converted))
 }
 
 pub(super) fn char(args: &[Value]) -> Result<Value> {

@@ -306,6 +306,41 @@ test invalid-decimal-cast-fails-beside-syntax-that-is-not-lowered {
 expect error {
 }
 
+test cast-to-temporal-types-rounds-to-the-precision {
+    SELECT CAST('2000-01-01 10:00:00.6' AS DATETIME), CAST('2000-01-01 10:00:00.66' AS DATETIME(1)), CAST(20000101 AS DATE), CAST('1.5' AS TIME), CAST(-1.5 AS TIME(1)), CONVERT('10:04:58.12345', TIME(3)), CONVERT('2000-1-2 3:4:5', DATETIME);
+}
+expect {
+    2000-01-01 10:00:01|2000-01-01 10:00:00.7|2000-01-01|00:00:02|-00:00:01.5|10:04:58.123|2000-01-02 03:04:05
+}
+
+test cast-to-temporal-types-of-invalid-and-typed-values {
+    SELECT CAST('2000-02-30' AS DATE), CAST('foo' AS DATETIME), CAST(NULL AS TIME), CAST(CAST('"2000-01-02"' AS JSON) AS DATE), CAST(TIMESTAMP '2000-01-01 23:59:59.5' AS DATE), CAST(DATE '2000-01-01' AS DATETIME);
+}
+expect {
+    NULL|NULL|NULL|2000-01-02|2000-01-01|2000-01-01 00:00:00
+}
+
+# mysql-error: 1426 Too-big precision 7 specified for 'CAST'. Maximum is 6.
+test cast-to-datetime-with-more-than-six-digits-fails {
+    SELECT CAST(1 AS DATETIME(7));
+}
+expect error {
+}
+
+# mysql-error: 1426 Too-big precision 7 specified for 'CAST'. Maximum is 6.
+test convert-to-time-with-more-than-six-digits-fails {
+    SELECT CONVERT(1, TIME(7));
+}
+expect error {
+}
+
+test cast-to-char-with-a-length-truncates {
+    SELECT CAST('abcdef' AS CHAR(3)), CONVERT(123456, CHAR(2)), CAST('😀a' AS NCHAR(2)), CAST(1.5e0 AS CHAR(10)), CAST(_binary 'abc' AS CHAR(2)), CONVERT('abc', NCHAR(1)), CAST('ab' AS CHAR(0));
+}
+expect {
+    abc|12|?a|1.5|ab|a|
+}
+
 test string-functions-with-special-syntax {
     SELECT TRIM(LEADING 'x' FROM 'xxaxx'), TRIM(TRAILING 'x' FROM 'xxaxx'), TRIM(BOTH 'x' FROM 'xxaxx'), TRIM('  a  '), SUBSTRING('abcdef' FROM 2 FOR 3), SUBSTRING('abcdef', 3), SUBSTR('abcdef' FROM 4);
 }

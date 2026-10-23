@@ -87,6 +87,8 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("SUBSTRING_INDEX", 3) => text::substring_index,
         ("UCASE" | "UPPER", 1) => text::upper,
         ("UNHEX", 1) => text::unhex,
+        ("__MYSQL_CAST_AS_CHAR", 2) => text::cast_as_char,
+        ("__MYSQL_CAST_AS_NCHAR", 2) => text::cast_as_nchar,
         ("__MYSQL_LTRIM", 2) => text::ltrim,
         ("__MYSQL_RTRIM", 2) => text::rtrim,
         ("__MYSQL_TRIM", 2) => text::trim,

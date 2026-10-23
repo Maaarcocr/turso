@@ -556,6 +556,14 @@ fn reports_decimal_casts_that_mysql_rejects() {
             name: "in a statement that is not lowered",
             sql: "INSERT INTO t VALUES (CAST(1 AS DEC(66)))",
         },
+        SqlCase {
+            name: "datetime with more than six fractional digits",
+            sql: "SELECT CAST(1 AS DATETIME(7))",
+        },
+        SqlCase {
+            name: "time with more than six fractional digits",
+            sql: "SELECT CONVERT(1, TIME(7))",
+        },
     ];
 
     for case in cases {
@@ -740,6 +748,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_json ('[1,') AS v, __mysql_cast_as_json ('x')",
         ),
         (
+            "SELECT CAST('2000-01-01' AS DATE), CONVERT(1.5, DATETIME(3)), CAST('1:2' AS TIME), CAST(s AS CHAR(2)), CONVERT(s, NCHAR(1)), CAST(s AS NCHAR)",
+            "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
+        ),
+        (
             "SELECT TRIM(LEADING 'ab' FROM s), TRIM(BOTH FROM s), TRIM(s), RTRIM(s)",
             "SELECT __mysql_ltrim (s, 'ab'), __mysql_trim (s, ' '), __mysql_trim (s, ' '), __mysql_rtrim (s, ' ')",
         ),
@@ -808,10 +820,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT CAST(a AS DATE) FROM t",
         },
         SqlCase {
-            name: "cast to sized char",
-            sql: "SELECT CAST(a AS CHAR(3)) FROM t",
-        },
-        SqlCase {
             name: "latin1 text",
             sql: "SELECT _latin1'\u{e9}'",
         },
@@ -858,6 +866,26 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "caret over a function",
             sql: "SELECT a ^ RAND() FROM t",
+        },
+        SqlCase {
+            name: "temporal cast of a column whose type may be DATE or TIME",
+            sql: "SELECT CAST(c AS DATE) FROM t",
+        },
+        SqlCase {
+            name: "temporal cast of a TIME literal to a date",
+            sql: "SELECT CAST(TIME '10:00:00' AS DATETIME)",
+        },
+        SqlCase {
+            name: "temporal cast in arithmetic",
+            sql: "SELECT CAST('2000-01-01' AS DATE) + 0",
+        },
+        SqlCase {
+            name: "temporal cast in a comparison",
+            sql: "SELECT CAST('2000-01-01' AS DATE) = '2000-1-1'",
+        },
+        SqlCase {
+            name: "JSON cast of a temporal value",
+            sql: "SELECT CAST(DATE '2000-01-01' AS JSON)",
         },
         SqlCase {
             name: "invalid JSON cast MySQL does not evaluate",

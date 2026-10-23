@@ -111,6 +111,9 @@ Lowered:
 | `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)` | `LOCATE(a, b)`, `SUBSTRING(s, a, b)` |
 | `TRIM([[LEADING \| TRAILING \| BOTH] [r] FROM] s)`, `LTRIM(s)`, `RTRIM(s)` | `__mysql_trim(s, r)`, `__mysql_ltrim(s, r)`, `__mysql_rtrim(s, r)` with `r` a space when it is left out (see string functions); `TRIM(LEADING r)` without `FROM` is a syntax error, as in MySQL |
 | `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The same SQLite type name the fallback used, so the result is unchanged: no rounding to an integer or to `d` decimals, and no unsigned wrap-around. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement falls back or is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
+| `CAST`/`CONVERT(x, type)` to `NCHAR` | `CAST(x AS NCHAR)`, which SQLite reads as text like `CHAR` |
+| `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(x, n)`, `__mysql_cast_as_nchar(x, n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
+| `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(x AS TEXT)`, `CAST(x AS BLOB)` |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
 | Integer, decimal and scientific literals, `TRUE`, `FALSE`, `NULL` | The same literal text the SQLite parser keeps (decimals and integers above the signed 64-bit range are still SQLite numbers) |
@@ -161,9 +164,18 @@ yet:
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables (`@a`, `@@x`), `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
-  collation, `CAST` to `DATE`, `DATETIME`, `TIME`, `YEAR`, `CHAR(n)` or with a
-  character set, `CONVERT(... USING ...)` with any other character set, and
-  `^` over function calls or subqueries.
+  collation, `CAST` to `YEAR`, `BINARY` or with a character set,
+  `CONVERT(... USING ...)` with any other character set, and `^` over
+  function calls or subqueries.
+- `CAST` to `DATE`, `DATETIME` or `TIME` in a comparison, arithmetic, a
+  condition, a numeric function argument or a JSON cast, where MySQL uses the
+  temporal value or its number (`CAST('2000-01-01' AS DATE) + 0` is
+  20000101), and of an operand that may have a DATE or TIME type (a column, a
+  function result, `TIME '..'` to a date, `DATE '..'` to `TIME`): MySQL
+  converts those from the type, not from the text (`CAST(TIME '10:00:00' AS
+  DATETIME)` is today at 10:00).
+- `CAST(x AS JSON)` of a `DATE`, `TIME` or `TIMESTAMP` value: MySQL makes a
+  JSON date or time, while the lowered text is not valid JSON.
 
 Known differences that remain on the lowered path, as on the fallback: `/`
 is SQLite division (integer division for two integers) rather than MySQL's
@@ -171,8 +183,12 @@ DECIMAL division; integer overflow becomes a REAL instead of an error; bit
 operators are signed 64-bit rather than BIGINT UNSIGNED; string comparisons and
 `LIKE` use binary or ASCII case folding rather than `utf8mb4_0900_ai_ci`;
 `WHERE` may refer to select-list aliases; `ORDER BY` with `DISTINCT` may use
-columns outside the select list; and unaliased columns are named after the expression as sqlparser
-prints it (string literals after their value).
+columns outside the select list; unaliased columns are named after the expression as sqlparser
+prints it (string literals after their value); and the result of a `DATE`,
+`DATETIME` or `TIME` cast is text, so an aggregate such as `SUM` reads its
+leading number rather than MySQL's 20000101, and a decimal literal reaches the
+cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
+`.125000`).
 
 ## JSON functions
 
@@ -245,8 +261,11 @@ functions for the MySQL dialect, replacing SQLite's `DATE`, `TIME` and
 `ADDDATE`/`SUBDATE` with a number of days, `DATE_FORMAT`, `TIME_FORMAT`,
 `STR_TO_DATE`, `FROM_UNIXTIME`, `UNIX_TIMESTAMP`, `CONVERT_TZ`, and `NOW`,
 `SYSDATE`, `CURDATE`, `CURTIME`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`,
-`LOCALTIME`, `LOCALTIMESTAMP` and the `CURRENT_*` functions. They follow
-MySQL 8.4.10:
+`LOCALTIME`, `LOCALTIMESTAMP` and the `CURRENT_*` functions, and the
+lowered `CAST(x AS DATE/DATETIME(p)/TIME(p))` as `__mysql_cast_as_date(x)`,
+`__mysql_cast_as_datetime(x, p)` and `__mysql_cast_as_time(x, p)`, which
+convert like `DATE`, `TIMESTAMP` and `TIME` but round to `p` digits. They
+follow MySQL 8.4.10:
 
 - Arguments convert as MySQL converts them: strings with MySQL's datetime
   and time parsers (delimiters, `T`, two-digit years, packed `YYYYMMDDhhmmss`

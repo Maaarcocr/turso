@@ -455,14 +455,24 @@ impl MySql {
             } => data_type,
             _ => return,
         };
-        let (DataType::Decimal(info) | DataType::Dec(info)) = data_type else {
-            return;
+        let reason = match data_type {
+            DataType::Decimal(info) | DataType::Dec(info) => invalid_cast_decimal(info),
+            DataType::Datetime(Some(precision)) | DataType::Time(Some(precision), _)
+                if *precision > MAX_TEMPORAL_PRECISION =>
+            {
+                Some(format!(
+                    "{data_type} has more than {MAX_TEMPORAL_PRECISION} fractional digits"
+                ))
+            }
+            _ => None,
         };
-        if let Some(reason) = invalid_cast_decimal(info) {
+        if let Some(reason) = reason {
             self.rejected_cast.borrow_mut().get_or_insert(reason);
         }
     }
 }
+
+pub(crate) const MAX_TEMPORAL_PRECISION: u64 = 6;
 
 fn invalid_cast_decimal(info: &ExactNumberInfo) -> Option<String> {
     let (precision, scale) = match *info {

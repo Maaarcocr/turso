@@ -192,8 +192,15 @@ pub(super) fn date(args: &[Arg]) -> Result<Value> {
 }
 
 pub(super) fn time(args: &[Arg]) -> Result<Value> {
-    let fsp = args[0].time_fsp();
-    Ok(match args[0].time() {
+    Ok(time_with_precision(&args[0], args[0].time_fsp()))
+}
+
+pub(super) fn cast_as_time(args: &[Arg]) -> Result<Value> {
+    Ok(time_with_precision(&args[0], cast_precision(&args[1])?))
+}
+
+fn time_with_precision(arg: &Arg, fsp: u8) -> Value {
+    match arg.time() {
         Some(mut t) => {
             if t.kind != Kind::Time {
                 t = MyTime::time(false, t.hour, t.minute, t.second, t.micro);
@@ -202,19 +209,35 @@ pub(super) fn time(args: &[Arg]) -> Result<Value> {
             time_value(t, fsp)
         }
         None => Value::Null,
-    })
+    }
 }
 
 pub(super) fn timestamp(args: &[Arg]) -> Result<Value> {
-    let fsp = args[0].datetime_fsp();
-    let Some(mut t) = args[0].datetime(DateFlags::CAST) else {
-        return Ok(Value::Null);
+    Ok(datetime_with_precision(&args[0], args[0].datetime_fsp()))
+}
+
+pub(super) fn cast_as_datetime(args: &[Arg]) -> Result<Value> {
+    Ok(datetime_with_precision(&args[0], cast_precision(&args[1])?))
+}
+
+fn datetime_with_precision(arg: &Arg, fsp: u8) -> Value {
+    let Some(mut t) = arg.datetime(DateFlags::CAST) else {
+        return Value::Null;
     };
-    Ok(if t.round_datetime(fsp) {
+    if t.round_datetime(fsp) {
         datetime_value(t, fsp)
     } else {
         Value::Null
-    })
+    }
+}
+
+fn cast_precision(precision: &Arg) -> Result<u8> {
+    match *precision {
+        Arg::Int(fsp @ 0..=6) => Ok(fsp as u8),
+        _ => Err(LimboError::InvalidArgument(
+            "the precision of a temporal CAST must be an integer from 0 to 6".to_string(),
+        )),
+    }
 }
 
 pub(super) fn date_format(args: &[Arg]) -> Result<Value> {
