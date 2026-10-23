@@ -45,16 +45,16 @@ impl Dialect for MySqlDialect {
             }
             Err(error) => error,
         };
-        // Anything the MySQL frontend cannot lower yet falls back to SQLite
-        // parsing of the same statement, mirroring the PostgreSQL frontend.
-        // SQLite must see the same single statement: if it ended earlier
-        // (its lexer disagrees about a quote or comment), resuming after its
-        // end could run text that MySQL treats as part of a string.
         if uses_array_operators(text) {
             return Err(LimboError::ParseError(format!(
                 "SQLite reads `&&` and `@>` as array operators, which MySQL does not have: {text}"
             )));
         }
+        // Anything the MySQL frontend cannot lower yet falls back to SQLite
+        // parsing of the same statement, mirroring the PostgreSQL frontend.
+        // SQLite must see the same single statement: if it ended earlier
+        // (its lexer disagrees about a quote or comment), resuming after its
+        // end could run text that MySQL treats as part of a string.
         let (cmd, consumed) = turso_core::dialect::sqlite::parse(text)?;
         let Some(cmd) = cmd else {
             return Err(LimboError::ParseError(format!(
