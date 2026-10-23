@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use turso_core::dialect::TypeRules;
+use turso_core::dialect::{ArgumentType, TypeRules};
 use turso_core::schema::{BTreeTable, Schema};
 use turso_core::{
     Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, Value, IO,
@@ -108,6 +108,18 @@ impl Dialect for MySqlDialect {
     ) -> Result<Value> {
         types::execute(name, args)
             .or_else(|| functions::execute(name, args))
+            .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
+    }
+
+    fn exec_typed_scalar_function(
+        &self,
+        _conn: &Connection,
+        name: &str,
+        args: &[Value],
+        arg_types: &[ArgumentType],
+    ) -> Result<Value> {
+        types::execute(name, args)
+            .or_else(|| functions::execute_typed(name, args, arg_types))
             .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
     }
 
