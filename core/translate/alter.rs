@@ -1294,7 +1294,7 @@ pub fn translate_alter_table(
             if is_generated {
                 for c in &col_def.constraints {
                     if let ast::ColumnConstraint::Generated { expr, .. } = &c.constraint {
-                        crate::schema::validate_generated_expr(expr)?;
+                        crate::schema::validate_generated_expr(expr, resolver)?;
                     }
                 }
             }
@@ -2002,7 +2002,7 @@ pub fn translate_alter_table(
 
                 for constraint in &definition.constraints {
                     if let ast::ColumnConstraint::Generated { expr, .. } = &constraint.constraint {
-                        crate::schema::validate_generated_expr(expr)?;
+                        crate::schema::validate_generated_expr(expr, resolver)?;
                     }
                 }
 

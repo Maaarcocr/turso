@@ -589,7 +589,7 @@ pub fn bind_and_rewrite_expr<'a>(
             Ok(WalkControl::Continue)
         },
     )?;
-    Ok(())
+    rewrite_typed_aggregates(top_level_expr, referenced_tables.as_deref(), resolver)
 }
 
 fn validate_function_tail(

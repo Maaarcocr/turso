@@ -669,6 +669,31 @@ pub fn translate_aggregation_step(
             });
             target_register
         }
+        AggFunc::NumericSum => {
+            if num_args != 1 {
+                crate::bail_parse_error!("numeric_sum bad number of arguments");
+            }
+            let expr_reg = agg_arg_source.translate(program, referenced_tables, resolver, 0)?;
+            handle_distinct(
+                program,
+                &agg_arg_source,
+                0,
+                expr_reg,
+                referenced_tables,
+                resolver,
+            )?;
+            program.emit_insn(Insn::AggStep {
+                data: Box::new(AggStepData {
+                    acc_reg: target_register,
+                    col: expr_reg,
+                    delimiter: 0,
+                    func: AccumulatorFunc::Agg(AggFunc::NumericSum),
+                    comparator: None,
+                    collation: None,
+                }),
+            });
+            target_register
+        }
         AggFunc::Total => {
             if num_args != 1 {
                 crate::bail_parse_error!("total bad number of arguments");
