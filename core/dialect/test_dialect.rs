@@ -95,6 +95,14 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 OPERATOR '<' (tinyint, tinyint) OPERATOR '=' (tinyint, tinyint)",
         },
         DialectType {
+            name: "tinyint unsigned",
+            storage: StorageType::RangedInteger { min: 0, max: 255 },
+            parameters: "",
+            behaviour: "CAST TO integer AS IMPLICIT \
+                OPERATOR '<' (tinyint unsigned, integer) \
+                OPERATOR '=' (tinyint unsigned, integer)",
+        },
+        DialectType {
             name: "ubigint",
             storage: StorageType::Uint64,
             parameters: "",

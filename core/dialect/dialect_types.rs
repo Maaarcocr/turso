@@ -420,6 +420,35 @@ mod tests {
     }
 
     #[test]
+    fn operator_signatures_name_types_of_several_words_without_quotes() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "types-several-words.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, s TINYINT UNSIGNED) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 200), (2, 7)")
+            .unwrap();
+        assert!(conn.execute("INSERT INTO t VALUES (3, 256)").is_err());
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT (SELECT id FROM t WHERE s < 100), (SELECT id FROM t WHERE s = 200)"
+            ),
+            ints(&[&[2, 1]])
+        );
+        let operators = query(
+            &conn,
+            "SELECT operators FROM pragma_list_types WHERE type LIKE 'tinyint unsigned%'",
+        );
+        assert_eq!(
+            operators,
+            vec![vec![Value::build_text(
+                "'<' (tinyint unsigned, integer), '=' (tinyint unsigned, integer)".to_string()
+            )]]
+        );
+    }
+
+    #[test]
     fn a_negated_literal_keeps_the_class_of_the_literal() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let db = open_db(&io, "types-negated-literal.db", marking()).unwrap();
