@@ -1174,8 +1174,13 @@ fn emit_index_column_value_from_cursor(
         if idx_col.pos_in_table != EXPR_INDEX_SENTINEL {
             let column = &table.columns()[idx_col.pos_in_table];
             if column.is_virtual_generated() {
-                crate::translate::expr::emit_generated_value_conversion(
-                    program, dest_reg, column, resolver,
+                crate::translate::expr::emit_generated_stored_value(
+                    program,
+                    dest_reg,
+                    column,
+                    table.is_strict,
+                    &table.name,
+                    resolver,
                 )?;
             }
         }

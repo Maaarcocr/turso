@@ -8,9 +8,9 @@ use super::{
         update::emit_program_for_update,
     },
     expr::{
-        bind_and_rewrite_expr, emit_generated_value_conversion, emit_stored_column,
-        emit_table_column, translate_expr_no_constant_opt, walk_expr, BindingBehavior,
-        NoConstantOptReason, WalkControl,
+        bind_and_rewrite_expr, emit_generated_stored_value, emit_stored_column, emit_table_column,
+        translate_expr_no_constant_opt, walk_expr, BindingBehavior, NoConstantOptReason,
+        WalkControl,
     },
     group_by::GroupByMetadata,
     main_loop::{LeftJoinMetadata, LoopLabels, RightJoinMetadata, SemiAntiJoinMetadata},
@@ -2258,7 +2258,8 @@ pub(crate) fn emit_columns_and_dependencies(
         };
         pairs.push((col, reg));
     }
-    let dml_ctx = DmlColumnContext::from_column_reg_mapping(pairs.into_iter());
+    let dml_ctx =
+        DmlColumnContext::from_column_reg_mapping(pairs.into_iter()).with_encoded_values();
     if targets
         .iter()
         .all(|&idx| !table.columns()[idx].is_rowid_alias())
@@ -2322,7 +2323,14 @@ pub(crate) fn emit_index_column_value_old_image(
             if let Some(table) = program.btree_table_from_cursor(table_cursor_id).cloned() {
                 let column = &table.columns()[idx_col.pos_in_table];
                 if column.is_virtual_generated() {
-                    emit_generated_value_conversion(program, dest_reg, column, resolver)?;
+                    emit_generated_stored_value(
+                        program,
+                        dest_reg,
+                        column,
+                        table.is_strict,
+                        &table.name,
+                        resolver,
+                    )?;
                 }
             }
         }
@@ -2435,6 +2443,22 @@ fn emit_index_column_value_new_image(
             dest_reg,
             idx_col.pos_in_table == EXPR_INDEX_SENTINEL,
         )?;
+        if let Some(column) = columns.get(idx_col.pos_in_table).filter(|column| {
+            column.is_virtual_generated()
+                && resolver
+                    .schema()
+                    .column_type_def(column, table.is_strict)
+                    .is_some()
+        }) {
+            emit_generated_stored_value(
+                program,
+                dest_reg,
+                column,
+                table.is_strict,
+                &table.name,
+                resolver,
+            )?;
+        }
     } else {
         let col_in_table = columns
             .get(idx_col.pos_in_table)
@@ -2452,7 +2476,14 @@ fn emit_index_column_value_new_image(
                     layout,
                     table,
                 )?;
-                emit_generated_value_conversion(program, dest_reg, col_in_table, resolver)?;
+                emit_generated_stored_value(
+                    program,
+                    dest_reg,
+                    col_in_table,
+                    table.is_strict,
+                    &table.name,
+                    resolver,
+                )?;
             }
             GeneratedType::NotGenerated => {
                 let src_reg = if col_in_table.is_rowid_alias() {

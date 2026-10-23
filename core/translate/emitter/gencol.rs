@@ -1,5 +1,8 @@
 use crate::schema::{BTreeTable, ColumnLayout, ColumnsTopologicalSort, GeneratedType};
-use crate::translate::expr::{emit_generated_value_conversion, translate_expr};
+use crate::translate::expr::{
+    emit_column_encode, emit_generated_value_conversion, emit_user_facing_column_value,
+    translate_expr,
+};
 use crate::vdbe::builder::{DmlColumnContext, SelfTableContext};
 use crate::{Arc, Result};
 use turso_parser::ast;
@@ -28,9 +31,24 @@ pub fn compute_virtual_columns(
             let target_reg = dml_ctx.to_column_reg(idx);
             translate_expr(program, None, expr, target_reg, resolver)?;
             emit_generated_value_conversion(program, target_reg, column, resolver)?;
+            if !dml_ctx.holds_encoded_values() && table.is_strict && !column.is_array() {
+                emit_column_encode(program, resolver, column, target_reg, &table.name, None)?;
+                emit_user_facing_column_value(
+                    program, target_reg, target_reg, column, true, resolver,
+                )?;
+            }
         }
         Ok(())
-    })
+    })?;
+    if dml_ctx.holds_encoded_values() && table.is_strict {
+        for (idx, column) in columns.iter() {
+            if column.is_virtual_generated() {
+                let reg = dml_ctx.to_column_reg(idx);
+                emit_column_encode(program, resolver, column, reg, &table.name, None)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Emit bytecode to compute a single virtual generated column expression.

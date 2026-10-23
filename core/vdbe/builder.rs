@@ -141,6 +141,7 @@ enum DmlColumnRegisters {
 pub struct DmlColumnContext {
     registers: DmlColumnRegisters,
     rowid_alias_col: Option<usize>,
+    holds_encoded_values: bool,
 }
 
 impl DmlColumnContext {
@@ -159,6 +160,7 @@ impl DmlColumnContext {
                 layout,
             },
             rowid_alias_col,
+            holds_encoded_values: false,
         }
     }
 
@@ -174,7 +176,17 @@ impl DmlColumnContext {
         Self {
             registers: DmlColumnRegisters::Indexed { column_regs },
             rowid_alias_col,
+            holds_encoded_values: false,
         }
+    }
+
+    pub fn with_encoded_values(mut self) -> Self {
+        self.holds_encoded_values = true;
+        self
+    }
+
+    pub fn holds_encoded_values(&self) -> bool {
+        self.holds_encoded_values
     }
 
     pub fn to_column_reg(&self, col_idx: usize) -> usize {

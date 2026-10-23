@@ -443,62 +443,72 @@ pub(crate) fn emit_custom_type_encode_columns(
                 continue;
             }
         }
-
         let reg = layout.to_register(start_reg, i);
-
-        // Handle array columns: encode input (text or blob) -> record blob for storage
-        if col.is_array() {
-            let skip_label = program.allocate_label();
-            program.emit_insn(Insn::IsNull {
-                reg,
-                target_pc: skip_label,
-            });
-            emit_array_encode(program, reg, col, resolver, table_name)?;
-            program.preassign_label_to_next_insn(skip_label);
-            continue;
-        }
-
-        if col.ty_str.is_empty() {
-            continue;
-        }
-        let Ok(Some(resolved)) = resolver.schema().column_resolved_type(col, true) else {
-            continue;
-        };
-
-        // Check if any type in the chain has not_null — if so, don't skip NULLs
-        let any_not_null = resolved.chain.iter().any(|td| td.not_null);
-
-        let skip_label = if !any_not_null {
-            // Skip NULL values: jump over encode if NULL
-            let label = program.allocate_label();
-            program.emit_insn(Insn::IsNull {
-                reg,
-                target_pc: label,
-            });
-            Some(label)
-        } else {
-            None
-        };
-
-        if resolved.chain.iter().any(|td| td.encode().is_some()) {
-            named_a_column |= emit_conversion_context(program, col, row_number_reg);
-        }
-
-        // Apply encode for each type in the chain (child first, then parent)
-        for td in &resolved.chain {
-            if let Some(encode_expr) = td.encode() {
-                emit_type_expr(program, encode_expr, reg, reg, col, td, resolver)?;
-            }
-        }
-
-        if let Some(label) = skip_label {
-            program.preassign_label_to_next_insn(label);
-        }
+        named_a_column |=
+            emit_column_encode(program, resolver, col, reg, table_name, row_number_reg)?;
     }
     if named_a_column {
         emit_conversion_context_end(program, row_number_reg);
     }
     Ok(())
+}
+
+pub(crate) fn emit_column_encode(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    col: &Column,
+    reg: usize,
+    table_name: &str,
+    row_number_reg: Option<usize>,
+) -> Result<bool> {
+    // Handle array columns: encode input (text or blob) -> record blob for storage
+    if col.is_array() {
+        let skip_label = program.allocate_label();
+        program.emit_insn(Insn::IsNull {
+            reg,
+            target_pc: skip_label,
+        });
+        emit_array_encode(program, reg, col, resolver, table_name)?;
+        program.preassign_label_to_next_insn(skip_label);
+        return Ok(false);
+    }
+
+    if col.ty_str.is_empty() {
+        return Ok(false);
+    }
+    let Ok(Some(resolved)) = resolver.schema().column_resolved_type(col, true) else {
+        return Ok(false);
+    };
+
+    // Check if any type in the chain has not_null — if so, don't skip NULLs
+    let any_not_null = resolved.chain.iter().any(|td| td.not_null);
+
+    let skip_label = if !any_not_null {
+        // Skip NULL values: jump over encode if NULL
+        let label = program.allocate_label();
+        program.emit_insn(Insn::IsNull {
+            reg,
+            target_pc: label,
+        });
+        Some(label)
+    } else {
+        None
+    };
+
+    let named_a_column = resolved.chain.iter().any(|td| td.encode().is_some())
+        && emit_conversion_context(program, col, row_number_reg);
+
+    // Apply encode for each type in the chain (child first, then parent)
+    for td in &resolved.chain {
+        if let Some(encode_expr) = td.encode() {
+            emit_type_expr(program, encode_expr, reg, reg, col, td, resolver)?;
+        }
+    }
+
+    if let Some(label) = skip_label {
+        program.preassign_label_to_next_insn(label);
+    }
+    Ok(named_a_column)
 }
 
 fn emit_conversion_context(

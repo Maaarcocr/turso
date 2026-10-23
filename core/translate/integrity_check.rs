@@ -1,7 +1,6 @@
 use crate::alloc::Arc;
 use crate::schema::Column;
-use crate::translate::expr::{emit_stored_column, emit_table_column};
-use crate::vdbe::affinity::Affinity;
+use crate::translate::expr::{emit_generated_stored_value, emit_stored_column, emit_table_column};
 use crate::vdbe::builder::SelfTableContext;
 use crate::{
     schema::{BTreeTable, GeneratedType, Index, Schema, Table, EXPR_INDEX_SENTINEL},
@@ -27,9 +26,7 @@ pub const MAX_INTEGRITY_CHECK_ERRORS: usize = 100;
 
 enum BoundIndexColumn {
     Column(usize),
-    /// The affiniy is `Some` when the index column refers to a virtual generated column
-    /// (the affinity is the column's declared type).
-    Expr(Box<ast::Expr>, Option<Affinity>),
+    Expr(Box<ast::Expr>, Option<usize>),
 }
 
 struct BoundIntegrityIndex {
@@ -313,15 +310,11 @@ fn translate_integrity_check_for_schema(
                 let mut unique_nullable = Vec::with_capacity(index.columns.len());
                 for col in &index.columns {
                     if let Some(expr) = col.expr.as_deref() {
-                        let affinity = if col.pos_in_table != EXPR_INDEX_SENTINEL {
-                            Some(btree_table.columns()[col.pos_in_table].affinity())
-                        } else {
-                            // expression indexes don't apply affinity from the basae table
-                            None
-                        };
+                        let virtual_column =
+                            (col.pos_in_table != EXPR_INDEX_SENTINEL).then_some(col.pos_in_table);
                         columns.push(BoundIndexColumn::Expr(
                             Box::new(bind_expr_for_table(expr, &mut table_references, resolver)?),
-                            affinity,
+                            virtual_column,
                         ));
                         unique_nullable.push(true);
                     } else {
@@ -379,7 +372,7 @@ fn translate_integrity_check_for_schema(
                 let col_ref = match col.generated_type() {
                     GeneratedType::Virtual { expr, .. } => BoundIndexColumn::Expr(
                         Box::new(bind_expr_for_table(expr, &mut table_references, resolver)?),
-                        Some(col.affinity()),
+                        Some(idx),
                     ),
                     GeneratedType::NotGenerated => BoundIndexColumn::Column(idx),
                 };
@@ -394,6 +387,7 @@ fn translate_integrity_check_for_schema(
                 resolver,
                 table_cursor_id,
                 &table_references,
+                btree_table,
                 col_ref,
             )?;
 
@@ -487,7 +481,7 @@ fn translate_integrity_check_for_schema(
                             resolver,
                         )?;
                     }
-                    BoundIndexColumn::Expr(expr, affinity) => {
+                    BoundIndexColumn::Expr(expr, virtual_column) => {
                         let self_table_context =
                             table_references.joined_tables().first().map(|jt| {
                                 SelfTableContext::ForSelect {
@@ -511,8 +505,15 @@ fn translate_integrity_check_for_schema(
                                 Ok(())
                             },
                         )?;
-                        if let Some(aff) = affinity {
-                            program.emit_column_affinity(target, *aff);
+                        if let Some(position) = virtual_column {
+                            emit_generated_stored_value(
+                                program,
+                                target,
+                                &btree_table.columns()[*position],
+                                btree_table.is_strict,
+                                &btree_table.name,
+                                resolver,
+                            )?;
                         }
                     }
                 }
@@ -792,6 +793,7 @@ fn emit_column(
     resolver: &Resolver,
     table_cursor_id: usize,
     table_references: &TableReferences,
+    btree_table: &BTreeTable,
     col_ref: &BoundIndexColumn,
 ) -> crate::Result<usize> {
     let col_value_reg = program.alloc_register();
@@ -799,7 +801,7 @@ fn emit_column(
         BoundIndexColumn::Column(idx) => {
             emit_stored_column(program, table_cursor_id, *idx, col_value_reg, resolver)?;
         }
-        BoundIndexColumn::Expr(expr, affinity) => {
+        BoundIndexColumn::Expr(expr, virtual_column) => {
             let self_table_context =
                 table_references
                     .joined_tables()
@@ -820,8 +822,15 @@ fn emit_column(
                         resolver,
                         NoConstantOptReason::RegisterReuse,
                     )?;
-                    if let Some(affinity) = affinity {
-                        program.emit_column_affinity(col_value_reg, *affinity);
+                    if let Some(position) = virtual_column {
+                        emit_generated_stored_value(
+                            program,
+                            col_value_reg,
+                            &btree_table.columns()[*position],
+                            btree_table.is_strict,
+                            &btree_table.name,
+                            resolver,
+                        )?;
                     }
                     Ok(())
                 },
