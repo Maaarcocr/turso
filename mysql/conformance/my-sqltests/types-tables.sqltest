@@ -703,6 +703,30 @@ expect {
     1|1|1|1|1|1|1|1
 }
 
+test integer-columns-compare-with-text-on-either-side {
+    CREATE TABLE t (i INT, s TINYINT, y YEAR, u BIGINT UNSIGNED, v VARCHAR(30));
+    INSERT INTO t VALUES (9, 9, 2009, 9, '9');
+    SELECT '9' = i, '8' > i, '9' <=> i, '9.5' = i, i = '9', '-1' < s, '2009' = y FROM t;
+    SELECT v = u, u = v, u = '9.0', u = '', u = '1e1', u = '9x', '9.0' = u, '9x' = u FROM t;
+    SELECT count(*) FROM t WHERE '9' = i;
+}
+expect {
+    1|0|1|0|1|1|1
+    1|1|1|0|0|1|1|1
+    1
+}
+
+test bigint-unsigned-compares-with-literals-above-the-signed-range {
+    CREATE TABLE t (id INT, u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (1, '18446744073709551615'), (2, 9);
+    SELECT id FROM t WHERE u = 18446744073709551615;
+    SELECT id FROM t WHERE u = '18446744073709551615';
+}
+expect {
+    1
+    1
+}
+
 test integer-columns-sort-and-group-as-numbers {
     CREATE TABLE t (i TINYINT, u BIGINT UNSIGNED);
     INSERT INTO t VALUES (10, '18446744073709551615'), (9, '9223372036854775808'), (-1, 2), (10, 2);

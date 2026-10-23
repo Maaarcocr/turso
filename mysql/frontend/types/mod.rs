@@ -70,6 +70,8 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_SQLITE_CAST", 2) => sqlite_cast,
         ("__MYSQL_ASSIGN_INTEGER", 1) => integer::assign_integer,
         ("__MYSQL_ASSIGN_UNSIGNED_BIGINT", 1) => integer::assign_unsigned_bigint,
+        ("__MYSQL_UNSIGNED_EQUALS_VALUE", 2) => integer::unsigned_equals_value,
+        ("__MYSQL_VALUE_EQUALS_UNSIGNED", 2) => integer::value_equals_unsigned,
         ("__MYSQL_ASSIGN_CHAR", 2) => string::assign_char,
         ("__MYSQL_ASSIGN_VARCHAR", 2) => string::assign_varchar,
         ("__MYSQL_ASSIGN_TEXT", 2) => string::assign_text,

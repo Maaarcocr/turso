@@ -1,7 +1,7 @@
 use super::number_text::{self, Reading};
 use super::{binary_string_in_number_column, data_truncated, invalid_value, out_of_range};
 use turso_core::dialect::{DialectType, StorageType};
-use turso_core::{Numeric, Result, Value};
+use turso_core::{LimboError, Numeric, Result, Value};
 
 macro_rules! ranged {
     ($name:literal, $min:expr, $max:expr) => {
@@ -21,7 +21,13 @@ macro_rules! ranged {
                 "\", integer) ",
                 "OPERATOR '=' (\"",
                 $name,
-                "\", integer)"
+                "\", integer) ",
+                "OPERATOR '<' (any, \"",
+                $name,
+                "\") ",
+                "OPERATOR '=' (any, \"",
+                $name,
+                "\")"
             ),
         }
     };
@@ -46,7 +52,13 @@ pub(super) const TYPES: [DialectType; 10] = [
             OPERATOR '<' (\"bigint unsigned\", \"bigint unsigned\") uint64_lt \
             OPERATOR '<' (\"bigint unsigned\", integer) uint64_lt \
             OPERATOR '=' (\"bigint unsigned\", \"bigint unsigned\") uint64_eq \
-            OPERATOR '=' (\"bigint unsigned\", integer) uint64_eq",
+            OPERATOR '=' (\"bigint unsigned\", real) __mysql_unsigned_equals_value \
+            OPERATOR '=' (\"bigint unsigned\", char) __mysql_unsigned_equals_value \
+            OPERATOR '=' (\"bigint unsigned\", varchar) __mysql_unsigned_equals_value \
+            OPERATOR '=' (\"bigint unsigned\", tinytext) __mysql_unsigned_equals_value \
+            OPERATOR '=' (\"bigint unsigned\", mediumtext) __mysql_unsigned_equals_value \
+            OPERATOR '=' (\"bigint unsigned\", longtext) __mysql_unsigned_equals_value \
+            OPERATOR '=' (any, \"bigint unsigned\") __mysql_value_equals_unsigned",
     },
 ];
 
@@ -95,6 +107,46 @@ pub(super) fn assign_unsigned_bigint(args: &[Value]) -> Result<Value> {
         Ok(signed) => Value::from_i64(signed),
         Err(_) => Value::build_text(unsigned.to_string()),
     })
+}
+
+pub(super) fn unsigned_equals_value(args: &[Value]) -> Result<Value> {
+    let [unsigned, value] = args else {
+        unreachable!("__mysql_unsigned_equals_value is resolved with two arguments");
+    };
+    unsigned_equals(unsigned, value)
+}
+
+pub(super) fn value_equals_unsigned(args: &[Value]) -> Result<Value> {
+    let [value, unsigned] = args else {
+        unreachable!("__mysql_value_equals_unsigned is resolved with two arguments");
+    };
+    unsigned_equals(unsigned, value)
+}
+
+fn unsigned_equals(unsigned: &Value, value: &Value) -> Result<Value> {
+    let unsigned = match unsigned {
+        Value::Null => return Ok(Value::Null),
+        Value::Numeric(Numeric::Integer(number)) => u64::try_from(*number).ok(),
+        Value::Text(text) => text.as_str().parse::<u64>().ok(),
+        Value::Numeric(Numeric::Float(_)) | Value::Blob(_) => None,
+    }
+    .ok_or_else(|| {
+        LimboError::InternalError(format!("a BIGINT UNSIGNED value read back as {unsigned}"))
+    })?;
+    let equal = match value {
+        Value::Null => return Ok(Value::Null),
+        Value::Numeric(Numeric::Integer(number)) => i128::from(unsigned) == i128::from(*number),
+        Value::Numeric(Numeric::Float(double)) => unsigned as f64 == f64::from(*double),
+        Value::Text(_) | Value::Blob(_) => match value.exec_cast("REAL")? {
+            Value::Numeric(Numeric::Float(double)) => unsigned as f64 == f64::from(double),
+            other => {
+                return Err(LimboError::InternalError(format!(
+                    "a REAL cast of {value} returned {other}, which is not a double"
+                )));
+            }
+        },
+    };
+    Ok(Value::from_i64(i64::from(equal)))
 }
 
 fn rounded_double(value: f64) -> Result<i64> {
