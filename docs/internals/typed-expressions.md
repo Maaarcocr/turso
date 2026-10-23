@@ -1385,6 +1385,15 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
   Materialized views read the stored value of a typed column without
   DECODE (this was already true before), so expressions over a numeric
   column in a view see the value without its declared scale.
+- **Unsigned arithmetic with a signed operand (ask C).** `uint64_add`,
+  `uint64_sub` and `uint64_mul` already computed with one signed operand
+  (`uint64_add(5, -3)` is 2, a negative result is out of range). What
+  refused `CAST(5 AS UNSIGNED) + -3` was the operator signature: with only
+  `(T, T)` and `CAST FROM integer AS IMPLICIT`, `-3` is converted to the
+  unsigned type first, and that conversion refuses it. A dialect declares
+  `(T, integer)` and `(integer, T)` for `+`, `-` and `*` (and for `<` and
+  `=`) and no implicit cast from integer, as the MySQL frontend does for
+  comparisons; the test dialect's `ubigint` now does the same.
 
 **Aggregates.** Only type-declared aggregates: `FUNCTION sum(numeric) RETURNS
 numeric numeric_sum` and `avg`, with native exact accumulators. A type without

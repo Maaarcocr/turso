@@ -377,6 +377,45 @@ mod tests {
     }
 
     #[test]
+    fn unsigned_64_bit_arithmetic_accepts_one_signed_operand() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "types-uint64-signed.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, u UBIGINT, i INTEGER) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 5, -3), (2, '18446744073709551615', -6)")
+            .unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT CAST(5 AS ubigint) + -3, -3 + CAST(5 AS ubigint), \
+                 CAST(5 AS ubigint) - -3, CAST(5 AS ubigint) * -0, u + i, i + u \
+                 FROM t WHERE id = 1"
+            ),
+            ints(&[&[2, 2, 8, 0, 2, 2]])
+        );
+        assert_eq!(
+            query(&conn, "SELECT u + i FROM t WHERE id = 2"),
+            vec![vec![Value::build_text("18446744073709551609".to_string())]]
+        );
+        for sql in [
+            "SELECT CAST(5 AS ubigint) + -6",
+            "SELECT -6 + CAST(5 AS ubigint)",
+            "SELECT CAST(5 AS ubigint) - 6",
+            "SELECT 3 - CAST(5 AS ubigint)",
+            "SELECT CAST(5 AS ubigint) * -1",
+            "SELECT u + i * 2 FROM t WHERE id = 1",
+            "SELECT u - 7 FROM t WHERE id = 1",
+        ] {
+            let error = conn
+                .prepare(sql)
+                .and_then(|mut stmt| stmt.run_collect_rows())
+                .unwrap_err();
+            assert!(error.to_string().contains("out of range"), "{sql}: {error}");
+        }
+    }
+
+    #[test]
     fn dates_and_times_are_stored_as_integers_and_sorted_as_times() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let text = |value: &str| Value::build_text(value.to_string());

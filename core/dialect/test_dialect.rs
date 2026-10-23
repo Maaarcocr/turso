@@ -98,10 +98,20 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
             name: "ubigint",
             storage: StorageType::Uint64,
             parameters: "",
-            behaviour: "CAST FROM integer, text AS IMPLICIT \
+            behaviour: "CAST FROM text AS IMPLICIT \
                 OPERATOR '<' (ubigint, ubigint) uint64_lt \
+                OPERATOR '<' (ubigint, integer) uint64_lt \
                 OPERATOR '=' (ubigint, ubigint) uint64_eq \
-                OPERATOR '+' (ubigint, ubigint) RETURNS ubigint uint64_add",
+                OPERATOR '=' (ubigint, integer) uint64_eq \
+                OPERATOR '+' (ubigint, ubigint) RETURNS ubigint uint64_add \
+                OPERATOR '+' (ubigint, integer) RETURNS ubigint uint64_add \
+                OPERATOR '+' (integer, ubigint) RETURNS ubigint uint64_add \
+                OPERATOR '-' (ubigint, ubigint) RETURNS ubigint uint64_sub \
+                OPERATOR '-' (ubigint, integer) RETURNS ubigint uint64_sub \
+                OPERATOR '-' (integer, ubigint) RETURNS ubigint uint64_sub \
+                OPERATOR '*' (ubigint, ubigint) RETURNS ubigint uint64_mul \
+                OPERATOR '*' (ubigint, integer) RETURNS ubigint uint64_mul \
+                OPERATOR '*' (integer, ubigint) RETURNS ubigint uint64_mul",
         },
         DialectType {
             name: "date_days",
