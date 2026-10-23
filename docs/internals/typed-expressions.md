@@ -1385,6 +1385,16 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
   Materialized views read the stored value of a typed column without
   DECODE (this was already true before), so expressions over a numeric
   column in a view see the value without its declared scale.
+- **Column types of CREATE TABLE ... AS SELECT (MySQL C1 item 2).** A
+  result column whose class is not known used to be an error in a marked
+  CTAS. Two changes: the class is now derived where it is knowable,
+  `count(x)` and `count(*)` are INTEGER, and SQLite's arithmetic on a
+  value of a dialect type that stores values unchanged (INTEGER, REAL,
+  TEXT, BLOB storage) uses that class, so `double_col * 2` is REAL. For
+  the rest (a dialect function, a string literal when string literals are
+  not text, `sum` of a type without a declared sum), the dialect names a
+  type with the key `any` in `class_column_types`; without that entry the
+  error remains.
 - **Unsigned arithmetic with a signed operand (ask C).** `uint64_add`,
   `uint64_sub` and `uint64_mul` already computed with one signed operand
   (`uint64_add(5, -3)` is 2, a negative result is out of range). What

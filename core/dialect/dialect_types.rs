@@ -983,11 +983,46 @@ mod tests {
                 .execute("CREATE TABLE n AS SELECT NULL AS z")
                 .unwrap_err();
             assert!(error.to_string().contains("CAST it"), "{error}");
+            conn.execute(
+                "CREATE TABLE k AS SELECT count(*) AS n, count(i) AS ni, \
+                 CAST(d AS DOUBLE) * 2 AS m FROM t",
+            )
+            .unwrap();
+            assert_eq!(
+                stored_sql(&conn, "k"),
+                "/* turso_dialect:marking */ CREATE TABLE k (n integer, ni integer, m double) STRICT"
+            );
+            assert_eq!(
+                query(&conn, "SELECT * FROM k"),
+                vec![vec![
+                    Value::from_i64(1),
+                    Value::from_i64(1),
+                    Value::from_f64(5.0)
+                ]]
+            );
             conn.close().unwrap();
         }
         let db = open_db(&io, "ctas.db", marking()).unwrap();
         let conn = db.connect(ConnectOpts::new()).unwrap();
         assert_eq!(query(&conn, "SELECT * FROM c"), expected_rows);
+    }
+
+    #[test]
+    fn a_column_of_unknown_class_takes_the_type_the_dialect_names_for_any() {
+        use crate::dialect::TypeRules;
+        use crate::translate::expr::{class_column_type, DynamicClass};
+        let rules = TypeRules {
+            class_column_types: &[("integer", "bigint"), ("any", "longtext")],
+            ..TypeRules::SQLITE
+        };
+        assert_eq!(
+            class_column_type(DynamicClass::Unknown, &rules),
+            Some("longtext")
+        );
+        assert_eq!(
+            class_column_type(DynamicClass::Unknown, &TypeRules::SQLITE),
+            None
+        );
     }
 
     fn query_plan(conn: &Arc<crate::Connection>, sql: &str) -> String {

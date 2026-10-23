@@ -326,6 +326,7 @@ fn compute_expr_type(
             env,
         ),
         ast::Expr::FunctionCall { name, args, .. } => function_call_type(name, args, tables, env),
+        ast::Expr::FunctionCallStar { name, .. } => function_star_type(name),
         ast::Expr::Unary(op, operand) => match resolve_unary_operator(op, operand, tables, env) {
             Some(resolved) => resolved.result,
             None => ExprType::Dynamic(DynamicClass::Unknown),
@@ -1652,7 +1653,7 @@ fn binary_type(
         | ast::Operator::Modulus => {
             let class_of = |operand_type: ExprType| match operand_type {
                 ExprType::Dynamic(class) => class,
-                ExprType::Named(_) => DynamicClass::Unknown,
+                ExprType::Named(named) => unchanged_value_class(&named.def),
             };
             ExprType::Dynamic(arithmetic_class(class_of(lhs_type), class_of(rhs_type)))
         }
@@ -1679,6 +1680,19 @@ fn untyped_operator_type(op: &ast::Operator) -> ExprType {
             ExprType::Dynamic(DynamicClass::Integer)
         }
         _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+fn unchanged_value_class(def: &TypeDef) -> DynamicClass {
+    match def.storage {
+        Some(storage) if storage.stores_values_unchanged() => match storage.stored_class() {
+            "integer" => DynamicClass::Integer,
+            "real" => DynamicClass::Real,
+            "text" => DynamicClass::Text,
+            "blob" => DynamicClass::Blob,
+            _ => DynamicClass::Unknown,
+        },
+        _ => DynamicClass::Unknown,
     }
 }
 
@@ -1725,6 +1739,19 @@ fn function_call_type(
         }
         Ok(Some(Func::Agg(AggFunc::NumericSum))) if arg_types.len() == 1 => {
             typed_sum_result(name.as_str(), &arg_types[0], env)
+        }
+        Ok(Some(Func::Agg(AggFunc::Count | AggFunc::Count0))) => {
+            ExprType::Dynamic(DynamicClass::Integer)
+        }
+        _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+fn function_star_type(name: &ast::Name) -> ExprType {
+    use crate::function::{AggFunc, Func};
+    match Func::resolve_function(name.as_str(), 0) {
+        Ok(Some(Func::Agg(AggFunc::Count | AggFunc::Count0))) => {
+            ExprType::Dynamic(DynamicClass::Integer)
         }
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
