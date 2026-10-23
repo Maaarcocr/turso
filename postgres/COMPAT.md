@@ -120,7 +120,9 @@ cidr, macaddr, macaddr8 map to Turso custom types. varchar(n)/char(n) and
 numeric(p,s) keep their type modifiers; a bare `numeric` column stays REAL.
 Decimal literals (`1.5`, `1e3`) and integer literals too large for bigint are
 exact `numeric` values, as in PostgreSQL, and `x::numeric` and
-`x::numeric(p,s)` are typed casts. interval, xml, tsvector/tsquery,
+`x::numeric(p,s)` are typed casts. A decimal literal keeps its decimal places
+(`2.50 * 2` is `5.00`), but a cast to `numeric` without precision and scale
+drops trailing zeros (`'1.50'::numeric` is `1.5`; PostgreSQL gives `1.50`). interval, xml, tsvector/tsquery,
 bit/varbit, geometric types degrade to TEXT; money to REAL; OID/reg* types to
 INTEGER. Unknown type names pass through as custom types.
 

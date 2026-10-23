@@ -1,8 +1,7 @@
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign};
 
-use crate::alloc::TursoVecExt;
-use crate::{LimboError, ValueBlob};
+use crate::LimboError;
 
 const NUMERIC_BLOB_VERSION: u8 = 0x01;
 const FLAG_NEGATIVE: u8 = 0x01;
@@ -16,56 +15,6 @@ const KEY_NEGATIVE: u8 = 0x10;
 const KEY_ZERO: u8 = 0x20;
 const KEY_POSITIVE: u8 = 0x30;
 const KEY_NEGATIVE_END: u8 = 0xFF;
-
-/// Serialize a BigDecimal to our portable blob format.
-///
-/// Format (all multi-byte values little-endian):
-/// ```text
-/// [version: 1 byte (0x01)]
-/// [flags:   1 byte (bit 0 = sign, 0=positive/zero, 1=negative)]
-/// [scale:   8 bytes, i64 LE]
-/// [num_limbs: 4 bytes, u32 LE]
-/// [limb0: 4 bytes u32 LE] [limb1: 4 bytes u32 LE] ... [limbN: 4 bytes u32 LE]
-/// ```
-pub fn bigdecimal_to_blob(val: &BigDecimal) -> ValueBlob {
-    let (bigint, scale) = val.as_bigint_and_exponent();
-    let (sign, magnitude) = bigint.into_parts();
-
-    // magnitude.to_u32_digits() returns limbs in little-endian order
-    let limbs = magnitude.to_u32_digits();
-    debug_assert!(
-        limbs.len() <= u32::MAX as usize,
-        "limb count {} exceeds u32::MAX",
-        limbs.len()
-    );
-    let num_limbs = limbs.len() as u32;
-
-    let mut buf = <ValueBlob as TursoVecExt<u8>>::with_capacity(14 + limbs.len() * 4);
-
-    // version
-    buf.push(NUMERIC_BLOB_VERSION);
-
-    // flags
-    let flags = if sign == Sign::Minus {
-        FLAG_NEGATIVE
-    } else {
-        0
-    };
-    buf.push(flags);
-
-    // scale (i64 LE)
-    buf.extend_from_slice(&scale.to_le_bytes());
-
-    // num_limbs (u32 LE)
-    buf.extend_from_slice(&num_limbs.to_le_bytes());
-
-    // limbs (u32 LE each)
-    for limb in &limbs {
-        buf.extend_from_slice(&limb.to_le_bytes());
-    }
-
-    buf
-}
 
 /// Deserialize a BigDecimal from our portable blob format.
 pub fn blob_to_bigdecimal(blob: &[u8]) -> crate::Result<BigDecimal> {
@@ -234,6 +183,63 @@ pub fn numeric_key(value: &BigDecimal) -> crate::Result<Vec<u8>> {
         key.push(KEY_NEGATIVE_END);
     }
     Ok(key)
+}
+
+pub fn decode_stored_numeric(blob: &[u8], scale: Option<i64>) -> crate::Result<BigDecimal> {
+    if blob.first() == Some(&NUMERIC_BLOB_VERSION) {
+        return blob_to_bigdecimal(blob);
+    }
+    let value = key_to_bigdecimal(blob)?;
+    Ok(match scale {
+        Some(scale) => value.with_scale(scale),
+        None => value.normalized(),
+    })
+}
+
+fn key_to_bigdecimal(key: &[u8]) -> crate::Result<BigDecimal> {
+    let invalid = || LimboError::Constraint("invalid numeric blob".to_string());
+    let (&class, rest) = key.split_first().ok_or_else(invalid)?;
+    let negative = match class {
+        KEY_ZERO if rest.is_empty() => return Ok(BigDecimal::from(0)),
+        KEY_POSITIVE => false,
+        KEY_NEGATIVE => true,
+        _ => return Err(invalid()),
+    };
+    let (exponent_bytes, pairs) = rest.split_at_checked(4).ok_or_else(invalid)?;
+    let pairs = if negative {
+        pairs
+            .strip_suffix(&[KEY_NEGATIVE_END])
+            .ok_or_else(invalid)?
+    } else {
+        pairs
+    };
+    if pairs.is_empty() {
+        return Err(invalid());
+    }
+    let exponent_bytes: [u8; 4] = std::array::from_fn(|i| {
+        if negative {
+            !exponent_bytes[i]
+        } else {
+            exponent_bytes[i]
+        }
+    });
+    let exponent = (u32::from_be_bytes(exponent_bytes) ^ 0x8000_0000) as i32;
+    let mut digits = String::with_capacity(pairs.len() * 2);
+    for &byte in pairs {
+        let pair = if negative {
+            100u8.checked_sub(byte)
+        } else {
+            byte.checked_sub(1)
+        }
+        .filter(|pair| *pair < 100)
+        .ok_or_else(invalid)?;
+        digits.push(char::from(b'0' + pair / 10));
+        digits.push(char::from(b'0' + pair % 10));
+    }
+    let magnitude: BigInt = digits.parse().map_err(|_| invalid())?;
+    let scale = digits.len() as i64 - i64::from(exponent);
+    let value = BigDecimal::new(if negative { -magnitude } else { magnitude }, scale);
+    check_numeric_range(value)
 }
 
 pub fn divide(dividend: &BigDecimal, divisor: &BigDecimal) -> crate::Result<BigDecimal> {
@@ -450,6 +456,53 @@ mod tests {
     }
 
     #[test]
+    fn test_stored_numeric_reads_back_from_the_ordered_format() {
+        for text in [
+            "0",
+            "1",
+            "1.5",
+            "-1.5",
+            "100",
+            "-0.001",
+            "123456.789",
+            "-98765",
+        ] {
+            let value = BigDecimal::from_str(text).unwrap();
+            let stored = numeric_key(&value).unwrap();
+            let decoded = decode_stored_numeric(&stored, None).unwrap();
+            assert_eq!(format_numeric(&decoded), text);
+        }
+        let stored = numeric_key(&BigDecimal::from_str("1.5").unwrap()).unwrap();
+        let decoded = decode_stored_numeric(&stored, Some(3)).unwrap();
+        assert_eq!(format_numeric(&decoded), "1.500");
+    }
+
+    #[test]
+    fn test_stored_numeric_still_reads_version_1_blobs() {
+        for text in ["0.00", "1.50", "-987.654", "100"] {
+            let value = BigDecimal::from_str(text).unwrap();
+            let stored = bigdecimal_to_blob(&value);
+            let decoded = decode_stored_numeric(&stored, Some(5)).unwrap();
+            assert_eq!(format_numeric(&decoded), text);
+        }
+    }
+
+    #[test]
+    fn test_stored_numeric_rejects_malformed_ordered_bytes() {
+        let malformed: [&[u8]; 6] = [
+            &[],
+            &[KEY_ZERO, 1],
+            &[KEY_POSITIVE, 0x80, 0, 0],
+            &[KEY_POSITIVE, 0x80, 0, 0, 1],
+            &[KEY_NEGATIVE, 0x7F, 0xFF, 0xFF, 0xFE, 50],
+            &[KEY_POSITIVE, 0x80, 0, 0, 1, 0xC8],
+        ];
+        for bytes in malformed {
+            assert!(decode_stored_numeric(bytes, None).is_err(), "{bytes:?}");
+        }
+    }
+
+    #[test]
     fn test_roundtrip_positive() {
         let val = BigDecimal::from_str("123.45").unwrap();
         let blob = bigdecimal_to_blob(&val);
@@ -643,5 +696,79 @@ mod tests {
         let decoded_b = blob_to_bigdecimal(&blob_b).unwrap();
         // The ordering of decoded values must match the ordering of originals
         a.0.cmp(&b.0) == decoded_a.cmp(&decoded_b)
+    }
+
+    #[quickcheck]
+    fn prop_ordered_format_round_trips(arb: ArbDecimal) -> bool {
+        match numeric_key(&arb.0) {
+            Ok(stored) => decode_stored_numeric(&stored, None).unwrap() == arb.0,
+            Err(_) => true,
+        }
+    }
+
+    #[quickcheck]
+    fn prop_ordered_format_bytes_follow_numeric_order(a: ArbDecimal, b: ArbDecimal) -> bool {
+        match (numeric_key(&a.0), numeric_key(&b.0)) {
+            (Ok(key_a), Ok(key_b)) => key_a.cmp(&key_b) == a.0.cmp(&b.0),
+            _ => true,
+        }
+    }
+
+    #[quickcheck]
+    fn prop_stored_numeric_decode_no_panic(data: Vec<u8>) -> bool {
+        let _ = decode_stored_numeric(&data, None);
+        true
+    }
+
+    /// Serialize a BigDecimal to the version 1 blob format written by older releases.
+    ///
+    /// Format (all multi-byte values little-endian):
+    /// ```text
+    /// [version: 1 byte (0x01)]
+    /// [flags:   1 byte (bit 0 = sign, 0=positive/zero, 1=negative)]
+    /// [scale:   8 bytes, i64 LE]
+    /// [num_limbs: 4 bytes, u32 LE]
+    /// [limb0: 4 bytes u32 LE] [limb1: 4 bytes u32 LE] ... [limbN: 4 bytes u32 LE]
+    /// ```
+    pub fn bigdecimal_to_blob(val: &BigDecimal) -> crate::ValueBlob {
+        let (bigint, scale) = val.as_bigint_and_exponent();
+        let (sign, magnitude) = bigint.into_parts();
+
+        // magnitude.to_u32_digits() returns limbs in little-endian order
+        let limbs = magnitude.to_u32_digits();
+        debug_assert!(
+            limbs.len() <= u32::MAX as usize,
+            "limb count {} exceeds u32::MAX",
+            limbs.len()
+        );
+        let num_limbs = limbs.len() as u32;
+
+        let mut buf = <crate::ValueBlob as crate::alloc::TursoVecExt<u8>>::with_capacity(
+            14 + limbs.len() * 4,
+        );
+
+        // version
+        buf.push(NUMERIC_BLOB_VERSION);
+
+        // flags
+        let flags = if sign == Sign::Minus {
+            FLAG_NEGATIVE
+        } else {
+            0
+        };
+        buf.push(flags);
+
+        // scale (i64 LE)
+        buf.extend_from_slice(&scale.to_le_bytes());
+
+        // num_limbs (u32 LE)
+        buf.extend_from_slice(&num_limbs.to_le_bytes());
+
+        // limbs (u32 LE each)
+        for limb in &limbs {
+            buf.extend_from_slice(&limb.to_le_bytes());
+        }
+
+        buf
     }
 }

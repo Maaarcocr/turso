@@ -832,10 +832,14 @@ UPDATE and REPLACE do this instead (only INSERT and REPLACE generate keys):
    cannot get `2147483648`. Turso reports the error kind "no more keys", which
    a frontend can report as MySQL does: its counter stops at the largest value
    and reports a duplicate key (1062).
-5. A `uint64` rowid accepts 0 to 9223372036854775807. A larger key is an
+5. A `uint64` key is the rowid only with AUTOINCREMENT, whose generated
+   keys stay small; without AUTOINCREMENT it is an ordinary primary key with
+   an index and holds every value up to 18446744073709551615, as in MySQL. A
+   `uint64` rowid accepts 0 to 9223372036854775807; a larger key is an
    out-of-range error, where MySQL accepts up to 18446744073709551615; this is
    a documented limit. Laravel's `BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
-   is a rowid under these rules.
+   is a rowid under these rules. Tables created before this rule keep their
+   marker, so a `uint64` key marked `rowid_alias` stays the rowid.
 
 AUTOINCREMENT keeps SQLite's rules (`sqlite_sequence`; a key is never reused).
 MySQL does not reuse keys either, but it does not give back the keys of a
@@ -1121,8 +1125,8 @@ Neutral core features that MySQL applications need, each its own proposal:
 - Unique constraints under case-insensitive collations.
 - Indexes on expressions of these types: the planner ignores them, as in
   Proposal 1, so results are correct but such an index is not used.
-- Keys above 9223372036854775807 in a `uint64` rowid; dates with a zero month
-  or day.
+- Keys above 9223372036854775807 in a `uint64` rowid (AUTOINCREMENT keys);
+  dates with a zero month or day.
 - Rounding typed values to their static parameters where they become keys of
   GROUP BY and DISTINCT (MySQL rounds a quotient's hidden digits there).
 - Table attributes that a frontend does not lower (MySQL `COMMENT`, `ENGINE`,
@@ -1356,6 +1360,59 @@ rule recorded in it); tables never rewritten keep their PostgreSQL DDL.
   refused in every dialect.
 
 ## Proposal 4: typed aggregates and ordered numeric storage
+
+### Implementation notes (Proposal 4)
+
+- **SUM and AVG (commit 29).** `numeric_sum` is a core aggregate (exact
+  decimal addition, with an inverse step so sliding window frames work; it
+  needs custom types). A type declares it with `FUNCTION sum(T) RETURNS R
+  numeric_sum`; numeric does, in core and in PostgreSQL. When an expression
+  is bound, `sum(x)` of such a type becomes `numeric_sum(x)` and `avg(x)`
+  becomes `numeric_sum(x) / count(x)`, keeping DISTINCT, FILTER and OVER, so
+  the division is the type's `/` and the result's static parameters come from
+  the dialect's result rule (`"sum"` gives the sum's parameters, then `/` its
+  own). The column name stays the one written. Types without a declared sum,
+  and all queries with custom types off, are unchanged.
+- **Ordered numeric storage (commit 30).** `numeric_encode` writes the v2
+  bytes (the same bytes as `numeric_key`), and `numeric_decode(value[,
+  scale])` reads v1 and v2; for v2 it applies the declared scale, or drops
+  trailing zeros when the scale is NULL. The built-in numeric type and the
+  `StorageType::Numeric` dialect types decode with `numeric_decode(value,
+  scale)`. The built-in numeric type now has `TypeDef.storage =
+  Some(StorageType::Numeric)`, and `StorageType::Numeric` is a stored-key
+  type whose `<` (`numeric_lt`) follows the index order, so ranges, ORDER BY
+  and min/max on an index of a numeric column use the index. The PostgreSQL
+  frontend gives a decimal literal the precision and scale of its digits
+  (`2.50` is `CAST('2.50' AS numeric(3,2))`), so `2.50 * 2` is `5.00` as in
+  PostgreSQL. An explicit cast to an unconstrained numeric
+  (`'1.50'::numeric`) reads back as `1.5`; PostgreSQL keeps `1.50`.
+  Materialized views read the stored value of a typed column without
+  DECODE (this was already true before), so expressions over a numeric
+  column in a view see the value without its declared scale.
+- **Column types of CREATE TABLE ... AS SELECT (MySQL C1 item 2).** A
+  result column whose class is not known used to be an error in a marked
+  CTAS. Two changes: the class is now derived where it is knowable,
+  `count(x)` and `count(*)` are INTEGER, and SQLite's arithmetic on a
+  value of a dialect type that stores values unchanged (INTEGER, REAL,
+  TEXT, BLOB storage) uses that class, so `double_col * 2` is REAL. For
+  the rest (a dialect function, a string literal when string literals are
+  not text, `sum` of a type without a declared sum), the dialect names a
+  type with the key `any` in `class_column_types`; without that entry the
+  error remains.
+- **Negated values (MySQL C1 item 5).** `-x` without a declared unary `-`
+  used to have no type, so `u < -5.3` on an unsigned column converted
+  `-5.3` into the column's type and failed, while `u < 5.3` compared by
+  SQLite's rules. `-x` now has the class of `x` when that class is INTEGER
+  or REAL (also for a dialect type that stores such values unchanged).
+- **Unsigned arithmetic with a signed operand (ask C).** `uint64_add`,
+  `uint64_sub` and `uint64_mul` already computed with one signed operand
+  (`uint64_add(5, -3)` is 2, a negative result is out of range). What
+  refused `CAST(5 AS UNSIGNED) + -3` was the operator signature: with only
+  `(T, T)` and `CAST FROM integer AS IMPLICIT`, `-3` is converted to the
+  unsigned type first, and that conversion refuses it. A dialect declares
+  `(T, integer)` and `(integer, T)` for `+`, `-` and `*` (and for `<` and
+  `=`) and no implicit cast from integer, as the MySQL frontend does for
+  comparisons; the test dialect's `ubigint` now does the same.
 
 **Aggregates.** Only type-declared aggregates: `FUNCTION sum(numeric) RETURNS
 numeric numeric_sum` and `avg`, with native exact accumulators. A type without

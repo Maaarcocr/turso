@@ -276,13 +276,13 @@ impl<T> OrOverflow<T> for Option<T> {
 
 /// Parse a Value (text, int, float, or blob) into a BigDecimal.
 fn value_to_bigdecimal(val: &Value) -> Result<bigdecimal::BigDecimal> {
-    use crate::numeric::decimal::{blob_to_bigdecimal, check_numeric_range, parse_decimal};
+    use crate::numeric::decimal::{check_numeric_range, decode_stored_numeric, parse_decimal};
     use bigdecimal::BigDecimal;
     match val {
         Value::Numeric(Numeric::Integer(i)) => Ok(BigDecimal::from(*i)),
         Value::Numeric(Numeric::Float(f)) => parse_decimal(&f.to_string()),
         Value::Text(t) => parse_decimal(&t.value),
-        Value::Blob(b) => check_numeric_range(blob_to_bigdecimal(b)?),
+        Value::Blob(b) => check_numeric_range(decode_stored_numeric(b, None)?),
         _ => Err(LimboError::Constraint(format!(
             "cannot convert to numeric: \"{val}\""
         ))),
@@ -7477,6 +7477,11 @@ fn init_agg_payload(func: &AggFunc, payload: &mut crate::alloc::Vec<Value>) -> R
             payload.push(Value::from_f64(0.0));
             payload.push(Value::from_i64(0));
         }
+        AggFunc::NumericSum => {
+            payload.try_reserve_exact(2)?;
+            payload.push(Value::Null);
+            payload.push(Value::from_i64(0));
+        }
         AggFunc::Min | AggFunc::Max => {
             payload.try_reserve_exact(1)?;
             payload.push(Value::Null);
@@ -7594,6 +7599,7 @@ fn update_agg_payload(
             };
             *i = i.checked_add(1).or_overflow()?;
         }
+        AggFunc::NumericSum => numeric_sum_step(arg, payload, NumericSumStep::Add)?,
         AggFunc::Avg => {
             if matches!(arg, Value::Null) {
                 return Ok(());
@@ -8227,9 +8233,49 @@ pub(crate) fn agg_payload_width(func: &AggFunc) -> Option<usize> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NumericSumStep {
+    Add,
+    Remove,
+}
+
+fn numeric_sum_step(arg: &Value, payload: &mut [Value], step: NumericSumStep) -> Result<()> {
+    if matches!(arg, Value::Null) {
+        return Ok(());
+    }
+    let value = value_to_bigdecimal(arg)?;
+    let [acc, count, ..] = payload else {
+        unreachable!("numeric_sum payload has a total and a count per init_agg_payload");
+    };
+    let Value::Numeric(Numeric::Integer(rows)) = count else {
+        unreachable!("numeric_sum count slot is Integer per init_agg_payload");
+    };
+    let total = match &*acc {
+        Value::Null => bigdecimal::BigDecimal::from(0),
+        total => value_to_bigdecimal(total)?,
+    };
+    let total = match step {
+        NumericSumStep::Add => {
+            *rows += 1;
+            total + value
+        }
+        NumericSumStep::Remove => {
+            *rows -= 1;
+            total - value
+        }
+    };
+    let total = crate::numeric::decimal::check_numeric_range(total)?;
+    *acc = Value::build_text(crate::numeric::decimal::format_numeric(&total));
+    Ok(())
+}
+
 fn finalize_agg_payload(func: &AggFunc, payload: &[Value]) -> Result<Value> {
     let val = match func {
         AggFunc::Count | AggFunc::Count0 => payload[0].clone(),
+        AggFunc::NumericSum => match &payload[1] {
+            Value::Numeric(Numeric::Integer(0)) => Value::Null,
+            _ => payload[0].clone(),
+        },
         AggFunc::Avg => {
             // Payload: [sum, r_err, count]
             let count = payload[2].as_int().unwrap_or(0);
@@ -9135,6 +9181,7 @@ fn kbn_step_int_neg(acc: &mut Value, i: i64, state: &mut SumAggState) {
 /// xInverse implementations at `func.c:1859-1986`.
 fn inverse_agg_payload(func: &AggFunc, arg: Value, payload: &mut [Value]) -> Result<()> {
     match func {
+        AggFunc::NumericSum => numeric_sum_step(&arg, payload, NumericSumStep::Remove)?,
         AggFunc::Count => {
             if !matches!(arg, Value::Null) {
                 let Value::Numeric(Numeric::Integer(i)) = &mut payload[0] else {
@@ -11546,9 +11593,7 @@ pub fn op_function(
                 let result = match val.get_value() {
                     Value::Null => Value::Null,
                     other => {
-                        use crate::numeric::decimal::{
-                            bigdecimal_to_blob, parse_decimal, validate_precision_scale,
-                        };
+                        use crate::numeric::decimal::{parse_decimal, validate_precision_scale};
 
                         let precision = match precision_reg.get_value() {
                             Value::Numeric(Numeric::Integer(i)) => Some(*i),
@@ -11586,18 +11631,31 @@ pub fn op_function(
                             Some(precision) => validate_precision_scale(&bd, precision, scale)?,
                             None => bd,
                         };
-                        Value::from_blob(bigdecimal_to_blob(&validated))
+                        Value::from_blob(crate::numeric::decimal::numeric_key(&validated)?)
                     }
                 };
                 state.registers[*dest].set_value(result);
             }
             ScalarFunc::NumericDecode => {
-                check_arg_count!(arg_count, 1);
                 let val = &state.registers[*start_reg];
+                let scale = match arg_count {
+                    1 => None,
+                    2 => match state.registers[*start_reg + 1].get_value() {
+                        Value::Numeric(Numeric::Integer(scale)) => Some(*scale),
+                        Value::Null => None,
+                        other => {
+                            return Err(LimboError::Constraint(format!(
+                                "numeric_decode: scale must be an integer, got \"{other}\""
+                            ))
+                            .into());
+                        }
+                    },
+                    _ => unreachable!("numeric_decode takes one or two arguments"),
+                };
                 let result = match val.get_value() {
                     Value::Null => Value::Null,
                     Value::Blob(b) => {
-                        let bd = crate::numeric::decimal::blob_to_bigdecimal(b)?;
+                        let bd = crate::numeric::decimal::decode_stored_numeric(b, scale)?;
                         Value::build_text(crate::numeric::decimal::format_numeric(&bd))
                     }
                     other => {
