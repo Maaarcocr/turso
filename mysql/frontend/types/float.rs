@@ -53,7 +53,7 @@ pub(super) fn assign_double(args: &[Value]) -> Result<Value> {
 }
 
 fn read_double(bytes: &[u8]) -> Result<f64> {
-    match number_text::read(bytes) {
+    match number_text::read_as_double(bytes) {
         Reading::Number(number) => Ok(number.to_f64()),
         Reading::NumberFollowedByText | Reading::NoNumber => Err(data_truncated()),
     }

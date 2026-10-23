@@ -4,7 +4,7 @@ use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{LimboError, Numeric, Result, Value};
 
 macro_rules! ranged {
-    ($name:literal, $min:expr, $max:expr) => {
+    ($name:literal, $min:expr, $max:expr, $assign:literal) => {
         DialectType {
             name: $name,
             storage: StorageType::RangedInteger {
@@ -14,7 +14,9 @@ macro_rules! ranged {
             parameters: "width integer DEFAULT NULL",
             behaviour: concat!(
                 "CAST TO integer AS IMPLICIT ",
-                "ASSIGN __mysql_assign_integer(value) ",
+                "ASSIGN ",
+                $assign,
+                "(value) ",
                 "CAST __mysql_sqlite_cast(value, 'INTEGER') ",
                 "OPERATOR '<' (\"",
                 $name,
@@ -34,15 +36,40 @@ macro_rules! ranged {
 }
 
 pub(super) const TYPES: [DialectType; 10] = [
-    ranged!("tinyint", -128, 127),
-    ranged!("tinyint unsigned", 0, 255),
-    ranged!("smallint", -32_768, 32_767),
-    ranged!("smallint unsigned", 0, 65_535),
-    ranged!("mediumint", -8_388_608, 8_388_607),
-    ranged!("mediumint unsigned", 0, 16_777_215),
-    ranged!("int", i32::MIN as i64, i32::MAX as i64),
-    ranged!("int unsigned", 0, u32::MAX as i64),
-    ranged!("bigint", i64::MIN, i64::MAX),
+    ranged!("tinyint", -128, 127, "__mysql_assign_integer"),
+    ranged!(
+        "tinyint unsigned",
+        0,
+        255,
+        "__mysql_assign_unsigned_integer"
+    ),
+    ranged!("smallint", -32_768, 32_767, "__mysql_assign_integer"),
+    ranged!(
+        "smallint unsigned",
+        0,
+        65_535,
+        "__mysql_assign_unsigned_integer"
+    ),
+    ranged!("mediumint", -8_388_608, 8_388_607, "__mysql_assign_integer"),
+    ranged!(
+        "mediumint unsigned",
+        0,
+        16_777_215,
+        "__mysql_assign_unsigned_integer"
+    ),
+    ranged!(
+        "int",
+        i32::MIN as i64,
+        i32::MAX as i64,
+        "__mysql_assign_integer"
+    ),
+    ranged!(
+        "int unsigned",
+        0,
+        u32::MAX as i64,
+        "__mysql_assign_unsigned_integer"
+    ),
+    ranged!("bigint", i64::MIN, i64::MAX, "__mysql_assign_integer"),
     DialectType {
         name: "bigint unsigned",
         storage: StorageType::Uint64,
@@ -77,6 +104,15 @@ pub(super) fn assign_integer(args: &[Value]) -> Result<Value> {
         .map_err(|_| out_of_range())
 }
 
+pub(super) fn assign_unsigned_integer(args: &[Value]) -> Result<Value> {
+    if let Value::Numeric(Numeric::Float(double)) = &args[0] {
+        if f64::from(*double) < 0.0 {
+            return Err(out_of_range());
+        }
+    }
+    assign_integer(args)
+}
+
 pub(super) fn assign_unsigned_bigint(args: &[Value]) -> Result<Value> {
     let magnitude = match &args[0] {
         Value::Null => return Ok(Value::Null),
@@ -87,7 +123,7 @@ pub(super) fn assign_unsigned_bigint(args: &[Value]) -> Result<Value> {
         }
         Value::Numeric(Numeric::Float(double)) => {
             let rounded = f64::from(*double).round();
-            if !(0.0..18_446_744_073_709_551_616.0).contains(&rounded) {
+            if f64::from(*double) < 0.0 || !(0.0..18_446_744_073_709_551_616.0).contains(&rounded) {
                 return Err(out_of_range());
             }
             if rounded >= 9_223_372_036_854_775_808.0 {
@@ -158,7 +194,7 @@ fn rounded_double(value: f64) -> Result<i64> {
 }
 
 fn read_integer(bytes: &[u8]) -> Result<i128> {
-    let number = match number_text::read(bytes) {
+    let number = match number_text::read_as_integer(bytes) {
         Reading::Number(number) => number,
         Reading::NumberFollowedByText => return Err(data_truncated()),
         Reading::NoNumber => {

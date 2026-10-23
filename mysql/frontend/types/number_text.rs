@@ -11,8 +11,22 @@ pub(super) struct TextNumber<'a> {
     exponent: i64,
 }
 
-pub(super) fn read(bytes: &[u8]) -> Reading<'_> {
-    let rest = skip_spaces(bytes);
+#[derive(Clone, Copy)]
+enum Syntax {
+    Integer,
+    Double,
+}
+
+pub(super) fn read_as_integer(bytes: &[u8]) -> Reading<'_> {
+    read(bytes, Syntax::Integer)
+}
+
+pub(super) fn read_as_double(bytes: &[u8]) -> Reading<'_> {
+    read(bytes, Syntax::Double)
+}
+
+fn read(bytes: &[u8], syntax: Syntax) -> Reading<'_> {
+    let rest = skip_leading_spaces(bytes, syntax);
     let (negative, rest) = match rest.split_first() {
         Some((b'-', rest)) => (true, rest),
         Some((b'+', rest)) => (false, rest),
@@ -26,7 +40,7 @@ pub(super) fn read(bytes: &[u8]) -> Reading<'_> {
     if whole.is_empty() && fraction.is_empty() {
         return Reading::NoNumber;
     }
-    let (exponent, rest) = read_exponent(rest);
+    let (exponent, rest) = read_exponent(rest, syntax);
     let number = TextNumber {
         negative,
         whole,
@@ -97,10 +111,23 @@ impl TextNumber<'_> {
     }
 }
 
+fn skip_leading_spaces(bytes: &[u8], syntax: Syntax) -> &[u8] {
+    match syntax {
+        Syntax::Integer => skip(bytes, |byte| matches!(byte, b' ' | b'\t')),
+        Syntax::Double => skip_spaces(bytes),
+    }
+}
+
 fn skip_spaces(bytes: &[u8]) -> &[u8] {
+    skip(bytes, |byte| {
+        matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C)
+    })
+}
+
+fn skip(bytes: &[u8], is_space: impl Fn(u8) -> bool) -> &[u8] {
     let start = bytes
         .iter()
-        .position(|byte| !matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C))
+        .position(|byte| !is_space(*byte))
         .unwrap_or(bytes.len());
     &bytes[start..]
 }
@@ -113,7 +140,7 @@ fn split_digits(bytes: &[u8]) -> (&[u8], &[u8]) {
     bytes.split_at(end)
 }
 
-fn read_exponent(bytes: &[u8]) -> (i64, &[u8]) {
+fn read_exponent(bytes: &[u8], syntax: Syntax) -> (i64, &[u8]) {
     let Some((b'e' | b'E', rest)) = bytes.split_first() else {
         return (0, bytes);
     };
@@ -124,7 +151,10 @@ fn read_exponent(bytes: &[u8]) -> (i64, &[u8]) {
     };
     let (digits, rest) = split_digits(rest);
     if digits.is_empty() {
-        return (0, bytes);
+        return match syntax {
+            Syntax::Integer => (0, rest),
+            Syntax::Double => (0, bytes),
+        };
     }
     let magnitude = digits.iter().fold(0_i64, |value, digit| {
         value
@@ -139,7 +169,7 @@ mod tests {
     use super::*;
 
     fn rounded(text: &str) -> Option<u128> {
-        match read(text.as_bytes()) {
+        match read_as_integer(text.as_bytes()) {
             Reading::Number(number) => number.rounded_magnitude(),
             _ => panic!("{text} is not a whole number"),
         }
@@ -171,11 +201,48 @@ mod tests {
 
     #[test]
     fn tells_numbers_from_numbers_followed_by_text() {
-        assert!(matches!(read(b"12abc"), Reading::NumberFollowedByText));
-        assert!(matches!(read(b"0x10"), Reading::NumberFollowedByText));
-        assert!(matches!(read(b"1e"), Reading::NumberFollowedByText));
-        for text in ["", "  ", "abc", "- 5", "-", "."] {
-            assert!(matches!(read(text.as_bytes()), Reading::NoNumber), "{text}");
+        for read in [read_as_integer, read_as_double] {
+            assert!(matches!(read(b"12abc"), Reading::NumberFollowedByText));
+            assert!(matches!(read(b"0x10"), Reading::NumberFollowedByText));
+            assert!(matches!(read(b"1ex"), Reading::NumberFollowedByText));
+            for text in ["", "  ", "abc", "- 5", "-", "."] {
+                assert!(matches!(read(text.as_bytes()), Reading::NoNumber), "{text}");
+            }
+        }
+    }
+
+    #[test]
+    fn integers_end_at_an_exponent_without_digits_and_doubles_do_not() {
+        for (text, expected) in [
+            ("1e", Some(1)),
+            ("1e+", Some(1)),
+            ("1.5e", Some(2)),
+            ("1E-", Some(1)),
+        ] {
+            assert_eq!(rounded(text), expected, "{text}");
+            assert!(
+                matches!(
+                    read_as_double(text.as_bytes()),
+                    Reading::NumberFollowedByText
+                ),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn integers_skip_only_leading_spaces_and_tabs_and_doubles_skip_all_whitespace() {
+        assert_eq!(rounded("\t12"), Some(12));
+        assert_eq!(rounded("12\n"), Some(12));
+        for text in ["\n12", "\r12", "\x0B12", "\x0C12"] {
+            assert!(
+                matches!(read_as_integer(text.as_bytes()), Reading::NoNumber),
+                "{text:?}"
+            );
+            assert!(
+                matches!(read_as_double(text.as_bytes()), Reading::Number(_)),
+                "{text:?}"
+            );
         }
     }
 }

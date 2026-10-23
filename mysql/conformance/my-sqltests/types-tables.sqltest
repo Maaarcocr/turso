@@ -71,6 +71,73 @@ test integer-columns-reject-a-sign-without-digits {
 expect error {
 }
 
+test integer-columns-end-numbers-at-an-exponent-without-digits {
+    CREATE TABLE t (n INT, i INT);
+    INSERT INTO t VALUES (1, '1e'), (2, '1e+'), (3, '1.5e'), (4, '1E-'), (5, '	12'), (6, '12	');
+    SELECT n, i FROM t ORDER BY n;
+}
+expect {
+    1|1
+    2|1
+    3|2
+    4|1
+    5|12
+    6|12
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: '
+test integer-columns-reject-text-after-a-leading-newline {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES ('
+    12');
+}
+expect error {
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'd' at row 1
+test double-columns-reject-an-exponent-without-digits {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('1e');
+}
+expect error {
+}
+
+test double-columns-skip-a-leading-newline {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('
+    12');
+    SELECT d FROM t;
+}
+expect {
+    12
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test unsigned-columns-reject-negative-decimals {
+    CREATE TABLE t (i INT UNSIGNED);
+    INSERT INTO t VALUES (-0.4);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'u' at row 1
+test bigint-unsigned-rejects-negative-decimals {
+    CREATE TABLE t (u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (-0.4);
+}
+expect error {
+}
+
+test unsigned-columns-take-negative-zero {
+    CREATE TABLE t (i INT UNSIGNED, u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (-0.0, -0.0), ('-0.4', '-0.4');
+    SELECT i, u FROM t;
+}
+expect {
+    0|0
+    0|0
+}
+
 # MySQL: ERROR 1264: Out of range value for column 'i' at row 1
 test integer-columns-reject-text-out-of-range {
     CREATE TABLE t (i INT);

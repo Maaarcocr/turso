@@ -70,6 +70,7 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
     let conversion: Conversion = match (name, arg_count) {
         ("__MYSQL_SQLITE_CAST", 2) => sqlite_cast,
         ("__MYSQL_ASSIGN_INTEGER", 1) => integer::assign_integer,
+        ("__MYSQL_ASSIGN_UNSIGNED_INTEGER", 1) => integer::assign_unsigned_integer,
         ("__MYSQL_ASSIGN_UNSIGNED_BIGINT", 1) => integer::assign_unsigned_bigint,
         ("__MYSQL_UNSIGNED_EQUALS_VALUE", 2) => integer::unsigned_equals_value,
         ("__MYSQL_VALUE_EQUALS_UNSIGNED", 2) => integer::value_equals_unsigned,
