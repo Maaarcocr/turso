@@ -341,11 +341,21 @@ fn precision_and_scale(precision: &Value, scale: &Value) -> Option<(u32, u32)> {
 }
 
 fn negate(args: &[Value]) -> Result<Value> {
-    unary(
-        args,
-        |decimal| decimal_value(&decimal.negated()),
-        |double| -double,
-    )
+    unary(args, negated, |double| -double)
+}
+
+/// `-x` of a DECIMAL. The lowering writes `-x` as `x * -1`, so this runs
+/// only in statements it does not lower, such as INSERT and UPDATE, where a
+/// decimal literal was a double before DECIMAL had a type. A negated value
+/// that a double holds exactly stays a double there, so a negative literal
+/// is stored as before (`-0.4` into an UNSIGNED column is out of range).
+fn negated(decimal: &Decimal) -> Value {
+    let negated = decimal.negated();
+    let double = negated.to_f64();
+    match Decimal::from_double(double) {
+        Some(read_back) if read_back.compare(&negated).is_eq() => Value::from_f64(double),
+        _ => decimal_value(&negated),
+    }
 }
 
 fn unary(args: &[Value], exact: fn(&Decimal) -> Value, double: fn(f64) -> f64) -> Result<Value> {
