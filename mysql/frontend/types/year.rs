@@ -10,5 +10,6 @@ pub(super) const TYPES: [DialectType; 1] = [DialectType {
         OPERATOR '<' (year, integer) \
         OPERATOR '=' (year, integer) \
         OPERATOR '<' (any, year) \
-        OPERATOR '=' (any, year)",
+        OPERATOR '=' (any, year) \
+        FUNCTION sum(year) RETURNS decimal numeric_sum",
 }];

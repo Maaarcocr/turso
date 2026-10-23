@@ -9,6 +9,7 @@ const LARGEST_PRECISION: i64 = 65;
 const LARGEST_SCALE: i64 = 30;
 const DIVISION_SCALE_INCREMENT: i64 = 4;
 const INTEGER_PRECISION: i64 = 19;
+const SUM_EXTRA_DIGITS: i64 = 22;
 const LARGEST_PLACES: i64 = 1000;
 
 macro_rules! arithmetic {
@@ -101,6 +102,9 @@ macro_rules! functions {
             "FUNCTION sign(",
             $quoted,
             ") RETURNS integer __mysql_decimal_sign ",
+            "FUNCTION sum(",
+            $quoted,
+            ") RETURNS decimal numeric_sum ",
         )
     };
 }
@@ -152,8 +156,9 @@ pub(super) const TYPES: [DialectType; 2] = [
     ),
 ];
 
-/// The precision and scale of `+ - * / %` results, as MySQL computes them
-/// from the operands'. An operand without parameters is an integer.
+/// The precision and scale of `+ - * / %` and SUM results, as MySQL
+/// computes them from the operands'. An operand without parameters is an
+/// integer.
 pub(super) fn result_parameters(operator: &str, operands: [Option<&[i64]>; 2]) -> Option<Vec<i64>> {
     let [(left_precision, left_scale), (right_precision, right_scale)] =
         operands.map(|parameters| {
@@ -180,6 +185,10 @@ pub(super) fn result_parameters(operator: &str, operands: [Option<&[i64]>; 2]) -
         "%" => (
             whole(left_precision, left_scale).max(whole(right_precision, right_scale)),
             left_scale.max(right_scale),
+        ),
+        "sum" => (
+            whole(left_precision, left_scale) + SUM_EXTRA_DIGITS,
+            left_scale,
         ),
         _ => return None,
     };

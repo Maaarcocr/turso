@@ -377,3 +377,30 @@ test round-and-truncate-to-tens {
 expect {
     1300|-1300|1200|1200|20|0
 }
+
+test sum-and-avg-of-integer-and-decimal-columns-are-exact {
+    CREATE TABLE t (i INT, d DECIMAL(10,2), b BIGINT, f DOUBLE);
+    INSERT INTO t VALUES (1, 1.50, 10, 0.5), (2, 2.25, 20, 1.5), (4, NULL, 30, 2);
+    SELECT SUM(i), AVG(i), SUM(d), AVG(d), SUM(b), AVG(b), SUM(f), AVG(f), AVG(i) * 2, SUM(DISTINCT i), SUM(i) / 3 FROM t;
+    SELECT SUM(i), AVG(d) FROM t WHERE i > 10;
+    SELECT i, SUM(d) OVER (ORDER BY i) FROM t ORDER BY i;
+}
+expect {
+    7|2.3333|3.75|1.875000|60|20.0000|4|1.3333333333333333|4.6667|7|2.3333
+    NULL|NULL
+    1|1.50
+    2|3.75
+    4|3.75
+}
+
+test grouped-averages-are-decimals {
+    CREATE TABLE t (g INT, i INT, d DECIMAL(5,1));
+    INSERT INTO t VALUES (1, 1, 0.5), (1, 2, 1.0), (2, 7, 2.5), (2, 8, NULL), (2, 9, 3.5);
+    SELECT g, SUM(i), AVG(i), SUM(d), AVG(d), COUNT(d) FROM t GROUP BY g ORDER BY g;
+    SELECT g FROM t GROUP BY g HAVING AVG(i) > 1.5 ORDER BY g;
+}
+expect {
+    1|3|1.5000|1.5|0.75000|2
+    2|24|8.0000|6.0|3.00000|2
+    2
+}

@@ -29,7 +29,10 @@ macro_rules! ranged {
                 "\") ",
                 "OPERATOR '=' (any, \"",
                 $name,
-                "\")"
+                "\") ",
+                "FUNCTION sum(\"",
+                $name,
+                "\") RETURNS decimal numeric_sum"
             ),
         }
     };
@@ -85,7 +88,8 @@ pub(super) const TYPES: [DialectType; 10] = [
             OPERATOR '=' (\"bigint unsigned\", tinytext) __mysql_unsigned_equals_value \
             OPERATOR '=' (\"bigint unsigned\", mediumtext) __mysql_unsigned_equals_value \
             OPERATOR '=' (\"bigint unsigned\", longtext) __mysql_unsigned_equals_value \
-            OPERATOR '=' (any, \"bigint unsigned\") __mysql_value_equals_unsigned",
+            OPERATOR '=' (any, \"bigint unsigned\") __mysql_value_equals_unsigned \
+            FUNCTION sum(\"bigint unsigned\") RETURNS decimal numeric_sum",
     },
 ];
 
