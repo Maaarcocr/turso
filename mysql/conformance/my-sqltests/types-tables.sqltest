@@ -474,6 +474,18 @@ expect {
     3|c
 }
 
+test bigint-unsigned-primary-key-holds-the-whole-range {
+    CREATE TABLE t (id BIGINT UNSIGNED PRIMARY KEY);
+    INSERT INTO t VALUES ('18446744073709551615'), (5);
+    SELECT id FROM t ORDER BY id;
+    SELECT id FROM t WHERE id = '18446744073709551615';
+}
+expect {
+    5
+    18446744073709551615
+    18446744073709551615
+}
+
 test integer-primary-key-converts-text-and-decimals {
     CREATE TABLE t (id INT PRIMARY KEY, v INT);
     INSERT INTO t VALUES ('7', 1), (8.5, 2), (-2, 3);
@@ -562,6 +574,17 @@ expect {
     2
 }
 
+test create-table-as-select-stores-text-and-sums {
+    CREATE TABLE s (k VARCHAR(10), i INT);
+    INSERT INTO s VALUES ('a', 1), ('a', 2), ('b', 3);
+    CREATE TABLE t AS SELECT k, SUM(i) AS total, CONCAT('new', k) AS label FROM s GROUP BY k;
+    SELECT k, total, label FROM t ORDER BY k;
+}
+expect {
+    a|3|newa
+    b|3|newb
+}
+
 test temporary-tables-have-column-types {
     CREATE TEMPORARY TABLE t (id INT PRIMARY KEY, v VARCHAR(3));
     INSERT INTO t VALUES ('2', 'ab'), (1, 'a');
@@ -635,6 +658,15 @@ expect {
     1|2
     2|NULL
     3|300
+}
+
+test generated-columns-can-unquote-json {
+    CREATE TABLE t (j JSON, name VARCHAR(10) AS (j->>'$.name'));
+    INSERT INTO t (j) VALUES ('\{"name": "ada"\}');
+    SELECT name FROM t;
+}
+expect {
+    ada
 }
 
 test spatial-columns-hold-null {

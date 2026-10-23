@@ -42,6 +42,7 @@ static RULES: LazyLock<TypeRules> = LazyLock::new(|| TypeRules {
         ("real", "double"),
         ("text", "longtext"),
         ("blob", "longblob"),
+        ("any", "longtext"),
     ],
 });
 
