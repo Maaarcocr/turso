@@ -43,13 +43,15 @@ pub(super) fn assign_binary(args: &[Value]) -> Result<Value> {
     let Some(bytes) = bytes_of(&args[0]) else {
         return Ok(Value::Null);
     };
-    let length = integer_parameter(&args[1]).ok_or_else(|| {
-        LimboError::InternalError(format!(
-            "a BINARY length must be an integer, got {}",
-            args[1]
-        ))
-    })?;
-    let length = usize::try_from(length).map_err(|_| data_too_long())?;
+    let length = integer_parameter(&args[1])
+        .and_then(|length| u8::try_from(length).ok())
+        .map(usize::from)
+        .ok_or_else(|| {
+            LimboError::InvalidArgument(format!(
+                "a BINARY length must be an integer from 0 to 255, got {}",
+                args[1]
+            ))
+        })?;
     if bytes.len() > length {
         return Err(data_too_long());
     }

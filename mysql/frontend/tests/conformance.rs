@@ -260,6 +260,59 @@ fn storing_errors_map_to_mysql_error_codes() -> turso_core::Result<()> {
 }
 
 #[test]
+fn create_table_the_mysql_lowering_refuses_reports_why_and_creates_nothing(
+) -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, reason) in [
+        (
+            "CREATE TABLE t (a SERIAL)",
+            "column type `SERIAL()` is not available",
+        ),
+        (
+            "CREATE TABLE t (a INT) STRICT",
+            "CREATE TABLE contains a clause that is not available",
+        ),
+        (
+            "CREATE TABLE t (b BINARY(4611686018427387904)) STRICT",
+            "CREATE TABLE contains a clause that is not available",
+        ),
+        (
+            "CREATE TABLE t (d DOUBLE(2, 5)) STRICT",
+            "CREATE TABLE contains a clause that is not available",
+        ),
+    ] {
+        let error = connection.execute(sql).expect_err(sql);
+        assert!(error.to_string().contains(reason), "{sql}: {error}");
+    }
+    assert_eq!(
+        query(&connection, "SELECT name FROM sqlite_schema")?,
+        Vec::<Vec<Value>>::new()
+    );
+    Ok(())
+}
+
+#[test]
+fn store_functions_refuse_type_parameters_mysql_does_not_allow() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for sql in [
+        "SELECT __mysql_assign_binary('a', 4611686018427387904)",
+        "SELECT __mysql_assign_binary('a', 256)",
+        "SELECT __mysql_assign_double(1, 2, 5, 0)",
+        "SELECT __mysql_assign_double(1, 256, 2, 0)",
+        "SELECT __mysql_assign_double(1, 60, 31, 0)",
+    ] {
+        query(&connection, sql).expect_err(sql);
+    }
+    assert_eq!(
+        query(&connection, "SELECT __mysql_assign_binary('a', 2)")?,
+        vec![vec![
+            Value::from_slice(b"a\0").expect("two bytes fit in memory")
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn reports_projection_metadata() -> turso_core::Result<()> {
     let connection = open_memory()?;
     let statement =
