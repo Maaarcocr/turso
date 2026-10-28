@@ -2,9 +2,9 @@ use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
 use crate::literal::{
-    binary_literal_as_double, binary_literal_value, negated_binary_literal, translate_as_bytes,
-    translate_introduced_string, translate_temporal_text, translate_typed_string,
-    translate_typed_string_as_bytes, translate_value, Context,
+    binary_literal_as_double, binary_literal_value, is_utf8_binary_literal, negated_binary_literal,
+    translate_as_bytes, translate_introduced_string, translate_temporal_text,
+    translate_typed_string, translate_typed_string_as_bytes, translate_value, Context,
 };
 use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
@@ -2164,10 +2164,10 @@ fn translate_collated_function(
     }
     if let Some(binary) = args
         .iter()
-        .find(|arg| is_binary_literal(arg) || is_binary_string(arg))
+        .find(|arg| is_binary_literal(arg) && !is_utf8_binary_literal(arg))
     {
         return Err(MysqlParserError::Unsupported(format!(
-            "{upper_name} of the binary string `{binary}` under a collation, which MySQL converts to utf8mb4, is not lowered yet"
+            "{upper_name} of the binary string `{binary}` that is not UTF-8 under a collation, which MySQL converts to utf8mb4, is not lowered yet"
         )));
     }
     if let Some(temporal) = args
