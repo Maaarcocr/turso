@@ -1848,7 +1848,11 @@ fn translate_cast_as_json(
     if has_a_temporal_type(expr) {
         return Err(temporal_outside_a_value_position(expr));
     }
-    let value = translate_expr(expr, context)?;
+    let value = if is_binary_literal(expr) {
+        translate_bytes(expr, context)?
+    } else {
+        translate_expr(expr, context)?
+    };
     let name = if is_boolean(expr) {
         "__mysql_cast_boolean_as_json"
     } else {
@@ -2385,7 +2389,7 @@ fn translate_function(
         args = group_concat_arguments(args, separator);
     }
     let over_clause = translate_over(over.as_ref(), context)?;
-    Ok(ast::Expr::FunctionCall {
+    let call = ast::Expr::FunctionCall {
         name: function_name,
         distinctness,
         args: args.into_iter().map(Box::new).collect(),
@@ -2395,6 +2399,13 @@ fn translate_function(
             over_clause,
             ..filter_over
         },
+    };
+    let json_timestamp = upper_name == "UNIX_TIMESTAMP"
+        && matches!(unnamed_arguments(list)?.as_slice(), [arg] if json::is_json_value(arg));
+    Ok(if json_timestamp {
+        ast::Expr::cast(call, Some(sized_decimal_type(65, 6)))
+    } else {
+        call
     })
 }
 
