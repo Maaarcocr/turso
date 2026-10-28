@@ -2162,6 +2162,14 @@ fn translate_collated_function(
             "{upper_name} with a collation and these clauses is not lowered yet"
         )));
     }
+    if let Some(binary) = args
+        .iter()
+        .find(|arg| is_binary_literal(arg) || is_binary_string(arg))
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} of the binary string `{binary}` under a collation, which MySQL converts to utf8mb4, is not lowered yet"
+        )));
+    }
     if let Some(temporal) = args
         .iter()
         .find(|arg| temporal_type(arg).is_some() || has_a_temporal_type(arg))

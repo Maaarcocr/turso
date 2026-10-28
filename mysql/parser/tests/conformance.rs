@@ -962,6 +962,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs = 'A' COLLATE utf8mb4_0900_as_ci",
         },
         SqlCase {
+            name: "collated STRCMP of a binary string",
+            sql: "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_cs, 0xff)",
+        },
+        SqlCase {
             name: "LIKE under a case-sensitive collation",
             sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs LIKE 'A'",
         },
