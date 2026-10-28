@@ -6,6 +6,7 @@ use turso_parser::ast::SortOrder;
 use crate::sync::RwLock;
 use crate::sync::{atomic, Arc};
 use bumpalo::Bump;
+use std::cell::RefCell;
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd, Reverse};
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -168,7 +169,7 @@ pub struct Sorter {
     pub index_key_info: Rc<Vec<KeyInfo>>,
     /// Per-column custom comparators for custom type ordering.
     /// When present, used instead of standard ValueRef comparison for that column.
-    comparators: Rc<Vec<Option<SortComparator>>>,
+    comparators: Rc<SortComparators>,
     /// Sorted chunks stored on disk.
     chunks: Vec<SortedChunk>,
     /// The heap of records consumed from the chunks and their corresponding chunk index.
@@ -229,7 +230,10 @@ impl Sorter {
             current: None,
             key_len: order.len(),
             index_key_info: Rc::new(index_key_info),
-            comparators: Rc::new(comparators),
+            comparators: Rc::new(SortComparators {
+                by_column: comparators,
+                first_error: RefCell::new(None),
+            }),
             chunks: vec![],
             chunk_heap: TursoAllocExt::new(),
             max_buffer_size: max_buffer_size_bytes,
@@ -268,6 +272,7 @@ impl Sorter {
                         // SAFETY: All pointers in records are valid (arena hasn't been reset).
                         self.records
                             .sort_by(|a, b| unsafe { a.as_ref().cmp(b.as_ref()) });
+                        self.comparators.take_error()?;
                         self.records.reverse();
                         self.sort_state = SortState::Next;
                     } else {
@@ -487,6 +492,7 @@ impl Sorter {
 
         // No pending IO - safe to pop from heap
         if let Some((next_record, chunk_idx)) = self.chunk_heap.pop() {
+            self.comparators.take_error()?;
             if let Some(c) = self.push_to_chunk_heap(chunk_idx)? {
                 self.pending_completion = Some((c, chunk_idx));
             }
@@ -513,6 +519,7 @@ impl Sorter {
                     )?)),
                     chunk_idx,
                 ))?;
+                self.comparators.take_error()?;
                 Ok(None)
             }
             ChunkNextResult::Done(None) => Ok(None),
@@ -529,6 +536,7 @@ impl Sorter {
         // SAFETY: All pointers are valid (arena not reset).
         self.records
             .sort_by(|a, b| unsafe { a.as_ref().cmp(b.as_ref()) });
+        self.comparators.take_error()?;
 
         let chunk_file = match &self.temp_file {
             Some(temp_file) => temp_file.file.clone(),
@@ -883,6 +891,31 @@ impl SortedChunk {
     }
 }
 
+struct SortComparators {
+    by_column: Vec<Option<SortComparator>>,
+    first_error: RefCell<Option<LimboError>>,
+}
+
+impl SortComparators {
+    fn compare(&self, column: usize, left: &ValueRef, right: &ValueRef) -> Option<Ordering> {
+        let comparator = self.by_column.get(column)?.as_ref()?;
+        if self.first_error.borrow().is_some() {
+            return Some(Ordering::Equal);
+        }
+        Some(comparator(left, right).unwrap_or_else(|error| {
+            *self.first_error.borrow_mut() = Some(error);
+            Ordering::Equal
+        }))
+    }
+
+    fn take_error(&self) -> Result<()> {
+        match self.first_error.borrow_mut().take() {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+}
+
 /// Record for in-memory sorting. All data lives in the arena, so no Drop is needed.
 struct ArenaSortableRecord {
     /// Payload bytes in arena. Using NonNull avoids lifetime issues with
@@ -894,7 +927,7 @@ struct ArenaSortableRecord {
     /// leak when arena.reset() skips Drop.
     index_key_info: NonNull<[KeyInfo]>,
     /// Shared comparators owned by Sorter. Same safety model as index_key_info.
-    comparators: NonNull<[Option<SortComparator>]>,
+    comparators: NonNull<SortComparators>,
     /// Order-preserving prefix of the first key column; see [normalized_first_key].
     norm_key: u64,
     /// True when equal `norm_key`s prove the full keys are equal.
@@ -907,7 +940,7 @@ impl ArenaSortableRecord {
         record: &ImmutableRecord,
         key_len: usize,
         index_key_info: &[KeyInfo],
-        comparators: &[Option<SortComparator>],
+        comparators: &SortComparators,
     ) -> Result<Self> {
         let payload = arena.try_alloc_slice_copy(record.get_payload())?;
 
@@ -928,7 +961,7 @@ impl ArenaSortableRecord {
 
         let key_values = key_values.into_bump_slice();
         let (norm_key, norm_decisive) =
-            normalized_first_key(key_values, index_key_info, comparators);
+            normalized_first_key(key_values, index_key_info, &comparators.by_column);
         Ok(Self {
             payload: NonNull::from(payload),
             key_values: NonNull::from(key_values),
@@ -975,12 +1008,9 @@ impl ArenaSortableRecord {
             .zip(index_key_info.iter())
             .enumerate()
         {
-            let cmp = if let Some(Some(comparator)) = comparators.get(i) {
-                let base =
-                    comparator(&self_val, &other_val).expect("Memory allocation failed here");
-                cmp_with_sort(base, &self_val, &other_val, key_info)
-            } else {
-                cmp_in_column(&self_val, &other_val, key_info)
+            let cmp = match comparators.compare(i, &self_val, &other_val) {
+                Some(base) => cmp_with_sort(base, &self_val, &other_val, key_info),
+                None => cmp_in_column(&self_val, &other_val, key_info),
             };
             if cmp != Ordering::Equal {
                 return cmp;
@@ -1022,7 +1052,7 @@ struct BoxedSortableRecord {
     record: ImmutableRecord,
     key_values: Vec<ValueRef<'static>>,
     index_key_info: Rc<Vec<KeyInfo>>,
-    comparators: Rc<Vec<Option<SortComparator>>>,
+    comparators: Rc<SortComparators>,
     deserialization_error: Option<LimboError>,
     /// Order-preserving prefix of the first key column; see [normalized_first_key].
     norm_key: u64,
@@ -1035,7 +1065,7 @@ impl BoxedSortableRecord {
         record: ImmutableRecord,
         key_len: usize,
         index_key_info: Rc<Vec<KeyInfo>>,
-        comparators: Rc<Vec<Option<SortComparator>>>,
+        comparators: Rc<SortComparators>,
     ) -> Result<Self> {
         let mut value_iterator = record.iter()?;
         let mut key_values = Vec::try_with_capacity_ext(key_len)?;
@@ -1066,7 +1096,7 @@ impl BoxedSortableRecord {
         }
 
         let (norm_key, norm_decisive) =
-            normalized_first_key(&key_values, &index_key_info, &comparators);
+            normalized_first_key(&key_values, &index_key_info, &comparators.by_column);
         Ok(Self {
             record,
             key_values,
@@ -1089,8 +1119,8 @@ impl BoxedSortableRecord {
             .zip(self.index_key_info.iter())
             .enumerate()
         {
-            let cmp = if let Some(Some(comparator)) = self.comparators.get(i) {
-                comparator(&self_val, &other_val).expect("Memory allocation failed here")
+            let cmp = if let Some(base) = self.comparators.compare(i, &self_val, &other_val) {
+                base
             } else {
                 match (self_val, other_val) {
                     (ValueRef::Text(left), ValueRef::Text(right)) => {
@@ -1593,6 +1623,51 @@ mod tests {
                 .expect("Failed to get the next record");
         }
         assert_eq!(idx, expected.len());
+    }
+
+    #[test]
+    fn a_failing_sort_comparator_is_an_error_not_a_panic() {
+        let always_failing: SortComparator =
+            Arc::new(|_, _| Err(LimboError::InternalError("comparison failed".to_string())));
+        let failing_across_chunks: SortComparator = Arc::new(|left, right| match (left, right) {
+            (
+                ValueRef::Numeric(crate::numeric::Numeric::Integer(left)),
+                ValueRef::Numeric(crate::numeric::Numeric::Integer(right)),
+            ) if (left - right).abs() < 10 => Ok(left.cmp(right)),
+            _ => Err(LimboError::InternalError("comparison failed".to_string())),
+        });
+        for (buffer_size, comparator) in [
+            (1 << 20, always_failing.clone()),
+            (256, always_failing),
+            (16, failing_across_chunks),
+        ] {
+            let io = Arc::new(PlatformIO::new().unwrap());
+            let mut sorter = Sorter::new(
+                &[SortOrder::Asc],
+                try_vec![CollationSeq::Binary].unwrap(),
+                try_vec![None].unwrap(),
+                try_vec![Some(comparator)].unwrap(),
+                buffer_size,
+                64,
+                io.clone(),
+                crate::TempStore::Default,
+            )
+            .unwrap();
+            let mut result = (0..50).try_for_each(|x| {
+                let values = try_vec![Value::from_i64(x)].unwrap();
+                let record = ImmutableRecord::from_values(&values, values.len()).unwrap();
+                io.block(|| sorter.insert(&record))
+            });
+            result = result.and_then(|()| io.block(|| sorter.sort()));
+            while result.is_ok() && sorter.has_more() {
+                result = io.block(|| sorter.next());
+            }
+            let error = result.unwrap_err();
+            assert!(
+                error.to_string().contains("comparison failed"),
+                "buffer {buffer_size}: {error}"
+            );
+        }
     }
 
     #[test]
