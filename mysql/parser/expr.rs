@@ -2,9 +2,10 @@ use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
 use crate::literal::{
-    binary_literal_as_double, binary_literal_value, is_utf8_binary_literal, negated_binary_literal,
-    translate_as_bytes, translate_introduced_string, translate_temporal_text,
-    translate_typed_string, translate_typed_string_as_bytes, translate_value, Context,
+    binary_literal_as_double, binary_literal_value, is_latin1_char, is_utf8_binary_literal,
+    negated_binary_literal, translate_as_bytes, translate_introduced_string,
+    translate_temporal_text, translate_typed_string, translate_typed_string_as_bytes,
+    translate_value, Context,
 };
 use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
@@ -61,7 +62,7 @@ fn translate_node(
     match expr {
         Expr::Value(value) => translate_value_expr(&value.value, literal_context, context),
         Expr::Prefixed { prefix, value } => {
-            translate_introduced_string(prefix, value, literal_context)
+            translate_introduced_string(prefix, value, literal_context, context.latin1_as_text)
         }
         Expr::TypedString(typed) => translate_typed_string(typed, literal_context),
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
@@ -197,6 +198,197 @@ fn translate_node(
         } => translate_trim(trim_where.as_ref(), trim_what.as_deref(), expr, context),
         _ => Err(unsupported(expr)),
     }
+}
+
+pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
+    const CHARACTER_LIMIT: u64 = 16_777_216;
+    const PACKET_BYTES: f64 = 67_108_864.0;
+    fn number(text: &str) -> f64 {
+        let text = text.trim_start();
+        (1..=text.len())
+            .rev()
+            .filter(|end| text.is_char_boundary(*end))
+            .find_map(|end| text[..end].parse::<f64>().ok())
+            .filter(|value| value.is_finite())
+            .unwrap_or(0.0)
+    }
+    fn count(expr: &Expr) -> Option<f64> {
+        match expr {
+            Expr::Value(value) => match &value.value {
+                Value::Number(text, false)
+                | Value::SingleQuotedString(text)
+                | Value::DoubleQuotedString(text) => Some(number(text)),
+                Value::Null => Some(-1.0),
+                _ => None,
+            },
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => count(expr).map(|value| -value),
+            Expr::Nested(inner) => count(inner),
+            _ => None,
+        }
+    }
+    fn mentions_latin1(expr: &Expr) -> bool {
+        expr.to_string().to_ascii_lowercase().contains("_latin1")
+    }
+    fn latin1_strings(expr: &Expr) -> bool {
+        match expr {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                    text.chars().all(is_latin1_char)
+                }
+                _ => true,
+            },
+            Expr::Prefixed { .. } => true,
+            Expr::UnaryOp { expr, .. } | Expr::Nested(expr) => latin1_strings(expr),
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                latin1_strings(expr)
+                    && substring_from.as_deref().is_none_or(latin1_strings)
+                    && substring_for.as_deref().is_none_or(latin1_strings)
+            }
+            Expr::Trim {
+                expr, trim_what, ..
+            } => latin1_strings(expr) && trim_what.as_deref().is_none_or(latin1_strings),
+            Expr::Function(function) => match &function.args {
+                FunctionArguments::List(list) => list.args.iter().all(|arg| {
+                    matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) if latin1_strings(arg))
+                }),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+    fn converts_to_subject(subject: &Expr, rest: &[&Expr]) -> bool {
+        !mentions_latin1(subject) || rest.iter().all(|arg| latin1_strings(arg))
+    }
+    fn padded(subject: u64, length: f64) -> Option<u64> {
+        if !(0.0..=PACKET_BYTES).contains(&length) {
+            return Some(0);
+        }
+        let length = length.ceil() as u64;
+        (length <= CHARACTER_LIMIT).then_some(subject.max(length))
+    }
+    fn characters(expr: &Expr, found: &mut bool) -> Option<u64> {
+        let characters = match expr {
+            Expr::Prefixed { prefix, value } => {
+                *found = true;
+                match value.as_ref() {
+                    Expr::Value(value) if prefix.value.eq_ignore_ascii_case("_latin1") => {
+                        match &value.value {
+                            Value::HexStringLiteral(digits) => digits.len() as u64 / 2 + 1,
+                            _ => return None,
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+            Expr::Value(value) => match &value.value {
+                Value::Number(text, false) => text.len() as u64 + 32,
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                    text.chars().count() as u64
+                }
+                Value::Null => 0,
+                _ => return None,
+            },
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } if matches!(expr.as_ref(), Expr::Value(_)) => characters(expr, found)? + 1,
+            Expr::Nested(inner) => characters(inner, found)?,
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                for position in [substring_from, substring_for].into_iter().flatten() {
+                    characters(position, found)?;
+                }
+                characters(expr, found)?
+            }
+            Expr::Trim {
+                expr,
+                trim_what,
+                trim_characters: None,
+                ..
+            } => {
+                if let Some(what) = trim_what.as_deref() {
+                    characters(what, found)?;
+                    if !converts_to_subject(expr, &[what]) {
+                        return None;
+                    }
+                }
+                characters(expr, found)?
+            }
+            Expr::Function(function) => {
+                let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+                    return None;
+                };
+                let FunctionArguments::List(list) = &function.args else {
+                    return None;
+                };
+                if function.over.is_some()
+                    || function.filter.is_some()
+                    || !function.within_group.is_empty()
+                    || list.duplicate_treatment.is_some()
+                    || !list.clauses.is_empty()
+                {
+                    return None;
+                }
+                let mut args = Vec::with_capacity(list.args.len());
+                let mut lengths = Vec::with_capacity(list.args.len());
+                for arg in &list.args {
+                    let FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) = arg else {
+                        return None;
+                    };
+                    lengths.push(characters(arg, found)?);
+                    args.push(arg);
+                }
+                let total = lengths.iter().sum::<u64>();
+                match (
+                    name.value.to_ascii_uppercase().as_str(),
+                    args.as_slice(),
+                    lengths.as_slice(),
+                ) {
+                    ("CONCAT", _, _) => total,
+                    ("CONCAT_WS", _, [separator, ..]) => total + separator * lengths.len() as u64,
+                    ("ELT", _, _) => lengths.iter().copied().max().unwrap_or(0),
+                    ("INSERT", [subject, ..], [text, _, _, replacement])
+                        if !mentions_latin1(subject) =>
+                    {
+                        text + replacement
+                    }
+                    (
+                        "LEFT" | "RIGHT" | "SUBSTR" | "SUBSTRING" | "MID" | "LTRIM" | "RTRIM"
+                        | "REVERSE",
+                        _,
+                        [text, ..],
+                    ) => *text,
+                    ("LPAD" | "RPAD", [subject, length, padding], [text, _, _])
+                        if converts_to_subject(subject, &[length, padding]) =>
+                    {
+                        padded(*text, count(length)?)?
+                    }
+                    ("REPLACE", [subject, from, to], [text, _, replacement])
+                        if converts_to_subject(subject, &[from, to]) =>
+                    {
+                        text * replacement.max(&1)
+                    }
+                    _ => return None,
+                }
+            }
+            _ => return None,
+        };
+        (characters <= CHARACTER_LIMIT).then_some(characters)
+    }
+    let mut found = false;
+    characters(expr, &mut found).is_some() && found
 }
 
 fn translate_value_expr(

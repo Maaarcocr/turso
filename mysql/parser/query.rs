@@ -1,5 +1,6 @@
 use crate::expr::{
-    failing_json_cast, translate_bytes, translate_condition, translate_expr, translate_window,
+    failing_json_cast, shows_latin1_as_text, translate_bytes, translate_condition, translate_expr,
+    translate_window,
 };
 use crate::invalid_json::invalid_json_text_evaluated;
 use crate::names::translate_identifier;
@@ -21,6 +22,7 @@ pub(crate) struct TranslationContext {
     expression_depth: usize,
     select_list_runs_once: bool,
     select_list_is_shown: bool,
+    pub(crate) latin1_as_text: bool,
     pub(crate) inserted_row_is_readable: bool,
     tables_read: Vec<ast::Name>,
 }
@@ -729,11 +731,14 @@ fn translate_selected(
     let failing_text = runs_once
         .then(|| invalid_json_text_evaluated(expr))
         .flatten();
-    match failing_text {
+    context.latin1_as_text = runs_once && shown && shows_latin1_as_text(expr);
+    let translated = match failing_text {
         Some(text) => Ok(failing_json_cast(text)),
         None if shown => translate_bytes(expr, context),
         None => translate_expr(expr, context),
-    }
+    };
+    context.latin1_as_text = false;
+    translated
 }
 
 fn implicit_column_name(expr: &Expr) -> String {
