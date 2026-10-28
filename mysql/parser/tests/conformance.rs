@@ -850,6 +850,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT LPAD ('\u{ff}', 3, 1), CONCAT ('\u{4e2d}', '\u{20ac}'), RPAD ('\u{4e2d}', 2, '\u{ff}')",
         ),
         (
+            "SELECT CAST(CAST('[]' AS JSON) AS SIGNED), CONVERT(CAST(true AS JSON), DECIMAL(3, 1)), CAST(CAST(1.5 AS JSON) AS UNSIGNED), CAST(JSON_ARRAY() AS DOUBLE)",
+            "SELECT __mysql_cast_as_signed (__mysql_json_integer (__mysql_cast_as_json ('[]'))), CAST (__mysql_json_decimal (__mysql_cast_boolean_as_json (TRUE)) AS DECIMAL (3, 1)), __mysql_cast_as_unsigned (1.5), CAST (__mysql_json_double (JSON_ARRAY ()) AS DOUBLE)",
+        ),
+        (
             "SELECT COLLATION('a'), COLLATION(_latin1 'a' ), COLLATION(RANDOM_BYTES(1))",
             "SELECT 'utf8mb4_0900_ai_ci', 'latin1_swedish_ci', 'binary'",
         ),
@@ -952,6 +956,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "latin1 text",
             sql: "SELECT _latin1'\u{e9}'",
+        },
+        SqlCase {
+            name: "integer of a JSON string that holds digits",
+            sql: r#"SELECT CAST(CAST('"12"' AS JSON) AS SIGNED)"#,
         },
         SqlCase {
             name: "byte length of latin1 text",

@@ -4,11 +4,11 @@ use turso_core::dialect::ArgumentType;
 use turso_core::{LimboError, Numeric, Result, Value};
 
 use super::super::decimal::shown_decimal;
-use super::super::string::text_to_double;
+use super::super::string::{leading_integer, text_to_double};
 use super::document::{Json, Object};
 use super::parse::parse;
 use super::{boolean_result, is_json};
-use crate::types::decimal_number::Decimal;
+use crate::types::decimal_number::{Decimal, Rounding};
 
 pub(super) fn execute_typed(
     name: &str,
@@ -20,6 +20,8 @@ pub(super) fn execute_typed(
         ("__MYSQL_JSON_NULL_SAFE_EQUAL", 2) => return Some(null_safe_equal(args, arg_types)),
         ("__MYSQL_JSON_TRUTH", 1) => truth,
         ("__MYSQL_JSON_DOUBLE", 1) => double,
+        ("__MYSQL_JSON_INTEGER", 1) => integer,
+        ("__MYSQL_JSON_DECIMAL", 1) => decimal,
         ("__MYSQL_JSON_REMAINDER", 2) => remainder,
         _ => return None,
     };
@@ -40,7 +42,13 @@ pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
         (
             "__MYSQL_JSON_COMPARE" | "__MYSQL_JSON_NULL_SAFE_EQUAL" | "__MYSQL_JSON_REMAINDER",
             2
-        ) | ("__MYSQL_JSON_TRUTH" | "__MYSQL_JSON_DOUBLE", 1)
+        ) | (
+            "__MYSQL_JSON_TRUTH"
+                | "__MYSQL_JSON_DOUBLE"
+                | "__MYSQL_JSON_INTEGER"
+                | "__MYSQL_JSON_DECIMAL",
+            1
+        )
     )
 }
 
@@ -180,6 +188,65 @@ fn truth(operands: &[Operand]) -> Value {
 
 fn double(operands: &[Operand]) -> Value {
     Value::from_f64(to_double(&operands[0]))
+}
+
+fn integer(operands: &[Operand]) -> Value {
+    Value::from_i64(to_integer(&operands[0]))
+}
+
+fn to_integer(operand: &Operand) -> i64 {
+    const BIGINT_MAX_DOUBLE: f64 = 9_223_372_036_854_775_807.0;
+    match operand {
+        Operand::Decimal(decimal) => {
+            let rounded = decimal.rounded(0, Rounding::HalfAwayFromZero);
+            rounded.to_i64().unwrap_or_else(|| {
+                if rounded.is_negative() {
+                    i64::MIN
+                } else {
+                    i64::MAX
+                }
+            })
+        }
+        Operand::Temporal(_) => 0,
+        Operand::Json(json) => match json {
+            Json::Integer(integer) => *integer,
+            Json::Unsigned(unsigned) => *unsigned as i64,
+            Json::Double(double) if *double <= i64::MIN as f64 => i64::MIN,
+            Json::Double(double) if *double >= BIGINT_MAX_DOUBLE => i64::MAX,
+            Json::Double(double) => double.round_ties_even() as i64,
+            Json::String(text) => leading_integer(text.as_bytes()),
+            Json::Boolean(value) => i64::from(*value),
+            Json::Null | Json::Opaque(_) | Json::Array(_) | Json::Object(_) => 0,
+        },
+    }
+}
+
+fn decimal(operands: &[Operand]) -> Value {
+    Value::build_text(to_decimal(&operands[0]).to_text())
+}
+
+fn to_decimal(operand: &Operand) -> Decimal {
+    match operand {
+        Operand::Decimal(decimal) => decimal.clone(),
+        Operand::Temporal(_) => Decimal::zero(),
+        Operand::Json(json) => match json {
+            Json::Integer(integer) => Decimal::from_i64(*integer),
+            Json::Unsigned(unsigned) => {
+                Decimal::parse(&unsigned.to_string()).expect("an unsigned integer is a decimal")
+            }
+            Json::Double(double) => Decimal::from_double(*double).expect("JSON doubles are finite"),
+            Json::String(text) => {
+                let text = text.trim_start();
+                (1..=text.len())
+                    .rev()
+                    .filter(|end| text.is_char_boundary(*end))
+                    .find_map(|end| Decimal::parse(&text[..end]))
+                    .unwrap_or_else(Decimal::zero)
+            }
+            Json::Boolean(value) => Decimal::from_i64(i64::from(*value)),
+            Json::Null | Json::Opaque(_) | Json::Array(_) | Json::Object(_) => Decimal::zero(),
+        },
+    }
 }
 
 fn remainder(operands: &[Operand]) -> Value {
