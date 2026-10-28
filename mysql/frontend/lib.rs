@@ -5,7 +5,6 @@ use turso_core::{
     Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, Value, IO,
 };
 use turso_parser::ast;
-use turso_parser::token::TokenType;
 
 mod errors;
 mod format;
@@ -24,54 +23,14 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        // Parse only the first statement and report the input consumed
-        // through its semicolon, so Connection can iterate multi-statement
-        // text. Text the MySQL tokenizer rejects is not MySQL; engine helper
-        // SQL is canonical SQLite text, so parse it as SQLite.
         let statement = match turso_mysql_parser::first_statement(sql) {
             Ok(Some(statement)) => statement,
             Ok(None) => return Ok((None, sql.len())),
-            Err(error) => {
-                let parsed = turso_core::dialect::sqlite::parse(sql)?;
-                if parsed.0.as_ref().is_some_and(creates_user_table) {
-                    return Err(LimboError::ParseError(error.to_string()));
-                }
-                return Ok(parsed);
-            }
+            Err(error) => return Err(LimboError::ParseError(error.to_string())),
         };
-        let text = &sql[statement.text.clone()];
-        let mysql_error = match turso_mysql_parser::parse_and_translate(text) {
-            Ok(stmt) => return Ok((Some(ast::Cmd::Stmt(stmt)), statement.end)),
-            Err(error @ turso_mysql_parser::MysqlParserError::Rejected(_)) => {
-                return Err(LimboError::ParseError(error.to_string()));
-            }
-            Err(error) => error,
-        };
-        if uses_array_operators(text) {
-            return Err(LimboError::ParseError(format!(
-                "SQLite reads `&&` and `@>` as array operators, which MySQL does not have: {text}"
-            )));
-        }
-        // Anything the MySQL frontend cannot lower yet falls back to SQLite
-        // parsing of the same statement, mirroring the PostgreSQL frontend.
-        // SQLite must see the same single statement: if it ended earlier
-        // (its lexer disagrees about a quote or comment), resuming after its
-        // end could run text that MySQL treats as part of a string.
-        let (cmd, consumed) = turso_core::dialect::sqlite::parse(text)?;
-        let Some(cmd) = cmd else {
-            return Err(LimboError::ParseError(format!(
-                "MySQL statement is empty when parsed as SQLite: {text}"
-            )));
-        };
-        if creates_user_table(&cmd) {
-            return Err(LimboError::ParseError(mysql_error.to_string()));
-        }
-        if let (Some(_), _) = turso_core::dialect::sqlite::parse(&text[consumed..])? {
-            return Err(LimboError::ParseError(format!(
-                "MySQL and SQLite disagree on where this statement ends: {text}"
-            )));
-        }
-        Ok((Some(cmd), statement.end))
+        let stmt = turso_mysql_parser::parse_and_translate(&sql[statement.text.clone()])
+            .map_err(|error| LimboError::ParseError(error.to_string()))?;
+        Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
     }
 
     fn parse_table_sql(&self, sql: &str, root_page: i64) -> Result<BTreeTable> {
@@ -145,25 +104,6 @@ impl Dialect for MySqlDialect {
     }
 }
 
-fn creates_user_table(cmd: &ast::Cmd) -> bool {
-    matches!(
-        cmd,
-        ast::Cmd::Stmt(ast::Stmt::CreateTable { tbl_name, .. })
-            if !turso_core::schema::is_system_table(tbl_name.name.as_str())
-    )
-}
-
-fn uses_array_operators(sql: &str) -> bool {
-    turso_parser::lexer::Lexer::new(sql.as_bytes())
-        .map_while(std::result::Result::ok)
-        .any(|token| {
-            matches!(
-                token.token_type,
-                TokenType::TK_ARRAY_OVERLAP | TokenType::TK_ARRAY_CONTAINS
-            )
-        })
-}
-
 /// Opens the database at `path` on `io` with the MySQL dialect and returns a
 /// connection to it.
 pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
@@ -201,8 +141,6 @@ mod tests {
         assert_eq!(consumed("SELECT 1; SELECT 2"), (true, 9));
         assert_eq!(consumed("SELECT 'a;b' /* ; */ ;\nSELECT 2"), (true, 22));
         assert_eq!(consumed("SELECT 1 -- done"), (true, 16));
-        // The SQLite fallback consumes the same statement.
-        assert_eq!(consumed("PRAGMA page_size; SELECT 2"), (true, 17));
         for empty in ["", "  \n", "-- comment", "# comment\n;;"] {
             assert_eq!(consumed(empty), (false, empty.len()), "{empty:?}");
         }
@@ -220,31 +158,6 @@ mod tests {
         }
         connection.close()?;
         Ok(())
-    }
-
-    #[test]
-    fn sqlite_fallback_cannot_end_a_statement_early() {
-        // MySQL reads one statement whose string contains `; DROP TABLE t;`.
-        // It is not lowered yet, and SQLite would read it as several
-        // statements, so the fallback must refuse it rather than run the
-        // statements SQLite sees after the first.
-        let sql = "SELECT SQL_NO_CACHE x FROM t WHERE y = 'a\\'; DROP TABLE t; -- '";
-        let error = MySqlDialect.parse(sql).expect_err("lexers disagree");
-        assert!(error.to_string().contains("disagree"), "{error}");
-    }
-
-    #[test]
-    fn sqlite_fallback_refuses_array_operators() {
-        for sql in ["SELECT SQL_NO_CACHE 1 && 1", "SELECT SQL_NO_CACHE 1 @> 1"] {
-            let error = MySqlDialect.parse(sql).expect_err(sql);
-            assert!(error.to_string().contains("array operators"), "{error}");
-        }
-    }
-
-    #[test]
-    fn sqlite_fallback_stops_reading_tokens_at_a_lexer_error() {
-        let sql = "SELECT SQL_NO_CACHE 1 = 'a\\'b'";
-        assert!(MySqlDialect.parse(sql).is_err(), "{sql}");
     }
 
     #[test]

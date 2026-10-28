@@ -178,31 +178,31 @@ fn timestamp_add_and_diff_take_the_unit_first() {
 fn extract_reads_dates_or_times_by_unit() {
     let connection = crate::open_memory().expect("in-memory database opens");
     assert_eq!(
-        select(&connection, "EXTRACT('DAY_HOUR', '25:00:00')"),
+        select(&connection, "EXTRACT(DAY_HOUR FROM '25:00:00')"),
         Value::from_i64(25)
     );
     assert_eq!(
-        select(&connection, "EXTRACT('DAY_HOUR', '2000-01-02 10:00:00')"),
+        select(&connection, "EXTRACT(DAY_HOUR FROM '2000-01-02 10:00:00')"),
         Value::from_i64(210)
     );
     assert_eq!(
-        select(&connection, "EXTRACT('DAY_MICROSECOND', '-25:00:00.5')"),
+        select(&connection, "EXTRACT(DAY_MICROSECOND FROM '-25:00:00.5')"),
         Value::from_i64(-250000500000)
     );
     assert_eq!(
-        select(&connection, "EXTRACT('DAY', '25:00:00')"),
+        select(&connection, "EXTRACT(DAY FROM '25:00:00')"),
         Value::from_i64(0)
     );
     assert_eq!(
-        select(&connection, "EXTRACT('WEEK', 0)"),
+        select(&connection, "EXTRACT(WEEK FROM 0)"),
         Value::from_i64(613566757)
     );
     assert_eq!(
-        select(&connection, "EXTRACT('YEAR_MONTH', '2000-01-02')"),
+        select(&connection, "EXTRACT(YEAR_MONTH FROM '2000-01-02')"),
         Value::from_i64(200001)
     );
     assert_eq!(
-        select(&connection, "EXTRACT('DAY', '0000-00-00')"),
+        select(&connection, "EXTRACT(DAY FROM '0000-00-00')"),
         Value::Null
     );
 }
@@ -231,8 +231,17 @@ fn get_format_takes_the_kind_as_text() {
 #[test]
 fn hexadecimal_blobs_are_unsigned_numbers() {
     let connection = crate::open_memory().expect("in-memory database opens");
+    let bytes = vec![0xFF, b'f', b'o', b'o', b'b', b'a', b'r', 0xFF];
+    let maketime = super::execute(
+        "MAKETIME",
+        &[
+            Value::from_blob(bytes),
+            Value::from_i64(0),
+            Value::from_i64(0),
+        ],
+    );
     assert_eq!(
-        select(&connection, "MAKETIME(X'FF666F6F626172FF', 0, 0)"),
+        maketime.expect("MAKETIME exists").expect("MAKETIME runs"),
         Value::build_text("838:59:59")
     );
     assert_eq!(
