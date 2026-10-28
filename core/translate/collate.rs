@@ -5,8 +5,11 @@ use std::{
     str::FromStr as _,
 };
 
-use icu_collator::{options::CollatorOptions, Collator, CollatorBorrowed};
-use icu_locale::Locale;
+use icu_collator::{
+    options::{CollatorOptions, Strength},
+    Collator, CollatorBorrowed,
+};
+use icu_locale::{extensions::unicode::key, Locale};
 use turso_parser::ast::Expr;
 
 use crate::{
@@ -271,13 +274,22 @@ impl LocaleCollationRegistry {
             return Ok(id);
         }
 
-        let locale = Locale::from_str(name).map_err(|_| {
-            crate::LimboError::ParseError(format!("no such collation sequence: {name}"))
-        })?;
+        let no_such_collation =
+            || crate::LimboError::ParseError(format!("no such collation sequence: {name}"));
+        let locale = Locale::from_str(name).map_err(|_| no_such_collation())?;
+        let mut options = CollatorOptions::default();
+        if let Some(strength) = locale.extensions.unicode.keywords.get(&key!("ks")) {
+            options.strength = Some(match strength.to_string().as_str() {
+                "level1" => Strength::Primary,
+                "level2" => Strength::Secondary,
+                "level3" => Strength::Tertiary,
+                "level4" => Strength::Quaternary,
+                "identic" => Strength::Identical,
+                _ => return Err(no_such_collation()),
+            });
+        }
         let collator =
-            Collator::try_new(locale.into(), CollatorOptions::default()).map_err(|_| {
-                crate::LimboError::ParseError(format!("no such collation sequence: {name}"))
-            })?;
+            Collator::try_new(locale.into(), options).map_err(|_| no_such_collation())?;
 
         let mut collations = self.collations.write();
         if let Some((idx, _)) = collations
@@ -719,6 +731,26 @@ mod tests {
 
         let upper_first_us = CollationSeq::new("en-US-u-kf-upper").unwrap();
         assert_eq!(upper_first_us.compare_strings("A", "a"), Ordering::Less);
+    }
+
+    #[test]
+    fn test_locale_collation_strength() {
+        let primary = CollationSeq::new("und-u-ks-level1").unwrap();
+        assert_eq!(primary.compare_strings("Résumé", "resume"), Ordering::Equal);
+        assert_eq!(primary.compare_strings("a", "a "), Ordering::Less);
+
+        let secondary = CollationSeq::new("und-u-ks-level2").unwrap();
+        assert_eq!(secondary.compare_strings("ABC", "abc"), Ordering::Equal);
+        assert_eq!(secondary.compare_strings("é", "e"), Ordering::Greater);
+
+        let tertiary = CollationSeq::new("und-u-ks-level3").unwrap();
+        assert_eq!(tertiary.compare_strings("a", "A"), Ordering::Less);
+
+        assert_eq!(
+            CollationSeq::new("und").unwrap().compare_strings("a", "A"),
+            Ordering::Less
+        );
+        assert!(CollationSeq::new("und-u-ks-level9").is_err());
     }
 
     #[test]
