@@ -1,4 +1,4 @@
-use crate::dialect::TEMPORAL_UNITS;
+use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::literal::{
     translate_as_bytes, translate_introduced_string, translate_temporal_text,
     translate_typed_string, translate_value, Context,
@@ -7,11 +7,11 @@ use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
 use crate::MysqlParserError;
 use sqlparser::ast::{
-    BinaryOperator, CaseWhen, CastKind, CeilFloorKind, DataType, DateTimeField, DuplicateTreatment,
-    ExactNumberInfo, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArgumentClause,
-    FunctionArgumentList, FunctionArguments, Ident, Interval, ObjectName, ObjectNamePart, Query,
-    TrimWhereField, UnaryOperator, Value, WindowFrame, WindowFrameBound, WindowFrameUnits,
-    WindowSpec, WindowType,
+    BinaryOperator, CaseWhen, CastKind, CeilFloorKind, CharacterLength, DataType, DateTimeField,
+    DuplicateTreatment, ExactNumberInfo, Expr, Function, FunctionArg, FunctionArgExpr,
+    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, Ident, Interval, ObjectName,
+    ObjectNamePart, Query, TimezoneInfo, TrimWhereField, UnaryOperator, Value, WindowFrame,
+    WindowFrameBound, WindowFrameUnits, WindowSpec, WindowType,
 };
 use turso_parser::ast;
 
@@ -534,6 +534,9 @@ fn translate_compared(
     if is_json_cast(expr) {
         return Err(json_outside_a_value_position(expr));
     }
+    if is_temporal_cast(expr) {
+        return Err(temporal_outside_a_value_position(expr));
+    }
     translate_compared_value(expr, other_side, context)
 }
 
@@ -716,8 +719,8 @@ fn translate_regexp(
                 .to_string(),
         ));
     }
-    let lhs = translate_in(expr, Context::Text, context)?;
-    let rhs = translate_in(pattern, Context::Text, context)?;
+    let lhs = translate_regexp_operand(expr, context)?;
+    let rhs = translate_regexp_operand(pattern, context)?;
     Ok(ast::Expr::like(
         lhs,
         negated,
@@ -725,6 +728,18 @@ fn translate_regexp(
         rhs,
         None,
     ))
+}
+
+fn translate_regexp_operand(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let literal_context = if is_json_cast(expr) {
+        Context::Value
+    } else {
+        Context::Text
+    };
+    translate_in(expr, literal_context, context)
 }
 
 fn is_binary_literal(expr: &Expr) -> bool {
@@ -1108,11 +1123,30 @@ fn translate_cast(
         DataType::Decimal(precision) => (decimal_type(precision), Context::Number),
         DataType::Char(None) | DataType::Character(None) => (type_name("CHAR"), Context::Value),
         DataType::JSON => return translate_cast_as_json(expr, literal_context, context),
-        other => {
-            return Err(MysqlParserError::Unsupported(format!(
-                "CAST to `{other}` is not lowered yet"
-            )))
+        DataType::Date => {
+            return translate_temporal_cast(expr, TemporalCast::Date, literal_context, context)
         }
+        DataType::Datetime(precision) => {
+            let target = TemporalCast::DateTime(precision.unwrap_or(0));
+            return translate_temporal_cast(expr, target, literal_context, context);
+        }
+        DataType::Time(precision, TimezoneInfo::None) => {
+            let target = TemporalCast::Time(precision.unwrap_or(0));
+            return translate_temporal_cast(expr, target, literal_context, context);
+        }
+        DataType::Char(Some(length)) | DataType::Character(Some(length)) => {
+            let length = character_length(length)?;
+            return translate_text_cast(expr, "__mysql_cast_as_char", length, context);
+        }
+        DataType::Custom(name, modifiers) if is_nchar(name) => match modifiers.as_slice() {
+            [] => (type_name("NCHAR"), Context::Value),
+            [length] => {
+                let length = nchar_length(length)?;
+                return translate_text_cast(expr, "__mysql_cast_as_nchar", length, context);
+            }
+            _ => return Err(unsupported_cast(data_type)),
+        },
+        other => return Err(unsupported_cast(other)),
     };
     Ok(ast::Expr::cast(
         translate_in(expr, operand_context, context)?,
@@ -1128,6 +1162,9 @@ fn translate_cast_as_json(
     if literal_context != Context::Value {
         return Err(json_outside_a_value_position(expr));
     }
+    if has_a_temporal_type(expr) {
+        return Err(temporal_outside_a_value_position(expr));
+    }
     let value = translate_expr(expr, context)?;
     let name = if is_boolean(expr) {
         "__mysql_cast_boolean_as_json"
@@ -1137,10 +1174,172 @@ fn translate_cast_as_json(
     Ok(function_call(name, vec![value]))
 }
 
+pub(crate) fn failing_json_cast(text: &str) -> ast::Expr {
+    function_call("__mysql_cast_as_json", vec![string_expr(text)])
+}
+
 fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
     MysqlParserError::Unsupported(format!(
         "JSON value `{expr}` in a comparison, a computation or a function MySQL evaluates lazily is not lowered yet"
     ))
+}
+
+fn unsupported_cast(data_type: &DataType) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!("CAST to `{data_type}` is not lowered yet"))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TemporalCast {
+    Date,
+    DateTime(u64),
+    Time(u64),
+}
+
+fn translate_temporal_cast(
+    expr: &Expr,
+    target: TemporalCast,
+    literal_context: Context,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if literal_context != Context::Value {
+        return Err(temporal_outside_a_value_position(expr));
+    }
+    if !converts_like_its_text(expr, target) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "a temporal CAST of `{expr}`, which may have a DATE or TIME type MySQL converts differently from its text, is not lowered yet"
+        )));
+    }
+    let value = translate_expr(expr, context)?;
+    Ok(match target {
+        TemporalCast::Date => function_call("__mysql_cast_as_date", vec![value]),
+        TemporalCast::DateTime(precision) => function_call(
+            "__mysql_cast_as_datetime",
+            vec![value, number(cast_precision(precision))],
+        ),
+        TemporalCast::Time(precision) => function_call(
+            "__mysql_cast_as_time",
+            vec![value, number(cast_precision(precision))],
+        ),
+    })
+}
+
+fn temporal_outside_a_value_position(expr: &Expr) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "temporal value `{expr}` in a comparison, a computation or a condition, where MySQL reads it as a temporal value or a number, is not lowered yet"
+    ))
+}
+
+fn converts_like_its_text(operand: &Expr, target: TemporalCast) -> bool {
+    match operand {
+        Expr::Value(_) | Expr::Prefixed { .. } | Expr::UnaryOp { .. } => true,
+        Expr::BinaryOp { left, right, .. } => {
+            !matches!(**left, Expr::Interval(_)) && !matches!(**right, Expr::Interval(_))
+        }
+        Expr::Nested(inner) => converts_like_its_text(inner, target),
+        Expr::TypedString(typed) => temporal_type_fits(&typed.data_type, target),
+        Expr::Cast {
+            expr,
+            data_type: DataType::JSON,
+            ..
+        }
+        | Expr::Convert {
+            expr,
+            data_type: Some(DataType::JSON),
+            ..
+        } => converts_like_its_text(expr, target),
+        Expr::Cast { data_type, .. }
+        | Expr::Convert {
+            data_type: Some(data_type),
+            ..
+        } => temporal_type_fits(data_type, target),
+        Expr::Function(function) => matches!(
+            function.name.0.as_slice(),
+            [ObjectNamePart::Identifier(name)]
+                if name.quote_style.is_none() && name.value.to_ascii_uppercase().starts_with("JSON_")
+        ),
+        _ => false,
+    }
+}
+
+fn temporal_type_fits(data_type: &DataType, target: TemporalCast) -> bool {
+    match data_type {
+        DataType::Date => !matches!(target, TemporalCast::Time(_)),
+        DataType::Time(..) => matches!(target, TemporalCast::Time(_)),
+        _ => true,
+    }
+}
+
+fn cast_precision(precision: u64) -> u64 {
+    assert!(
+        precision <= MAX_TEMPORAL_PRECISION,
+        "the dialect rejects temporal CAST precisions above {MAX_TEMPORAL_PRECISION}"
+    );
+    precision
+}
+
+fn has_a_temporal_type(expr: &Expr) -> bool {
+    match expr {
+        Expr::TypedString(_) => true,
+        Expr::Nested(inner) => has_a_temporal_type(inner),
+        other => is_temporal_cast(other),
+    }
+}
+
+fn is_temporal_cast(expr: &Expr) -> bool {
+    match expr {
+        Expr::Cast { data_type, .. }
+        | Expr::Convert {
+            data_type: Some(data_type),
+            ..
+        } => matches!(
+            data_type,
+            DataType::Date | DataType::Datetime(_) | DataType::Time(..)
+        ),
+        Expr::Nested(inner) => is_temporal_cast(inner),
+        _ => false,
+    }
+}
+
+const MAX_CHAR_CAST_LENGTH: u64 = 16 * 1024 * 1024;
+
+fn character_length(length: &CharacterLength) -> Result<u64, MysqlParserError> {
+    match length {
+        CharacterLength::IntegerLength { length, unit: None }
+            if *length <= MAX_CHAR_CAST_LENGTH =>
+        {
+            Ok(*length)
+        }
+        other => Err(MysqlParserError::Unsupported(format!(
+            "CAST to CHAR({other}) is not lowered yet"
+        ))),
+    }
+}
+
+fn is_nchar(name: &ObjectName) -> bool {
+    matches!(
+        name.0.as_slice(),
+        [ObjectNamePart::Identifier(identifier)]
+            if identifier.quote_style.is_none() && identifier.value.eq_ignore_ascii_case("NCHAR")
+    )
+}
+
+fn nchar_length(length: &str) -> Result<u64, MysqlParserError> {
+    match length.parse::<u64>() {
+        Ok(length) if length <= MAX_CHAR_CAST_LENGTH => Ok(length),
+        _ => Err(MysqlParserError::Unsupported(format!(
+            "CAST to NCHAR({length}) is not lowered yet"
+        ))),
+    }
+}
+
+fn translate_text_cast(
+    expr: &Expr,
+    name: &str,
+    length: u64,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let value = translate_expr(expr, context)?;
+    Ok(function_call(name, vec![value, number(length)]))
 }
 
 fn decimal_type(precision: &ExactNumberInfo) -> ast::Type {
@@ -1233,35 +1432,16 @@ fn translate_trim(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let Some(removed) = trim_what else {
-        let name = match trim_where {
-            None | Some(TrimWhereField::Both) => "TRIM",
-            Some(TrimWhereField::Leading) => "LTRIM",
-            Some(TrimWhereField::Trailing) => "RTRIM",
-        };
-        return Ok(function_call(name, vec![translate_expr(expr, context)?]));
-    };
-    let single_character = matches!(
-        removed,
-        Expr::Value(value) if matches!(
-            &value.value,
-            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)
-                if text.chars().count() <= 1
-        )
-    );
-    if !single_character {
-        return Err(MysqlParserError::Unsupported(
-            "TRIM of a string longer than one character is not lowered yet".to_string(),
-        ));
-    }
-    let removed = translate_expr(removed, context)?;
+    let removed = trim_what
+        .map(|removed| translate_expr(removed, context))
+        .transpose()?;
     let text = translate_expr(expr, context)?;
-    let name = match trim_where {
-        None | Some(TrimWhereField::Both) => "TRIM",
-        Some(TrimWhereField::Leading) => "LTRIM",
-        Some(TrimWhereField::Trailing) => "RTRIM",
+    let ends = match trim_where {
+        None | Some(TrimWhereField::Both) => TrimEnds::Both,
+        Some(TrimWhereField::Leading) => TrimEnds::Leading,
+        Some(TrimWhereField::Trailing) => TrimEnds::Trailing,
     };
-    Ok(function_call(name, vec![text, removed]))
+    Ok(trim_call(ends, text, removed))
 }
 
 fn translate_interval_arithmetic(
@@ -1451,6 +1631,15 @@ fn translate_special_function(
             let to = translate_in(to, argument_context(upper_name, 2, &args), context)?;
             Ok(Some(translate_conv_of_literal(literal, from, to)?))
         }
+        ("COLLATION", [value]) => Ok(collation_of(value).map(string_expr)),
+        ("LTRIM" | "RTRIM", [text]) => {
+            let ends = if upper_name == "LTRIM" {
+                TrimEnds::Leading
+            } else {
+                TrimEnds::Trailing
+            };
+            Ok(Some(trim_call(ends, translate_expr(text, context)?, None)))
+        }
         ("BIN" | "OCT", [value]) => {
             let Some(literal) = hex_or_bit_literal(value) else {
                 return Ok(None);
@@ -1465,6 +1654,97 @@ fn translate_special_function(
         (_, []) => Ok(current_time_literal(upper_name)),
         _ => Ok(None),
     }
+}
+
+fn collation_of(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::Nested(inner) => collation_of(inner),
+        Expr::Value(value) => match value.value {
+            Value::SingleQuotedString(_) | Value::DoubleQuotedString(_) => Some(DEFAULT_COLLATION),
+            Value::NationalStringLiteral(_) => Some("utf8mb3_general_ci"),
+            Value::Number(..)
+            | Value::Null
+            | Value::Boolean(_)
+            | Value::HexStringLiteral(_)
+            | Value::SingleQuotedByteStringLiteral(_) => Some("binary"),
+            _ => None,
+        },
+        Expr::Prefixed { prefix, value } if string_literal(value).is_some() => {
+            match prefix.value.to_ascii_lowercase().as_str() {
+                "_binary" => Some("binary"),
+                "_utf8mb4" => Some(DEFAULT_COLLATION),
+                "_utf8mb3" | "_utf8" => Some("utf8mb3_general_ci"),
+                "_latin1" => Some("latin1_swedish_ci"),
+                "_ascii" => Some("ascii_general_ci"),
+                _ => None,
+            }
+        }
+        Expr::Collate { expr, collation } if collation_of(expr) == Some(DEFAULT_COLLATION) => {
+            let name = single_name(collation).ok()?.to_ascii_lowercase();
+            UTF8MB4_COLLATIONS
+                .iter()
+                .find(|known| **known == name)
+                .copied()
+        }
+        Expr::UnaryOp { expr, .. } => collation_of(expr).map(|_| "binary"),
+        Expr::Function(function) => {
+            let (name, args) = function_shape(function)?;
+            match (name.as_str(), args.as_slice()) {
+                ("RANDOM_BYTES", [argument]) => collation_of(argument).map(|_| "binary"),
+                ("UUID", []) => Some("utf8mb3_general_ci"),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+const DEFAULT_COLLATION: &str = "utf8mb4_0900_ai_ci";
+
+const UTF8MB4_COLLATIONS: &[&str] = &[
+    "utf8mb4_0900_ai_ci",
+    "utf8mb4_0900_as_ci",
+    "utf8mb4_0900_as_cs",
+    "utf8mb4_0900_bin",
+    "utf8mb4_bin",
+    "utf8mb4_general_ci",
+    "utf8mb4_unicode_ci",
+];
+
+fn function_shape(function: &Function) -> Option<(String, Vec<&Expr>)> {
+    let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+        return None;
+    };
+    let FunctionArguments::List(list) = &function.args else {
+        return None;
+    };
+    if name.quote_style.is_some()
+        || function.over.is_some()
+        || function.filter.is_some()
+        || list.duplicate_treatment.is_some()
+        || !list.clauses.is_empty()
+    {
+        return None;
+    }
+    let args = unnamed_arguments(list).ok()?;
+    Some((name.value.to_ascii_uppercase(), args))
+}
+
+#[derive(Clone, Copy)]
+enum TrimEnds {
+    Both,
+    Leading,
+    Trailing,
+}
+
+fn trim_call(ends: TrimEnds, text: ast::Expr, removed: Option<ast::Expr>) -> ast::Expr {
+    let name = match ends {
+        TrimEnds::Both => "__mysql_trim",
+        TrimEnds::Leading => "__mysql_ltrim",
+        TrimEnds::Trailing => "__mysql_rtrim",
+    };
+    let removed = removed.unwrap_or_else(|| string_expr(" "));
+    function_call(name, vec![text, removed])
 }
 
 fn translate_conv_of_literal(

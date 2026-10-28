@@ -1,4 +1,5 @@
-use crate::expr::{translate_condition, translate_expr, translate_window};
+use crate::expr::{failing_json_cast, translate_condition, translate_expr, translate_window};
+use crate::invalid_json::invalid_json_text_evaluated;
 use crate::names::translate_identifier;
 use crate::MysqlParserError;
 use sqlparser::ast::{
@@ -16,6 +17,7 @@ use turso_parser::{ast, MAX_EXPR_DEPTH};
 pub(crate) struct TranslationContext {
     parameter_count: u32,
     expression_depth: usize,
+    select_list_runs_once: bool,
 }
 
 impl TranslationContext {
@@ -50,7 +52,25 @@ pub(crate) fn translate_query(
     query: &Query,
     context: &mut TranslationContext,
 ) -> Result<ast::Stmt, MysqlParserError> {
+    context.select_list_runs_once = runs_select_list_once(query);
     Ok(ast::Stmt::Select(translate_subquery(query, context)?))
+}
+
+fn runs_select_list_once(query: &Query) -> bool {
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    let no_table = match select.from.as_slice() {
+        [] => true,
+        [only] => only.joins.is_empty() && is_dual(&only.relation),
+        _ => false,
+    };
+    is_plain_body(query)
+        && no_table
+        && select.selection.is_none()
+        && select.having.is_none()
+        && select.named_window.is_empty()
+        && matches!(&select.group_by, GroupByExpr::Expressions(terms, modifiers) if terms.is_empty() && modifiers.is_empty())
 }
 
 pub(crate) fn translate_subquery(
@@ -363,9 +383,10 @@ fn translate_select(
     if projection.is_empty() {
         return Err(unsupported("SELECT without projection".to_string()));
     }
+    let runs_once = std::mem::take(&mut context.select_list_runs_once);
     let columns = projection
         .iter()
-        .map(|item| translate_projection(item, context))
+        .map(|item| translate_projection(item, runs_once, context))
         .collect::<Result<Vec<_>, _>>()?;
     let from = translate_from(from, context)?;
     let where_clause = selection
@@ -649,13 +670,14 @@ fn only_changes_the_plan(hint: &OptimizerHint) -> bool {
 
 fn translate_projection(
     item: &SelectItem,
+    runs_once: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::ResultColumn, MysqlParserError> {
     match item {
         SelectItem::UnnamedExpr(expr) => {
             let name = implicit_column_name(expr);
             Ok(ast::ResultColumn::Expr(
-                Box::new(translate_expr(expr, context)?),
+                Box::new(translate_selected(expr, runs_once, context)?),
                 Some(ast::As::ImplicitColumnName(ast::Name::exact(name))),
             ))
         }
@@ -665,7 +687,7 @@ fn translate_projection(
                 _ => translate_identifier(alias)?,
             };
             Ok(ast::ResultColumn::Expr(
-                Box::new(translate_expr(expr, context)?),
+                Box::new(translate_selected(expr, runs_once, context)?),
                 Some(ast::As::As(name)),
             ))
         }
@@ -680,6 +702,20 @@ fn translate_projection(
             _ => Err(unsupported(format!("wildcard `{name}.*`"))),
         },
         other => Err(unsupported(format!("projection `{other}`"))),
+    }
+}
+
+fn translate_selected(
+    expr: &Expr,
+    runs_once: bool,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let failing_text = runs_once
+        .then(|| invalid_json_text_evaluated(expr))
+        .flatten();
+    match failing_text {
+        Some(text) => Ok(failing_json_cast(text)),
+        None => translate_expr(expr, context),
     }
 }
 

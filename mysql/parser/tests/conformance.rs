@@ -72,6 +72,7 @@ fn malformed_sql_returns_parse_errors() {
         "SELECT 'unterminated",
         "SELECT (1",
         "INSERT INTO",
+        "SELECT TRIM(LEADING 'a')",
     ];
 
     for sql in cases {
@@ -558,6 +559,14 @@ fn reports_decimal_casts_that_mysql_rejects() {
             name: "in a statement that is not lowered",
             sql: "INSERT INTO t VALUES (CAST(1 AS DEC(66)))",
         },
+        SqlCase {
+            name: "datetime with more than six fractional digits",
+            sql: "SELECT CAST(1 AS DATETIME(7))",
+        },
+        SqlCase {
+            name: "time with more than six fractional digits",
+            sql: "SELECT CONVERT(1, TIME(7))",
+        },
     ];
 
     for case in cases {
@@ -746,6 +755,26 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD (7, 255), \"IF\" (1, 'yes', 'no'), CONCAT (x'41')",
         ),
         (
+            "SELECT -1.5 - CAST('[1,' AS JSON) AS v, CAST(CAST('x' AS JSON) AS DATE)",
+            "SELECT __mysql_cast_as_json ('[1,') AS v, __mysql_cast_as_json ('x')",
+        ),
+        (
+            "SELECT CAST('2000-01-01' AS DATE), CONVERT(1.5, DATETIME(3)), CAST('1:2' AS TIME), CAST(s AS CHAR(2)), CONVERT(s, NCHAR(1)), CAST(s AS NCHAR)",
+            "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
+        ),
+        (
+            "SELECT COLLATION('a'), COLLATION(_latin1 'a' ), COLLATION(RANDOM_BYTES(1))",
+            "SELECT 'utf8mb4_0900_ai_ci', 'latin1_swedish_ci', 'binary'",
+        ),
+        (
+            "SELECT s REGEXP CAST('[1]' AS JSON)",
+            "SELECT s REGEXP __mysql_cast_as_json ('[1]')",
+        ),
+        (
+            "SELECT TRIM(LEADING 'ab' FROM s), TRIM(BOTH FROM s), TRIM(s), RTRIM(s)",
+            "SELECT __mysql_ltrim (s, 'ab'), __mysql_trim (s, ' '), __mysql_trim (s, ' '), __mysql_rtrim (s, ' ')",
+        ),
+        (
             "SELECT ELT(0x2, 0x41), FIELD(0x61, 97), FIELD(0x61, 'a'), BIN(0x5), CONV(0xFF, 7, 0x10)",
             "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
         ),
@@ -810,10 +839,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT CAST(a AS DATE) FROM t",
         },
         SqlCase {
-            name: "cast to sized char",
-            sql: "SELECT CAST(a AS CHAR(3)) FROM t",
-        },
-        SqlCase {
             name: "latin1 text",
             sql: "SELECT _latin1'\u{e9}'",
         },
@@ -862,8 +887,32 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a ^ RAND() FROM t",
         },
         SqlCase {
-            name: "multi-character trim",
-            sql: "SELECT TRIM(LEADING 'ab' FROM 'abab')",
+            name: "temporal cast of a column whose type may be DATE or TIME",
+            sql: "SELECT CAST(c AS DATE) FROM t",
+        },
+        SqlCase {
+            name: "temporal cast of a TIME literal to a date",
+            sql: "SELECT CAST(TIME '10:00:00' AS DATETIME)",
+        },
+        SqlCase {
+            name: "temporal cast in arithmetic",
+            sql: "SELECT CAST('2000-01-01' AS DATE) + 0",
+        },
+        SqlCase {
+            name: "temporal cast in a comparison",
+            sql: "SELECT CAST('2000-01-01' AS DATE) = '2000-1-1'",
+        },
+        SqlCase {
+            name: "JSON cast of a temporal value",
+            sql: "SELECT CAST(DATE '2000-01-01' AS JSON)",
+        },
+        SqlCase {
+            name: "invalid JSON cast MySQL does not evaluate",
+            sql: "SELECT 0 AND CAST('x' AS JSON)",
+        },
+        SqlCase {
+            name: "invalid JSON cast evaluated once per row",
+            sql: "SELECT CAST('x' AS JSON) + 1 FROM t",
         },
         SqlCase {
             name: "full-text search",
@@ -987,6 +1036,13 @@ fn lowering_rejects_unsupported_statement_families() {
         "EXPLAIN SELECT 1",
         "USE app",
         "SET @answer = 42",
+        "SET NAMES latin1",
+        "SET GLOBAL time_zone = 'UTC'",
+        "SET time_zone = '+01:00'",
+        "SET sql_mode = ''",
+        "SET autocommit = 0",
+        "SET FOREIGN_KEY_CHECKS = 2",
+        "SET FOREIGN_KEY_CHECKS = 0, FOREIGN_KEY_CHECKS = 1",
         "START TRANSACTION",
         "COMMIT",
         "ROLLBACK",
@@ -998,6 +1054,26 @@ fn lowering_rejects_unsupported_statement_families() {
             matches!(error, MysqlParserError::Unsupported(_)),
             "SQL: {sql}\nerror: {error}"
         );
+    }
+}
+
+#[test]
+fn lowers_session_settings_of_the_target_profile() {
+    let cases = [
+        ("SET NAMES utf8mb4", "SELECT 0 WHERE 0"),
+        ("SET @@session.time_zone = 'UTC', autocommit = ON", "SELECT 0 WHERE 0"),
+        (
+            "SET sql_mode = 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO'",
+            "SELECT 0 WHERE 0",
+        ),
+        ("SET FOREIGN_KEY_CHECKS = 0", "PRAGMA foreign_keys = 0"),
+        ("SET time_zone = '+00:00', foreign_key_checks = ON", "PRAGMA foreign_keys = 1"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
     }
 }
 

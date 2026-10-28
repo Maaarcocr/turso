@@ -108,16 +108,22 @@ Lowered:
 | Column references, `?` parameters (numbered in text order), `CASE`, `IN` lists and subqueries, `BETWEEN`, `EXISTS`, scalar subqueries, row values, `IS [NOT] NULL/TRUE/FALSE/UNKNOWN`, `= ANY (subquery)`, `<> ALL (subquery)` | Same expressions; `IS UNKNOWN` is `IS NULL`; `= ANY` is `IN`, `<> ALL` is `NOT IN` |
 | `a DIV b` | `CAST(a / b AS INTEGER)`: truncates toward zero, `NULL` for a zero divisor |
 | `MOD`, `%`, `XOR`, `&&`, `\|\|`, `!`, `^`, `<=>` | `%`; `(NOT a) <> (NOT b)`; `AND`; `OR`; `NOT`; `(a \| b) - (a & b)` (only when neither side calls a function or has a subquery, since both sides appear twice); `IS` |
-| `a LIKE p [ESCAPE c]`, `REGEXP`, `RLIKE` | `LIKE` with `ESCAPE '\'` unless the pattern is a string without backslashes (MySQL's default escape character); a dangling escape at the end of a literal pattern matches itself, as in MySQL; `REGEXP` operator |
+| `a LIKE p [ESCAPE c]`, `REGEXP`, `RLIKE` | `LIKE` with `ESCAPE '\'` unless the pattern is a string without backslashes (MySQL's default escape character); a dangling escape at the end of a literal pattern matches itself, as in MySQL; `REGEXP` operator, whose operands may be `CAST(x AS JSON)` (MySQL matches the JSON text) |
+| `COLLATION(x)` of a literal, an introduced string (`_utf8mb4`, `_utf8mb3`, `_utf8`, `_latin1`, `_ascii`, `_binary`), `'..' COLLATE c` with a `utf8mb4` collation, `RANDOM_BYTES(literal)` or `UUID()` | The collation name MySQL derives from the type (`'utf8mb4_0900_ai_ci'`, `'binary'` for numbers, `NULL` and binary strings), without evaluating `x`, as in MySQL; other arguments fall back |
 | Function calls | Passed through by name, so SQLite built-ins and the MySQL functions in `mysql/frontend/functions` both resolve; `COUNT(*)`, `DISTINCT` arguments and `OVER` are kept. Arguments of the numeric functions (`ABS`, `ACOS`, `ASIN`, `ATAN`, `ATAN2`, `CEIL`, `CEILING`, `CHAR`, `COS`, `COT`, `DEGREES`, `EXP`, `FLOOR`, `LN`, `LOG`, `LOG10`, `LOG2`, `MOD`, `POW`, `POWER`, `RADIANS`, `ROUND`, `SIGN`, `SIN`, `SQRT`, `TAN`, `TRUNCATE`) and the condition of `IF` are a numeric context for literals; the separator of `CONCAT_WS` is text |
 | `CAST(x AS JSON)` used as a value (a selected column, a `CASE`/`IF` result, a `JSON_*` argument, or an argument of another function whose other arguments are non-NULL literals), a boolean expression (`TRUE`, `a = b`, `NOT a`, `IN`, `LIKE`, ...) used as a value of `JSON_ARRAY`, `JSON_OBJECT`, `JSON_SET`, `JSON_INSERT`, `JSON_REPLACE`, `JSON_ARRAY_APPEND`, `JSON_ARRAY_INSERT` or `CAST(... AS JSON)`, and `x MEMBER OF (y)` | `__mysql_cast_as_json(x)`, `__mysql_cast_boolean_as_json(x)`, `__mysql_member_of(x, y)` (see JSON functions) |
+| A select item, in a `SELECT` with no table (or `FROM DUAL`), `WHERE`, `GROUP BY`, `HAVING`, `WINDOW`, `ORDER BY` or `LIMIT`, built only from literals, operators, casts and function calls, in which MySQL always evaluates `CAST('text' AS JSON)` of a text its JSON parser rejects | `__mysql_cast_as_json('text')`, which fails with MySQL's error 3141, since the item fails whatever surrounds the cast (`SELECT -1.5 - CAST('[1,' AS JSON)`). MySQL evaluates the left operand of an operator first and the right one only when the left one is a value that cannot be NULL (for `AND` a true number, for `OR` a false number, or `NULL`); the subject of `IS`, `IN` and `BETWEEN`; `LIKE` before its pattern and `REGEXP` after its pattern; the operand of a cast; and every argument of a function when the other arguments cannot be NULL, of `CHAR` and `INTERVAL` always, of `CONCAT_WS` when the separator cannot be NULL, and never of `IF`, `IFNULL`, `COALESCE`, `NULLIF`, `ELT`, `FIELD` or `MAKE_SET` (`0 AND CAST('x' AS JSON)` is 0 and `CONCAT(NULL, CAST('x' AS JSON))` is `NULL`, which keep falling back) |
 | `GET_FORMAT(DATE \| TIME \| DATETIME \| TIMESTAMP, f)` | `GET_FORMAT('DATE', f)` |
 | `GROUP_CONCAT(a, b, ... [ORDER BY ...] [SEPARATOR s])` | `group_concat(a \|\| b \|\| ..., s)` (Turso does not support `ORDER BY` inside aggregates yet and reports an error) |
 | `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms) |
 | `x->'path'`, `x->>'path'` | `JSON_EXTRACT(x, path)`, `JSON_UNQUOTE(JSON_EXTRACT(x, path))` |
 | `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`, `LOCALTIME`, `LOCALTIMESTAMP` (with or without `()`) | SQLite's current-time literals, which are UTC like the target time zone |
-| `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)`, `TRIM([LEADING \| TRAILING \| BOTH] [c] FROM s)` with `c` one character | `LOCATE(a, b)`, `SUBSTRING(s, a, b)`, `LTRIM/RTRIM/TRIM(s, c)` |
+| `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)` | `LOCATE(a, b)`, `SUBSTRING(s, a, b)` |
+| `TRIM([[LEADING \| TRAILING \| BOTH] [r] FROM] s)`, `LTRIM(s)`, `RTRIM(s)` | `__mysql_trim(s, r)`, `__mysql_ltrim(s, r)`, `__mysql_rtrim(s, r)` with `r` a space when it is left out (see string functions); `TRIM(LEADING r)` without `FROM` is a syntax error, as in MySQL |
 | `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The same SQLite type name the fallback used, so the result is unchanged: no rounding to an integer or to `d` decimals, and no unsigned wrap-around. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement falls back or is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
+| `CAST`/`CONVERT(x, type)` to `NCHAR` | `CAST(x AS NCHAR)`, which SQLite reads as text like `CHAR` |
+| `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(x, n)`, `__mysql_cast_as_nchar(x, n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
+| `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(x AS TEXT)`, `CAST(x AS BLOB)` |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
 | Integer, decimal and scientific literals, `TRUE`, `FALSE`, `NULL` | The same literal text the SQLite parser keeps (decimals and integers above the signed 64-bit range are still SQLite numbers) |
@@ -144,9 +150,9 @@ yet:
   `DIV` with a literal outside the BIGINT range, bit operations on fractional
   or out-of-range number literals, and `_binary` strings in numeric contexts.
 - Binary strings that are not NUL-free UTF-8 outside numeric contexts.
-- `CAST(x AS JSON)` in a comparison, arithmetic or a condition: MySQL
-  compares and computes JSON values by JSON rules, while the lowered value is
-  JSON text.
+- `CAST(x AS JSON)` in a comparison, arithmetic or a condition, except the
+  failing select items above: MySQL compares and computes JSON values by JSON
+  rules, while the lowered value is JSON text.
 - `CAST(x AS JSON)` as an argument of a function other than `JSON_*` when the
   function is `CONCAT_WS`, `ELT` or `MAKE_SET`, or when another argument is
   not a non-NULL literal: MySQL stops evaluating arguments at the first NULL
@@ -168,9 +174,18 @@ yet:
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables (`@a`, `@@x`), `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
-  collation, `CAST` to `DATE`, `DATETIME`, `TIME`, `YEAR`, `CHAR(n)` or with a
-  character set, `CONVERT(... USING ...)` with any other character set, `TRIM`
-  of a longer string, and `^` over function calls or subqueries.
+  collation, `CAST` to `YEAR`, `BINARY` or with a character set,
+  `CONVERT(... USING ...)` with any other character set, and `^` over
+  function calls or subqueries.
+- `CAST` to `DATE`, `DATETIME` or `TIME` in a comparison, arithmetic, a
+  condition, a numeric function argument or a JSON cast, where MySQL uses the
+  temporal value or its number (`CAST('2000-01-01' AS DATE) + 0` is
+  20000101), and of an operand that may have a DATE or TIME type (a column, a
+  function result, `TIME '..'` to a date, `DATE '..'` to `TIME`): MySQL
+  converts those from the type, not from the text (`CAST(TIME '10:00:00' AS
+  DATETIME)` is today at 10:00).
+- `CAST(x AS JSON)` of a `DATE`, `TIME` or `TIMESTAMP` value: MySQL makes a
+  JSON date or time, while the lowered text is not valid JSON.
 
 Known differences that remain on the lowered path, as on the fallback: `/`
 is SQLite division (integer division for two integers) rather than MySQL's
@@ -178,8 +193,30 @@ DECIMAL division; integer overflow becomes a REAL instead of an error; bit
 operators are signed 64-bit rather than BIGINT UNSIGNED; string comparisons and
 `LIKE` use binary or ASCII case folding rather than `utf8mb4_0900_ai_ci`;
 `WHERE` may refer to select-list aliases; `ORDER BY` with `DISTINCT` may use
-columns outside the select list; and unaliased columns are named after the expression as sqlparser
-prints it (string literals after their value).
+columns outside the select list; unaliased columns are named after the expression as sqlparser
+prints it (string literals after their value); and the result of a `DATE`,
+`DATETIME` or `TIME` cast is text, so an aggregate such as `SUM` reads its
+leading number rather than MySQL's 20000101, and a decimal literal reaches the
+cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
+`.125000`).
+
+## Session settings (`SET`)
+
+`mysql/parser/session.rs` lowers `SET` statements (session scope, with or
+without `SESSION`, `LOCAL`, `@@`, `@@session.` or `@@local.`; several
+assignments in one statement are allowed):
+
+| Statement | Lowering |
+|---|---|
+| `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON`, `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
+| `FOREIGN_KEY_CHECKS` set to 0, 1, `ON`, `OFF`, `TRUE` or `FALSE` | `PRAGMA foreign_keys = 0/1`, which Turso applies at once, also inside a transaction, as MySQL does. Turso then checks foreign keys like SQLite: an `UPDATE` that writes the same key value is checked too, where InnoDB skips it |
+
+Everything else falls back to the SQLite parser and fails: user variables
+(`SET @a = 1`, Turso has no session variables yet), other values of these
+variables (`sql_mode`, `time_zone`, `autocommit = 0` and character sets
+change the semantics of later statements), `GLOBAL` scope, and other
+variables. Turso does not check foreign keys until `FOREIGN_KEY_CHECKS` is
+set to 1, while MySQL checks them by default.
 
 ## JSON functions
 
@@ -252,8 +289,11 @@ functions for the MySQL dialect, replacing SQLite's `DATE`, `TIME` and
 `ADDDATE`/`SUBDATE` with a number of days, `DATE_FORMAT`, `TIME_FORMAT`,
 `STR_TO_DATE`, `FROM_UNIXTIME`, `UNIX_TIMESTAMP`, `CONVERT_TZ`, and `NOW`,
 `SYSDATE`, `CURDATE`, `CURTIME`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`,
-`LOCALTIME`, `LOCALTIMESTAMP` and the `CURRENT_*` functions. They follow
-MySQL 8.4.10:
+`LOCALTIME`, `LOCALTIMESTAMP` and the `CURRENT_*` functions, and the
+lowered `CAST(x AS DATE/DATETIME(p)/TIME(p))` as `__mysql_cast_as_date(x)`,
+`__mysql_cast_as_datetime(x, p)` and `__mysql_cast_as_time(x, p)`, which
+convert like `DATE`, `TIMESTAMP` and `TIME` but round to `p` digits. They
+follow MySQL 8.4.10:
 
 - Arguments convert as MySQL converts them: strings with MySQL's datetime
   and time parsers (delimiters, `T`, two-digit years, packed `YYYYMMDDhhmmss`
@@ -336,7 +376,9 @@ back to SQLite parsing. Owned specs: `conformance/my-sqltests/functions-string.s
   `INSTR`, `LCASE`/`LOWER`, `LEFT`, `LENGTH`/`OCTET_LENGTH`, `LOCATE`,
   `POSITION`, `LPAD`, `RPAD`, `MAKE_SET`, `MID`, `ORD`, `REPEAT`, `REPLACE`,
   `RIGHT`, `SPACE`, `SUBSTR`/`SUBSTRING`, `SUBSTRING_INDEX`, `UCASE`/`UPPER`,
-  `UNHEX`.
+  `UNHEX`, and `TRIM`/`LTRIM`/`RTRIM` as `__mysql_trim`, `__mysql_ltrim` and
+  `__mysql_rtrim(s, r)`, which remove whole repeats of `r` byte by byte (case
+  matters, an empty `r` removes nothing).
 - Hashing and encoding: `CRC32`, `MD5`, `SHA`/`SHA1`, `SHA2`, `TO_BASE64`,
   `FROM_BASE64`.
 - Network and UUID: `INET_ATON`, `INET_NTOA`, `INET6_ATON`, `INET6_NTOA`,
@@ -356,7 +398,7 @@ as integers). Numbers used as strings print as MySQL prints them. Strings
 compare with `utf8mb4_0900_ai_ci` (ICU root collation at primary strength: no
 case or accent differences, trailing spaces count). Binary strings compare
 byte by byte in `STRCMP`, `GREATEST`, `LEAST` and `FIND_IN_SET`; `LOCATE`,
-`INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD` and `SUBSTRING_INDEX`
+`INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD`, `SUBSTRING_INDEX` and `TRIM`
 convert a binary argument used with a text string to `utf8mb4`, failing on
 invalid UTF-8 as MySQL does.
 Results above the signed BIGINT range are returned as text, and functions
@@ -364,8 +406,9 @@ whose result would exceed `max_allowed_packet` (64 MiB) return `NULL` instead
 of allocating it. Regular expressions run on `fancy-regex` with MySQL's ICU
 behavior translated where it differs: case-insensitive by default, the `c`,
 `i`, `m`, `n` and `u` match types, `.` and `$` with ICU line terminators,
-`\Q..\E`, `$n` replacements, and errors for empty patterns, invalid flags and
-out-of-range positions.
+`\Q..\E`, `$n` replacements, and errors for empty patterns, invalid flags,
+out-of-range positions, and `{` or `}` outside a `{m}`, `{m,}` or `{m,n}`
+interval that follows something to repeat (ICU's errors 3688 and 3692).
 
 Not supported yet: exact DECIMAL arguments and results (a decimal literal
 reaches the functions as a DOUBLE, so `TRUNCATE(1.0, 1)` prints `1` instead

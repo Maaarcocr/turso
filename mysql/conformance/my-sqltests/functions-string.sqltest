@@ -377,6 +377,41 @@ expect {
     NULL|NULL|abc
 }
 
+test trim-removes-whole-strings {
+    SELECT TRIM('ab' FROM 'ababcab'), TRIM(LEADING 'ab' FROM 'ababcab'), TRIM(TRAILING 'ab' FROM 'ababcab'), TRIM('aa' FROM 'aaaaa'), TRIM('' FROM 'xax'), TRIM('A' FROM 'aXa');
+}
+expect {
+    c|cab|ababc|a|xax|aXa
+}
+
+test trim-without-a-string-removes-spaces {
+    SELECT CONCAT('[', TRIM(LEADING FROM '  a  '), ']', TRIM(TRAILING FROM '  a  '), ']', TRIM(BOTH FROM '  a  '), ']', LTRIM('  a  '), ']', RTRIM('  a  '), ']', TRIM('  a  '), ']');
+}
+expect {
+    [a  ]  a]a]a  ]  a]a]
+}
+
+test trim-null-and-numbers {
+    SELECT TRIM(NULL FROM 'a'), TRIM('a' FROM NULL), TRIM(1 FROM 121), TRIM(1e2), LTRIM(1e2), RTRIM(2.5e0), TRIM('é' FROM 'éaé');
+}
+expect {
+    NULL|NULL|2|100|100|2.5|a
+}
+
+test trim-of-binary-strings {
+    SELECT HEX(TRIM('a' FROM _binary 'abca')), TRIM(0x61 FROM 'abca');
+}
+expect {
+    6263|bc
+}
+
+# mysql-error: 1064 You have an error in your SQL syntax; ... near ')'
+test trim-with-a-side-needs-from {
+    SELECT TRIM(LEADING 'a');
+}
+expect error {
+}
+
 test char-builds-bytes {
     SELECT CHAR(77, 121, 83, 81, 76), HEX(CHAR(1, 256)), HEX(CHAR(65536)), CHAR(77, NULL, 121);
 }
@@ -641,6 +676,55 @@ test exp-overflow-is-out-of-range {
     SELECT EXP(1000);
 }
 expect error {
+}
+
+test regexp-intervals-and-braces-in-classes {
+    SELECT 'aa' REGEXP '^a\{2\}$', 'a' REGEXP 'a\{1,\}', 'a' REGEXP '[\{]', 'x\{' REGEXP '[\{]';
+}
+expect {
+    1|1|0|1
+}
+
+# mysql-error: 3688 Syntax error in regular expression on line 1, character 1.
+test regexp-brace-without-an-operand-is-an-error {
+    SELECT 'a' REGEXP '\{';
+}
+expect error {
+}
+
+# mysql-error: 3692 Incorrect description of a {min,max} interval.
+test regexp-incomplete-interval-is-an-error {
+    SELECT 'a\{' REGEXP 'a\{';
+}
+expect error {
+}
+
+# mysql-error: 3688 Syntax error in regular expression on line 1, character 2.
+test regexp-closing-brace-alone-is-an-error {
+    SELECT 'a\}' REGEXP 'a\}';
+}
+expect error {
+}
+
+test regexp-of-json-uses-its-text {
+    SELECT '"ab"' REGEXP CAST('"ab"' AS JSON), 'ab' REGEXP CAST('"ab"' AS JSON), CAST('\{"b": 1, "a": 2\}' AS JSON) REGEXP '^."a"';
+}
+expect {
+    1|0|1
+}
+
+# mysql-error: 3688 Syntax error in regular expression on line 1, character 1.
+test regexp-of-a-json-object-pattern-is-an-error {
+    SELECT 'a' REGEXP CAST('\{"a": 1\}' AS JSON);
+}
+expect error {
+}
+
+test collation-of-literals {
+    SELECT COLLATION('a'), COLLATION(1), COLLATION(_latin1 'a'), COLLATION('a' COLLATE utf8mb4_bin), COLLATION(RANDOM_BYTES(0)), COLLATION(UUID()), COLLATION(N'a'), COLLATION(NULL), COLLATION(-1.5);
+}
+expect {
+    utf8mb4_0900_ai_ci|binary|latin1_swedish_ci|utf8mb4_bin|binary|utf8mb3_general_ci|utf8mb3_general_ci|binary|binary
 }
 
 # mysql-error: 3685 Illegal argument to a regular expression.

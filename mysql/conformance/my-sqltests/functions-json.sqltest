@@ -527,3 +527,63 @@ test json-in-a-text-column-is-a-string {
 expect {
     ["\{\"b\":1,\"a\":2\}"]|\{"a": 2, "b": 1\}
 }
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test invalid-json-cast-in-a-bit-operation-is-an-error {
+    SELECT CAST('invalid' AS JSON) & 1.7;
+}
+expect error {
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test invalid-json-cast-after-a-number-is-an-error {
+    SELECT -1.5 - CAST(' "b": 2\}' AS JSON);
+}
+expect error {
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function cast_as_json: "The document root must not be followed by other values." at position 4.
+test invalid-json-cast-inside-another-cast-is-an-error {
+    SELECT CAST(CAST('2000-01-01' AS JSON) AS DATE);
+}
+expect error {
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 0.
+test interval-evaluates-an-invalid-json-cast-after-null {
+    SELECT INTERVAL(NULL, CAST('invalid' AS JSON), 1);
+}
+expect error {
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function cast_as_json: "Invalid value." at position 3.
+test concat-ws-evaluates-an-invalid-json-cast-after-null {
+    SELECT CONCAT_WS('a', NULL, CAST('[1,' AS JSON));
+}
+expect error {
+}
+
+# mysql-error: 3141 Invalid JSON text in argument 1 to function cast_as_json: "Missing a name for object member." at position 8.
+test invalid-json-cast-in-a-comparison-is-an-error {
+    SELECT 1, CAST('\{"a": 1,\}' AS JSON) = 1;
+}
+expect error {
+}
+
+test invalid-json-cast-that-is-never-evaluated {
+    SELECT 0 AND CAST('x' AS JSON), 1 OR CAST('x' AS JSON), NULL = CAST('x' AS JSON), CONCAT(NULL, CAST('x' AS JSON)), FIELD(1, 1, CAST('x' AS JSON)), IF(1, 1, CAST('x' AS JSON)), CONCAT_WS(NULL, CAST('x' AS JSON)), 1 - 1 AND CAST('x' AS JSON);
+}
+expect {
+    0|1|NULL|NULL|1|1|NULL|0
+}
+
+setup empty {
+    CREATE TABLE empty_table(a INTEGER);
+}
+
+@setup empty
+test invalid-json-cast-over-no-rows {
+    SELECT CAST('x' AS JSON) + 1 FROM empty_table;
+}
+expect {
+}

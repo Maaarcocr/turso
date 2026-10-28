@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use turso_core::{Result, Value};
+use turso_core::{LimboError, Result, Value};
 
 use super::collation::compare_bytes;
 
@@ -327,6 +327,88 @@ pub(super) fn replace(args: &[Value]) -> Result<Value> {
     }
     bytes.extend_from_slice(&text.as_bytes()[rest..]);
     bytes_value(bytes, binary)
+}
+
+pub(super) fn trim(args: &[Value]) -> Result<Value> {
+    trim_ends(args, Ends::Both)
+}
+
+pub(super) fn ltrim(args: &[Value]) -> Result<Value> {
+    trim_ends(args, Ends::Leading)
+}
+
+pub(super) fn rtrim(args: &[Value]) -> Result<Value> {
+    trim_ends(args, Ends::Trailing)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Ends {
+    Both,
+    Leading,
+    Trailing,
+}
+
+fn trim_ends(args: &[Value], ends: Ends) -> Result<Value> {
+    let Some(text) = string(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    let Some(removed) = string_converted_to_text(&args[1], !text.is_binary())? else {
+        return Ok(Value::Null);
+    };
+    let removed = removed.as_bytes();
+    if removed.is_empty() {
+        return text.into_value();
+    }
+    let bytes = text.as_bytes();
+    let (mut start, mut end) = (0, bytes.len());
+    if ends != Ends::Trailing {
+        while bytes[start..end].starts_with(removed) {
+            start += removed.len();
+        }
+    }
+    if ends != Ends::Leading {
+        while bytes[start..end].ends_with(removed) {
+            end -= removed.len();
+        }
+    }
+    text.slice(start, end).into_value()
+}
+
+pub(super) fn cast_as_char(args: &[Value]) -> Result<Value> {
+    cast_to_text(args, false)
+}
+
+pub(super) fn cast_as_nchar(args: &[Value]) -> Result<Value> {
+    cast_to_text(args, true)
+}
+
+fn cast_to_text(args: &[Value], national: bool) -> Result<Value> {
+    let Some(value) = string(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    let Ok(text) = std::str::from_utf8(value.as_bytes()) else {
+        return Ok(Value::Null);
+    };
+    let length = match integer(&args[1]) {
+        Some(length) if !length.is_negative() => length.as_unsigned() as usize,
+        _ => {
+            return Err(LimboError::InvalidArgument(
+                "the length of a CHAR cast must be a non-negative integer".to_string(),
+            ))
+        }
+    };
+    let converted: String = text
+        .chars()
+        .take(length)
+        .map(|ch| {
+            if national && ch.len_utf8() == 4 {
+                '?'
+            } else {
+                ch
+            }
+        })
+        .collect();
+    Ok(Value::build_text(converted))
 }
 
 pub(super) fn char(args: &[Value]) -> Result<Value> {
