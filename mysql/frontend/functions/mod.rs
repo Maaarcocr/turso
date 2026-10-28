@@ -59,10 +59,12 @@ fn with_decimals_read<'a>(
                     DecimalArgument::Text => Value::build_text(decimal.to_text()),
                     DecimalArgument::Count => {
                         let whole = decimal.rounded(0, Rounding::HalfAwayFromZero);
-                        Value::from_i64(whole.to_i64().unwrap_or(if whole.is_negative() {
-                            i64::MIN
-                        } else {
-                            i64::MAX
+                        Value::from_i64(whole.to_i64().unwrap_or_else(|| {
+                            if whole.is_negative() {
+                                i64::MIN
+                            } else {
+                                i64::MAX
+                            }
                         }))
                     }
                     DecimalArgument::Double => Value::from_f64(decimal.to_f64()),

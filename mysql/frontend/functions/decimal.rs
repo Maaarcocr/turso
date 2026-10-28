@@ -53,10 +53,12 @@ fn rounded(
         (Some(places), _) => places
             .rounded(0, Rounding::HalfAwayFromZero)
             .to_i64()
-            .unwrap_or(if places.is_negative() {
-                i64::MIN
-            } else {
-                i64::MAX
+            .unwrap_or_else(|| {
+                if places.is_negative() {
+                    i64::MIN
+                } else {
+                    i64::MAX
+                }
             }),
         (None, Value::Null) => return Value::Null,
         (None, Value::Numeric(Numeric::Integer(places))) => *places,

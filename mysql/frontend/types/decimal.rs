@@ -338,7 +338,7 @@ pub(super) fn cast_decimal(args: &[Value]) -> Result<Value> {
 /// tells whether a number too large to read is negative.
 fn leading_decimal(bytes: &[u8]) -> std::result::Result<Decimal, bool> {
     match number_text::leading_number(bytes) {
-        Some(number) => Decimal::from_text_number(&number).ok_or(number.is_negative()),
+        Some(number) => Decimal::from_text_number(&number).ok_or_else(|| number.is_negative()),
         None => Ok(Decimal::zero()),
     }
 }
