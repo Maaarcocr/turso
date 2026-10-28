@@ -159,6 +159,10 @@ pub(super) fn string_converted_to_text(
     }
 }
 
+pub(super) fn is_non_binary(value: &Value) -> bool {
+    matches!(value, Value::Text(_) | Value::Numeric(_))
+}
+
 pub(super) fn string(value: &Value) -> Option<Str<'_>> {
     Some(match value {
         Value::Null => return None,

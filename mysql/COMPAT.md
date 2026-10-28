@@ -150,10 +150,10 @@ Lowered:
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
 | `COLLATE utf8mb4_0900_ai_ci`, `_as_ci`, `_as_cs`, `utf8mb4_ja_0900_as_cs`, `utf8mb4_ja_0900_as_cs_ks` on a `utf8mb4` operand; `COLLATE utf8mb4_bin` | `COLLATE "und-u-ks-level1"`, `"und-u-ks-level2"`, `"und-u-ks-level3"`, `"ja-u-ks-level3"`, `"ja-u-ks-level4"`; `COLLATE RTRIM`. `FIELD`, `GREATEST`, `LEAST` and `STRCMP` with an explicit collation compare under it; two different explicit collations, and `LIKE`, `REGEXP`, `LOCATE`, `INSTR`, `POSITION`, `FIND_IN_SET` and `NULLIF` under a collation other than `utf8mb4_0900_ai_ci`, are refused |
 | A comparison, `IN` list or `BETWEEN` whose operands are all `utf8mb4` string literals | The left operand gets `COLLATE "und-u-ks-level1"`, MySQL's `utf8mb4_0900_ai_ci` |
-| Integer, decimal and scientific literals, `TRUE`, `FALSE`, `NULL` | The same literal text the SQLite parser keeps (decimals and integers above the signed 64-bit range are still SQLite numbers) |
+| Integer, decimal and scientific literals, `TRUE`, `FALSE`, `NULL` | The same literal text the SQLite parser keeps. A negative decimal, an integer above the BIGINT UNSIGNED range, and a negated integer below the BIGINT range (`-9223372036854775809`) are exact DECIMALs, as in MySQL. An integer between the BIGINT and BIGINT UNSIGNED limits is an exact DECIMAL of its digits in a select item, a function result position and a string function argument, where it shows as MySQL's BIGINT UNSIGNED does; elsewhere it is still a SQLite number (a DOUBLE) |
 | `'...'`, `"..."`, `N'...'` | Text (`"..."` is a string, never an identifier) |
-| `X'..'`, `0x..`, `b'..'`, `0b..` | A blob; in a comparison with a number, a logical operator, a condition, a numeric function argument, a numeric `CAST`, or `\|`, `&`, `>>`, `^`, the unsigned integer value; in a comparison with a string, text. Function arguments MySQL reads as numbers are also the value: the index of `ELT`, the bits of `MAKE_SET` and `EXPORT_SET`, the counts and positions of `LEFT`, `RIGHT`, `SUBSTRING`/`SUBSTR`/`MID`, `INSERT`, `LOCATE`, `SUBSTRING_INDEX`, `LPAD`, `RPAD`, `REPEAT` and `SPACE`, the length of `SHA2`, the bases of `CONV`, every argument of `INTERVAL`, and every argument of `FIELD` when another argument is a number (`FIELD(0x61, 97)` is 1, `FIELD(0x61, 'a')` compares bytes). `CONV`, `BIN` and `OCT` of a hex or bit literal convert its value whatever the base: `__mysql_conv_binary_literal(bytes, from, to)` |
-| `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` is a blob |
+| `X'..'`, `0x..`, `b'..'`, `0b..` | A blob; in a comparison with a number, a logical operator, a condition, a numeric function argument, a numeric `CAST`, or `\|`, `&`, `>>`, `^`, the unsigned integer value; in a comparison with a string, text. Function arguments MySQL reads as numbers are also the value: the index of `ELT`, the bits of `MAKE_SET` and `EXPORT_SET`, the counts and positions of `LEFT`, `RIGHT`, `SUBSTRING`/`SUBSTR`/`MID`, `INSERT`, `LOCATE`, `SUBSTRING_INDEX`, `LPAD`, `RPAD`, `REPEAT` and `SPACE`, the length of `SHA2`, the bases of `CONV`, every argument of `INTERVAL`, and every argument of `FIELD` when another argument is a number (`FIELD(0x61, 97)` is 1, `FIELD(0x61, 'a')` compares bytes). `CONV`, `BIN` and `OCT` of a hex or bit literal convert its value whatever the base: `__mysql_conv_binary_literal(bytes, from, to)`. Any bytes, UTF-8 or not, are a blob in a select item and in the string arguments of the string functions MySQL implements over binary strings (`HEX(0xAACC)`, `LENGTH(0xAACC)`, `REPLACE(0xAACC, 'a', 'b')`) and of the date and time functions. A negated hex or bit literal is a DOUBLE (`-0x1` is `-1e0`) in a select item, a string or numeric function argument, `PERIOD_ADD`/`PERIOD_DIFF`, a `MOD` whose other arguments hide decimals, and `+ - * /` with a double or string literal. In `+ - * / %` MySQL computes the literal as BIGINT UNSIGNED: with a double or string literal (not `%`) it is the DOUBLE of its value (`X'40' + -1.5e0` is 62.5); with a decimal literal, `NULL`, or in a division by or of an integer, its integer value, since the result is no longer unsigned (`0x1 / 7` is 0.1429); with integer or other hex literals, the integer value when the result, known from the literals, is in the BIGINT range and the operation is not itself an operand of arithmetic (`0xff + b'1001'` is 264) |
+| `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` is a blob where a hex literal is one, text in a date or time function argument, and in a numeric function argument the text MySQL parses (its bytes up to the first NUL or non-ASCII byte, so `_binary X'40'` is `'@'`, 0), and in `+ - * /` the DOUBLE MySQL parses from its text (`_binary 'foobar' * -1` is `-0`) |
 | `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); a string literal compared with one is converted the same way (`DATE '2018-05-01' = '2018-5-1'`); in arithmetic, a comparison with a number, a logical operator, a condition or a numeric function argument (including `MAKEDATE`, `MAKETIME`, `SEC_TO_TIME`, `FROM_UNIXTIME`, `FROM_DAYS` and `PERIOD_*`), the number MySQL uses (`20180501`, `-1013458`, `103458.5`), with fractions past 6 digits rounded; `TIME '..'` compared with `TIME '..'` as numbers |
 | `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which are refused |
 
@@ -167,14 +167,29 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   not round to tens.
 - `REGEXP` with an empty pattern or over binary strings, row values inside row
   values, `VALUES` rows of different lengths: MySQL raises an error.
-- Hex and bit literals in arithmetic (`+ - * / DIV % MOD`, unary
-  `-`/`+`/`~`, `<<`): MySQL computes them as BIGINT UNSIGNED, which fails on
-  negative results. Temporal literals under `%`, `<<` and `~`, in bit
-  operations when negative or fractional, and negated when fractional: MySQL
-  computes those as BIGINT UNSIGNED or DOUBLE. `DIV` with a literal outside
-  the BIGINT range, bit operations on fractional or out-of-range number
-  literals, and `_binary` strings in numeric contexts.
-- Binary strings that are not NUL-free UTF-8 outside numeric contexts.
+- Hex and bit literals in arithmetic outside the cases above (`DIV`, unary
+  `+`/`~`, `<<`, operands that are not literals, results outside the BIGINT
+  range, operations nested in arithmetic, literals above the BIGINT range with
+  integers or decimals, `%` with doubles or strings): MySQL computes them as
+  BIGINT UNSIGNED, which fails on negative results. Temporal literals under
+  `%`, `<<` and `~`, in bit operations when negative or fractional, and
+  negated when fractional: MySQL computes those as BIGINT UNSIGNED or DOUBLE.
+  `DIV` with a literal outside the BIGINT range, and bit operations on
+  fractional or out-of-range number literals.
+- Binary strings that are not NUL-free UTF-8 outside numeric contexts, select
+  items and binary-string function arguments (`CONCAT` and `CONCAT_WS` with a
+  `JSON_*` argument convert them to `utf8mb4`), and `_binary` strings in bit
+  operations, `~`, `<<`, `%` and `DIV`, which MySQL computes on their bytes
+  or as a DOUBLE that Turso's modulus and integer division would truncate.
+- A negated hex or bit literal where MySQL can show the decimals of its
+  DOUBLE (`-0x1 + 1.5`, `IF(c, -0x1, 1.5)`, `MOD(-0x1, 1.5)`), or of
+  10^15 or more, which MySQL shows with fixed digits rather than an exponent.
+- `STRCMP` of a binary string and a `DATE` or `TIMESTAMP` literal: MySQL
+  reads the string as a date and fails on it.
+- `ROUND`/`TRUNCATE` of an integer literal above `BIGINT`, unless the places
+  are `NULL` or -20 or less: MySQL rounds it as `BIGINT UNSIGNED` (and fails
+  on overflow), while Turso would round its DOUBLE.
+- `CHAR` of a negated DOUBLE literal outside `BIGINT`: MySQL fails on it.
 - A JSON value in a comparison, arithmetic or a condition, except the
   failing select items above and the JSON comparisons, conditions and
   arithmetic above, when it is a cast that may fail (of a column, a function
@@ -418,8 +433,8 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
 - A `BLOB` argument is read as MySQL reads a hexadecimal literal: as a
   string in date and time positions and as a `BIGINT UNSIGNED` made of its
   bytes in numeric positions (`MAKEDATE(X'31', 1)` is `2049-01-01`). A
-  `_binary '..'` string arrives as the same `BLOB`, so in numeric positions
-  it is also read as bytes, where MySQL parses its text.
+  `_binary '..'` string would arrive as the same `BLOB`, so it is lowered to
+  its text instead, which these functions parse as MySQL does.
 - An integer literal above the `BIGINT` range becomes a double. The doubles
   for `9223372036854775808` and `18446744073709551615` are read as those
   `BIGINT UNSIGNED` values, so `18446744073709551616` behaves like
@@ -469,7 +484,12 @@ case or accent differences, trailing spaces count). Binary strings compare
 byte by byte in `STRCMP`, `GREATEST`, `LEAST` and `FIND_IN_SET`; `LOCATE`,
 `INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD`, `SUBSTRING_INDEX` and `TRIM`
 convert a binary argument used with a text string to `utf8mb4`, failing on
-invalid UTF-8 as MySQL does.
+invalid UTF-8 as MySQL does. The string or number that decides is the subject
+(`REPLACE`, `INSERT`, `LPAD`, `RPAD`, `SUBSTRING_INDEX`), the string searched
+(`LOCATE`, `INSTR`, `POSITION`) or the string looked for (`FIELD`), and the
+conversion happens when MySQL evaluates the argument: `REPLACE` and `FIELD`
+stop at the first `NULL` or match, the others evaluate every argument first.
+`ROUND` of a `BIGINT` to tens fails when the result leaves the `BIGINT` range.
 Results above the signed BIGINT range are returned as text, and functions
 whose result would exceed `max_allowed_packet` (64 MiB) return `NULL` instead
 of allocating it. Regular expressions run on `fancy-regex` with MySQL's ICU

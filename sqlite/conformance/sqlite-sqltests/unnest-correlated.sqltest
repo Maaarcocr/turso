@@ -2692,3 +2692,41 @@ expect {
     1|10
     2|11
 }
+
+setup semi_join_after_unnested_scalar {
+    CREATE TABLE customers(c_id INTEGER PRIMARY KEY, bill TEXT);
+    CREATE TABLE orders(o_id INTEGER PRIMARY KEY, c_id INTEGER, ship TEXT COLLATE NOCASE);
+    INSERT INTO customers VALUES (1, 'CA'), (2, 'TX'), (3, 'MA'), (4, 'TX'), (5, NULL), (6, 'FL');
+    INSERT INTO orders VALUES
+        (10, 1, 'CA'), (20, 1, 'CA'), (40, 2, 'CA'), (50, 2, 'TX'), (60, 2, NULL),
+        (70, 4, 'WY'), (80, 4, NULL), (90, 6, 'WA');
+}
+
+# The semi-join loop of the IN subquery must stay inside the loop over the
+# unnested scalar subquery: a NULL candidate that sorts first must not end
+# the search for the outer row.
+@setup semi_join_after_unnested_scalar
+test semi-join-nested-after-unnested-scalar-subquery {
+    SELECT c_id FROM customers
+    WHERE (SELECT min(ship) FROM orders WHERE orders.c_id = customers.c_id)
+        IN (SELECT ship FROM orders WHERE orders.c_id = customers.c_id)
+    ORDER BY c_id;
+}
+expect {
+    1
+    2
+    4
+    6
+}
+
+@setup semi_join_after_unnested_scalar
+test anti-join-nested-after-unnested-scalar-subquery {
+    SELECT c_id FROM customers
+    WHERE (SELECT min(ship) FROM orders WHERE orders.c_id = customers.c_id)
+        NOT IN (SELECT ship FROM orders WHERE orders.c_id = customers.c_id AND ship IS NOT NULL)
+    ORDER BY c_id;
+}
+expect {
+    3
+    5
+}

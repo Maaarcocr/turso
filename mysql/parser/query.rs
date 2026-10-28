@@ -1,4 +1,6 @@
-use crate::expr::{failing_json_cast, translate_condition, translate_expr, translate_window};
+use crate::expr::{
+    failing_json_cast, translate_bytes, translate_condition, translate_expr, translate_window,
+};
 use crate::invalid_json::invalid_json_text_evaluated;
 use crate::names::translate_identifier;
 use crate::MysqlParserError;
@@ -18,6 +20,7 @@ pub(crate) struct TranslationContext {
     parameter_count: u32,
     expression_depth: usize,
     select_list_runs_once: bool,
+    select_list_is_shown: bool,
     pub(crate) inserted_row_is_readable: bool,
     tables_read: Vec<ast::Name>,
 }
@@ -61,6 +64,8 @@ pub(crate) fn translate_query(
     context: &mut TranslationContext,
 ) -> Result<ast::Stmt, MysqlParserError> {
     context.select_list_runs_once = runs_select_list_once(query);
+    context.select_list_is_shown =
+        query.with.is_none() && matches!(query.body.as_ref(), SetExpr::Select(_));
     Ok(ast::Stmt::Select(translate_subquery(query, context)?))
 }
 
@@ -392,9 +397,10 @@ fn translate_select(
         return Err(unsupported("SELECT without projection".to_string()));
     }
     let runs_once = std::mem::take(&mut context.select_list_runs_once);
+    let shown = std::mem::take(&mut context.select_list_is_shown);
     let columns = projection
         .iter()
-        .map(|item| translate_projection(item, runs_once, context))
+        .map(|item| translate_projection(item, runs_once, shown, context))
         .collect::<Result<Vec<_>, _>>()?;
     let from = translate_from(from, context)?;
     let where_clause = selection
@@ -679,13 +685,14 @@ pub(crate) fn only_changes_the_plan(hint: &OptimizerHint) -> bool {
 fn translate_projection(
     item: &SelectItem,
     runs_once: bool,
+    shown: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::ResultColumn, MysqlParserError> {
     match item {
         SelectItem::UnnamedExpr(expr) => {
             let name = implicit_column_name(expr);
             Ok(ast::ResultColumn::Expr(
-                Box::new(translate_selected(expr, runs_once, context)?),
+                Box::new(translate_selected(expr, runs_once, shown, context)?),
                 Some(ast::As::ImplicitColumnName(ast::Name::exact(name))),
             ))
         }
@@ -695,7 +702,7 @@ fn translate_projection(
                 _ => translate_identifier(alias)?,
             };
             Ok(ast::ResultColumn::Expr(
-                Box::new(translate_selected(expr, runs_once, context)?),
+                Box::new(translate_selected(expr, runs_once, shown, context)?),
                 Some(ast::As::As(name)),
             ))
         }
@@ -716,6 +723,7 @@ fn translate_projection(
 fn translate_selected(
     expr: &Expr,
     runs_once: bool,
+    shown: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     let failing_text = runs_once
@@ -723,6 +731,7 @@ fn translate_selected(
         .flatten();
     match failing_text {
         Some(text) => Ok(failing_json_cast(text)),
+        None if shown => translate_bytes(expr, context),
         None => translate_expr(expr, context),
     }
 }

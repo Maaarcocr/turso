@@ -370,25 +370,27 @@ fn integer_casts_round_decimals_and_doubles_and_truncate_strings() -> turso_core
 }
 
 #[test]
-fn bigint_unsigned_refuses_doubles_it_cannot_store_exactly() -> turso_core::Result<()> {
+fn bigint_unsigned_stores_integer_literals_exactly_and_refuses_doubles() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (n INT, u BIGINT UNSIGNED)")?;
-    for sql in [
-        "INSERT INTO t VALUES (1, 12345678901234567891)",
-        "INSERT INTO t VALUES (2, 9223372036854775808)",
-        "INSERT INTO t VALUES (3, 1e19)",
-    ] {
-        let error = connection.execute(sql).expect_err(sql);
-        assert_eq!(
-            turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
-            Some(1366),
-            "{sql}"
-        );
-    }
-    connection.execute("INSERT INTO t VALUES (4, '12345678901234567891'), (5, 1e18)")?;
+    let sql = "INSERT INTO t VALUES (3, 1e19)";
+    let error = connection.execute(sql).expect_err(sql);
+    assert_eq!(
+        turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
+        Some(1366),
+        "{sql}"
+    );
+    connection.execute(
+        "INSERT INTO t VALUES (1, 12345678901234567891), (2, 9223372036854775808), (4, '12345678901234567891'), (5, 1e18)",
+    )?;
     assert_eq!(
         query(&connection, "SELECT n, CAST(u AS CHAR) FROM t ORDER BY n")?,
         vec![
+            vec![
+                Value::from_i64(1),
+                Value::build_text("12345678901234567891")
+            ],
+            vec![Value::from_i64(2), Value::build_text("9223372036854775808")],
             vec![
                 Value::from_i64(4),
                 Value::build_text("12345678901234567891")
