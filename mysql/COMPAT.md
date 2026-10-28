@@ -23,7 +23,7 @@ The detailed dependency graph is in [`conformance/curriculum.toml`](conformance/
 
 The matrix row above predates this section: DDL is now partly lowered and executed as described here.
 
-`CREATE [TEMPORARY] TABLE`, `CREATE TABLE ... [AS] SELECT`, `CREATE [UNIQUE] INDEX`, `DROP INDEX ... ON`, `DROP TABLE [IF EXISTS]` (one table), `RENAME TABLE` (one table), and single-operation `ALTER TABLE` (`ADD [COLUMN]` without `FIRST`/`AFTER`, `DROP [COLUMN]`, `RENAME COLUMN`, `RENAME [TO|AS]`, `DROP {INDEX|KEY}`) are lowered to Turso DDL. Other statements fall back to the SQLite parser, but a `CREATE TABLE` that is not lowered fails: every table of the MySQL dialect is a typed table.
+`CREATE [TEMPORARY] TABLE`, `CREATE TABLE ... [AS] SELECT`, `CREATE [UNIQUE] INDEX`, `DROP INDEX ... ON`, `DROP TABLE [IF EXISTS]` (one table), `RENAME TABLE` (one table), and single-operation `ALTER TABLE` (`ADD [COLUMN]` without `FIRST`/`AFTER`, `DROP [COLUMN]`, `RENAME COLUMN`, `RENAME [TO|AS]`, `DROP {INDEX|KEY}`) are lowered to Turso DDL. Other DDL statements are refused with an unsupported-syntax error.
 
 Typed tables are STRICT tables that core marks with `/* turso_dialect:mysql */` in `sqlite_schema` and keeps marked through `ALTER TABLE`, reopen and `RENAME TABLE`. Each column has a MySQL type from the frontend's type table (`mysql/frontend/types/`), which maps it onto a core storage type and says how a value is converted when it is stored (strict mode: a value MySQL rejects makes the statement fail, see `mysql_error` for the MySQL error codes):
 
@@ -52,7 +52,7 @@ A single integer primary key column is the table's rowid, so rows are read in pr
 
 `CREATE TABLE` keys are validated like InnoDB does: a `BLOB`/`TEXT` key part needs a prefix length, `JSON` columns cannot be key parts, a prefix must fit the column and be on a string, a key is at most 3072 bytes, key names are distinct, and key columns must exist.
 
-DDL that MySQL itself rejects fails with an error instead of falling back to the SQLite parser (which would often accept it): invalid defaults, invalid keys, a second primary key, an `AUTO_INCREMENT` column outside every key, `NULL` primary key columns, out-of-range type parameters (`VARCHAR(16384)`, `CHAR(256)`, `DECIMAL(5,6)`, `DATETIME(7)`, `BIT(65)`), duplicate `ENUM` members, a collation on a binary string, an index named `PRIMARY`, and identifiers longer than 64 characters. A `CREATE TABLE` the MySQL frontend cannot lower never falls back to the SQLite parser: it fails with the frontend's reason, so every table gets its column types from the MySQL lowering. Other DDL MySQL rejects is not detected yet when its SQLite reading is valid, for example foreign keys whose parent table or column types do not match.
+DDL that MySQL itself rejects fails with MySQL's error rather than an unsupported-syntax error: invalid defaults, invalid keys, a second primary key, an `AUTO_INCREMENT` column outside every key, `NULL` primary key columns, out-of-range type parameters (`VARCHAR(16384)`, `CHAR(256)`, `DECIMAL(5,6)`, `DATETIME(7)`, `BIT(65)`), duplicate `ENUM` members, a collation on a binary string, an index named `PRIMARY`, and identifiers longer than 64 characters. Every table gets its column types from the MySQL lowering. Other DDL MySQL rejects is not detected yet when its SQLite reading is valid, for example foreign keys whose parent table or column types do not match.
 
 Compatibility no-ops (accepted, with no effect in Turso):
 
@@ -84,8 +84,8 @@ Known gaps:
 
 `SELECT` statements are lowered by `mysql/parser/query.rs` (statement
 structure), `expr.rs` (expressions) and `literal.rs` (literals) into the shared
-Turso AST. Anything listed under "Falls back" is rejected by the lowering, so
-the statement is parsed by the SQLite fallback exactly as before.
+Turso AST. Anything listed under "Refused" fails with an unsupported-syntax
+error.
 
 Parsing uses sqlparser's MySQL dialect wrapped in `mysql/parser/dialect.rs`,
 which applies MySQL 8.4 operator precedence (`!` and unary `-`/`~` above `^`,
@@ -120,7 +120,7 @@ Lowered:
 | `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`, `LOCALTIME`, `LOCALTIMESTAMP` (with or without `()`) | SQLite's current-time literals, which are UTC like the target time zone |
 | `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)` | `LOCATE(a, b)`, `SUBSTRING(s, a, b)` |
 | `TRIM([[LEADING \| TRAILING \| BOTH] [r] FROM] s)`, `LTRIM(s)`, `RTRIM(s)` | `__mysql_trim(s, r)`, `__mysql_ltrim(s, r)`, `__mysql_rtrim(s, r)` with `r` a space when it is left out (see string functions); `TRIM(LEADING r)` without `FROM` is a syntax error, as in MySQL |
-| `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The same SQLite type name the fallback used, so the result is unchanged: no rounding to an integer or to `d` decimals, and no unsigned wrap-around. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement falls back or is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
+| `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The SQLite type name of the same affinity: no rounding to an integer or to `d` decimals, and no unsigned wrap-around. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement is refused or the cast is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
 | `CAST`/`CONVERT(x, type)` to `NCHAR` | `CAST(x AS NCHAR)`, which SQLite reads as text like `CHAR` |
 | `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(x, n)`, `__mysql_cast_as_nchar(x, n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
@@ -131,10 +131,9 @@ Lowered:
 | `X'..'`, `0x..`, `b'..'`, `0b..` | A blob; in a comparison with a number, a logical operator, a condition, a numeric function argument, a numeric `CAST`, or `\|`, `&`, `>>`, `^`, the unsigned integer value; in a comparison with a string, text. Function arguments MySQL reads as numbers are also the value: the index of `ELT`, the bits of `MAKE_SET` and `EXPORT_SET`, the counts and positions of `LEFT`, `RIGHT`, `SUBSTRING`/`SUBSTR`/`MID`, `INSERT`, `LOCATE`, `SUBSTRING_INDEX`, `LPAD`, `RPAD`, `REPEAT` and `SPACE`, the length of `SHA2`, the bases of `CONV`, every argument of `INTERVAL`, and every argument of `FIELD` when another argument is a number (`FIELD(0x61, 97)` is 1, `FIELD(0x61, 'a')` compares bytes). `CONV`, `BIN` and `OCT` of a hex or bit literal convert its value whatever the base: `__mysql_conv_binary_literal(bytes, from, to)` |
 | `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` is a blob |
 | `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); a string literal compared with one is converted the same way (`DATE '2018-05-01' = '2018-5-1'`); in a logical operator, a condition or a numeric function argument, the number MySQL uses (`20180501`) |
-| `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which fall back |
+| `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which are refused |
 
-Falls back to SQLite parsing, because Turso cannot run it with MySQL's meaning
-yet:
+Refused, because Turso cannot run it with MySQL's meaning yet:
 
 - `WITH RECURSIVE`: MySQL stops after `cte_max_recursion_depth` (1000)
   iterations; Turso does not.
@@ -187,7 +186,7 @@ yet:
 - `CAST(x AS JSON)` of a `DATE`, `TIME` or `TIMESTAMP` value: MySQL makes a
   JSON date or time, while the lowered text is not valid JSON.
 
-Known differences that remain on the lowered path, as on the fallback: `/`
+Known differences that remain on the lowered path: `/`
 is SQLite division (integer division for two integers) rather than MySQL's
 DECIMAL division; integer overflow becomes a REAL instead of an error; bit
 operators are signed 64-bit rather than BIGINT UNSIGNED; string comparisons and
@@ -200,6 +199,35 @@ leading number rather than MySQL's 20000101, and a decimal literal reaches the
 cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
 `.125000`).
 
+## `INSERT`
+
+`mysql/parser/insert.rs` lowers `INSERT [INTO] t [(columns)]` with a
+`VALUES` list (several rows allowed), a `SELECT` (also a `UNION` or `WITH`
+query), or `SET c = expr, ...`, and `INSERT INTO t () VALUES ()` to
+`DEFAULT VALUES`. `LOW_PRIORITY`, `DELAYED` and `HIGH_PRIORITY` are
+accepted and have no effect.
+
+`ON DUPLICATE KEY UPDATE c = expr, ...` after `VALUES` lowers to Turso's
+upsert, `INSERT ... ON CONFLICT DO UPDATE SET ...` without a conflict
+target, which like MySQL updates the row whose primary or unique key the
+inserted row duplicates (also a row inserted earlier by the same
+statement). `VALUES(c)` is `excluded.c`, the value the row would have
+inserted, and `t.c` targets and references of the inserted table drop the
+qualifier.
+
+Refused: `INSERT IGNORE`, `REPLACE`, `DEFAULT` as a value, a schema-qualified
+table, `ON DUPLICATE KEY UPDATE` after a `SELECT` (MySQL lets the update read
+the selected columns), the `AS alias` row alias, an `INSERT ... SET` or
+update that assigns a column twice, an `INSERT ... SET` value that reads a
+column, and an update assignment that reads a column an earlier assignment
+wrote (MySQL assigns left to right, so `a = a + 1, b = a` sets `b` to the new
+`a`, while the upsert reads the old row).
+
+Known differences: the affected-row count is SQLite's (1 per inserted or
+updated row) rather than MySQL's 2 for an update and 0 for an unchanged
+row; an update consumes no `AUTO_INCREMENT` value; and Turso checks foreign
+keys only after `SET FOREIGN_KEY_CHECKS = 1`.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or
@@ -211,7 +239,7 @@ assignments in one statement are allowed):
 | `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON`, `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
 | `FOREIGN_KEY_CHECKS` set to 0, 1, `ON`, `OFF`, `TRUE` or `FALSE` | `PRAGMA foreign_keys = 0/1`, which Turso applies at once, also inside a transaction, as MySQL does. Turso then checks foreign keys like SQLite: an `UPDATE` that writes the same key value is checked too, where InnoDB skips it |
 
-Everything else falls back to the SQLite parser and fails: user variables
+Everything else is refused: user variables
 (`SET @a = 1`, Turso has no session variables yet), other values of these
 variables (`sql_mode`, `time_zone`, `autocommit = 0` and character sets
 change the semantics of later statements), `GLOBAL` scope, and other
@@ -349,8 +377,7 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
   string in date and time positions and as a `BIGINT UNSIGNED` made of its
   bytes in numeric positions (`MAKEDATE(X'31', 1)` is `2049-01-01`). A
   `_binary '..'` string arrives as the same `BLOB`, so in numeric positions
-  it is also read as bytes, where MySQL parses its text. Through the SQLite
-  fallback, `0x..` literals are integers.
+  it is also read as bytes, where MySQL parses its text.
 - An integer literal above the `BIGINT` range becomes a double. The doubles
   for `9223372036854775808` and `18446744073709551615` are read as those
   `BIGINT UNSIGNED` values, so `18446744073709551616` behaves like
@@ -413,8 +440,7 @@ interval that follows something to repeat (ICU's errors 3688 and 3692).
 Not supported yet: exact DECIMAL arguments and results (a decimal literal
 reaches the functions as a DOUBLE, so `TRUNCATE(1.0, 1)` prints `1` instead
 of `1.0` and halves round to even), unsigned BIGINT literals above the signed
-range, `0x..` hex literals in the SQLite fallback (they arrive as integers),
-other collations and character sets, warnings, ICU-only regular expression
+range, other collations and character sets, warnings, ICU-only regular expression
 syntax (`\uhhhh`, `\N{..}`, Python-style `(?P<name>)` is rejected), and
 `RANDOM_BYTES`. `INSERT(str, pos, len, newstr)` only runs once the statement
 is lowered, because `INSERT` is a keyword to the SQLite parser.

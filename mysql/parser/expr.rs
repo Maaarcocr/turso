@@ -1632,6 +1632,12 @@ fn translate_special_function(
             Ok(Some(translate_conv_of_literal(literal, from, to)?))
         }
         ("COLLATION", [value]) => Ok(collation_of(value).map(string_expr)),
+        ("VALUES", [Expr::Identifier(column)]) if context.inserted_row_is_readable => {
+            Ok(Some(ast::Expr::Qualified(
+                ast::Name::exact("excluded".to_string()),
+                translate_identifier(column)?,
+            )))
+        }
         ("LTRIM" | "RTRIM", [text]) => {
             let ends = if upper_name == "LTRIM" {
                 TrimEnds::Leading

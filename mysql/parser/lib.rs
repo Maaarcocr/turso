@@ -12,7 +12,9 @@ mod ddl_expr;
 mod ddl_index;
 mod ddl_type;
 mod dialect;
+mod dml;
 mod expr;
+mod insert;
 mod invalid_json;
 mod literal;
 mod names;
@@ -70,9 +72,17 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement),
         Statement::Set(set) => session::translate_set(set),
-        _ => Err(MysqlParserError::Unsupported(
-            "only SELECT projections and DDL are available in the bootstrap frontend".to_string(),
-        )),
+        Statement::Insert(insert) => insert::translate_insert(insert),
+        Statement::Update(update) => dml::translate_update(update),
+        Statement::Delete(delete) => dml::translate_delete(delete),
+        _ => {
+            let text = statement.to_string();
+            let keyword = text.split_whitespace().next().unwrap_or_default();
+            Err(MysqlParserError::Unsupported(format!(
+                "{} statements are not available",
+                keyword.to_ascii_uppercase()
+            )))
+        }
     }
 }
 
