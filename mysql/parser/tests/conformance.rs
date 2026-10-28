@@ -1018,7 +1018,8 @@ fn known_parser_gaps_return_errors() {
 fn lowering_rejects_unsupported_statement_families() {
     let cases = [
         "TRUNCATE TABLE users",
-        "CREATE VIEW v AS SELECT 1",
+        "CREATE OR REPLACE VIEW v AS SELECT 1",
+        "DROP VIEW a, b",
         "ALTER TABLE users ADD INDEX name_key (name)",
         "ALTER TABLE users MODIFY COLUMN name VARCHAR(20)",
         "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
@@ -1061,6 +1062,28 @@ fn lowering_rejects_unsupported_statement_families() {
             matches!(error, MysqlParserError::Unsupported(_)),
             "SQL: {sql}\nerror: {error}"
         );
+    }
+}
+
+#[test]
+fn lowers_views() {
+    let cases = [
+        (
+            "CREATE VIEW v AS SELECT id, name FROM users WHERE id > 1",
+            "CREATE VIEW v AS SELECT id, name FROM users WHERE id > 1",
+        ),
+        (
+            "CREATE ALGORITHM=MERGE DEFINER=`root`@`localhost` SQL SECURITY INVOKER VIEW `v` (`a`, b) AS SELECT 1, 2",
+            "CREATE VIEW `v` (`a`, b) AS SELECT 1, 2",
+        ),
+        ("DROP VIEW v", "DROP VIEW v"),
+        ("DROP VIEW IF EXISTS v", "DROP VIEW IF EXISTS v"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
     }
 }
 

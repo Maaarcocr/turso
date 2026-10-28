@@ -80,6 +80,18 @@ Known gaps:
 - `CREATE TABLE ... AS SELECT` copies only the column type. `NOT NULL` and `DEFAULT` of the columns it reads are not copied, and neither are the `CHECK`s that hold the members of `ENUM` and `SET` columns and the validity of `JSON` columns, so the new table accepts any text there. MySQL keeps all of these.
 - Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, spatial `SRID` and `SPATIAL` keys, `FULLTEXT` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
+## Views
+
+`mysql/parser/ddl_view.rs` lowers `CREATE VIEW v [(columns)] AS SELECT ...`
+to a Turso view over the lowered query, and `DROP VIEW [IF EXISTS] v` for one
+view. `ALGORITHM`, `DEFINER` and `SQL SECURITY` are accepted and have no
+effect: Turso has no privileges, and the algorithm only chooses a plan.
+
+Refused: `CREATE OR REPLACE VIEW`, `DROP VIEW` of several views, and view
+columns with types or options. Known differences: Turso views are read-only,
+so `INSERT`, `UPDATE` and `DELETE` through a view fail where MySQL changes
+the base table, and `WITH CHECK OPTION` does not parse.
+
 ## SELECT statements and expressions
 
 `SELECT` statements are lowered by `mysql/parser/query.rs` (statement
