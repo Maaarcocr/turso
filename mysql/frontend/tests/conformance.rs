@@ -340,6 +340,36 @@ fn binary_strings_cannot_be_stored_in_number_columns_yet() -> turso_core::Result
 }
 
 #[test]
+fn integer_casts_round_decimals_and_doubles_and_truncate_strings() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (d DECIMAL(5, 2), f DOUBLE, s VARCHAR(20), day DATE)")?;
+    connection.execute("INSERT INTO t VALUES (-2.50, 2.5, ' -7.9xyz', '2020-01-01')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(d AS SIGNED), CAST(f AS SIGNED), CAST(s AS SIGNED), \
+             CAST(1.5 AS UNSIGNED), CAST('18446744073709551615' AS SIGNED), \
+             CAST(1e30 AS SIGNED) FROM t"
+        )?,
+        vec![vec![
+            Value::from_i64(-3),
+            Value::from_i64(2),
+            Value::from_i64(-7),
+            Value::from_i64(2),
+            Value::from_i64(-1),
+            Value::from_i64(i64::MAX),
+        ]]
+    );
+    for sql in [
+        "SELECT CAST(d AS UNSIGNED) FROM t",
+        "SELECT CAST(day AS SIGNED) FROM t",
+    ] {
+        connection.prepare(sql)?.run_collect_rows().expect_err(sql);
+    }
+    Ok(())
+}
+
+#[test]
 fn bigint_unsigned_refuses_doubles_it_cannot_store_exactly() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (n INT, u BIGINT UNSIGNED)")?;

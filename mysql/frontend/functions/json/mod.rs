@@ -1,9 +1,11 @@
 use std::borrow::Cow;
 
+use turso_core::dialect::ArgumentType;
 use turso_core::types::{Text, TextSubtype};
 use turso_core::{LimboError, Numeric, Result, Value};
 
 mod build;
+mod compare;
 mod document;
 mod modify;
 mod parse;
@@ -15,11 +17,22 @@ use document::{format_double, Json};
 use parse::{parse, ParseError};
 use path::{Path, PathError};
 
-pub(super) fn accepts(name: &str, _arg_count: usize) -> bool {
-    Function::from_name(name).is_some()
+pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
+    Function::from_name(name).is_some() || compare::accepts(name, arg_count)
+}
+
+pub(super) fn execute_typed(
+    name: &str,
+    args: &[Value],
+    arg_types: &[ArgumentType],
+) -> Option<Result<Value>> {
+    compare::execute_typed(name, args, arg_types)
 }
 
 pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
+    if compare::accepts(name, args.len()) {
+        return compare::execute_typed(name, args, &vec![ArgumentType::Unknown; args.len()]);
+    }
     let function = Function::from_name(name)?;
     if !function.accepts_arg_count(args.len()) {
         return Some(Err(mysql_error(

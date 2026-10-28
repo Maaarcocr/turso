@@ -131,6 +131,9 @@ Lowered:
 | Function calls | Passed through by name, so SQLite built-ins and the MySQL functions in `mysql/frontend/functions` both resolve; `COUNT(*)`, `DISTINCT` arguments and `OVER` are kept. Arguments of the numeric functions (`ABS`, `ACOS`, `ASIN`, `ATAN`, `ATAN2`, `CEIL`, `CEILING`, `CHAR`, `COS`, `COT`, `DEGREES`, `EXP`, `FLOOR`, `LN`, `LOG`, `LOG10`, `LOG2`, `MOD`, `POW`, `POWER`, `RADIANS`, `ROUND`, `SIGN`, `SIN`, `SQRT`, `TAN`, `TRUNCATE`) and the condition of `IF` are a numeric context for literals; the separator of `CONCAT_WS` is text |
 | `CAST(x AS JSON)` used as a value (a selected column, a `CASE`/`IF` result, a `JSON_*` argument, or an argument of another function whose other arguments are non-NULL literals), a boolean expression (`TRUE`, `a = b`, `NOT a`, `IN`, `LIKE`, ...) used as a value of `JSON_ARRAY`, `JSON_OBJECT`, `JSON_SET`, `JSON_INSERT`, `JSON_REPLACE`, `JSON_ARRAY_APPEND`, `JSON_ARRAY_INSERT` or `CAST(... AS JSON)`, and `x MEMBER OF (y)` | `__mysql_cast_as_json(x)`, `__mysql_cast_boolean_as_json(x)`, `__mysql_member_of(x, y)` (see JSON functions) |
 | A select item, in a `SELECT` with no table (or `FROM DUAL`), `WHERE`, `GROUP BY`, `HAVING`, `WINDOW`, `ORDER BY` or `LIMIT`, built only from literals, operators, casts and function calls, in which MySQL always evaluates `CAST('text' AS JSON)` of a text its JSON parser rejects | `__mysql_cast_as_json('text')`, which fails with MySQL's error 3141, since the item fails whatever surrounds the cast (`SELECT -1.5 - CAST('[1,' AS JSON)`). MySQL evaluates the left operand of an operator first and the right one only when the left one is a value that cannot be NULL (for `AND` a true number, for `OR` a false number, or `NULL`); the subject of `IS`, `IN` and `BETWEEN`; `LIKE` before its pattern and `REGEXP` after its pattern; the operand of a cast; and every argument of a function when the other arguments cannot be NULL, of `CHAR` and `INTERVAL` always, of `CONCAT_WS` when the separator cannot be NULL, and never of `IF`, `IFNULL`, `COALESCE`, `NULLIF`, `ELT`, `FIELD` or `MAKE_SET` (`0 AND CAST('x' AS JSON)` is 0 and `CONCAT(NULL, CAST('x' AS JSON))` is `NULL`, which keep falling back) |
+| A JSON value (`CAST(x AS JSON)`, `x->'path'`, or a call of a `JSON_*` function that returns JSON) compared with `=`, `<>`, `<`, `<=`, `>`, `>=` or `<=>` to another JSON value or to a literal, a temporal literal, a boolean expression or arithmetic on number literals | `__mysql_json_compare(a, b) OP 0`, `__mysql_json_null_safe_equal(a, b)`: MySQL's JSON comparison. Numbers compare exactly across integers, doubles and decimals; strings by their bytes; arrays element by element and then by length; objects by member count, then by keys and values; `false` before `true`; values of different JSON types by MySQL's type order (null, numbers, strings, objects, arrays, booleans, dates, times, datetimes, opaque values). The other operand becomes a JSON value: a string a JSON string, a number a JSON number, a boolean expression a JSON boolean, a binary string an opaque value, and a `DATE`/`TIME`/`TIMESTAMP` literal a JSON date, time or datetime |
+| A JSON value used as a condition (`WHERE`, `NOT`, `AND`, `OR`, `XOR`, the condition of `IF`), in arithmetic (`+ - * / % MOD`, unary `-`), or as an operand of `LIKE` | `__mysql_json_truth(x)` (MySQL's `x <> 0` under the JSON rules); `__mysql_json_double(x)`, MySQL's DOUBLE of the JSON value (a string's leading number, `true` 1, other non-numbers 0), and `__mysql_json_remainder(a, b)`, the DOUBLE remainder (`1.5e0 % CAST('1.1' AS JSON)` is `0.3999999999999999`, `NULL` for a zero divisor); `__mysql_like_bin(s, p, escape)`, which matches the JSON text with `utf8mb4_bin` (case-sensitive), as MySQL does. `REGEXP`, `REGEXP_LIKE` and `STRCMP` with a JSON operand also compare case-sensitively, and a JSON operand next to a binary string is not an error |
+| `CAST(DATE '..' AS JSON)`, `CAST(TIME '..' AS JSON)` (from 00:00:00 to 23:59:59) and `CAST(TIMESTAMP '..' AS JSON)` as an argument of `CONCAT`, `CONCAT_WS`, `STRCMP`, `SHA`, `SHA1`, `SHA2` (the string), `MD5`, `CRC32`, `TO_BASE64`, `FROM_BASE64`, `HEX` or `UNHEX`, or as an operand of `LIKE`, which read only its text | `__mysql_cast_as_json('"2000-01-01"')`: the JSON text MySQL prints for the date, time or datetime, with six fractional digits for times and datetimes (`"12:34:56.000000"`) |
 | `GET_FORMAT(DATE \| TIME \| DATETIME \| TIMESTAMP, f)` | `GET_FORMAT('DATE', f)` |
 | `GROUP_CONCAT(a, b, ... [ORDER BY ...] [SEPARATOR s])` | `group_concat(a \|\| b \|\| ..., s)` (Turso does not support `ORDER BY` inside aggregates yet and reports an error) |
 | `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms) |
@@ -138,7 +141,8 @@ Lowered:
 | `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`, `LOCALTIME`, `LOCALTIMESTAMP` (with or without `()`) | SQLite's current-time literals, which are UTC like the target time zone |
 | `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)` | `LOCATE(a, b)`, `SUBSTRING(s, a, b)` |
 | `TRIM([[LEADING \| TRAILING \| BOTH] [r] FROM] s)`, `LTRIM(s)`, `RTRIM(s)` | `__mysql_trim(s, r)`, `__mysql_ltrim(s, r)`, `__mysql_rtrim(s, r)` with `r` a space when it is left out (see string functions); `TRIM(LEADING r)` without `FROM` is a syntax error, as in MySQL |
-| `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]`, `UNSIGNED [INTEGER]`, `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The SQLite type name of the same affinity: no rounding to an integer or to `d` decimals, and no unsigned wrap-around. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement is refused or the cast is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
+| `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]` and `UNSIGNED [INTEGER]` | `__mysql_cast_as_signed(x)`, `__mysql_cast_as_unsigned(x)`: a DECIMAL rounds half away from zero, a double rounds to the nearest even integer and saturates at the BIGINT range (also for `UNSIGNED`, as in MySQL), text and binary strings give the integer they start with (`'-1.5'` is -1), and `UNSIGNED` keeps the 64 bits of a negative result. An integer literal above 9223372036854775807 is passed as text so it stays exact. An `UNSIGNED` result above 9223372036854775807 fails (Turso has no unsigned 64-bit value type yet), as does a cast of a `DATE`, `DATETIME`, `TIMESTAMP`, `TIME`, `ENUM` or `SET` column (stored as text as given, and MySQL casts an `ENUM` by its index) |
+| `CAST`/`CONVERT(x, type)` to `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The SQLite type name of the same affinity. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement is refused or the cast is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
 | `CAST`/`CONVERT(x, type)` to `NCHAR` | `CAST(x AS NCHAR)`, which SQLite reads as text like `CHAR` |
 | `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(x, n)`, `__mysql_cast_as_nchar(x, n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
@@ -171,14 +175,25 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   the BIGINT range, bit operations on fractional or out-of-range number
   literals, and `_binary` strings in numeric contexts.
 - Binary strings that are not NUL-free UTF-8 outside numeric contexts.
-- `CAST(x AS JSON)` in a comparison, arithmetic or a condition, except the
-  failing select items above: MySQL compares and computes JSON values by JSON
-  rules, while the lowered value is JSON text.
+- A JSON value in a comparison, arithmetic or a condition, except the
+  failing select items above and the JSON comparisons, conditions and
+  arithmetic above, when it is a cast that may fail (of a column, a function
+  result or an integer literal above the signed BIGINT range) or contains
+  one: MySQL may never evaluate it. Other `JSON_*` calls and `->` are lowered
+  like JSON functions elsewhere, so an error they raise is reported even
+  where MySQL would not evaluate them.
+  Also a JSON value compared with a column or a function result, or used with
+  `IN`, `BETWEEN`, `DIV` or a bit operator: MySQL converts the other operand
+  by its type.
 - `CAST(x AS JSON)` as an argument of a function other than `JSON_*` when the
   function is `CONCAT_WS`, `ELT` or `MAKE_SET`, or when another argument is
-  not a non-NULL literal: MySQL stops evaluating arguments at the first NULL
+  not a non-NULL literal, unless the cast cannot fail and no argument is a
+  `_binary` string: MySQL stops evaluating arguments at the first NULL
   (`MAKEDATE(CAST('x' AS JSON), NULL)` is NULL) or never evaluates unused
   ones, while Turso evaluates every argument and reports the invalid JSON.
+  `FIELD`, `GREATEST`, `LEAST`, `LOCATE`, `INSTR`, `POSITION` and
+  `FIND_IN_SET` with a JSON argument are refused too: MySQL compares with
+  `utf8mb4_bin` there.
 - Temporal literals compared with a string that is not a valid value of their
   type, with a DECIMAL literal that has the same DOUBLE value (MySQL compares
   them as DOUBLE), or with a temporal literal of another type or, for
@@ -208,8 +223,12 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   function result, `TIME '..'` to a date, `DATE '..'` to `TIME`): MySQL
   converts those from the type, not from the text (`CAST(TIME '10:00:00' AS
   DATETIME)` is today at 10:00).
-- `CAST(x AS JSON)` of a `DATE`, `TIME` or `TIMESTAMP` value: MySQL makes a
-  JSON date or time, while the lowered text is not valid JSON.
+- `CAST(x AS JSON)` of a `DATE`, `TIME` or `TIMESTAMP` value outside the
+  comparisons and text-reading functions above, and of a `TIME` outside
+  00:00:00 to 23:59:59 there: MySQL makes a JSON date or time, which reads
+  as 0 in numbers and as NULL in a function of the other temporal kind, while
+  a JSON value in Turso is its text, and MySQL prints a JSON time of 24 hours
+  or more with fewer hours.
 
 Known differences that remain on the lowered path: `/`
 is SQLite division (integer division for two integers) rather than MySQL's
@@ -301,9 +320,9 @@ tagged with the JSON text subtype while it moves between expressions:
   A column declared `JSON` also has SQLite's numeric affinity, so a stored
   `1` reads back as an integer, which JSON functions reject (error 3146) as
   MySQL does for SQL numbers.
-- Comparisons do not use JSON rules: `JSON_EXTRACT('{"a": "x"}', '$.a') =
-  'x'` is false (MySQL: true) because the text is `"x"`, and a JSON number
-  compares as text with SQL numbers.
+- Comparisons, conditions and arithmetic of JSON values use JSON rules only
+  where the lowering above sees the JSON value (a cast, `->` or a `JSON_*`
+  call). A JSON value from a column, a subquery or `CASE` is text there.
 - Turso has no `DECIMAL`, unsigned or temporal types, and `TRUE` is the
   integer 1, so these never become JSON decimals, unsigned integers, dates or
   booleans; binary strings become MySQL's `base64:type15:` opaque values.

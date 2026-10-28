@@ -189,6 +189,76 @@ fn unsigned_equals(unsigned: &Value, value: &Value) -> Result<Value> {
     Ok(Value::from_i64(i64::from(equal)))
 }
 
+pub(super) fn cast_as_signed(args: &[Value]) -> Result<Value> {
+    signed_result(integer_bits(&args[0]))
+}
+
+pub(super) fn cast_as_unsigned(args: &[Value]) -> Result<Value> {
+    unsigned_result(integer_bits(&args[0]))
+}
+
+pub(super) fn cast_as_integer_unsupported(_args: &[Value]) -> Result<Value> {
+    Err(LimboError::InvalidArgument(
+        "CAST of a DATE, DATETIME, TIMESTAMP, TIME, ENUM or SET value to SIGNED or UNSIGNED \
+        is not supported yet"
+            .to_string(),
+    ))
+}
+
+pub(super) fn signed_result(bits: Option<u64>) -> Result<Value> {
+    Ok(bits.map_or(Value::Null, |bits| Value::from_i64(bits as i64)))
+}
+
+pub(super) fn unsigned_result(bits: Option<u64>) -> Result<Value> {
+    match bits {
+        None => Ok(Value::Null),
+        Some(bits) => i64::try_from(bits).map(Value::from_i64).map_err(|_| {
+            LimboError::InvalidArgument(format!(
+                "CAST to UNSIGNED of {bits}, which is above 9223372036854775807, \
+                is not supported yet"
+            ))
+        }),
+    }
+}
+
+fn integer_bits(value: &Value) -> Option<u64> {
+    match value {
+        Value::Null => None,
+        Value::Numeric(Numeric::Integer(number)) => Some(*number as u64),
+        Value::Numeric(Numeric::Float(double)) => Some(double_bits(f64::from(*double))),
+        Value::Text(text) => Some(text_bits(text.as_str().as_bytes())),
+        Value::Blob(bytes) => Some(text_bits(bytes)),
+    }
+}
+
+pub(super) fn double_bits(value: f64) -> u64 {
+    if value <= -9_223_372_036_854_775_808.0 {
+        i64::MIN as u64
+    } else if value >= 9_223_372_036_854_775_807.0 {
+        i64::MAX as u64
+    } else {
+        value.round_ties_even() as i64 as u64
+    }
+}
+
+pub(super) fn text_bits(bytes: &[u8]) -> u64 {
+    let Some(number) = number_text::leading_number(bytes) else {
+        return 0;
+    };
+    let (negative, whole, _, _) = number.parts();
+    let magnitude = whole.iter().fold(0_u128, |value, digit| {
+        (value * 10 + u128::from(digit - b'0')).min(u128::from(u64::MAX) + 1)
+    });
+    if negative {
+        match i64::try_from(magnitude) {
+            Ok(magnitude) => (-magnitude) as u64,
+            Err(_) => i64::MIN as u64,
+        }
+    } else {
+        u64::try_from(magnitude).unwrap_or(u64::MAX)
+    }
+}
+
 fn rounded_double(value: f64) -> Result<i64> {
     let rounded = value.round();
     if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&rounded) {

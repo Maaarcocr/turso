@@ -1,0 +1,223 @@
+# Owned specs for JSON values in comparisons, conditions, arithmetic, LIKE,
+# REGEXP_LIKE and STRCMP, and for JSON dates and times read as text. Every
+# expected value was recorded from MySQL 8.4.10 (mysql/conformance/target.toml)
+# and copied from specs/vitess/evalengine.
+
+@database :memory:
+
+test json-string-sorts-after-numbers {
+    SELECT cast('"foo"' as json) < 0.000;
+}
+expect {
+    0
+}
+
+test json-string-sorts-after-json-numbers {
+    SELECT cast('"foo"' as json) < cast('-1.1' as json);
+}
+expect {
+    0
+}
+
+test json-integer-compares-exactly {
+    SELECT 9223372036854775807 >= cast(9223372036854775807 as json);
+}
+expect {
+    1
+}
+
+test json-time-sorts-after-numbers {
+    SELECT time '10:04:58' > cast('1.1' as json);
+}
+expect {
+    1
+}
+
+test json-time-sorts-after-arrays {
+    SELECT time '10:04:58' > cast('["ab"]' as json);
+}
+expect {
+    1
+}
+
+test json-array-sorts-before-times {
+    SELECT cast('["ab"]' as json) < time '32:34:58';
+}
+expect {
+    1
+}
+
+test json-date-is-not-a-boolean {
+    SELECT date '2000-01-01' = cast(true as json);
+}
+expect {
+    0
+}
+
+test json-boolean-is-not-a-string {
+    SELECT cast(true as json) <=> '20000101';
+}
+expect {
+    0
+}
+
+test json-null-safe-equal-with-null {
+    SELECT NULL <=> cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test json-array-is-not-an-opaque-value {
+    SELECT JSON_ARRAY() = cast(_binary '"bar"' as json);
+}
+expect {
+    0
+}
+
+test json-zero-is-false {
+    SELECT NOT cast(0 as json);
+}
+expect {
+    1
+}
+
+test json-true-is-true {
+    SELECT NOT cast(true as json);
+}
+expect {
+    0
+}
+
+test json-array-is-true {
+    SELECT cast(0 as json) OR cast('["a"]' as json);
+}
+expect {
+    1
+}
+
+test json-negation-is-a-double {
+    SELECT -cast(0 as json);
+}
+expect {
+    -0
+}
+
+test json-boolean-negation {
+    SELECT -cast(true as json);
+}
+expect {
+    -1
+}
+
+test json-division-reads-a-double {
+    SELECT '20000101' / cast('-1.1' as json);
+}
+expect {
+    -18181910
+}
+
+test json-object-divisor-is-zero {
+    SELECT '20000101103458.123456foo' / cast('\{"a": 1, "b": 2\}' as json);
+}
+expect {
+    NULL
+}
+
+test json-remainder-is-a-double-remainder {
+    SELECT 255 MOD cast(-1.1 as json);
+}
+expect {
+    0.8999999999999795
+}
+
+test json-remainder-by-zero {
+    SELECT 1 % cast(0 as json);
+}
+expect {
+    NULL
+}
+
+test json-opaque-value-in-arithmetic {
+    SELECT cast(_binary' "foo"' as json) * cast('1' as json);
+}
+expect {
+    0
+}
+
+test json-like-matches-the-json-text {
+    SELECT cast(0 as json) LIKE 'FOO%';
+}
+expect {
+    0
+}
+
+test json-like-pattern {
+    SELECT time '10:04:58.1' LIKE cast('"foo"' as json);
+}
+expect {
+    0
+}
+
+test json-regexp-like {
+    SELECT REGEXP_LIKE(cast(0 as json), cast(0 as json), 'i');
+}
+expect {
+    1
+}
+
+test regexp-like-null-match-type-before-empty-pattern {
+    SELECT REGEXP_LIKE(cast(1.1 as json), '', NULL);
+}
+expect {
+    NULL
+}
+
+test regexp-like-null-match-type-of-a-string {
+    SELECT REGEXP_LIKE('', '', NULL);
+}
+expect {
+    NULL
+}
+
+test json-strcmp-compares-the-json-text {
+    SELECT STRCMP(cast(0 as json), cast('\{"c": 1, "b": 2\}' as json));
+}
+expect {
+    -1
+}
+
+test json-time-in-concat {
+    SELECT CONCAT('10:04:58', cast(time '12:34:56' as json));
+}
+expect {
+    10:04:58"12:34:56.000000"
+}
+
+test json-datetime-in-concat {
+    SELECT CONCAT('103458.123456', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    103458.123456"2000-01-01 12:34:58.000000"
+}
+
+test json-date-in-md5 {
+    SELECT MD5(cast(date '2000-01-01' as json));
+}
+expect {
+    a3de844fcc0196b8373c9b319eddc249
+}
+
+test json-time-in-to-base64 {
+    SELECT TO_BASE64(cast(time '12:34:56' as json));
+}
+expect {
+    IjEyOjM0OjU2LjAwMDAwMCI=
+}
+
+test json-arguments-of-maketime {
+    SELECT MAKETIME(cast(0 as json), '', cast('1.1' as json));
+}
+expect {
+    00:00:01.100000
+}
