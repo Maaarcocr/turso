@@ -4,7 +4,7 @@ use crate::expr::{
     translate_bytes, translate_expr, translate_in, translate_json_value,
 };
 use crate::invalid_json::mysql_rejects_json_text;
-use crate::literal::{temporal_literal, Context, TemporalKind};
+use crate::literal::{is_utf8_binary_literal, temporal_literal, Context, TemporalKind};
 use crate::query::TranslationContext;
 use crate::MysqlParserError;
 use sqlparser::ast::{
@@ -475,6 +475,11 @@ fn like_operand(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if is_binary_literal(expr) && !is_utf8_binary_literal(expr) {
+        return Err(MysqlParserError::Rejected(format!(
+            "cannot convert the binary string `{expr}` of LIKE to utf8mb4"
+        )));
+    }
     if !is_json_value(expr) {
         return translate_in(expr, Context::Text, context);
     }

@@ -537,6 +537,10 @@ fn reports_ddl_that_mysql_rejects() {
             sql: "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_cs, 0xff)",
         },
         SqlCase {
+            name: "LIKE of a JSON value and a binary string that is not UTF-8",
+            sql: "SELECT CAST(TRUE AS JSON) LIKE 0xFF",
+        },
+        SqlCase {
             name: "unknown storage engine",
             sql: "CREATE TABLE t (id INT) ENGINE=NoSuchEngine",
         },
@@ -892,6 +896,10 @@ fn lowers_select_statements_to_shared_ast() {
         (
             "SELECT NOT CAST('0' AS JSON), -CAST('1' AS JSON), CAST('1' AS JSON) + 1, 1.5e0 % CAST('1.1' AS JSON)",
             "SELECT NOT __mysql_json_truth (__mysql_cast_as_json ('0')), ((__mysql_json_double (__mysql_cast_as_json ('1'))) * - 1), __mysql_json_double (__mysql_cast_as_json ('1')) + 1, __mysql_json_remainder (1.5e0, __mysql_json_double (__mysql_cast_as_json ('1.1')))",
+        ),
+        (
+            "SELECT 0x61 LIKE 'A', 'a' NOT LIKE _binary 0xFF, 5 LIKE X'35'",
+            "SELECT __mysql_like_bin (x'61', 'A', '\\'), NOT __mysql_like_bin ('a', x'FF', '\\'), __mysql_like_bin (5, x'35', '\\')",
         ),
         (
             "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
