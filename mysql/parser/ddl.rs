@@ -82,6 +82,11 @@ pub(crate) fn translate_create_table(
         backup,
     } = create_table;
 
+    if *strict || *without_rowid {
+        return Err(MysqlParserError::Rejected(
+            "STRICT and WITHOUT ROWID are not MySQL table options".to_string(),
+        ));
+    }
     if *or_replace
         || *external
         || *dynamic
@@ -94,7 +99,6 @@ pub(crate) fn translate_create_table(
         || hive_formats.is_some()
         || file_format.is_some()
         || location.is_some()
-        || *without_rowid
         || like.is_some()
         || clone.is_some()
         || version.is_some()
@@ -108,7 +112,6 @@ pub(crate) fn translate_create_table(
         || inherits.is_some()
         || partition_of.is_some()
         || for_values.is_some()
-        || *strict
         || *copy_grants
         || enable_schema_evolution.is_some()
         || change_tracking.is_some()
@@ -240,6 +243,25 @@ fn translate_table_options(options: &CreateTableOptions) -> Result<String, Mysql
     Ok(collation)
 }
 
+const MYSQL_ENGINES: &[&str] = &[
+    "InnoDB",
+    "INNOBASE",
+    "MyISAM",
+    "MEMORY",
+    "HEAP",
+    "CSV",
+    "ARCHIVE",
+    "BLACKHOLE",
+    "MRG_MYISAM",
+    "MERGE",
+    "FEDERATED",
+    "PERFORMANCE_SCHEMA",
+    "ndbcluster",
+    "NDB",
+    "ndbinfo",
+    "TempTable",
+];
+
 fn table_option_has_no_effect(option: &SqlOption) -> Result<bool, MysqlParserError> {
     match option {
         SqlOption::NamedParenthesizedList(NamedParenthesizedList {
@@ -247,6 +269,15 @@ fn table_option_has_no_effect(option: &SqlOption) -> Result<bool, MysqlParserErr
             name: Some(engine),
             values,
         }) if key.value == "ENGINE" => {
+            if !MYSQL_ENGINES
+                .iter()
+                .any(|known| engine.value.eq_ignore_ascii_case(known))
+            {
+                return Err(MysqlParserError::Rejected(format!(
+                    "unknown storage engine '{}'",
+                    engine.value
+                )));
+            }
             Ok(values.is_empty() && engine.value.eq_ignore_ascii_case("InnoDB"))
         }
         SqlOption::Comment(_) => Ok(true),

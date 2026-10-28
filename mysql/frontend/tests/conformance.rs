@@ -412,15 +412,15 @@ fn create_table_the_mysql_lowering_refuses_reports_why_and_creates_nothing(
         ),
         (
             "CREATE TABLE t (a INT) STRICT",
-            "CREATE TABLE contains a clause that is not available",
+            "STRICT and WITHOUT ROWID are not MySQL table options",
         ),
         (
             "CREATE TABLE t (b BINARY(4611686018427387904)) STRICT",
-            "CREATE TABLE contains a clause that is not available",
+            "STRICT and WITHOUT ROWID are not MySQL table options",
         ),
         (
             "CREATE TABLE t (d DOUBLE(2, 5)) STRICT",
-            "CREATE TABLE contains a clause that is not available",
+            "STRICT and WITHOUT ROWID are not MySQL table options",
         ),
     ] {
         let error = connection.execute(sql).expect_err(sql);

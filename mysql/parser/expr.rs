@@ -1945,11 +1945,46 @@ fn single_explicit_collation(exprs: &[&Expr]) -> Result<Option<String>, MysqlPar
     match found.as_slice() {
         [] => Ok(None),
         [name] => Ok(Some(name.clone())),
+        _ if is_illegal_mix(exprs)? => Err(MysqlParserError::Rejected(format!(
+            "illegal mix of collations {}",
+            found.join(", ")
+        ))),
         _ => Err(MysqlParserError::Unsupported(format!(
             "operands with the collations {}, which MySQL rejects as an illegal mix, are not lowered yet",
             found.join(", ")
         ))),
     }
+}
+
+fn is_illegal_mix(exprs: &[&Expr]) -> Result<bool, MysqlParserError> {
+    let mut names = Vec::new();
+    for expr in exprs {
+        let mut own = Vec::new();
+        explicit_collations(expr, &mut own)?;
+        if own.is_empty() {
+            continue;
+        }
+        let mut operand = *expr;
+        while let Expr::Nested(inner) = operand {
+            operand = inner;
+        }
+        let Expr::Collate { expr, collation } = operand else {
+            return Ok(false);
+        };
+        let mut inner = Vec::new();
+        explicit_collations(expr, &mut inner)?;
+        if !inner.is_empty() {
+            return Ok(false);
+        }
+        let name = single_name(collation)?.to_ascii_lowercase();
+        if name == "binary" {
+            return Ok(false);
+        }
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    Ok(names.len() > 1)
 }
 
 fn ensure_default_collation(exprs: &[&Expr], operation: &str) -> Result<(), MysqlParserError> {
@@ -2166,9 +2201,13 @@ fn translate_collated_function(
         .iter()
         .find(|arg| is_binary_literal(arg) && !is_utf8_binary_literal(arg))
     {
-        return Err(MysqlParserError::Unsupported(format!(
-            "{upper_name} of the binary string `{binary}` that is not UTF-8 under a collation, which MySQL converts to utf8mb4, is not lowered yet"
-        )));
+        let message =
+            format!("cannot convert the binary string `{binary}` of {upper_name} to utf8mb4");
+        return Err(if collation == "binary" {
+            MysqlParserError::Unsupported(format!("{message} under COLLATE binary"))
+        } else {
+            MysqlParserError::Rejected(message)
+        });
     }
     if let Some(temporal) = args
         .iter()
