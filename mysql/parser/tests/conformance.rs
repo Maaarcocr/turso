@@ -1038,8 +1038,6 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
         "REPLACE INTO users VALUES (1)",
-        "UPDATE users SET id = 2",
-        "DELETE FROM users",
         "SHOW TABLES",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
@@ -1112,6 +1110,220 @@ fn lowers_on_duplicate_key_update_to_an_upsert() {
         let statement =
             parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
         assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
+fn lowers_single_table_update_and_delete() {
+    let cases = [
+        ("UPDATE users SET id = 2", "UPDATE users SET id = 2"),
+        (
+            "UPDATE users SET qty = qty + 1, name = 'Ada' WHERE id = 3",
+            "UPDATE users SET qty = qty + 1, name = 'Ada' WHERE id = 3",
+        ),
+        (
+            "UPDATE `users` SET `display``name` = 'x' WHERE `id` = 1",
+            "UPDATE `users` SET `display``name` = 'x' WHERE `id` = 1",
+        ),
+        (
+            "UPDATE users SET users.qty = 1 WHERE users.id > 2",
+            "UPDATE users SET qty = 1 WHERE users.id > 2",
+        ),
+        (
+            "UPDATE users AS u SET u.qty = 1 WHERE u.id > 2",
+            "UPDATE users AS u SET qty = 1 WHERE u.id > 2",
+        ),
+        (
+            "UPDATE users u SET qty = 1",
+            "UPDATE users AS u SET qty = 1",
+        ),
+        (
+            "UPDATE app.users SET qty = 1",
+            "UPDATE app.users SET qty = 1",
+        ),
+        (
+            "UPDATE users SET qty = ?, name = ? WHERE id = ?",
+            "UPDATE users SET qty = ?1, name = ?2 WHERE id = ?3",
+        ),
+        (
+            "UPDATE users SET qty = 1, name = other + 1",
+            "UPDATE users SET qty = 1, name = other + 1",
+        ),
+        (
+            "UPDATE users SET qty = (SELECT MAX(qty) FROM stock WHERE stock.id = users.id)",
+            "UPDATE users SET qty = (SELECT MAX (qty) FROM stock WHERE stock.id = users.id)",
+        ),
+        (
+            "UPDATE /*+ NO_RANGE_OPTIMIZATION(users) */ users SET qty = 1",
+            "UPDATE users SET qty = 1",
+        ),
+        ("UPDATE quick SET qty = 1", "UPDATE quick SET qty = 1"),
+        ("DELETE FROM users", "DELETE FROM users"),
+        (
+            "DELETE FROM users WHERE id = 3",
+            "DELETE FROM users WHERE id = 3",
+        ),
+        (
+            "DELETE FROM users AS u WHERE u.id = 3",
+            "DELETE FROM users AS u WHERE u.id = 3",
+        ),
+        (
+            "DELETE FROM app.users WHERE id = ?",
+            "DELETE FROM app.users WHERE id = ?1",
+        ),
+        (
+            "DELETE FROM users WHERE id IN (SELECT user_id FROM banned)",
+            "DELETE FROM users WHERE id IN (SELECT user_id FROM banned)",
+        ),
+        ("DELETE FROM quick", "DELETE FROM quick"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
+fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
+    let cases = [
+        SqlCase {
+            name: "assignment reads an earlier assignment",
+            sql: "UPDATE users SET qty = 1, name = qty + 1",
+        },
+        SqlCase {
+            name: "swap reads an earlier assignment",
+            sql: "UPDATE users SET a = b, b = a",
+        },
+        SqlCase {
+            name: "qualified read of an earlier assignment",
+            sql: "UPDATE users SET qty = 1, name = users.qty",
+        },
+        SqlCase {
+            name: "subquery after an assignment",
+            sql: "UPDATE users SET qty = 1, name = (SELECT name FROM other)",
+        },
+        SqlCase {
+            name: "same column twice",
+            sql: "UPDATE users SET qty = 1, QTY = 2",
+        },
+        SqlCase {
+            name: "default value",
+            sql: "UPDATE users SET qty = DEFAULT",
+        },
+        SqlCase {
+            name: "tuple assignment",
+            sql: "UPDATE users SET (a, b) = (1, 2)",
+        },
+        SqlCase {
+            name: "assignment to another table",
+            sql: "UPDATE users SET other.qty = 1",
+        },
+        SqlCase {
+            name: "assignment through the table name of an aliased target",
+            sql: "UPDATE users AS u SET users.qty = 1",
+        },
+        SqlCase {
+            name: "update order by",
+            sql: "UPDATE users SET qty = 1 ORDER BY id",
+        },
+        SqlCase {
+            name: "update limit",
+            sql: "UPDATE users SET qty = 1 LIMIT 1",
+        },
+        SqlCase {
+            name: "update low priority",
+            sql: "UPDATE LOW_PRIORITY users SET qty = 1",
+        },
+        SqlCase {
+            name: "update ignore",
+            sql: "UPDATE IGNORE users SET qty = 1",
+        },
+        SqlCase {
+            name: "multi-table update",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = other.qty",
+        },
+        SqlCase {
+            name: "update returning",
+            sql: "UPDATE users SET qty = 1 RETURNING qty",
+        },
+        SqlCase {
+            name: "update partition",
+            sql: "UPDATE users PARTITION (p0) SET qty = 1",
+        },
+        SqlCase {
+            name: "update index hint",
+            sql: "UPDATE users USE INDEX (i) SET qty = 1",
+        },
+        SqlCase {
+            name: "update setting hint",
+            sql: "UPDATE /*+ SET_VAR(sql_mode='') */ users SET qty = 1",
+        },
+        SqlCase {
+            name: "update subquery reads the target",
+            sql: "UPDATE users SET qty = 1 WHERE id IN (SELECT id FROM users)",
+        },
+        SqlCase {
+            name: "delete order by limit",
+            sql: "DELETE FROM users ORDER BY id LIMIT 1",
+        },
+        SqlCase {
+            name: "delete limit",
+            sql: "DELETE FROM users LIMIT 1",
+        },
+        SqlCase {
+            name: "delete low priority",
+            sql: "DELETE LOW_PRIORITY FROM users",
+        },
+        SqlCase {
+            name: "delete quick",
+            sql: "DELETE QUICK FROM users",
+        },
+        SqlCase {
+            name: "delete ignore",
+            sql: "DELETE IGNORE FROM users",
+        },
+        SqlCase {
+            name: "multi-table delete",
+            sql: "DELETE users FROM users JOIN other ON users.id = other.id",
+        },
+        SqlCase {
+            name: "delete using",
+            sql: "DELETE FROM users USING users JOIN other",
+        },
+        SqlCase {
+            name: "delete returning",
+            sql: "DELETE FROM users RETURNING id",
+        },
+        SqlCase {
+            name: "delete partition",
+            sql: "DELETE FROM users PARTITION (p0)",
+        },
+        SqlCase {
+            name: "delete subquery reads the target",
+            sql: "DELETE FROM users WHERE id IN (SELECT id FROM users)",
+        },
+        SqlCase {
+            name: "delete derived table reads the target",
+            sql: "DELETE FROM users WHERE id IN (SELECT id FROM (SELECT id FROM users) AS d)",
+        },
+    ];
+
+    for case in cases {
+        let error = match parse_and_translate(case.sql) {
+            Ok(statement) => panic!(
+                "{} unexpectedly lowered to `{statement}`\nSQL: {}",
+                case.name, case.sql
+            ),
+            Err(error) => error,
+        };
+        assert!(
+            matches!(error, MysqlParserError::Unsupported(_)),
+            "{}\nSQL: {}\nerror: {error}",
+            case.name,
+            case.sql
+        );
     }
 }
 
