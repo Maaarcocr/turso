@@ -51,11 +51,12 @@ fn number_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserE
         } => accept_if(!*unsigned || !decimal.is_negative(), || {
             numeric(decimal.to_text())
         }),
-        Family::Char { .. } | Family::Varchar { .. } | Family::Varbinary { .. } => {
-            string_default(family, &decimal.to_text())
-        }
+        Family::Char { .. }
+        | Family::Varchar { .. }
+        | Family::Binary { .. }
+        | Family::Varbinary { .. } => string_default(family, &decimal.to_text()),
         Family::Year => year(decimal.exact_integer().ok_or_else(unsupported)?),
-        Family::Enum(_) | Family::Text { .. } | Family::Blob { .. } | Family::Json => {
+        Family::Enum(_) | Family::Text | Family::Blob | Family::Json | Family::Spatial => {
             Err(rejected())
         }
         Family::Set(_)
@@ -75,9 +76,10 @@ fn text_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserErr
                 None => Err(rejected()),
             }
         }
-        Family::Char { .. } | Family::Varchar { .. } | Family::Varbinary { .. } => {
-            string_default(family, text)
-        }
+        Family::Char { .. }
+        | Family::Varchar { .. }
+        | Family::Binary { .. }
+        | Family::Varbinary { .. } => string_default(family, text),
         Family::Enum(members) => members
             .iter()
             .find(|member| member.to_lowercase() == text.to_lowercase())
@@ -116,7 +118,7 @@ fn text_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserErr
             _ => Err(unsupported()),
         },
         Family::Bit { .. } => Err(unsupported()),
-        Family::Text { .. } | Family::Blob { .. } | Family::Json => Err(rejected()),
+        Family::Text | Family::Blob | Family::Json | Family::Spatial => Err(rejected()),
     }
 }
 
@@ -146,7 +148,9 @@ fn string_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserE
         Family::Char { length } | Family::Varchar { length } => {
             fit_characters(text, *length, family)
         }
-        Family::Varbinary { length } => (text.len() as u64 <= *length).then(|| text.to_string()),
+        Family::Binary { length } | Family::Varbinary { length } => {
+            (text.len() as u64 <= *length).then(|| text.to_string())
+        }
         _ => None,
     };
     fitted.map(|text| string(&text)).ok_or_else(rejected)

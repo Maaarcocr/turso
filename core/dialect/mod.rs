@@ -213,6 +213,10 @@ pub trait Dialect: Send + Sync + 'static {
     fn marks_tables(&self) -> bool {
         false
     }
+
+    fn marks_rewritten_tables(&self) -> bool {
+        self.marks_tables()
+    }
 }
 
 #[derive(Debug)]

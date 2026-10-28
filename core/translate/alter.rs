@@ -678,7 +678,8 @@ fn emit_column_constraints_validation(
     }
 
     let dml_ctx =
-        DmlColumnContext::layout(resolved_table.columns(), base_dest_reg, rowid_reg, layout);
+        DmlColumnContext::layout(resolved_table.columns(), base_dest_reg, rowid_reg, layout)
+            .with_encoded_values();
     let resolved_table_arc = Arc::new(resolved_table.clone());
     compute_virtual_columns(
         program,
@@ -1186,6 +1187,7 @@ pub fn translate_alter_table(
             }
 
             btree.columns_mut().remove(dropped_index);
+            crate::dialect::marker::mark_rewritten_table(connection.dialect().as_ref(), &mut btree);
 
             let sql = escape_sql_string_literal(&btree.to_sql());
 
@@ -1293,7 +1295,7 @@ pub fn translate_alter_table(
             if is_generated {
                 for c in &col_def.constraints {
                     if let ast::ColumnConstraint::Generated { expr, .. } = &c.constraint {
-                        crate::schema::validate_generated_expr(expr)?;
+                        crate::schema::validate_generated_expr(expr, resolver)?;
                     }
                 }
             }
@@ -1332,7 +1334,8 @@ pub fn translate_alter_table(
                 }
                 let written_ty = column.written_ty_str.as_deref().unwrap_or(ty);
                 let is_builtin = ty.is_empty()
-                    || (btree.dialect_marker.is_none() && is_builtin_strict_type(written_ty));
+                    || (!resolver.schema().uses_name_table(&btree)
+                        && is_builtin_strict_type(written_ty));
                 // Domain types require STRICT tables because domain constraints
                 // (CHECK, NOT NULL, DEFAULT) are only enforced on STRICT tables.
                 if !is_builtin && !btree.is_strict {
@@ -1360,7 +1363,7 @@ pub fn translate_alter_table(
                 }
 
                 default_type_mismatch = btree.is_strict
-                    && btree.dialect_marker.is_none()
+                    && !resolver.schema().uses_name_table(&btree)
                     && strict_default_type_mismatch(&column)?;
             }
 
@@ -1474,6 +1477,7 @@ pub fn translate_alter_table(
             // Refresh local `column` from btree so that domain NOT NULL is
             // visible to the empty-table check below.
             column = btree.columns().last().unwrap().clone();
+            crate::dialect::marker::mark_rewritten_table(connection.dialect().as_ref(), &mut btree);
 
             let escaped = escape_sql_string_literal(&btree.to_sql());
             let escaped_table_name = escape_sql_string_literal(table_name);
@@ -1562,7 +1566,7 @@ pub fn translate_alter_table(
                 if default_type_mismatch {
                     emit_add_column_default_type_validation(program, &original_btree, database_id)?;
                 }
-                if btree.dialect_marker.is_some() {
+                if resolver.schema().uses_name_table(&btree) {
                     emit_add_column_default_conversion(
                         program,
                         &original_btree,
@@ -1999,7 +2003,7 @@ pub fn translate_alter_table(
 
                 for constraint in &definition.constraints {
                     if let ast::ColumnConstraint::Generated { expr, .. } = &constraint.constraint {
-                        crate::schema::validate_generated_expr(expr)?;
+                        crate::schema::validate_generated_expr(expr, resolver)?;
                     }
                 }
 

@@ -6,12 +6,13 @@ use crate::ddl_index::{
 };
 use crate::ddl_type::ensure_key_length;
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
+use crate::query::{translate_subquery, TranslationContext};
 use crate::MysqlParserError;
 use sqlparser::ast::{
-    CreateTable, CreateTableOptions, Expr, ForeignKeyConstraint, HiveDistributionStyle, Ident,
-    IndexColumn, IndexConstraint, IndexOption, IndexType, NamedParenthesizedList, ObjectName,
-    ObjectNamePart, PrimaryKeyConstraint, ReferentialAction, SqlOption, TableConstraint,
-    UniqueConstraint, Value,
+    ColumnDef, CreateTable, CreateTableOptions, Expr, ForeignKeyConstraint, HiveDistributionStyle,
+    Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, NamedParenthesizedList,
+    ObjectName, ObjectNamePart, PrimaryKeyConstraint, Query, ReferentialAction, SqlOption,
+    TableConstraint, UniqueConstraint, Value,
 };
 use turso_parser::ast;
 
@@ -83,7 +84,6 @@ pub(crate) fn translate_create_table(
     } = create_table;
 
     if *or_replace
-        || *temporary
         || *external
         || *dynamic
         || global.is_some()
@@ -95,7 +95,6 @@ pub(crate) fn translate_create_table(
         || hive_formats.is_some()
         || file_format.is_some()
         || location.is_some()
-        || query.is_some()
         || *without_rowid
         || like.is_some()
         || clone.is_some()
@@ -141,14 +140,43 @@ pub(crate) fn translate_create_table(
                 .to_string(),
         ));
     }
-    if columns.is_empty() {
-        return Err(MysqlParserError::Unsupported(
-            "CREATE TABLE requires at least one column".to_string(),
-        ));
-    }
     translate_table_options(table_options)?;
-
     let table_name = translate_ddl_name(name)?;
+    let body = match (query, columns.is_empty() && constraints.is_empty()) {
+        (Some(query), true) => translate_select_body(query)?,
+        (None, false) => translate_columns_and_constraints(columns, constraints)?,
+        (Some(_), false) => {
+            return Err(MysqlParserError::Unsupported(
+                "CREATE TABLE with both column definitions and a SELECT is not available"
+                    .to_string(),
+            ));
+        }
+        (None, true) => {
+            return Err(MysqlParserError::Unsupported(
+                "CREATE TABLE requires at least one column".to_string(),
+            ));
+        }
+    };
+    Ok(ast::Stmt::CreateTable {
+        temporary: *temporary,
+        if_not_exists: *if_not_exists,
+        tbl_name: ast::QualifiedName::single(table_name),
+        body,
+    })
+}
+
+fn translate_select_body(query: &Query) -> Result<ast::CreateTableBody, MysqlParserError> {
+    let mut context = TranslationContext::default();
+    Ok(ast::CreateTableBody::AsSelect(translate_subquery(
+        query,
+        &mut context,
+    )?))
+}
+
+fn translate_columns_and_constraints(
+    columns: &[ColumnDef],
+    constraints: &[TableConstraint],
+) -> Result<ast::CreateTableBody, MysqlParserError> {
     let columns = columns
         .iter()
         .map(Column::from_mysql)
@@ -172,15 +200,12 @@ pub(crate) fn translate_create_table(
         .into_iter()
         .map(Column::into_definition)
         .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(ast::Stmt::CreateTable {
-        temporary: false,
-        if_not_exists: *if_not_exists,
-        tbl_name: ast::QualifiedName::single(table_name),
-        body: ast::CreateTableBody::ColumnsAndConstraints {
-            columns,
-            constraints: table_constraints,
-            options: ast::TableOptions::empty(),
+    Ok(ast::CreateTableBody::ColumnsAndConstraints {
+        columns,
+        constraints: table_constraints,
+        options: ast::TableOptions {
+            without_rowid_text: None,
+            strict_text: Some("STRICT".to_string()),
         },
     })
 }

@@ -326,9 +326,10 @@ fn compute_expr_type(
             env,
         ),
         ast::Expr::FunctionCall { name, args, .. } => function_call_type(name, args, tables, env),
+        ast::Expr::FunctionCallStar { name, .. } => function_star_type(name),
         ast::Expr::Unary(op, operand) => match resolve_unary_operator(op, operand, tables, env) {
             Some(resolved) => resolved.result,
-            None => ExprType::Dynamic(DynamicClass::Unknown),
+            None => untyped_unary_type(op, operand, tables, env),
         },
         ast::Expr::SubqueryResult {
             subquery_id,
@@ -339,6 +340,25 @@ fn compute_expr_type(
             Some(named) => ExprType::Named(named),
             None => ExprType::Dynamic(DynamicClass::Unknown),
         },
+        _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+fn untyped_unary_type(
+    op: &ast::UnaryOperator,
+    operand: &ast::Expr,
+    tables: Option<&TableReferences>,
+    env: &TypeEnv,
+) -> ExprType {
+    if !matches!(op, ast::UnaryOperator::Negative) {
+        return ExprType::Dynamic(DynamicClass::Unknown);
+    }
+    let class = match expr_type(operand, tables, env) {
+        ExprType::Dynamic(class) => class,
+        ExprType::Named(named) => unchanged_value_class(&named.def),
+    };
+    match class {
+        DynamicClass::Integer | DynamicClass::Real => ExprType::Dynamic(class),
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
 }
@@ -930,6 +950,21 @@ pub(crate) fn emit_assign_into_type(
     resolver: &Resolver,
 ) -> Result<()> {
     emit_store_and_read_back(program, reg, named, ValueConversion::Assignment, resolver)
+}
+
+pub(crate) fn emit_generated_stored_value(
+    program: &mut ProgramBuilder,
+    reg: usize,
+    column: &crate::schema::Column,
+    table_is_strict: bool,
+    table_name: &str,
+    resolver: &Resolver,
+) -> Result<()> {
+    emit_generated_value_conversion(program, reg, column, resolver)?;
+    if table_is_strict {
+        emit_column_encode(program, resolver, column, reg, table_name, None)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn emit_generated_value_conversion(
@@ -1652,7 +1687,7 @@ fn binary_type(
         | ast::Operator::Modulus => {
             let class_of = |operand_type: ExprType| match operand_type {
                 ExprType::Dynamic(class) => class,
-                ExprType::Named(_) => DynamicClass::Unknown,
+                ExprType::Named(named) => unchanged_value_class(&named.def),
             };
             ExprType::Dynamic(arithmetic_class(class_of(lhs_type), class_of(rhs_type)))
         }
@@ -1679,6 +1714,19 @@ fn untyped_operator_type(op: &ast::Operator) -> ExprType {
             ExprType::Dynamic(DynamicClass::Integer)
         }
         _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+fn unchanged_value_class(def: &TypeDef) -> DynamicClass {
+    match def.storage {
+        Some(storage) if storage.stores_values_unchanged() => match storage.stored_class() {
+            "integer" => DynamicClass::Integer,
+            "real" => DynamicClass::Real,
+            "text" => DynamicClass::Text,
+            "blob" => DynamicClass::Blob,
+            _ => DynamicClass::Unknown,
+        },
+        _ => DynamicClass::Unknown,
     }
 }
 
@@ -1723,8 +1771,114 @@ fn function_call_type(
         Ok(Some(Func::Agg(AggFunc::Max | AggFunc::Min))) if arg_types.len() == 1 => {
             arg_types[0].clone()
         }
+        Ok(Some(Func::Agg(AggFunc::NumericSum))) if arg_types.len() == 1 => {
+            typed_sum_result(name.as_str(), &arg_types[0], env)
+        }
+        Ok(Some(Func::Agg(AggFunc::Count | AggFunc::Count0))) => {
+            ExprType::Dynamic(DynamicClass::Integer)
+        }
         _ => ExprType::Dynamic(DynamicClass::Unknown),
     }
+}
+
+fn function_star_type(name: &ast::Name) -> ExprType {
+    use crate::function::{AggFunc, Func};
+    match Func::resolve_function(name.as_str(), 0) {
+        Ok(Some(Func::Agg(AggFunc::Count | AggFunc::Count0))) => {
+            ExprType::Dynamic(DynamicClass::Integer)
+        }
+        _ => ExprType::Dynamic(DynamicClass::Unknown),
+    }
+}
+
+fn typed_sum_result(sum_function: &str, arg_type: &ExprType, env: &TypeEnv) -> ExprType {
+    let ExprType::Named(arg) = operator_type(arg_type, env) else {
+        return ExprType::Dynamic(DynamicClass::Unknown);
+    };
+    let Some(declared) = declared_sum(&arg.def, env)
+        .filter(|declared| declared.func_name.eq_ignore_ascii_case(sum_function))
+    else {
+        return ExprType::Dynamic(DynamicClass::Unknown);
+    };
+    let mut result = slot_type(&declared.returns, env);
+    if let (ExprType::Named(result), Some(rule)) = (&mut result, env.rules.result_parameters) {
+        let arg_params = integer_params(arg.params.as_deref().unwrap_or_default());
+        result.params = rule("sum", [arg_params.as_deref(), None])
+            .map(|params| params.into_iter().map(integer_literal).collect());
+    }
+    result
+}
+
+fn declared_sum<'d>(def: &'d TypeDef, env: &TypeEnv) -> Option<&'d ast::TypeFunction> {
+    def.functions().iter().find(|declared| {
+        declared.name.eq_ignore_ascii_case("sum")
+            && matches!(
+                declared.args.as_slice(),
+                [arg] if matches!(slot_named(arg, env), Some(Slot::Named(slot)) if slot.name.eq_ignore_ascii_case(&def.name))
+            )
+            && matches!(
+                crate::function::Func::resolve_function(&declared.func_name, 1),
+                Ok(Some(crate::function::Func::Agg(_)))
+            )
+    })
+}
+
+pub(crate) fn rewrite_typed_aggregates(
+    expr: &mut ast::Expr,
+    tables: Option<&TableReferences>,
+    resolver: &Resolver,
+) -> Result<()> {
+    if resolver.schema().type_registry.is_empty() {
+        return Ok(());
+    }
+    let env = TypeEnv::from_resolver(resolver);
+    walk_expr_mut(expr, &mut |expr: &mut ast::Expr| -> Result<WalkControl> {
+        let ast::Expr::FunctionCall {
+            name,
+            args,
+            distinctness,
+            filter_over,
+            order_by,
+            within_group,
+        } = expr
+        else {
+            return Ok(WalkControl::Continue);
+        };
+        if args.len() != 1 || !order_by.is_empty() || !within_group.is_empty() {
+            return Ok(WalkControl::Continue);
+        }
+        let average = match crate::function::Func::resolve_function(name.as_str(), 1) {
+            Ok(Some(crate::function::Func::Agg(crate::function::AggFunc::Sum))) => false,
+            Ok(Some(crate::function::Func::Agg(crate::function::AggFunc::Avg))) => true,
+            _ => return Ok(WalkControl::Continue),
+        };
+        let ExprType::Named(arg) = operator_type(&expr_type(&args[0], tables, &env), &env) else {
+            return Ok(WalkControl::Continue);
+        };
+        let Some(declared) = declared_sum(&arg.def, &env) else {
+            return Ok(WalkControl::Continue);
+        };
+        let call = |function: &str| ast::Expr::FunctionCall {
+            name: ast::Name::from_string(function),
+            args: args.clone(),
+            distinctness: *distinctness,
+            filter_over: filter_over.clone(),
+            order_by: vec![],
+            within_group: vec![],
+        };
+        let sum = call(&declared.func_name);
+        *expr = if average {
+            ast::Expr::Binary(
+                Box::new(sum),
+                ast::Operator::Divide,
+                Box::new(call("count")),
+            )
+        } else {
+            sum
+        };
+        Ok(WalkControl::SkipChildren)
+    })?;
+    Ok(())
 }
 
 pub(crate) fn case_branches<'e>(

@@ -1,3 +1,4 @@
+use super::DecimalArgument;
 use turso_core::{Result, Value};
 
 mod collation;
@@ -9,7 +10,47 @@ mod numeric;
 mod regexp;
 mod text;
 
+pub(crate) use convert::format_double;
+
 type Function = fn(&[Value]) -> Result<Value>;
+
+/// A value read as MySQL reads it where it needs a DOUBLE.
+pub(super) fn double_argument(value: &Value) -> f64 {
+    convert::double(value).unwrap_or(0.0)
+}
+
+/// The integer at the start of a string, as MySQL reads a string where it
+/// needs an integer.
+pub(super) fn leading_integer(bytes: &[u8]) -> i64 {
+    convert::string_to_integer(bytes)
+}
+
+/// How a string function reads a DECIMAL argument at `position`: as its
+/// text, or as a count or position. `Double` for every other function.
+pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
+    if name == "CHAR" {
+        return DecimalArgument::Count;
+    }
+    let counts: &[usize] = match name {
+        "LEFT" | "RIGHT" | "LPAD" | "RPAD" | "REPEAT" | "SHA2" => &[1],
+        "SUBSTR" | "SUBSTRING" | "MID" | "INSERT" => &[1, 2],
+        "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => &[2, 3],
+        "REGEXP_INSTR" => &[2, 3, 4],
+        "REGEXP_REPLACE" => &[3, 4],
+        "ELT" | "MAKE_SET" | "SPACE" | "HEX" => &[0],
+        "EXPORT_SET" => &[0, 4],
+        "ASCII" | "BIT_LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" | "CONCAT" | "CONCAT_WS"
+        | "FIND_IN_SET" | "INSTR" | "LCASE" | "LENGTH" | "LOWER" | "OCTET_LENGTH" | "ORD"
+        | "POSITION" | "REPLACE" | "REVERSE" | "STRCMP" | "UCASE" | "UPPER" | "CRC32" | "MD5"
+        | "SHA" | "SHA1" | "TO_BASE64" | "REGEXP" | "REGEXP_LIKE" => &[],
+        _ => return DecimalArgument::Double,
+    };
+    if counts.contains(&position) {
+        DecimalArgument::Count
+    } else {
+        DecimalArgument::Text
+    }
+}
 
 pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
     function(name, arg_count).is_some()

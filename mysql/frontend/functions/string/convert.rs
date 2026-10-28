@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use turso_core::{LimboError, Numeric, Result, Value};
 
+pub(crate) use crate::format::format_double;
+
 pub(super) const MAX_ALLOWED_PACKET: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug)]
@@ -289,32 +291,5 @@ pub(super) fn bytes_value(bytes: Vec<u8>, binary: bool) -> Result<Value> {
     match String::from_utf8(bytes) {
         Ok(text) => Ok(Value::build_text(text)),
         Err(error) => Ok(Value::from_slice(error.as_bytes())?),
-    }
-}
-
-pub(super) fn format_double(value: f64) -> String {
-    let sign = if value.is_sign_negative() { "-" } else { "" };
-    if value == 0.0 {
-        return format!("{sign}0");
-    }
-    let scientific = format!("{:e}", value.abs());
-    let (mantissa, exponent) = scientific
-        .split_once('e')
-        .expect("`{:e}` output has an exponent");
-    let exponent: i32 = exponent.parse().expect("`{:e}` exponent is an integer");
-    let digits = mantissa.replace('.', "");
-    let integer_digits = exponent + 1;
-    let is_integer = digits.len() as i32 <= integer_digits;
-    if exponent < -15 || (exponent >= 15 && is_integer) {
-        format!("{sign}{mantissa}e{exponent}")
-    } else if exponent < 0 {
-        let zeros = "0".repeat((-integer_digits) as usize);
-        format!("{sign}0.{zeros}{digits}")
-    } else if is_integer {
-        let zeros = "0".repeat(integer_digits as usize - digits.len());
-        format!("{sign}{digits}{zeros}")
-    } else {
-        let (integer, fraction) = digits.split_at(integer_digits as usize);
-        format!("{sign}{integer}.{fraction}")
     }
 }

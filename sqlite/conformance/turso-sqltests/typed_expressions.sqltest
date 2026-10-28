@@ -361,7 +361,7 @@ expect {
     1
     |
     2|2.00
-    2.0|3.00
+    2|3.00
     1|1|1
 }
 
@@ -571,13 +571,13 @@ expect error {
 @requires materialized_views "uses materialized views"
 test materialized-view-computes-typed-expressions {
     CREATE TABLE t1(p numeric(10,2), g INTEGER) STRICT;
-    INSERT INTO t1 VALUES ('1.50', 1), ('2.25', 1);
+    INSERT INTO t1 VALUES ('1.25', 1), ('2.25', 1);
     CREATE MATERIALIZED VIEW v AS SELECT g, p * 2 AS x FROM t1;
     INSERT INTO t1 VALUES ('0.25', 2);
     SELECT g, x FROM v ORDER BY g, x;
 }
 expect {
-    1|3.00
+    1|2.50
     1|4.50
     2|0.50
 }
@@ -707,11 +707,11 @@ test domains-use-the-operators-of-their-base-type {
 }
 expect {
     1.5
-    9.00
-    10.00
+    9
+    10
     3
-    18.00|10.00
-    20.00|11.00
+    18|10
+    20|11
     3.0|2.5
     1
     3
@@ -807,4 +807,151 @@ test check-constraint-still-refuses-integer-compared-with-text {
 }
 expect error {
     type mismatch in CHECK constraint: cannot compare INTEGER with TEXT
+}
+
+@requires strict "uses STRICT tables"
+test sum-and-avg-of-numeric-are-exact {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(10,2), r REAL) STRICT;
+    INSERT INTO t1 VALUES (1, '1.10', 1.10), (2, '2.20', 2.20), (3, '0.01', 0.01), (4, NULL, NULL);
+    SELECT sum(p), avg(p), typeof(avg(r)), count(p) FROM t1;
+    SELECT sum(DISTINCT p), avg(p) FILTER (WHERE id > 1) FROM t1;
+    SELECT sum(p), avg(p) FROM t1 WHERE id > 10;
+}
+expect {
+    3.31|1.10333333333333333333|real|3
+    3.31|1.10500000000000000000
+    |
+}
+
+@requires strict "uses STRICT tables"
+test sum-and-avg-of-numeric-over-sliding-windows {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(10,2)) STRICT;
+    INSERT INTO t1 VALUES (1, '1.10'), (2, '2.20'), (3, '0.01');
+    SELECT id, sum(p) OVER w, avg(p) OVER w FROM t1
+    WINDOW w AS (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW);
+}
+expect {
+    1|1.10|1.10000000000000000000
+    2|3.30|1.6500000000000000
+    3|2.21|1.10500000000000000000
+}
+
+@requires strict "uses STRICT tables"
+test numeric-ranges-and-order-by-use-an-index {
+    CREATE TABLE t1(id INTEGER PRIMARY KEY, p numeric(10,2), q numeric) STRICT;
+    CREATE INDEX t1p ON t1(p);
+    CREATE INDEX t1q ON t1(q);
+    INSERT INTO t1 VALUES (1, '1.50', '1.50'), (2, '-2', '-2'), (3, '10', '10'), (4, '0.25', '0.25'), (5, NULL, NULL), (6, '9.99', '9.990'), (7, '-0.5', '-0.50'), (8, '100', '1e2');
+    EXPLAIN QUERY PLAN SELECT id FROM t1 WHERE p > 1.5;
+    SELECT group_concat(id) FROM (SELECT id FROM t1 WHERE p > 1.5);
+    SELECT group_concat(id) FROM (SELECT id FROM t1 NOT INDEXED WHERE p > 1.5);
+    SELECT group_concat(id) FROM (SELECT id FROM t1 WHERE p BETWEEN -1 AND 9.995);
+    SELECT group_concat(id) FROM (SELECT id FROM t1 NOT INDEXED WHERE p BETWEEN -1 AND 9.995);
+    SELECT group_concat(id) FROM (SELECT id FROM t1 WHERE q >= 1.5 AND q < 100);
+    SELECT group_concat(id) FROM (SELECT id FROM t1 NOT INDEXED WHERE q >= 1.5 AND q < 100);
+    EXPLAIN QUERY PLAN SELECT p FROM t1 ORDER BY p;
+    SELECT group_concat(p, ' ') FROM (SELECT p FROM t1 ORDER BY p);
+    SELECT group_concat(q, ' ') FROM (SELECT q FROM t1 ORDER BY q DESC);
+    SELECT min(p), max(p), min(q), max(q) FROM t1;
+    SELECT id FROM t1 WHERE p = 1.5;
+    SELECT id FROM t1 WHERE q = 100;
+}
+expect {
+    1|0|0|SEARCH t1 USING COVERING INDEX t1p (p>?)
+    6,3,8
+    3,6,8
+    7,4,1,6
+    1,4,6,7
+    1,6,3
+    1,3,6
+    1|0|0|SCAN t1 USING COVERING INDEX t1p
+    -2.00 -0.50 0.25 1.50 9.99 10.00 100.00
+    100 10 9.99 1.5 0.25 -0.5 -2
+    -2.00|100.00|-2|100
+    1
+    8
+}
+
+test numeric-values-are-stored-in-an-order-preserving-form {
+    SELECT hex(numeric_encode('1.50', 10, 2)), hex(numeric_encode('-1.5', NULL, NULL)), hex(numeric_encode(0, NULL, NULL));
+    SELECT numeric_encode('-2', NULL, NULL) < numeric_encode('-1.5', NULL, NULL), numeric_encode('9.99', NULL, NULL) < numeric_encode('10', NULL, NULL);
+    SELECT numeric_decode(numeric_encode('1.50', 10, 2), 2), numeric_decode(numeric_encode('1.50', NULL, NULL), NULL), numeric_decode(numeric_encode('100', NULL, NULL));
+    SELECT numeric_decode(x'010002000000000000000100000096000000', 5), numeric_decode(x'010102000000000000000100000096000000');
+}
+expect {
+    308000000110|107FFFFFFE55FF|20
+    1|1
+    1.50|1.5|100
+    1.50|-1.50
+}
+
+@requires strict "uses STRICT tables"
+test virtual-columns-are-computed-from-decoded-values {
+    CREATE TABLE t(id INTEGER PRIMARY KEY, d numeric(10,2), o INTEGER, g INTEGER AS (d) VIRTUAL, h TEXT AS (d || 'x') VIRTUAL, n numeric(10,2) AS (d * 2) VIRTUAL) STRICT;
+    CREATE TABLE log(x TEXT);
+    CREATE TRIGGER bi BEFORE INSERT ON t BEGIN INSERT INTO log VALUES ('bi ' || NEW.h || ' ' || NEW.n); END;
+    CREATE TRIGGER ai AFTER INSERT ON t BEGIN INSERT INTO log VALUES ('ai ' || NEW.g || ' ' || NEW.h || ' ' || NEW.n); END;
+    CREATE TRIGGER bu BEFORE UPDATE ON t BEGIN INSERT INTO log VALUES ('bu ' || NEW.d || ' ' || NEW.h || ' ' || OLD.h || ' ' || NEW.n || ' ' || OLD.n); END;
+    CREATE TRIGGER au AFTER UPDATE ON t BEGIN INSERT INTO log VALUES ('au ' || NEW.d || ' ' || NEW.h || ' ' || OLD.h || ' ' || NEW.n || ' ' || OLD.n); END;
+    CREATE TRIGGER bd BEFORE DELETE ON t BEGIN INSERT INTO log VALUES ('bd ' || OLD.h || ' ' || OLD.n); END;
+    INSERT INTO t(id, d, o) VALUES (1, '2.00', 1), (2, '4.00', 1) RETURNING g, h, n;
+    UPDATE t SET d = '3.00' WHERE id = 1 RETURNING g, h, n;
+    UPDATE t SET o = 2 WHERE id = 1 RETURNING g, h, n;
+    INSERT INTO t(id, d) VALUES (1, '9.00') ON CONFLICT(id) DO UPDATE SET d = excluded.d RETURNING g, h, n;
+    DELETE FROM t WHERE id = 2 RETURNING g, h, n;
+    SELECT g, h, n FROM t;
+    SELECT x FROM log;
+}
+expect {
+    2|2.00x|4.00
+    4|4.00x|8.00
+    3|3.00x|6.00
+    3|3.00x|6.00
+    9|9.00x|18.00
+    4|4.00x|8.00
+    9|9.00x|18.00
+    bi 2.00x 4.00
+    ai 2 2.00x 4.00
+    bi 4.00x 8.00
+    ai 4 4.00x 8.00
+    bu 3.00 3.00x 2.00x 6.00 4.00
+    au 3.00 3.00x 2.00x 6.00 4.00
+    bu 3.00 3.00x 3.00x 6.00 6.00
+    au 3.00 3.00x 3.00x 6.00 6.00
+    bi 9.00x 18.00
+    bu 9.00 9.00x 3.00x 18.00 6.00
+    au 9.00 9.00x 3.00x 18.00 6.00
+    bd 4.00x 8.00
+}
+
+@requires strict "uses STRICT tables"
+test check-constraints-see-the-decoded-value-of-virtual-columns {
+    CREATE TABLE u(id INTEGER PRIMARY KEY, d numeric(10,2), h TEXT AS (d || 'x') VIRTUAL CHECK (h <> '9.00x')) STRICT;
+    INSERT INTO u(id, d) VALUES (2, '8');
+    INSERT INTO u(id, d) VALUES (1, '9');
+}
+expect error {
+    CHECK constraint failed
+}
+
+@requires strict "uses STRICT tables"
+test indexes-on-typed-virtual-columns-store-encoded-keys {
+    CREATE TABLE v(id INTEGER PRIMARY KEY, d numeric(10,2), n numeric(10,2) AS (d * 2) VIRTUAL) STRICT;
+    CREATE INDEX vn ON v(n);
+    INSERT INTO v(id, d) VALUES (1, '1.50'), (2, '0.25');
+    UPDATE v SET d = '5' WHERE id = 2;
+    INSERT INTO v(id, d) VALUES (3, '0.10');
+    CREATE INDEX vn2 ON v(n DESC);
+    SELECT id, n FROM v INDEXED BY vn ORDER BY n;
+    SELECT n FROM v INDEXED BY vn2 WHERE n < 5;
+    DELETE FROM v WHERE id = 1;
+    PRAGMA integrity_check;
+}
+expect {
+    3|0.20
+    1|3.00
+    2|10.00
+    3.00
+    0.20
+    ok
 }

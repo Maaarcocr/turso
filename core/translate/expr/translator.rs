@@ -98,7 +98,9 @@ pub fn translate_expr(
     target_register: usize,
     resolver: &Resolver,
 ) -> Result<usize> {
-    let constant_span = if expr.is_constant(resolver) {
+    let constant_span = if matches!(expr, ast::Expr::Register(_)) {
+        None
+    } else if expr.is_constant(resolver) {
         if !program.constant_span_is_open() {
             Some(program.constant_span_start())
         } else {
@@ -218,7 +220,8 @@ fn translate_expr_by_kind(
             translate_like_expr(program, referenced_tables, expr, target_register, resolver)
         }
         ast::Expr::Literal(ast::Literal::Numeric(digits))
-            if decimal_literal_type(digits, &TypeEnv::from_resolver(resolver)).is_some() =>
+            if resolver.dialect.type_rules().decimal_literal_type.is_some()
+                && decimal_literal_type(digits, &TypeEnv::from_resolver(resolver)).is_some() =>
         {
             program.emit_insn(Insn::String8 {
                 value: digits.clone(),
@@ -2530,11 +2533,25 @@ fn translate_self_table_column_expr(
                 };
                 program.set_collation(Some((table_column.collation(), false)));
                 let src_reg = dml_ctx.to_column_reg(*column);
-                program.emit_insn(Insn::Copy {
-                    src_reg,
-                    dst_reg: target_register,
-                    extra_amount: 0,
-                });
+                if dml_ctx.holds_encoded_values()
+                    && !table_column.is_virtual_generated()
+                    && !table_column.is_rowid_alias()
+                {
+                    emit_user_facing_column_value(
+                        program,
+                        src_reg,
+                        target_register,
+                        table_column,
+                        table.is_strict,
+                        resolver,
+                    )?;
+                } else {
+                    program.emit_insn(Insn::Copy {
+                        src_reg,
+                        dst_reg: target_register,
+                        extra_amount: 0,
+                    });
+                }
                 Ok(target_register)
             }
             None => {
@@ -2724,10 +2741,12 @@ fn translate_column_expr(
                             },
                         )?;
 
-                        super::emit_generated_value_conversion(
+                        super::emit_generated_stored_value(
                             program,
                             target_register,
                             table_column,
+                            table.is_strict(),
+                            table.get_name(),
                             resolver,
                         )?;
                         // The virtual column's declared collation must override

@@ -87,6 +87,7 @@ impl StorageType {
             StorageType::DatetimeMicros => function_is("datetime_micros_lt"),
             StorageType::TimeMicros => function_is("time_micros_lt"),
             StorageType::Uint64 => function_is("uint64_lt"),
+            StorageType::Numeric => function_is("numeric_lt"),
             _ => self.stores_values_unchanged() && function.is_none(),
         }
     }
@@ -100,6 +101,7 @@ impl StorageType {
                 | StorageType::Uint64
                 | StorageType::Enumeration
                 | StorageType::LabelSet
+                | StorageType::Numeric
         )
     }
 
@@ -112,6 +114,10 @@ impl StorageType {
                 | StorageType::Text
                 | StorageType::Blob
         )
+    }
+
+    pub(crate) fn every_value_fits_a_rowid(self) -> bool {
+        !matches!(self, StorageType::Uint64)
     }
 
     pub(crate) fn largest_key(self) -> Option<i64> {
@@ -156,7 +162,7 @@ impl StorageType {
                 DECODE enumeration_decode(value, labels) KEY enumeration_encode(value, labels)"
                 .to_string(),
             StorageType::Numeric => " ENCODE numeric_encode(value, precision, scale) \
-                DECODE numeric_decode(value) KEY numeric_key(value)"
+                DECODE numeric_decode(value, scale) KEY numeric_key(value)"
                 .to_string(),
             StorageType::LabelSet => " ENCODE label_set_encode(value, labels) \
                 DECODE label_set_decode(value, labels) KEY label_set_encode(value, labels)"
@@ -375,6 +381,93 @@ mod tests {
     }
 
     #[test]
+    fn unsigned_64_bit_arithmetic_accepts_one_signed_operand() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "types-uint64-signed.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, u UBIGINT, i INTEGER) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 5, -3), (2, '18446744073709551615', -6)")
+            .unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT CAST(5 AS ubigint) + -3, -3 + CAST(5 AS ubigint), \
+                 CAST(5 AS ubigint) - -3, CAST(5 AS ubigint) * -0, u + i, i + u \
+                 FROM t WHERE id = 1"
+            ),
+            ints(&[&[2, 2, 8, 0, 2, 2]])
+        );
+        assert_eq!(
+            query(&conn, "SELECT u + i FROM t WHERE id = 2"),
+            vec![vec![Value::build_text("18446744073709551609".to_string())]]
+        );
+        for sql in [
+            "SELECT CAST(5 AS ubigint) + -6",
+            "SELECT -6 + CAST(5 AS ubigint)",
+            "SELECT CAST(5 AS ubigint) - 6",
+            "SELECT 3 - CAST(5 AS ubigint)",
+            "SELECT CAST(5 AS ubigint) * -1",
+            "SELECT u + i * 2 FROM t WHERE id = 1",
+            "SELECT u - 7 FROM t WHERE id = 1",
+        ] {
+            let error = conn
+                .prepare(sql)
+                .and_then(|mut stmt| stmt.run_collect_rows())
+                .unwrap_err();
+            assert!(error.to_string().contains("out of range"), "{sql}: {error}");
+        }
+    }
+
+    #[test]
+    fn operator_signatures_name_types_of_several_words_without_quotes() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "types-several-words.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, s TINYINT UNSIGNED) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 200), (2, 7)")
+            .unwrap();
+        assert!(conn.execute("INSERT INTO t VALUES (3, 256)").is_err());
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT (SELECT id FROM t WHERE s < 100), (SELECT id FROM t WHERE s = 200)"
+            ),
+            ints(&[&[2, 1]])
+        );
+        let operators = query(
+            &conn,
+            "SELECT operators FROM pragma_list_types WHERE type LIKE 'tinyint unsigned%'",
+        );
+        assert_eq!(
+            operators,
+            vec![vec![Value::build_text(
+                "'<' (tinyint unsigned, integer), '=' (tinyint unsigned, integer)".to_string()
+            )]]
+        );
+    }
+
+    #[test]
+    fn a_negated_literal_keeps_the_class_of_the_literal() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "types-negated-literal.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, u UBIGINT) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 5), (2, 7)").unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT (SELECT count(*) FROM t WHERE u > -5.3e0), \
+                 (SELECT count(*) FROM t WHERE u < -5.3e0), \
+                 (SELECT count(*) FROM t WHERE u > 5.3e0)"
+            ),
+            ints(&[&[2, 0, 1]])
+        );
+    }
+
+    #[test]
     fn dates_and_times_are_stored_as_integers_and_sorted_as_times() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let text = |value: &str| Value::build_text(value.to_string());
@@ -569,6 +662,20 @@ mod tests {
             vec!["42", "4"]
         );
         assert_eq!(column_parameters(&conn, "SELECT 1.50"), vec!["3", "2"]);
+    }
+
+    #[test]
+    fn a_converted_operand_keeps_a_constant_expression_in_one_piece() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "constant-conversion.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT NULLIF(99, 2), COUNT(*) * CASE WHEN 0 THEN 'abc' = 3 ELSE 4 END"
+            ),
+            ints(&[&[99, 4]])
+        );
     }
 
     #[test]
@@ -776,6 +883,55 @@ mod tests {
         assert_eq!(query(&conn, "SELECT j FROM t"), ints(&[&[9]]));
     }
 
+    #[test]
+    fn generated_columns_can_call_dialect_functions() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let open = || {
+            let file = io
+                .open_file(
+                    "generated-dialect-function.db",
+                    crate::OpenFlags::Create,
+                    true,
+                )
+                .unwrap();
+            crate::Database::open(
+                io.clone(),
+                "generated-dialect-function.db",
+                crate::OpenOptions::new(marking())
+                    .storage(Arc::new(crate::storage::database::DatabaseFile::new(file)))
+                    .db_opts(crate::DatabaseOpts::new().with_generated_columns(true)),
+            )
+            .unwrap()
+        };
+        {
+            let db = open();
+            let conn = db.connect(ConnectOpts::new()).unwrap();
+            conn.execute(
+                "CREATE TABLE t(id INTEGER PRIMARY KEY, j TEXT, \
+                 n DOUBLE AS (test_text_length(j)) VIRTUAL) STRICT",
+            )
+            .unwrap();
+            conn.execute("ALTER TABLE t ADD COLUMN m DOUBLE AS (test_text_length(j || 'x'))")
+                .unwrap();
+            conn.execute("INSERT INTO t(id, j) VALUES (1, 'abc')")
+                .unwrap();
+            let error = conn
+                .execute("CREATE TABLE u(a TEXT, b TEXT AS (no_such_function(a))) STRICT")
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("could not resolve function"),
+                "{error}"
+            );
+            conn.close().unwrap();
+        }
+        let db = open();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(&conn, "SELECT n, m FROM t"),
+            vec![vec![Value::from_f64(3.0), Value::from_f64(4.0)]]
+        );
+    }
+
     fn declared_types(
         conn: &Arc<crate::Connection>,
         sql: &str,
@@ -893,11 +1049,46 @@ mod tests {
                 .execute("CREATE TABLE n AS SELECT NULL AS z")
                 .unwrap_err();
             assert!(error.to_string().contains("CAST it"), "{error}");
+            conn.execute(
+                "CREATE TABLE k AS SELECT count(*) AS n, count(i) AS ni, \
+                 CAST(d AS DOUBLE) * 2 AS m FROM t",
+            )
+            .unwrap();
+            assert_eq!(
+                stored_sql(&conn, "k"),
+                "/* turso_dialect:marking */ CREATE TABLE k (n integer, ni integer, m double) STRICT"
+            );
+            assert_eq!(
+                query(&conn, "SELECT * FROM k"),
+                vec![vec![
+                    Value::from_i64(1),
+                    Value::from_i64(1),
+                    Value::from_f64(5.0)
+                ]]
+            );
             conn.close().unwrap();
         }
         let db = open_db(&io, "ctas.db", marking()).unwrap();
         let conn = db.connect(ConnectOpts::new()).unwrap();
         assert_eq!(query(&conn, "SELECT * FROM c"), expected_rows);
+    }
+
+    #[test]
+    fn a_column_of_unknown_class_takes_the_type_the_dialect_names_for_any() {
+        use crate::dialect::TypeRules;
+        use crate::translate::expr::{class_column_type, DynamicClass};
+        let rules = TypeRules {
+            class_column_types: &[("integer", "bigint"), ("any", "longtext")],
+            ..TypeRules::SQLITE
+        };
+        assert_eq!(
+            class_column_type(DynamicClass::Unknown, &rules),
+            Some("longtext")
+        );
+        assert_eq!(
+            class_column_type(DynamicClass::Unknown, &TypeRules::SQLITE),
+            None
+        );
     }
 
     fn query_plan(conn: &Arc<crate::Connection>, sql: &str) -> String {
@@ -940,6 +1131,8 @@ mod tests {
             ("i > 5", true),
             ("i <= 5", true),
             ("i < 3000000000", true),
+            ("i = 3000000000", true),
+            ("i IN (5, 3000000000)", true),
             ("i > 3000000000", true),
             ("dt > '2024-01-01 10:00:00'", true),
             ("dt >= '2024-01-01 10:00:00.5'", true),
@@ -972,6 +1165,30 @@ mod tests {
             assert_eq!(sorted(&indexed), sorted(&scanned), "{condition}");
         }
 
+        conn.execute("CREATE TABLE small(id INTEGER PRIMARY KEY, tiny TINYINT) STRICT")
+            .unwrap();
+        conn.execute("CREATE INDEX small_tiny ON small(tiny)")
+            .unwrap();
+        conn.execute("INSERT INTO small VALUES (1, 5), (2, 9)")
+            .unwrap();
+        for condition in ["tiny = 1000", "tiny IN (9, 1000)"] {
+            let indexed = format!("SELECT id FROM small WHERE {condition}");
+            let plan = query_plan(&conn, &indexed);
+            assert!(plan.contains("INDEX small_tiny"), "{condition}: {plan}");
+            assert_eq!(
+                query(&conn, &indexed),
+                query(
+                    &conn,
+                    &format!("SELECT id FROM small NOT INDEXED WHERE {condition}")
+                ),
+                "{condition}"
+            );
+        }
+        let join = "SELECT small.id, t.id FROM t CROSS JOIN small ON small.tiny = t.i";
+        let join_plan = query_plan(&conn, join);
+        assert!(join_plan.contains("INDEX small_tiny"), "{join_plan}");
+        assert_eq!(query(&conn, join), ints(&[&[1, 1], &[2, 2]]));
+
         for (order, uses_index) in [
             ("dt", true),
             ("d DESC", true),
@@ -999,6 +1216,49 @@ mod tests {
             vec![vec![
                 Value::build_text("-01:00:00.000000"),
                 Value::build_text("18446744073709551615")
+            ]]
+        );
+    }
+
+    #[test]
+    fn only_converted_columns_name_themselves_for_errors() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "conversion-context.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, a TEXT, b DOUBLE, tiny TINYINT) STRICT",
+        )
+        .unwrap();
+        let contexts: Vec<String> = query(&conn, "EXPLAIN INSERT INTO t VALUES (1, 'x', 1.5, 2)")
+            .iter()
+            .filter(|row| row[1].to_string() == "TypeConversionContext")
+            .map(|row| row[5].to_string())
+            .collect();
+        assert_eq!(contexts, vec!["id", "tiny", ""]);
+    }
+
+    #[test]
+    fn avg_divides_the_typed_sum_with_the_dialect_division() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "typed-avg.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, d DECIMAL(10,2)) STRICT")
+            .unwrap();
+        conn.execute("INSERT INTO t VALUES (1, 1.10), (2, 2.20)")
+            .unwrap();
+        assert_eq!(
+            column_parameters(&conn, "SELECT sum(d) FROM t"),
+            vec!["32", "2"]
+        );
+        assert_eq!(
+            column_parameters(&conn, "SELECT avg(d) FROM t"),
+            vec!["36", "6"]
+        );
+        assert_eq!(
+            query(&conn, "SELECT sum(d), avg(d) FROM t"),
+            vec![vec![
+                Value::build_text("3.30"),
+                Value::build_text("1.6500000000000000")
             ]]
         );
     }

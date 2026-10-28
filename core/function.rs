@@ -504,6 +504,8 @@ pub enum AggFunc {
     #[strum(disabled)]
     PercentileDisc,
     #[strum(disabled)]
+    NumericSum,
+    #[strum(disabled)]
     External(Arc<ExtFunc>),
 }
 
@@ -738,7 +740,8 @@ impl PartialEq for AggFunc {
             | (Self::ArrayAgg, Self::ArrayAgg)
             | (Self::Mode, Self::Mode)
             | (Self::PercentileCont, Self::PercentileCont)
-            | (Self::PercentileDisc, Self::PercentileDisc) => true,
+            | (Self::PercentileDisc, Self::PercentileDisc)
+            | (Self::NumericSum, Self::NumericSum) => true,
             (Self::External(a), Self::External(b)) => Arc::ptr_eq(a, b),
             _ => false,
         }
@@ -768,6 +771,7 @@ impl AggFunc {
             Self::StringAgg => 2,
             Self::Sum => 1,
             Self::Total => 1,
+            Self::NumericSum => 1,
             Self::ArrayAgg => 1,
             // Ordered-set aggregates: args are rewritten by the planner to
             // `[value]` (mode) or `[value, fraction]` (percentiles).
@@ -797,6 +801,7 @@ impl AggFunc {
             Self::StringAgg => &[2],
             Self::Sum => &[1],
             Self::Total => &[1],
+            Self::NumericSum => &[1],
             Self::ArrayAgg => &[1],
             Self::Mode => &[1],
             Self::PercentileCont | Self::PercentileDisc => &[2],
@@ -819,6 +824,7 @@ impl AggFunc {
             Self::StringAgg => "string_agg",
             Self::Sum => "sum",
             Self::Total => "total",
+            Self::NumericSum => "numeric_sum",
             Self::ArrayAgg => "array_agg",
             Self::Mode => "mode",
             Self::PercentileCont => "percentile_cont",
@@ -1393,7 +1399,6 @@ impl ScalarFunc {
             Self::BooleanToInt
             | Self::IntToBoolean
             | Self::ValidateIpAddr
-            | Self::NumericDecode
             | Self::NumericKey
             | Self::NumericNeg
             | Self::NumericAbs => &[1],
@@ -1406,6 +1411,7 @@ impl ScalarFunc {
             | Self::DatePlus
             | Self::DateMinus => &[2],
             Self::NumericEncode => &[3],
+            Self::NumericDecode => &[1, 2],
             Self::Storage(func) => match func.arity() {
                 1 => &[1],
                 _ => &[2],

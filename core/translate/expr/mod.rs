@@ -84,9 +84,10 @@ pub(crate) use affinity::{
     comparison_affinity, expr_data_type, get_expr_affinity, StorageClassMask,
 };
 pub(crate) use arrays::{
-    emit_array_decode, emit_custom_type_assign_columns, emit_custom_type_decode_columns,
-    emit_custom_type_encode_columns, emit_generated_key_range_check, emit_key_assign,
-    emit_key_conversion, emit_key_encode, emit_row_number_counter,
+    emit_array_decode, emit_column_encode, emit_custom_type_assign_columns,
+    emit_custom_type_decode_columns, emit_custom_type_encode_columns,
+    emit_generated_key_range_check, emit_key_assign, emit_key_conversion, emit_key_encode,
+    emit_row_number_counter,
 };
 pub(crate) use binary::expr_is_array;
 pub use binding::{bind_and_rewrite_expr, BindingBehavior};
@@ -110,14 +111,14 @@ pub use translator::{
 };
 pub(crate) use types::{
     branch_type, class_column_type, column_named_type, common_branch_type,
-    conversion_keeps_stored_value, emit_assign_into_type, emit_generated_value_conversion,
-    emit_type_key, emit_type_keys, emit_value_conversion, emit_value_conversion_in_place,
-    expr_type, hash_join_can_compare_values, hash_join_key_form, in_subquery_comparison,
-    index_order_serves_sort, operator_type, plan_column_types, plan_result_types,
-    recursive_cte_column_types, recursive_cte_conversions, recursive_cte_row_keys,
-    resolve_operator, resolve_typed_operator, select_column_types, type_key, type_keys,
-    typed_range_can_use_index, Conversion, DynamicClass, ExprType, HashKeyForm,
-    InSubqueryComparison, IndexRowKey, IndexRowKeys, NamedType, ResolvedOperator,
+    conversion_keeps_stored_value, emit_assign_into_type, emit_generated_stored_value,
+    emit_generated_value_conversion, emit_type_key, emit_type_keys, emit_value_conversion,
+    emit_value_conversion_in_place, expr_type, hash_join_can_compare_values, hash_join_key_form,
+    in_subquery_comparison, index_order_serves_sort, operator_type, plan_column_types,
+    plan_result_types, recursive_cte_column_types, recursive_cte_conversions,
+    recursive_cte_row_keys, resolve_operator, resolve_typed_operator, select_column_types,
+    type_key, type_keys, typed_range_can_use_index, Conversion, DynamicClass, ExprType,
+    HashKeyForm, InSubqueryComparison, IndexRowKey, IndexRowKeys, NamedType, ResolvedOperator,
     SubqueryColumnTypes, TypeEnv, TypeKey,
 };
 pub use utils::{

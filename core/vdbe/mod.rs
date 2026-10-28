@@ -1644,6 +1644,20 @@ impl ProgramState {
         metrics
     }
 
+    fn with_conversion_context(&self, error: LimboError) -> LimboError {
+        match (error, &self.type_conversion_context) {
+            (LimboError::TypeConversion(mut conversion), Some((column, row_reg))) => {
+                conversion.column = Some(column.to_string());
+                conversion.row = match self.registers[*row_reg].get_value() {
+                    Value::Numeric(crate::numeric::Numeric::Integer(row)) => Some(*row),
+                    _ => None,
+                };
+                LimboError::TypeConversion(conversion)
+            }
+            (error, _) => error,
+        }
+    }
+
     pub(crate) fn reset_metrics(&mut self) {
         self.metrics.reset();
         if let Some(OpProgramState::Step { statement, .. }) = self.active_op_state.program_mut() {
@@ -2668,14 +2682,16 @@ impl Program {
                         program.park_on_io(state, io, waker)
                     }
                     Err(boxed_err) => {
-                        if let (Some(target), LimboError::Constraint(_)) =
-                            (state.error_target, &*boxed_err)
+                        if let (
+                            Some(target),
+                            LimboError::Constraint(_) | LimboError::TypeConversion(_),
+                        ) = (state.error_target, &*boxed_err)
                         {
                             state.error_target = None;
                             state.pc = target.as_offset_int();
                             return None;
                         }
-                        program.fail_step(state, pager, *boxed_err)
+                        program.fail_step(state, pager, state.with_conversion_context(*boxed_err))
                     }
                     Ok(InsnFunctionStepResult::Step) | Ok(InsnFunctionStepResult::Row) => {
                         unreachable!("the dispatch loop settles steps and rows itself")

@@ -92,9 +92,7 @@ fn lowers_basic_create_table_to_shared_ast() {
     assert_eq!(
         statement.to_string(),
         "CREATE TABLE users (\
-         id INT PRIMARY KEY NOT NULL CHECK (id BETWEEN - 2147483648 AND 2147483647), \
-         name VARCHAR (100) CHECK (char_length (rtrim (name)) <= 100), \
-         bio VARCHAR (1000) CHECK (char_length (rtrim (bio)) <= 1000))"
+         id INT PRIMARY KEY NOT NULL, name VARCHAR (100), bio VARCHAR (1000)) STRICT"
     );
 
     let ast::Stmt::CreateTable {
@@ -122,7 +120,13 @@ fn lowers_basic_create_table_to_shared_ast() {
     };
     assert_eq!(columns.len(), 3);
     assert!(constraints.is_empty());
-    assert_eq!(options, ast::TableOptions::empty());
+    assert_eq!(
+        options,
+        ast::TableOptions {
+            without_rowid_text: None,
+            strict_text: Some("STRICT".to_string()),
+        }
+    );
     assert_eq!(columns[0].col_name.as_str(), "id");
     assert_eq!(columns[0].col_type.as_ref().unwrap().name, "INT");
     assert!(matches!(
@@ -143,10 +147,6 @@ fn lowers_basic_create_table_to_shared_ast() {
                     conflict_clause: None,
                 },
             },
-            ast::NamedColumnConstraint {
-                name: None,
-                constraint: ast::ColumnConstraint::Check { .. },
-            },
         ]
     ));
     assert_eq!(columns[1].col_name.as_str(), "name");
@@ -166,8 +166,7 @@ fn lowers_create_table_if_not_exists_and_preserves_identifiers() {
     assert_eq!(
         statement.to_string(),
         "CREATE TABLE IF NOT EXISTS `select` (\
-         `primary` INT PRIMARY KEY NOT NULL CHECK (`primary` BETWEEN - 2147483648 AND 2147483647), \
-         `display``name` VARCHAR (100) CHECK (char_length (rtrim (`display``name`)) <= 100))"
+         `primary` INT PRIMARY KEY NOT NULL, `display``name` VARCHAR (100)) STRICT"
     );
 
     let ast::Stmt::CreateTable {
@@ -196,27 +195,43 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
     let cases = [
         (
             "CREATE TABLE t (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'key', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-            "CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL CHECK (id != 0) CHECK (id >= 0))",
+            "CREATE TABLE t (id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT NOT NULL) STRICT",
         ),
         (
             "CREATE TABLE t (a TINYINT(1) DEFAULT '1', b DECIMAL(10,2) UNSIGNED, c FLOAT(7,3), d BIT(3))",
-            "CREATE TABLE t (a TINYINT DEFAULT 1 CHECK (a BETWEEN - 128 AND 127), b DECIMAL UNSIGNED (10, 2) CHECK (b >= 0), c FLOAT (7, 3) CHECK (c = round (c, 3) AND abs (c) < 1e4), d BIT (3) CHECK (d BETWEEN 0 AND 7))",
+            "CREATE TABLE t (a TINYINT (1) DEFAULT 1, b DECIMAL UNSIGNED (10, 2), c FLOAT (7, 3), d BIT (3)) STRICT",
         ),
         (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
-            "CREATE TABLE t (e TEXT NOT NULL DEFAULT 'x' CHECK (e IN ('x', 'y')), s TEXT DEFAULT 'r,w' CHECK (s IN ('', 'r', 'w', 'r,w')), j JSON TEXT CHECK (json_valid (j)), t TINYTEXT CHECK (octet_length (t) <= 255))",
+            "CREATE TABLE t (e ENUM NOT NULL DEFAULT 'x' CHECK (e IN ('x', 'y')), s \"SET\" DEFAULT 'r,w' CHECK (s IN ('', 'r', 'w', 'r,w')), j LONGTEXT CHECK (json_valid (j)), t TINYTEXT) STRICT",
         ),
         (
             "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP) STRICT",
         ),
         (
             "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
-            "CREATE TABLE t (id INT CHECK (id BETWEEN - 2147483648 AND 2147483647), email VARCHAR (50) CHECK (char_length (rtrim (email)) <= 50), CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
+            "CREATE TABLE t (id INT, email VARCHAR (50), CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE) STRICT",
         ),
         (
             "CREATE TABLE t (a INT, b INT AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2))",
-            "CREATE TABLE t (a INT CHECK (a BETWEEN - 2147483648 AND 2147483647), b INT CHECK (b BETWEEN - 2147483648 AND 2147483647) GENERATED ALWAYS AS (a + 1) STORED, c INT CHECK (c BETWEEN - 2147483648 AND 2147483647) GENERATED ALWAYS AS (a * 2) VIRTUAL)",
+            "CREATE TABLE t (a INT, b INT GENERATED ALWAYS AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2) VIRTUAL) STRICT",
+        ),
+        (
+            "CREATE TEMPORARY TABLE t (id INTEGER, code BINARY(4), location POINT)",
+            "CREATE TEMP TABLE t (id INT, code BINARY (4), location POINT) STRICT",
+        ),
+        (
+            "CREATE TABLE t AS SELECT 1",
+            "CREATE TABLE t AS SELECT 1",
+        ),
+        (
+            "CREATE TABLE t SELECT 1",
+            "CREATE TABLE t AS SELECT 1",
+        ),
+        (
+            "CREATE TABLE t (j JSON, b INT AS (j->>'$.b'))",
+            "CREATE TABLE t (j LONGTEXT CHECK (json_valid (j)), b INT GENERATED ALWAYS AS (JSON_UNQUOTE (JSON_EXTRACT (j, '$.b'))) VIRTUAL) STRICT",
         ),
         (
             "CREATE UNIQUE INDEX idx USING BTREE ON t (a DESC, b)",
@@ -232,7 +247,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0 COMMENT 'x'",
-            "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0 CHECK (c BETWEEN 0 AND 4294967295)",
+            "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0",
         ),
         (
             "ALTER TABLE t RENAME COLUMN a TO b",
@@ -267,10 +282,6 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
 fn rejects_create_table_shapes_without_a_faithful_lowering() {
     let cases = [
         SqlCase {
-            name: "temporary",
-            sql: "CREATE TEMPORARY TABLE users(id INTEGER)",
-        },
-        SqlCase {
             name: "qualified name",
             sql: "CREATE TABLE app.users(id INTEGER)",
         },
@@ -279,12 +290,8 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users LIKE source_users",
         },
         SqlCase {
-            name: "ctas",
-            sql: "CREATE TABLE users AS SELECT 1",
-        },
-        SqlCase {
-            name: "ctas without as",
-            sql: "CREATE TABLE users SELECT 1",
+            name: "columns and a select",
+            sql: "CREATE TABLE users (id INT) AS SELECT 1",
         },
         SqlCase {
             name: "external",
@@ -327,12 +334,8 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(name VARCHAR(1.5))",
         },
         SqlCase {
-            name: "binary pads values",
-            sql: "CREATE TABLE users(code BINARY(4))",
-        },
-        SqlCase {
-            name: "geometry",
-            sql: "CREATE TABLE users(location POINT)",
+            name: "geometry with a reference system",
+            sql: "CREATE TABLE users(location POINT SRID 4326)",
         },
         SqlCase {
             name: "set with too many members to enumerate",
@@ -695,6 +698,14 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         ("SELECT 7 DIV 2", "SELECT CAST (7 / 2 AS INTEGER)"),
         ("SELECT 7 MOD 2", "SELECT 7 % 2"),
+        (
+            "SELECT -1.5, -.5, -a, - -2, +b, 18446744073709551616",
+            "SELECT CAST ('-1.5' AS DECIMAL (2, 1)), CAST ('-.5' AS DECIMAL (1, 1)), ((a) * - 1), ((- 2) * - 1), b, CAST ('18446744073709551616' AS DECIMAL (20, 0))",
+        ),
+        (
+            "SELECT CAST(a AS DECIMAL), CAST(a AS DECIMAL(5)), CONVERT(a, DECIMAL(0))",
+            "SELECT CAST (a AS DECIMAL (10, 0)), CAST (a AS DECIMAL (5, 0)), CAST (a AS DECIMAL (10, 0))",
+        ),
         ("SELECT a <=> b", "SELECT a IS b"),
         ("SELECT a && b || c", "SELECT a AND b OR c"),
         ("SELECT \"text\"", "SELECT 'text'"),
@@ -877,10 +888,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "regular expression over bytes",
             sql: "SELECT 'a' REGEXP _binary 'a'",
-        },
-        SqlCase {
-            name: "negative rounding",
-            sql: "SELECT ROUND(1234, -2)",
         },
         SqlCase {
             name: "nested row value",

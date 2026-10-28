@@ -177,6 +177,10 @@ impl Dialect for PostgresDialect {
     fn type_rules(&self) -> &'static TypeRules {
         &POSTGRES_TYPE_RULES
     }
+
+    fn marks_rewritten_tables(&self) -> bool {
+        true
+    }
 }
 
 static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
@@ -190,7 +194,8 @@ static POSTGRES_TYPE_RULES: TypeRules = TypeRules {
          OPERATOR '-' (numeric) RETURNS numeric numeric_neg \
          OPERATOR '<' (numeric, numeric) numeric_lt \
          OPERATOR '=' (numeric, numeric) numeric_eq \
-         FUNCTION abs(numeric) RETURNS numeric numeric_abs",
+         FUNCTION abs(numeric) RETURNS numeric numeric_abs \
+         FUNCTION sum(numeric) RETURNS numeric numeric_sum",
     )],
     cast_uses_parameter_defaults: true,
     dialect_types: &[],

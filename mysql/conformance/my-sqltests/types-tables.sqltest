@@ -1,0 +1,871 @@
+# Owned specs for typed MySQL tables: how each column type family converts
+# and checks a value when it is stored (strict mode), integer primary keys
+# and AUTO_INCREMENT, and the CREATE TABLE forms that create typed tables.
+# Every expected value was recorded from MySQL 8.4.10
+# (mysql/conformance/target.toml) in a fresh database per test; error tests
+# note the MySQL error in a comment.
+
+@database :memory:
+
+test integer-columns-read-numbers-in-text {
+    CREATE TABLE t (n INT, i INT);
+    INSERT INTO t VALUES (1, '12'), (2, ' 7 '), (3, '+5'), (4, '1e1'), (5, '1.5e1'), (6, '-0'), (7, '.5'), (8, '5.');
+    SELECT n, i FROM t ORDER BY n;
+}
+expect {
+    1|12
+    2|7
+    3|5
+    4|10
+    5|15
+    6|0
+    7|1
+    8|5
+}
+
+test integer-columns-round-decimals-half-away-from-zero {
+    CREATE TABLE t (n INT, i BIGINT);
+    INSERT INTO t VALUES (1, 1.5), (2, 2.5), (3, -2.5), (4, 1.4), (5, '2.5'), (6, '-3.5'), (7, '2.5e0'), (8, '2.49');
+    SELECT n, i FROM t ORDER BY n;
+}
+expect {
+    1|2
+    2|3
+    3|-3
+    4|1
+    5|3
+    6|-4
+    7|3
+    8|2
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'i' at row 1
+test integer-columns-reject-text-with-trailing-characters {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES ('12abc');
+}
+expect error {
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: 'abc' for column 'i' at row 1
+test integer-columns-reject-text-without-digits {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES ('abc');
+}
+expect error {
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: '' for column 'i' at row 1
+test integer-columns-reject-empty-text {
+    CREATE TABLE t (i SMALLINT);
+    INSERT INTO t VALUES ('');
+}
+expect error {
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: '- 5' for column 'i' at row 1
+test integer-columns-reject-a-sign-without-digits {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES ('- 5');
+}
+expect error {
+}
+
+test integer-columns-end-numbers-at-an-exponent-without-digits {
+    CREATE TABLE t (n INT, i INT);
+    INSERT INTO t VALUES (1, '1e'), (2, '1e+'), (3, '1.5e'), (4, '1E-'), (5, '	12'), (6, '12	');
+    SELECT n, i FROM t ORDER BY n;
+}
+expect {
+    1|1
+    2|1
+    3|2
+    4|1
+    5|12
+    6|12
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: '
+test integer-columns-reject-text-after-a-leading-newline {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES ('
+    12');
+}
+expect error {
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'd' at row 1
+test double-columns-reject-an-exponent-without-digits {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('1e');
+}
+expect error {
+}
+
+test double-columns-skip-a-leading-newline {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('
+    12');
+    SELECT d FROM t;
+}
+expect {
+    12
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test unsigned-columns-reject-negative-decimals {
+    CREATE TABLE t (i INT UNSIGNED);
+    INSERT INTO t VALUES (-0.4);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'u' at row 1
+test bigint-unsigned-rejects-negative-decimals {
+    CREATE TABLE t (u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (-0.4);
+}
+expect error {
+}
+
+test unsigned-columns-take-negative-zero {
+    CREATE TABLE t (i INT UNSIGNED, u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (-0.0, -0.0), ('-0.4', '-0.4');
+    SELECT i, u FROM t;
+}
+expect {
+    0|0
+    0|0
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test integer-columns-reject-text-out-of-range {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES ('2147483648');
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test integer-columns-reject-decimals-that-round-out-of-range {
+    CREATE TABLE t (i INT);
+    INSERT INTO t VALUES (2147483647.5);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test integer-columns-reject-text-beyond-bigint {
+    CREATE TABLE t (i BIGINT);
+    INSERT INTO t VALUES ('9223372036854775808');
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test tinyint-unsigned-rejects-256 {
+    CREATE TABLE t (i TINYINT UNSIGNED);
+    INSERT INTO t VALUES (256);
+}
+expect error {
+}
+
+test integer-display-width-is-accepted {
+    CREATE TABLE t (a INT(11), b TINYINT(1), c BIGINT(20) UNSIGNED, d BOOL);
+    INSERT INTO t VALUES ('5', '1', '7', '0');
+    SELECT a, b, c, d FROM t;
+}
+expect {
+    5|1|7|0
+}
+
+test bigint-unsigned-stores-values-above-the-signed-range {
+    CREATE TABLE t (u BIGINT UNSIGNED);
+    INSERT INTO t VALUES ('18446744073709551615'), ('9223372036854775808'), (5), ('9223372036854775807');
+    SELECT u FROM t ORDER BY u;
+}
+expect {
+    5
+    9223372036854775807
+    9223372036854775808
+    18446744073709551615
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'u' at row 1
+test bigint-unsigned-rejects-negative-values {
+    CREATE TABLE t (u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (-1);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'u' at row 1
+test bigint-unsigned-rejects-values-above-its-range {
+    CREATE TABLE t (u BIGINT UNSIGNED);
+    INSERT INTO t VALUES ('18446744073709551616');
+}
+expect error {
+}
+
+test update-converts-text-into-integer-columns {
+    CREATE TABLE t (id INT PRIMARY KEY, i INT);
+    INSERT INTO t VALUES (1, 1);
+    UPDATE t SET i = '42' WHERE id = 1;
+    SELECT id, i FROM t;
+}
+expect {
+    1|42
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: 'x' for column 'i' at row 1
+test update-rejects-text-without-digits {
+    CREATE TABLE t (id INT PRIMARY KEY, i INT);
+    INSERT INTO t VALUES (1, 1);
+    UPDATE t SET i = 'x' WHERE id = 1;
+}
+expect error {
+}
+
+test insert-select-converts-each-value {
+    CREATE TABLE s (v VARCHAR(10));
+    INSERT INTO s VALUES ('1'), ('2.5'), ('-7');
+    CREATE TABLE t (i INT);
+    INSERT INTO t SELECT v FROM s;
+    SELECT i FROM t ORDER BY i;
+}
+expect {
+    -7
+    1
+    3
+}
+
+test varchar-stores-numbers-as-mysql-prints-them {
+    CREATE TABLE t (n INT, v VARCHAR(30));
+    INSERT INTO t VALUES (1, 12), (2, 1.5), (3, -0.5), (4, 1e20), (5, 123456789012345678e0);
+    SELECT n, v FROM t ORDER BY n;
+}
+expect {
+    1|12
+    2|1.5
+    3|-0.5
+    4|1e20
+    5|1.2345678901234568e17
+}
+
+test varchar-drops-trailing-spaces-beyond-its-length {
+    CREATE TABLE t (n INT, v VARCHAR(3));
+    INSERT INTO t VALUES (1, 'abc   '), (2, 'ab '), (3, 'a  ');
+    SELECT n, concat('[', v, ']') FROM t ORDER BY n;
+}
+expect {
+    1|[abc]
+    2|[ab ]
+    3|[a  ]
+}
+
+test char-removes-trailing-spaces {
+    CREATE TABLE t (n INT, c CHAR(5));
+    INSERT INTO t VALUES (1, 'ab   '), (2, 'abcde   '), (3, ' a');
+    SELECT n, concat('[', c, ']'), char_length(c) FROM t ORDER BY n;
+}
+expect {
+    1|[ab]|2
+    2|[abcde]|5
+    3|[ a]|2
+}
+
+# MySQL: ERROR 1406: Data too long for column 'c' at row 1
+test char-rejects-characters-beyond-its-length {
+    CREATE TABLE t (c CHAR(3));
+    INSERT INTO t VALUES ('ab c');
+}
+expect error {
+}
+
+test varchar-counts-multibyte-characters-once {
+    CREATE TABLE t (v VARCHAR(3), c CHAR(3));
+    INSERT INTO t VALUES ('ééé', 'ñññ');
+    SELECT v, c, length(v), char_length(c) FROM t;
+}
+expect {
+    ééé|ñññ|6|3
+}
+
+# MySQL: ERROR 1406: Data too long for column 't' at row 1
+test text-limits-count-bytes {
+    CREATE TABLE t (t TINYTEXT);
+    INSERT INTO t VALUES (repeat('é', 128));
+}
+expect error {
+}
+
+test text-accepts-its-whole-byte-limit {
+    CREATE TABLE t (t TINYTEXT);
+    INSERT INTO t VALUES (repeat('é', 127)), (repeat('a', 255));
+    SELECT length(t) FROM t ORDER BY 1;
+}
+expect {
+    254
+    255
+}
+
+# MySQL: ERROR 1366: Incorrect string value: '\x98vT2\x10' for column 't' at row 1
+test text-rejects-bytes-that-are-not-utf8 {
+    CREATE TABLE t (t TEXT);
+    INSERT INTO t VALUES (X'9876543210');
+}
+expect error {
+}
+
+test text-columns-store-utf8-bytes-as-text {
+    CREATE TABLE t (v VARCHAR(10), t TEXT);
+    INSERT INTO t VALUES (X'616263', X'C3A9');
+    SELECT v, t FROM t;
+}
+expect {
+    abc|é
+}
+
+# MySQL: ERROR 1406: Data too long for column 'v' at row 1
+test update-rejects-text-longer-than-the-column {
+    CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(2));
+    INSERT INTO t VALUES (1, 'ab');
+    UPDATE t SET v = 'abc';
+}
+expect error {
+}
+
+test binary-pads-with-zero-bytes {
+    CREATE TABLE t (b BINARY(3));
+    INSERT INTO t VALUES ('a'), ('abc'), ('');
+    SELECT hex(b), length(b) FROM t ORDER BY 1;
+}
+expect {
+    000000|3
+    610000|3
+    616263|3
+}
+
+test binary-without-a-length-holds-one-byte {
+    CREATE TABLE t (b BINARY);
+    INSERT INTO t VALUES ('a');
+    SELECT hex(b) FROM t;
+}
+expect {
+    61
+}
+
+# MySQL: ERROR 1406: Data too long for column 'b' at row 1
+test binary-rejects-bytes-beyond-its-length {
+    CREATE TABLE t (b BINARY(2));
+    INSERT INTO t VALUES ('é ');
+}
+expect error {
+}
+
+test varbinary-counts-bytes {
+    CREATE TABLE t (vb VARBINARY(3));
+    INSERT INTO t VALUES ('é'), ('abc');
+    SELECT hex(vb) FROM t ORDER BY 1;
+}
+expect {
+    616263
+    C3A9
+}
+
+# MySQL: ERROR 1406: Data too long for column 'vb' at row 1
+test varbinary-rejects-trailing-spaces-beyond-its-length {
+    CREATE TABLE t (vb VARBINARY(3));
+    INSERT INTO t VALUES ('ab  ');
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'b' at row 1
+test tinyblob-rejects-more-than-255-bytes {
+    CREATE TABLE t (b TINYBLOB);
+    INSERT INTO t VALUES (repeat('a', 256));
+}
+expect error {
+}
+
+test blobs-store-numbers-as-their-text {
+    CREATE TABLE t (n INT, b BLOB);
+    INSERT INTO t VALUES (1, 12), (2, 1.5), (3, 'x');
+    SELECT n, b, hex(b) FROM t ORDER BY n;
+}
+expect {
+    1|12|3132
+    2|1.5|312E35
+    3|x|78
+}
+
+test binary-columns-compare-equal-to-the-same-text {
+    CREATE TABLE t (vb VARBINARY(5), b BLOB, bi BINARY(3));
+    INSERT INTO t VALUES ('abc', 'abc', 'abc');
+    SELECT count(*) FROM t WHERE vb = 'abc' AND b = 'abc' AND bi = 'abc' AND vb LIKE 'a%';
+}
+expect {
+    1
+}
+
+test double-columns-read-numbers-in-text {
+    CREATE TABLE t (n INT, d DOUBLE);
+    INSERT INTO t VALUES (1, '1.5'), (2, ' 2.25 '), (3, '.5e1'), (4, '-1e308'), (5, 7);
+    SELECT n, d FROM t ORDER BY n;
+}
+expect {
+    1|1.5
+    2|2.25
+    3|5
+    4|-1e308
+    5|7
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'd' at row 1
+test double-columns-reject-text-with-trailing-characters {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('1.5x');
+}
+expect error {
+}
+
+# MySQL: ERROR 1265: Data truncated for column 'd' at row 1
+test double-columns-reject-text-without-digits {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('abc');
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'd' at row 1
+test double-columns-reject-text-out-of-range {
+    CREATE TABLE t (d DOUBLE);
+    INSERT INTO t VALUES ('1e309');
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'd' at row 1
+test double-unsigned-rejects-negative-values {
+    CREATE TABLE t (d DOUBLE UNSIGNED);
+    INSERT INTO t VALUES (-1);
+}
+expect error {
+}
+
+test float-unsigned-accepts-zero-and-positive-values {
+    CREATE TABLE t (f FLOAT UNSIGNED, d DOUBLE UNSIGNED);
+    INSERT INTO t VALUES (0, 0), (1.5, 2.5);
+    SELECT f, d FROM t ORDER BY f;
+}
+expect {
+    0|0
+    1.5|2.5
+}
+
+test double-with-digits-rounds-to-its-scale {
+    CREATE TABLE t (n INT, d DOUBLE(6,2));
+    INSERT INTO t VALUES (1, 1.234), (2, -1.236), (3, 9999.99), (4, '12.345');
+    SELECT n, d FROM t ORDER BY n;
+}
+expect {
+    1|1.23
+    2|-1.24
+    3|9999.99
+    4|12.35
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'd' at row 1
+test double-with-digits-rejects-values-above-its-precision {
+    CREATE TABLE t (d DOUBLE(6,2));
+    INSERT INTO t VALUES (10000);
+}
+expect error {
+}
+
+test auto-increment-generates-a-key-for-zero {
+    CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, v INT);
+    INSERT INTO t VALUES (0, 1), (NULL, 2);
+    INSERT INTO t VALUES (10, 3);
+    INSERT INTO t VALUES (0, 4);
+    INSERT INTO t (v) VALUES (5);
+    SELECT id, v FROM t ORDER BY id;
+}
+expect {
+    1|1
+    2|2
+    10|3
+    11|4
+    12|5
+}
+
+test update-can-store-zero-in-an-auto-increment-key {
+    CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, v INT);
+    INSERT INTO t (v) VALUES (1), (2);
+    UPDATE t SET id = 0 WHERE v = 1;
+    SELECT id, v FROM t ORDER BY id;
+}
+expect {
+    0|1
+    2|2
+}
+
+# MySQL: ERROR 1048: Column 'id' cannot be null
+test update-rejects-null-in-an-auto-increment-key {
+    CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, v INT);
+    INSERT INTO t (v) VALUES (1);
+    UPDATE t SET id = NULL;
+}
+expect error {
+}
+
+# MySQL: ERROR 1062: Duplicate entry '127' for key 't.PRIMARY'
+test auto-increment-stops-at-the-largest-value-of-its-type {
+    CREATE TABLE t (id TINYINT AUTO_INCREMENT PRIMARY KEY, v INT);
+    INSERT INTO t VALUES (127, 1);
+    INSERT INTO t (v) VALUES (2);
+}
+expect error {
+}
+
+test bigint-unsigned-auto-increment-key {
+    CREATE TABLE t (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);
+    INSERT INTO t (name) VALUES ('a'), ('b');
+    INSERT INTO t VALUES (0, 'c');
+    SELECT id, name FROM t ORDER BY id;
+}
+expect {
+    1|a
+    2|b
+    3|c
+}
+
+test bigint-unsigned-primary-key-holds-the-whole-range {
+    CREATE TABLE t (id BIGINT UNSIGNED PRIMARY KEY);
+    INSERT INTO t VALUES ('18446744073709551615'), (5);
+    SELECT id FROM t ORDER BY id;
+    SELECT id FROM t WHERE id = '18446744073709551615';
+}
+expect {
+    5
+    18446744073709551615
+    18446744073709551615
+}
+
+test integer-primary-key-converts-text-and-decimals {
+    CREATE TABLE t (id INT PRIMARY KEY, v INT);
+    INSERT INTO t VALUES ('7', 1), (8.5, 2), (-2, 3);
+    SELECT id, v FROM t ORDER BY id;
+}
+expect {
+    -2|3
+    7|1
+    9|2
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'id' at row 1
+test integer-primary-key-rejects-out-of-range-values {
+    CREATE TABLE t (id INT PRIMARY KEY, v INT);
+    INSERT INTO t VALUES (2147483648, 1);
+}
+expect error {
+}
+
+# MySQL: ERROR 1366: Incorrect integer value: 'x' for column 'id' at row 1
+test integer-primary-key-rejects-text-without-digits {
+    CREATE TABLE t (id INT PRIMARY KEY);
+    INSERT INTO t VALUES ('x');
+}
+expect error {
+}
+
+# MySQL: ERROR 1062: Duplicate entry '1' for key 't.PRIMARY'
+test integer-primary-key-rejects-duplicates {
+    CREATE TABLE t (id SMALLINT PRIMARY KEY);
+    INSERT INTO t VALUES (1), ('1');
+}
+expect error {
+}
+
+test rows-are-read-in-primary-key-order {
+    CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(5));
+    INSERT INTO t VALUES (3, 'c'), (1, 'a'), (2, 'b');
+    SELECT id, v FROM t;
+}
+expect {
+    1|a
+    2|b
+    3|c
+}
+
+test table-level-primary-key-orders-rows {
+    CREATE TABLE t (v VARCHAR(5), id BIGINT NOT NULL, PRIMARY KEY (id));
+    INSERT INTO t VALUES ('c', 30), ('a', 10), ('b', 20);
+    SELECT id, v FROM t;
+}
+expect {
+    10|a
+    20|b
+    30|c
+}
+
+test create-table-as-select-copies-columns-and-rows {
+    CREATE TABLE s (i INT, v VARCHAR(10));
+    INSERT INTO s VALUES (2, 'two'), (1, 'one');
+    CREATE TABLE t AS SELECT i, v FROM s;
+    SELECT i, v FROM t ORDER BY i;
+}
+expect {
+    1|one
+    2|two
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'i' at row 1
+test create-table-as-select-keeps-column-rules {
+    CREATE TABLE s (i TINYINT);
+    INSERT INTO s VALUES (1);
+    CREATE TABLE t AS SELECT i FROM s;
+    INSERT INTO t VALUES (128);
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'l' at row 1
+test create-table-as-select-keeps-bit-widths {
+    CREATE TABLE s (l BIT(3));
+    INSERT INTO s VALUES (5);
+    CREATE TABLE t AS SELECT l FROM s;
+    INSERT INTO t VALUES (8);
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'l' at row 1
+test bit-columns-reject-values-above-their-width {
+    CREATE TABLE t (l BIT(3));
+    INSERT INTO t VALUES (8);
+}
+expect error {
+}
+
+# MySQL: ERROR 1406: Data too long for column 'l' at row 1
+test bit-columns-reject-negative-values {
+    CREATE TABLE t (l BIT(3));
+    INSERT INTO t VALUES (-1);
+}
+expect error {
+}
+
+test create-table-select-without-as {
+    CREATE TABLE s (i INT);
+    INSERT INTO s VALUES (1), (2);
+    CREATE TABLE t SELECT i FROM s WHERE i > 1;
+    SELECT i FROM t;
+}
+expect {
+    2
+}
+
+test create-table-as-select-stores-text-and-sums {
+    CREATE TABLE s (k VARCHAR(10), i INT);
+    INSERT INTO s VALUES ('a', 1), ('a', 2), ('b', 3);
+    CREATE TABLE t AS SELECT k, SUM(i) AS total, CONCAT('new', k) AS label FROM s GROUP BY k;
+    SELECT k, total, label FROM t ORDER BY k;
+}
+expect {
+    a|3|newa
+    b|3|newb
+}
+
+test temporary-tables-have-column-types {
+    CREATE TEMPORARY TABLE t (id INT PRIMARY KEY, v VARCHAR(3));
+    INSERT INTO t VALUES ('2', 'ab'), (1, 'a');
+    SELECT id, v FROM t;
+}
+expect {
+    1|a
+    2|ab
+}
+
+# MySQL: ERROR 1406: Data too long for column 'v' at row 1
+test temporary-tables-check-column-types {
+    CREATE TEMPORARY TABLE t (v VARCHAR(3));
+    INSERT INTO t VALUES ('abcd');
+}
+expect error {
+}
+
+# MySQL: ERROR 1064: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'STRICT' at line 1
+test create-table-with-a-sqlite-table-option-fails {
+    CREATE TABLE t (a INT) STRICT;
+}
+expect error {
+}
+
+# MySQL: ERROR 1064: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ANY)' at line 1
+test create-table-with-a-sqlite-only-column-type-fails {
+    CREATE TABLE t (a INT, b ANY);
+}
+expect error {
+}
+
+test added-columns-keep-their-type-rules {
+    CREATE TABLE t (id INT PRIMARY KEY, a TINYINT);
+    ALTER TABLE t ADD COLUMN v VARCHAR(2);
+    INSERT INTO t VALUES (1, '5', 'ab');
+    SELECT id, a, v FROM t;
+}
+expect {
+    1|5|ab
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'a' at row 1
+test altered-tables-keep-the-rules-of-old-columns {
+    CREATE TABLE t (id INT PRIMARY KEY, a TINYINT);
+    ALTER TABLE t ADD COLUMN v VARCHAR(2);
+    INSERT INTO t VALUES (1, 128, 'ab');
+}
+expect error {
+}
+
+test renamed-tables-keep-integer-keys {
+    CREATE TABLE t (id INT PRIMARY KEY, v INT);
+    INSERT INTO t VALUES (2, 20), (1, 10);
+    RENAME TABLE t TO u;
+    INSERT INTO u VALUES ('3', 30);
+    SELECT id, v FROM u;
+}
+expect {
+    1|10
+    2|20
+    3|30
+}
+
+test generated-columns-convert-json-values {
+    CREATE TABLE t (a INT PRIMARY KEY, j JSON, b INT GENERATED ALWAYS AS (j->'$.b') VIRTUAL);
+    INSERT INTO t (a, j) VALUES (1, '\{"a": 1, "b": 2\}'), (2, '\{"a": 1\}'), (3, '\{"b": 300\}');
+    SELECT a, b FROM t ORDER BY a;
+}
+expect {
+    1|2
+    2|NULL
+    3|300
+}
+
+test generated-columns-can-unquote-json {
+    CREATE TABLE t (j JSON, name VARCHAR(10) AS (j->>'$.name'));
+    INSERT INTO t (j) VALUES ('\{"name": "ada"\}');
+    SELECT name FROM t;
+}
+expect {
+    ada
+}
+
+test spatial-columns-hold-null {
+    CREATE TABLE g (pk INT NOT NULL PRIMARY KEY, v1 GEOMETRY DEFAULT NULL, v2 LINESTRING DEFAULT NULL, v3 POINT DEFAULT NULL, v4 POLYGON DEFAULT NULL);
+    INSERT INTO g (pk) VALUES (0);
+    SELECT * FROM g;
+}
+expect {
+    0|NULL|NULL|NULL|NULL
+}
+
+# MySQL: ERROR 1416: Cannot get geometry object from data you send to the GEOMETRY field
+test spatial-columns-reject-values-that-are-not-geometries {
+    CREATE TABLE g (p POINT);
+    INSERT INTO g VALUES ('abc');
+}
+expect error {
+}
+
+test decimal-columns-compare-as-numbers {
+    CREATE TABLE t (d DECIMAL(10,2));
+    INSERT INTO t VALUES (1.5), ('2'), (10);
+    SELECT count(*) FROM t WHERE d > 1.9 AND d < 11;
+}
+expect {
+    2
+}
+
+test decimal-columns-keep-large-integers-exact {
+    CREATE TABLE t (d DECIMAL(20,0));
+    INSERT INTO t VALUES (9007199254740993), (1000000000000000), ('9007199254740995');
+    SELECT d, d + 1 FROM t ORDER BY d;
+    SELECT count(*) FROM t WHERE d = 9007199254740993;
+}
+expect {
+    1000000000000000|1000000000000001
+    9007199254740993|9007199254740994
+    9007199254740995|9007199254740996
+    1
+}
+
+test date-columns-keep-their-text {
+    CREATE TABLE t (d DATE, dt DATETIME, ts TIMESTAMP, tm TIME, y YEAR);
+    INSERT INTO t VALUES ('2024-05-01', '2024-05-01 10:30:00', '2024-05-01 10:30:00', '10:30:00', 2024);
+    SELECT d, dt, ts, tm, y FROM t;
+}
+expect {
+    2024-05-01|2024-05-01 10:30:00|2024-05-01 10:30:00|10:30:00|2024
+}
+
+test enum-and-set-columns-keep-their-members {
+    CREATE TABLE t (e ENUM('small', 'large'), s SET('a', 'b'));
+    INSERT INTO t VALUES ('large', 'a,b');
+    SELECT e, s FROM t;
+}
+expect {
+    large|a,b
+}
+
+test columns-compare-with-text-literals {
+    CREATE TABLE t (i INT, d DOUBLE, u BIGINT UNSIGNED, v VARCHAR(5), b BLOB, dt DATE, e ENUM('small', 'large'));
+    INSERT INTO t VALUES (1, 2.5, 5, '5', 'abc', '2024-01-01', 'small');
+    SELECT i = '1', i IN ('1', 'x'), d = '2.5', u = '5', v = 5, b = 'abc', dt = '2024-01-01', e = 'small' FROM t;
+}
+expect {
+    1|1|1|1|1|1|1|1
+}
+
+test integer-columns-compare-with-text-on-either-side {
+    CREATE TABLE t (i INT, s TINYINT, y YEAR, u BIGINT UNSIGNED, v VARCHAR(30));
+    INSERT INTO t VALUES (9, 9, 2009, 9, '9');
+    SELECT '9' = i, '8' > i, '9' <=> i, '9.5' = i, i = '9', '-1' < s, '2009' = y FROM t;
+    SELECT v = u, u = v, u = '9.0', u = '', u = '1e1', u = '9x', '9.0' = u, '9x' = u FROM t;
+    SELECT count(*) FROM t WHERE '9' = i;
+}
+expect {
+    1|0|1|0|1|1|1
+    1|1|1|0|0|1|1|1
+    1
+}
+
+test bigint-unsigned-compares-with-literals-above-the-signed-range {
+    CREATE TABLE t (id INT, u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (1, '18446744073709551615'), (2, 9);
+    SELECT id FROM t WHERE u = 18446744073709551615;
+    SELECT id FROM t WHERE u = '18446744073709551615';
+}
+expect {
+    1
+    1
+}
+
+test integer-columns-sort-and-group-as-numbers {
+    CREATE TABLE t (i TINYINT, u BIGINT UNSIGNED);
+    INSERT INTO t VALUES (10, '18446744073709551615'), (9, '9223372036854775808'), (-1, 2), (10, 2);
+    SELECT i, count(*) FROM t GROUP BY i ORDER BY i DESC;
+    SELECT u FROM t ORDER BY u;
+    SELECT max(u), min(u), max(i), min(i) FROM t;
+}
+expect {
+    10|2
+    9|1
+    -1|1
+    2
+    2
+    9223372036854775808
+    18446744073709551615
+    18446744073709551615|2|10|-1
+}

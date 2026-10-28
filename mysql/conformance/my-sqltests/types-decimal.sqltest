@@ -1,0 +1,406 @@
+# Owned specs for exact DECIMAL values: literal types, the scale of
+# arithmetic results, division with MySQL's hidden digits, comparisons,
+# CAST AS DECIMAL, DECIMAL columns, and functions that read decimals. Every
+# expected value was recorded from MySQL 8.4.10
+# (mysql/conformance/target.toml) in a fresh database per test; error tests
+# note the MySQL error in a comment.
+
+@database :memory:
+
+test decimal-literals-keep-their-digits {
+    SELECT 1.50, .5, 5., 0.0, 00.10, 3.14159265358979323846264338327950288419716939937510;
+}
+expect {
+    1.50|0.5|5|0.0|0.10|3.14159265358979323846264338327950288419716939937510
+}
+
+test integer-literals-above-bigint-unsigned-are-decimals {
+    SELECT 18446744073709551616, -18446744073709551616, 99999999999999999999999999999 + 1, 18446744073709551616 / 2;
+}
+expect {
+    18446744073709551616|-18446744073709551616|100000000000000000000000000000|9223372036854775808.0000
+}
+
+test addition-and-subtraction-keep-the-larger-scale {
+    SELECT 1.5 + 2.25, 1.50 - 2, 1 + 0.000, 2.5 - 2.5, 1 + 1.5 + 1, 0.1 + 0.2;
+}
+expect {
+    3.75|-0.50|1.000|0.0|3.5|0.3
+}
+
+test multiplication-adds-the-scales {
+    SELECT 1.5 * 1.25, 0 * 1.0, 2 * 0.50, 1.10 * 1.10, -0.04 * 1;
+}
+expect {
+    1.875|0.0|1.00|1.2100|-0.04
+}
+
+test multiplication-shows-at-most-30-decimals {
+    SELECT 1.0000000000000000000000000000000000000001 * 3, 0.0000000000000001 * 0.0000000000000001;
+}
+expect {
+    3.000000000000000000000000000000|0.000000000000000000000000000000
+}
+
+test division-adds-four-decimals-to-the-dividend {
+    SELECT 2/4, 13/1.0, 1/3, 4/3/1, 7/2, 1.5/0.3, 10/4.0, -7/2;
+}
+expect {
+    0.5000|13.0000|0.3333|1.33333333|3.5000|5.00000|2.5000|-3.5000
+}
+
+test division-keeps-hidden-digits {
+    SELECT 64/77*77, 10/3*3, (10/3)/3, 1/3/3/3/3, 2/3 = 0.666666666, 2/3 = 0.6667, CAST(2/3 AS DECIMAL(30,20)), 1.000000001/3*1000000000000000000;
+}
+expect {
+    64.0000|10.0000|1.11111111|0.0123456790000000|1|0|0.66666666600000000000|333333333666666666.0000000000000
+}
+
+test division-by-zero-is-null {
+    SELECT 1/0, 1.5/0, 1/0.0, 0/0, 1.5 % 0;
+}
+expect {
+    NULL|NULL|NULL|NULL|NULL
+}
+
+test doubles-and-strings-make-double-results {
+    SELECT 1/2e0, 1.5 + 1e0, 0.1 + 0.2e0, '7'/2, 7/'2', '1.5' + 1.50, 1.5 * '2abc';
+}
+expect {
+    0.5|2.5|0.30000000000000004|3.5|3.5|3|3
+}
+
+test unary-minus-keeps-the-scale-without-negative-zero {
+    SELECT -1.5, -0.0, -(-1.50), - 0.00, -1.5/7, -(1/3);
+}
+expect {
+    -1.5|0.0|1.50|0.00|-0.21429|-0.3333
+}
+
+test unary-plus-changes-nothing {
+    SELECT +1.5, +1.50 / 3, + - 2.5;
+}
+expect {
+    1.5|0.500000|-2.5
+}
+
+test remainder-keeps-the-larger-scale {
+    SELECT 5.5 % 2, -5.5 % 2, 5 % 1.5, 7.25 % 0.5;
+}
+expect {
+    1.5|-1.5|0.5|0.25
+}
+
+test integers-and-decimals-compare-exactly {
+    SELECT 9223372036854775807 = 9223372036854775807.0, 5 = 5.0000000000000001, 5 < 5.0000000000000001, 1 = 1.0, 2 > 1.99, 1.5 = 1.50, 1.5 <> 1.49;
+}
+expect {
+    1|0|1|1|1|1|1
+}
+
+test decimals-compare-with-strings-and-doubles-as-doubles {
+    SELECT 1.5 = '1.5', 1.5 = '1.5abc', 'abc' = 0.0, 1.5 < 'abc', 1.5 = 1.5e0, 0.1 + 0.2 = 0.3, 0.1e0 + 0.2e0 = 0.3;
+}
+expect {
+    1|1|1|0|1|1|0
+}
+
+test decimals-in-lists-and-ranges {
+    SELECT 1.5 IN (1.50, 2), 2 IN (1.5, 2.0), 3 IN (1.5, 2.5), 1.5 BETWEEN 1 AND 2, 2.5 NOT BETWEEN 2.4 AND 2.6;
+}
+expect {
+    1|1|0|1|0
+}
+
+test cast-as-decimal-rounds-half-away-from-zero {
+    SELECT CAST(1.005 AS DECIMAL(5,2)), CAST(-1.005 AS DECIMAL(5,2)), CAST(2.5 AS DECIMAL), CAST(-2.5 AS DECIMAL), CAST(0.125e0 AS DECIMAL(5,2)), CAST('1.235' AS DECIMAL(5,2)), CAST(1 AS DECIMAL(5,2)), CAST(12.345 AS DECIMAL(4)), CONVERT(1.25, DECIMAL(3,1));
+}
+expect {
+    1.01|-1.01|3|-3|0.13|1.24|1.00|12|1.3
+}
+
+test cast-as-decimal-clamps-to-the-largest-value {
+    SELECT CAST(1000 AS DECIMAL(3,1)), CAST(-1000 AS DECIMAL(3,1)), CAST(1e100 AS DECIMAL(5,2)), CAST(99.95 AS DECIMAL(3,1)), CAST('12345' AS DECIMAL(4,2));
+}
+expect {
+    99.9|-99.9|999.99|99.9|99.99
+}
+
+test cast-as-decimal-reads-the-number-at-the-start-of-text {
+    SELECT CAST('1.5abc' AS DECIMAL(5,2)), CAST('abc' AS DECIMAL(5,2)), CAST('' AS DECIMAL(5,2)), CAST(' 12.5 ' AS DECIMAL(5,2)), CAST('1e2' AS DECIMAL(5,2)), CAST('-0' AS DECIMAL(3,1)), CAST(-0.04 AS DECIMAL(2,1));
+}
+expect {
+    1.50|0.00|0.00|12.50|100.00|0.0|0.0
+}
+
+test cast-as-decimal-keeps-long-values {
+    SELECT CAST(3.14159265358979323846264338327950288419716939937510 AS DECIMAL(30,24)), CAST(31415926535897932384.6264338327950288419716939937510582097494459 AS DECIMAL(62, 30)), CAST(0.1e0 AS DECIMAL(30,25)), CAST(1/3e0 AS DECIMAL(30,25)), CAST(NULL AS DECIMAL);
+}
+expect {
+    3.141592653589793238462643|31415926535897932384.626433832795028841971693993751|0.1000000000000000000000000|0.3333333333333333000000000|NULL
+}
+
+test decimal-columns-round-half-away-from-zero-to-their-scale {
+    CREATE TABLE t (n INT, d DECIMAL(5,2));
+    INSERT INTO t VALUES (1, 1.005), (2, '2.345'), (3, -1.005), (4, 999.994), (5, '1e2'), (6, 1.5e0), (7, ' 3.5 '), (8, -0.001), (9, 0.125e0), (10, 7);
+    SELECT n, d FROM t ORDER BY n;
+}
+expect {
+    1|1.01
+    2|2.35
+    3|-1.01
+    4|999.99
+    5|100.00
+    6|1.50
+    7|3.50
+    8|0.00
+    9|0.13
+    10|7.00
+}
+
+test decimal-column-types-and-their-defaults {
+    CREATE TABLE t (n INT, a DECIMAL, b NUMERIC(4), c DEC(6,3), d FIXED(5,1), e DECIMAL(4,2) DEFAULT 1.5, f DECIMAL(4,2) DEFAULT -2);
+    INSERT INTO t (n, a, b, c, d) VALUES (1, 1.5, 2.5, 3.14159, -4.25);
+    SELECT n, a, b, c, d, e, f FROM t;
+}
+expect {
+    1|2|3|3.142|-4.3|1.50|-2.00
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'd' at row 1
+test decimal-columns-reject-too-many-whole-digits {
+    CREATE TABLE t (d DECIMAL(5,2));
+    INSERT INTO t VALUES (999.995);
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'd' at row 1
+test decimal-columns-default-to-ten-whole-digits {
+    CREATE TABLE t (d DECIMAL);
+    INSERT INTO t VALUES (12345678901.4);
+}
+expect error {
+}
+
+# MySQL: ERROR 1366: Incorrect decimal value: '1.5abc' for column 'd' at row 1
+test decimal-columns-reject-text-with-trailing-characters {
+    CREATE TABLE t (d DECIMAL(5,2));
+    INSERT INTO t VALUES ('1.5abc');
+}
+expect error {
+}
+
+# MySQL: ERROR 1366: Incorrect decimal value: 'abc' for column 'd' at row 1
+test decimal-columns-reject-text-without-digits {
+    CREATE TABLE t (d DECIMAL(5,2));
+    INSERT INTO t VALUES ('abc');
+}
+expect error {
+}
+
+# MySQL: ERROR 1264: Out of range value for column 'd' at row 1
+test unsigned-decimal-columns-reject-negative-values {
+    CREATE TABLE t (d DECIMAL(5,2) UNSIGNED);
+    INSERT INTO t VALUES (-0.001);
+}
+expect error {
+}
+
+test unsigned-decimal-columns-compute-like-decimals {
+    CREATE TABLE t (u DECIMAL(5,2) UNSIGNED, d DECIMAL(5,1));
+    INSERT INTO t VALUES (1.5, 2.5), (0, 0);
+    SELECT u, u + d, u - d, u * 2, u / 3, u = 1.5, u < d, -u FROM t ORDER BY u;
+}
+expect {
+    0.00|0.00|0.00|0.00|0.000000|0|0|0.00
+    1.50|4.00|-1.00|3.00|0.500000|1|1|-1.50
+}
+
+test decimal-columns-keep-their-scale-in-arithmetic {
+    CREATE TABLE t (a DECIMAL(10,2), b DECIMAL(10,3), i INT);
+    INSERT INTO t VALUES (1.5, 2.25, 3), (-1, 0.001, 7);
+    SELECT a, b, a + b, a * b, a / b, a / i, i / a, a - i, -a, a + 1e0, a * 1.5 FROM t ORDER BY i;
+}
+expect {
+    1.50|2.250|3.750|3.37500|0.666667|0.500000|2.0000|-1.50|-1.50|2.5|2.250
+    -1.00|0.001|-0.999|-0.00100|-1000.000000|-0.142857|-7.0000|-8.00|1.00|0|-1.500
+}
+
+test decimal-columns-compare-with-other-columns {
+    CREATE TABLE t (d DECIMAL(10,2), i INT, f DOUBLE, v VARCHAR(10));
+    INSERT INTO t VALUES (2.00, 2, 2.0, '2'), (2.50, 2, 2.5, '2.5'), (-1.25, -1, -1.25, 'x');
+    SELECT d, d = i, d > i, d = f, d < f, i < d FROM t ORDER BY d;
+}
+expect {
+    -1.25|0|0|1|0|0
+    2.00|1|0|1|0|0
+    2.50|0|1|1|0|1
+}
+
+test decimal-values-sort-group-and-remove-duplicates-by-value {
+    CREATE TABLE t (d DECIMAL(10,2), n INT);
+    INSERT INTO t VALUES (10, 1), (9.5, 2), (-1, 3), (9.50, 4), (100, 5), (NULL, 6);
+    SELECT d FROM t ORDER BY d;
+    SELECT d, COUNT(*) FROM t GROUP BY d ORDER BY d DESC;
+    SELECT DISTINCT d FROM t ORDER BY d;
+    SELECT MIN(d), MAX(d) FROM t;
+}
+expect {
+    NULL
+    -1.00
+    9.50
+    9.50
+    10.00
+    100.00
+    100.00|1
+    10.00|1
+    9.50|2
+    -1.00|1
+    NULL|1
+    NULL
+    -1.00
+    9.50
+    10.00
+    100.00
+    -1.00|100.00
+}
+
+test decimal-index-lookups-match-a-scan {
+    CREATE TABLE t (id INT PRIMARY KEY, d DECIMAL(10,2), KEY (d));
+    INSERT INTO t VALUES (1, 1.5), (2, 1.50), (3, 2), (4, -3.25), (5, 1.505);
+    SELECT id FROM t WHERE d = 1.5 ORDER BY id;
+    SELECT id FROM t WHERE d = 1.51 ORDER BY id;
+    SELECT id FROM t WHERE d BETWEEN 1 AND 2 ORDER BY id;
+    SELECT id FROM t WHERE d < 0 ORDER BY id;
+}
+expect {
+    1
+    2
+    5
+    1
+    2
+    3
+    5
+    4
+}
+
+test double-columns-compare-with-decimal-literals {
+    CREATE TABLE t (id INT PRIMARY KEY, f FLOAT, g DOUBLE, KEY (f), KEY (g));
+    INSERT INTO t VALUES (1, 1.5, 61.39), (2, 7.25, 61.4), (3, 99.75, 61.41);
+    SELECT id FROM t WHERE f > 7.24 ORDER BY id;
+    SELECT id FROM t WHERE g = 61.4 ORDER BY id;
+    SELECT id FROM t WHERE g BETWEEN 61.395 AND 61.405 ORDER BY id;
+    SELECT id FROM t WHERE f IN (1.5, 99.75) ORDER BY id;
+}
+expect {
+    2
+    3
+    2
+    2
+    1
+    3
+}
+
+test division-of-integer-columns {
+    CREATE TABLE t (a INT, b INT);
+    INSERT INTO t VALUES (7, 2), (1, 3), (64, 77), (5, 0), (NULL, 1);
+    SELECT a / b, a / b * b, a DIV b, a / b > 2 FROM t ORDER BY a;
+}
+expect {
+    NULL|NULL|NULL|NULL
+    0.3333|1.0000|0|0
+    NULL|NULL|NULL|NULL
+    3.5000|7.0000|3|1
+    0.8312|64.0000|0|0
+}
+
+test subqueries-and-derived-tables-keep-decimal-types {
+    SELECT (SELECT 1.5) + 1, x * 2, x > 1 FROM (SELECT 1.50 AS x) s;
+}
+expect {
+    2.5|3.00|1
+}
+
+test coalesce-keeps-the-type-of-one-decimal {
+    SELECT COALESCE(NULL, 1/3), IFNULL(NULL, 1.50), NULLIF(1.50, 2), COALESCE(NULL, 2.5) * 2;
+}
+expect {
+    0.3333|1.50|1.50|5.0
+}
+
+test round-and-truncate-of-decimals-are-exact {
+    SELECT ROUND(1.555, 2), ROUND(-1.555, 2), ROUND(2.5), ROUND(-2.5), ROUND(1.5, 0), TRUNCATE(1.999, 2), TRUNCATE(-1.999, 1), TRUNCATE(1.0, 1), ROUND(1234.5678, -2), TRUNCATE(1234.5678, -2), ROUND(1.5, 5), ROUND(64/77*77, 2), ROUND(2.5e0);
+}
+expect {
+    1.56|-1.56|3|-3|2|1.99|-1.9|1.0|1200|1200|1.5|64.00|2
+}
+
+test abs-sign-floor-ceiling-and-mod-of-decimals {
+    SELECT ABS(-1.50), SIGN(-0.5), SIGN(0.0), FLOOR(-1.5), CEILING(1.01), CEIL(-1.01), FLOOR(1.5) + 0, MOD(5.5, 2), MOD(-5.5, 2), MOD(5, 1.5), MOD(1.5, 0), FLOOR(12345678901234567890.5);
+}
+expect {
+    1.50|-1|0|-2|2|-1|1|1.5|-1.5|0.5|NULL|12345678901234567890
+}
+
+test rounded-decimals-compare-as-numbers {
+    SELECT ROUND(1.555, 2) > 1, ABS(-2.5) < 10, FLOOR(9.5) = 9, MOD(5.5, 2) = 1.5;
+}
+expect {
+    1|1|1|1
+}
+
+test functions-that-do-not-read-decimals-get-them-as-numbers {
+    SELECT POW(1.5, 2), SQRT(2.25), EXP(0.0), LOCATE('b', 'abc', 1.5), SUBSTRING('abcdef', 2.4), REPEAT('a', 2.4);
+}
+expect {
+    2.25|1.5|1|2|bcdef|aa
+}
+
+test string-functions-read-decimals-as-mysql-shows-them {
+    SELECT CONCAT(1.50, 'x'), CONCAT(1/3), LENGTH(1.50), CONCAT_WS(',', 0.0, -0.5), REPLACE(1.50, '0', 'x'), UPPER(1.50), LOCATE('5', 1.50), INSTR(2.50, '0'), CHAR_LENGTH(-0.0), FIND_IN_SET(1.50, '1.5,1.50'), INSERT(1.50, 1, 1, 'x'), STRCMP(1.50, '1.50');
+}
+expect {
+    1.50x|0.3333|4|0.0,-0.5|1.5x|1.50|3|4|3|2|x.50|0
+}
+
+test string-functions-round-decimal-counts-half-away-from-zero {
+    SELECT LEFT('abcdef', 2.5), SUBSTRING('abcdef', 2.5), REPEAT('a', 2.5), LPAD('x', 2.5, '0'), ELT(1.5, 'a', 'b'), HEX(1.5), SUBSTRING_INDEX(1.2345, '3', 1), LOCATE('b', 'abcb', 2.5);
+}
+expect {
+    abc|cdef|aaa|00x|b|2|1.2|4
+}
+
+test round-and-truncate-to-tens {
+    SELECT ROUND(1250, -2), ROUND(-1250, -2), ROUND(1234.5678e0, -2), TRUNCATE(1299, -2), ROUND(15e0, -1), ROUND(-0.5, -1);
+}
+expect {
+    1300|-1300|1200|1200|20|0
+}
+
+test sum-and-avg-of-integer-and-decimal-columns-are-exact {
+    CREATE TABLE t (i INT, d DECIMAL(10,2), b BIGINT, f DOUBLE);
+    INSERT INTO t VALUES (1, 1.50, 10, 0.5), (2, 2.25, 20, 1.5), (4, NULL, 30, 2);
+    SELECT SUM(i), AVG(i), SUM(d), AVG(d), SUM(b), AVG(b), SUM(f), AVG(f), AVG(i) * 2, SUM(DISTINCT i), SUM(i) / 3 FROM t;
+    SELECT SUM(i), AVG(d) FROM t WHERE i > 10;
+    SELECT i, SUM(d) OVER (ORDER BY i) FROM t ORDER BY i;
+}
+expect {
+    7|2.3333|3.75|1.875000|60|20.0000|4|1.3333333333333333|4.6667|7|2.3333
+    NULL|NULL
+    1|1.50
+    2|3.75
+    4|3.75
+}
+
+test grouped-averages-are-decimals {
+    CREATE TABLE t (g INT, i INT, d DECIMAL(5,1));
+    INSERT INTO t VALUES (1, 1, 0.5), (1, 2, 1.0), (2, 7, 2.5), (2, 8, NULL), (2, 9, 3.5);
+    SELECT g, SUM(i), AVG(i), SUM(d), AVG(d), COUNT(d) FROM t GROUP BY g ORDER BY g;
+    SELECT g FROM t GROUP BY g HAVING AVG(i) > 1.5 ORDER BY g;
+}
+expect {
+    1|3|1.5000|1.5|0.75000|2
+    2|24|8.0000|6.0|3.00000|2
+    2
+}

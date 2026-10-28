@@ -910,7 +910,9 @@ fn bootstrap_builtin_types(
         } else {
             format!("{} {behaviour}", builtin.storage)
         };
-        register_type_sql(registry, sql)?;
+        let mut type_def = parse_type_sql(sql)?;
+        type_def.storage = builtin.stored_as;
+        registry.insert(type_registry_key(&type_def.name), Arc::new(type_def));
     }
 
     // Register aliases
@@ -939,15 +941,6 @@ fn bootstrap_dialect_types(
     Ok(())
 }
 
-fn register_type_sql(
-    registry: &mut HashMap<String, Arc<TypeDef>>,
-    sql: String,
-) -> crate::Result<()> {
-    let type_def = parse_type_sql(sql)?;
-    registry.insert(type_registry_key(&type_def.name), Arc::new(type_def));
-    Ok(())
-}
-
 fn parse_type_sql(sql: String) -> crate::Result<TypeDef> {
     use turso_parser::ast::{Cmd, Stmt};
     use turso_parser::parser::Parser;
@@ -968,6 +961,7 @@ fn parse_type_sql(sql: String) -> crate::Result<TypeDef> {
 struct BuiltinType {
     name: &'static str,
     storage: &'static str,
+    stored_as: Option<crate::dialect::StorageType>,
     behaviour: &'static str,
 }
 
@@ -976,33 +970,39 @@ const BUILTIN_TYPES: &[BuiltinType] = &[
     BuiltinType {
         name: "uuid",
         storage: "CREATE TYPE uuid(value any) BASE blob ENCODE CASE WHEN value IS NULL THEN NULL WHEN typeof(value) = 'blob' AND length(value) = 16 THEN value ELSE coalesce(uuid_blob(value), RAISE(ABORT, 'invalid UUID value')) END DECODE uuid_str(value)",
+        stored_as: None,
         behaviour: "OPERATOR '<' (uuid, uuid) OPERATOR '=' (uuid, uuid)",
     },
     BuiltinType {
         name: "boolean",
         storage: "CREATE TYPE boolean(value any) BASE integer ENCODE boolean_to_int(value) DECODE CASE WHEN value THEN 1 ELSE 0 END",
+        stored_as: None,
         behaviour: "OPERATOR '<' (boolean, boolean) OPERATOR '=' (boolean, boolean)",
     },
     #[cfg(feature = "json")]
     BuiltinType {
         name: "json",
         storage: "CREATE TYPE json(value text) BASE text ENCODE json(value) DECODE value",
+        stored_as: None,
         behaviour: "",
     },
     #[cfg(feature = "json")]
     BuiltinType {
         name: "jsonb",
         storage: "CREATE TYPE jsonb(value text) BASE blob ENCODE jsonb(value) DECODE json(value)",
+        stored_as: None,
         behaviour: "",
     },
     BuiltinType {
         name: "varchar",
         storage: "CREATE TYPE varchar(value text, maxlen integer DEFAULT NULL) BASE text ENCODE CASE WHEN maxlen IS NULL OR length(value) <= maxlen THEN value ELSE RAISE(ABORT, 'value too long for varchar') END DECODE value",
+        stored_as: None,
         behaviour: "OPERATOR '<' (varchar, varchar) OPERATOR '=' (varchar, varchar)",
     },
     BuiltinType {
         name: "date",
         storage: "CREATE TYPE date(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN date(value) IS NULL THEN RAISE(ABORT, 'invalid date value') ELSE date(value) END DECODE value",
+        stored_as: None,
         behaviour: "OPERATOR '+' date_plus OPERATOR '-' date_minus OPERATOR '<' (date, date) OPERATOR '=' (date, date)",
     },
     // ENCODE preserves sub-second precision through strftime + a rtrim pair
@@ -1016,57 +1016,68 @@ const BUILTIN_TYPES: &[BuiltinType] = &[
     BuiltinType {
         name: "time",
         storage: "CREATE TYPE time(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN time(value) IS NULL THEN RAISE(ABORT, 'invalid time value') ELSE rtrim(rtrim(strftime('%H:%M:%f', value), '0'), '.') END DECODE value",
+        stored_as: None,
         behaviour: "OPERATOR '<' (time, time) OPERATOR '=' (time, time)",
     },
     BuiltinType {
         name: "timestamp",
         storage: "CREATE TYPE timestamp(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN datetime(value) IS NULL THEN RAISE(ABORT, 'invalid timestamp value') ELSE rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', value), '0'), '.') END DECODE value",
+        stored_as: None,
         behaviour: "OPERATOR '<' (timestamp, timestamp) OPERATOR '=' (timestamp, timestamp)",
     },
     BuiltinType {
         name: "timestamptz",
         storage: "CREATE TYPE timestamptz(value text) BASE text ENCODE CASE WHEN value IS NULL THEN NULL WHEN datetime(value) IS NULL THEN RAISE(ABORT, 'invalid timestamp value') ELSE rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', value), '0'), '.') END DECODE value",
+        stored_as: None,
         behaviour: "OPERATOR '<' (timestamptz, timestamptz) OPERATOR '=' (timestamptz, timestamptz)",
     },
     BuiltinType {
         name: "smallint",
         storage: "CREATE TYPE smallint(value integer) BASE integer ENCODE CASE WHEN value BETWEEN -32768 AND 32767 THEN value ELSE RAISE(ABORT, 'integer out of range for smallint') END DECODE value",
+        stored_as: None,
         behaviour: "OPERATOR '<' (smallint, smallint) OPERATOR '=' (smallint, smallint)",
     },
     BuiltinType {
         name: "bigint",
         storage: "CREATE TYPE bigint(value integer) BASE integer",
+        stored_as: None,
         behaviour: "",
     },
     BuiltinType {
         name: "inet",
         storage: "CREATE TYPE inet(value text) BASE text ENCODE validate_ipaddr(value) DECODE value",
+        stored_as: None,
         behaviour: "",
     },
     BuiltinType {
         name: "cidr",
         storage: "CREATE TYPE cidr(value text) BASE text ENCODE value DECODE value",
+        stored_as: None,
         behaviour: "",
     },
     BuiltinType {
         name: "macaddr",
         storage: "CREATE TYPE macaddr(value text) BASE text ENCODE value DECODE value",
+        stored_as: None,
         behaviour: "",
     },
     BuiltinType {
         name: "macaddr8",
         storage: "CREATE TYPE macaddr8(value text) BASE text ENCODE value DECODE value",
+        stored_as: None,
         behaviour: "",
     },
     BuiltinType {
         name: "bytea",
         storage: "CREATE TYPE bytea(value blob) BASE blob",
+        stored_as: None,
         behaviour: "OPERATOR '<' (bytea, bytea) OPERATOR '=' (bytea, bytea)",
     },
     BuiltinType {
         name: "numeric",
-        storage: "CREATE TYPE numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL) BASE blob ENCODE numeric_encode(value, precision, scale) DECODE numeric_decode(value) KEY numeric_key(value)",
-        behaviour: "CAST FROM integer, real AS IMPLICIT OPERATOR '+' (numeric, numeric) RETURNS numeric numeric_add OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div OPERATOR '-' (numeric) RETURNS numeric numeric_neg OPERATOR '<' (numeric, numeric) numeric_lt OPERATOR '=' (numeric, numeric) numeric_eq FUNCTION abs(numeric) RETURNS numeric numeric_abs",
+        storage: "CREATE TYPE numeric(value any, precision integer DEFAULT NULL, scale integer DEFAULT NULL) BASE blob ENCODE numeric_encode(value, precision, scale) DECODE numeric_decode(value, scale) KEY numeric_key(value)",
+        stored_as: Some(crate::dialect::StorageType::Numeric),
+        behaviour: "CAST FROM integer, real AS IMPLICIT OPERATOR '+' (numeric, numeric) RETURNS numeric numeric_add OPERATOR '-' (numeric, numeric) RETURNS numeric numeric_sub OPERATOR '*' (numeric, numeric) RETURNS numeric numeric_mul OPERATOR '/' (numeric, numeric) RETURNS numeric numeric_div OPERATOR '-' (numeric) RETURNS numeric numeric_neg OPERATOR '<' (numeric, numeric) numeric_lt OPERATOR '=' (numeric, numeric) numeric_eq FUNCTION abs(numeric) RETURNS numeric numeric_abs FUNCTION sum(numeric) RETURNS numeric numeric_sum",
     },
 ];
 
@@ -1226,6 +1237,28 @@ impl Schema {
     /// CREATE TABLE validation, CAST).
     pub fn get_type_def_unchecked(&self, type_name: &str) -> Option<&Arc<TypeDef>> {
         self.type_registry.get(&type_registry_key(type_name))
+    }
+
+    pub(crate) fn uses_name_table(&self, table: &BTreeTable) -> bool {
+        table.dialect_marker.is_some() && self.has_name_table()
+    }
+
+    pub(crate) fn is_integer_key_type(&self, type_name: &str) -> bool {
+        if self.has_name_table() {
+            self.largest_key_of_type(type_name).is_some()
+        } else {
+            crate::util::is_rowid_alias_type(type_name)
+        }
+    }
+
+    pub(crate) fn has_name_table(&self) -> bool {
+        !self.type_rules.dialect_types.is_empty()
+    }
+
+    pub(crate) fn every_value_fits_a_rowid(&self, type_name: &str) -> bool {
+        self.get_type_def_unchecked(type_name)
+            .and_then(|def| def.storage)
+            .is_none_or(crate::dialect::StorageType::every_value_fits_a_rowid)
     }
 
     pub(crate) fn largest_key_of_type(&self, type_name: &str) -> Option<i64> {
@@ -4204,7 +4237,7 @@ impl BTreeTable {
         let (_, column) = self
             .get_rowid_alias_column()
             .expect("a table marked rowid_alias has a rowid column");
-        if schema.largest_key_of_type(&column.ty_str).is_none() {
+        if !schema.is_integer_key_type(&column.ty_str) {
             return Err(LimboError::Corrupt(format!(
                 "malformed database schema: table {} is marked rowid_alias but the type {} of its key is not an integer type",
                 self.name, column.ty_str
@@ -5179,7 +5212,7 @@ fn string_literal_eq(value: &str, expected: &str) -> bool {
     value.trim_matches('\'').eq_ignore_ascii_case(expected)
 }
 
-pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
+pub(crate) fn validate_generated_expr(expr: &Expr, resolver: &Resolver) -> Result<()> {
     use ast::Expr;
     match expr {
         Expr::Qualified(_, _) => {
@@ -5207,7 +5240,7 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
                 bail_parse_error!("window functions prohibited in generated columns");
             }
             let arg_count = args.len();
-            let Some(func) = Func::resolve_function(name.as_str(), arg_count)? else {
+            let Some(func) = resolver.resolve_function(name.as_str(), arg_count)? else {
                 return Err(LimboError::ParseError(format!(
                     "could not resolve function {}",
                     name.as_str()
@@ -5220,7 +5253,7 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
                 bail_parse_error!("non-deterministic functions prohibited in generated columns");
             }
             for arg in args {
-                validate_generated_expr(arg)?;
+                validate_generated_expr(arg, resolver)?;
             }
         }
 
@@ -5228,7 +5261,7 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
             if filter_over.over_clause.is_some() {
                 bail_parse_error!("window functions prohibited in generated columns");
             }
-            let Some(func) = Func::resolve_function(name.as_str(), 0)? else {
+            let Some(func) = resolver.resolve_function(name.as_str(), 0)? else {
                 return Err(LimboError::ParseError(format!(
                     "could not resolve function {}",
                     name.as_str()
@@ -5244,15 +5277,15 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
         }
 
         Expr::Binary(lhs, _, rhs) => {
-            validate_generated_expr(lhs)?;
-            validate_generated_expr(rhs)?;
+            validate_generated_expr(lhs, resolver)?;
+            validate_generated_expr(rhs, resolver)?;
         }
         Expr::Unary(_, inner) => {
-            validate_generated_expr(inner)?;
+            validate_generated_expr(inner, resolver)?;
         }
         Expr::Parenthesized(exprs) => {
             for e in exprs {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Case {
@@ -5262,46 +5295,46 @@ pub(crate) fn validate_generated_expr(expr: &Expr) -> Result<()> {
             ..
         } => {
             if let Some(b) = base {
-                validate_generated_expr(b)?;
+                validate_generated_expr(b, resolver)?;
             }
             for (w, t) in when_then_pairs {
-                validate_generated_expr(w)?;
-                validate_generated_expr(t)?;
+                validate_generated_expr(w, resolver)?;
+                validate_generated_expr(t, resolver)?;
             }
             if let Some(e) = else_expr {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Cast { expr, .. } => {
-            validate_generated_expr(expr)?;
+            validate_generated_expr(expr, resolver)?;
         }
         Expr::InList { lhs, rhs, .. } => {
-            validate_generated_expr(lhs)?;
+            validate_generated_expr(lhs, resolver)?;
             for e in rhs {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Between {
             lhs, start, end, ..
         } => {
-            validate_generated_expr(lhs)?;
-            validate_generated_expr(start)?;
-            validate_generated_expr(end)?;
+            validate_generated_expr(lhs, resolver)?;
+            validate_generated_expr(start, resolver)?;
+            validate_generated_expr(end, resolver)?;
         }
         Expr::Like {
             lhs, rhs, escape, ..
         } => {
-            validate_generated_expr(lhs)?;
-            validate_generated_expr(rhs)?;
+            validate_generated_expr(lhs, resolver)?;
+            validate_generated_expr(rhs, resolver)?;
             if let Some(e) = escape {
-                validate_generated_expr(e)?;
+                validate_generated_expr(e, resolver)?;
             }
         }
         Expr::Collate(inner, _) => {
-            validate_generated_expr(inner)?;
+            validate_generated_expr(inner, resolver)?;
         }
         Expr::IsNull(inner) | Expr::NotNull(inner) => {
-            validate_generated_expr(inner)?;
+            validate_generated_expr(inner, resolver)?;
         }
         // CURRENT_TIME/DATE/TIMESTAMP parse as literals but evaluate to a
         // different value on every read; SQLite rejects them like any other
@@ -5615,7 +5648,6 @@ pub(crate) fn create_table_with_rowid_decision(
                             {
                                 bail_parse_error!("Stored generated columns are not supported");
                             }
-                            validate_generated_expr(expr)?;
                             generated = Some(expr.clone());
                         }
                         ast::ColumnConstraint::PrimaryKey {

@@ -62,7 +62,8 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 OPERATOR '/' (decimal, decimal) RETURNS decimal numeric_div \
                 OPERATOR '-' (decimal) RETURNS decimal numeric_neg \
                 OPERATOR '<' (decimal, decimal) numeric_lt \
-                OPERATOR '=' (decimal, decimal) numeric_eq",
+                OPERATOR '=' (decimal, decimal) numeric_eq \
+                FUNCTION sum(decimal) RETURNS decimal numeric_sum",
         },
         DialectType {
             name: "integer",
@@ -94,13 +95,31 @@ pub(crate) static TEST_TYPE_RULES: TypeRules = TypeRules {
                 OPERATOR '<' (tinyint, tinyint) OPERATOR '=' (tinyint, tinyint)",
         },
         DialectType {
+            name: "tinyint unsigned",
+            storage: StorageType::RangedInteger { min: 0, max: 255 },
+            parameters: "",
+            behaviour: "CAST TO integer AS IMPLICIT \
+                OPERATOR '<' (tinyint unsigned, integer) \
+                OPERATOR '=' (tinyint unsigned, integer)",
+        },
+        DialectType {
             name: "ubigint",
             storage: StorageType::Uint64,
             parameters: "",
-            behaviour: "CAST FROM integer, text AS IMPLICIT \
+            behaviour: "CAST FROM text AS IMPLICIT \
                 OPERATOR '<' (ubigint, ubigint) uint64_lt \
+                OPERATOR '<' (ubigint, integer) uint64_lt \
                 OPERATOR '=' (ubigint, ubigint) uint64_eq \
-                OPERATOR '+' (ubigint, ubigint) RETURNS ubigint uint64_add",
+                OPERATOR '=' (ubigint, integer) uint64_eq \
+                OPERATOR '+' (ubigint, ubigint) RETURNS ubigint uint64_add \
+                OPERATOR '+' (ubigint, integer) RETURNS ubigint uint64_add \
+                OPERATOR '+' (integer, ubigint) RETURNS ubigint uint64_add \
+                OPERATOR '-' (ubigint, ubigint) RETURNS ubigint uint64_sub \
+                OPERATOR '-' (ubigint, integer) RETURNS ubigint uint64_sub \
+                OPERATOR '-' (integer, ubigint) RETURNS ubigint uint64_sub \
+                OPERATOR '*' (ubigint, ubigint) RETURNS ubigint uint64_mul \
+                OPERATOR '*' (ubigint, integer) RETURNS ubigint uint64_mul \
+                OPERATOR '*' (integer, ubigint) RETURNS ubigint uint64_mul",
         },
         DialectType {
             name: "date_days",
@@ -382,6 +401,7 @@ fn test_result_parameters(operator: &str, operands: [Option<&[i64]>; 2]) -> Opti
             let scale = scale(lhs).max(scale(rhs));
             Some(vec![precision(lhs).max(precision(rhs)) + 1, scale])
         }
+        "sum" => Some(vec![precision(lhs) + 22, scale(lhs)]),
         _ => None,
     }
 }

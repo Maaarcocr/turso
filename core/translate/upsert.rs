@@ -776,6 +776,7 @@ pub fn emit_upsert(
         new_rowid_reg.unwrap_or(ctx.conflict_rowid_reg),
         &layout,
         resolver,
+        false,
     )?;
 
     if let Some(bt) = table.btree() {
@@ -965,6 +966,7 @@ pub fn emit_upsert(
                 new_rowid_reg.unwrap_or(ctx.conflict_rowid_reg),
                 &layout,
                 resolver,
+                true,
             )?;
 
             let has_relevant_after_triggers = has_triggers_including_temp(
@@ -1599,6 +1601,7 @@ pub fn emit_upsert(
             new_rowid_reg.unwrap_or(ctx.conflict_rowid_reg),
             &layout,
             resolver,
+            true,
         )?;
     }
 
@@ -1629,12 +1632,18 @@ fn compute_new_row_virtual_columns(
     rowid_reg: usize,
     layout: &ColumnLayout,
     resolver: &Resolver,
+    values_are_encoded: bool,
 ) -> crate::Result<()> {
     if !ctx.table.has_virtual_columns {
         return Ok(());
     }
     let dml_ctx =
         DmlColumnContext::layout(ctx.table.columns(), new_start, rowid_reg, layout.clone());
+    let dml_ctx = if values_are_encoded {
+        dml_ctx.with_encoded_values()
+    } else {
+        dml_ctx
+    };
     compute_virtual_columns(
         program,
         &ctx.table.columns_topo_sort()?,

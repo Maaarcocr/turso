@@ -76,7 +76,15 @@ pub(super) fn do_emit_table_column(
                 translate_expr(program, referenced_tables, expr, target_register, resolver)?;
                 Ok(())
             })?;
-            emit_generated_value_conversion(program, target_register, column, resolver)?;
+            let table = context_table(self_table_context);
+            emit_generated_stored_value(
+                program,
+                target_register,
+                column,
+                table.as_ref().is_some_and(|table| table.is_strict),
+                table.as_ref().map_or("", |table| table.name.as_str()),
+                resolver,
+            )?;
         }
         _ => {
             emit_stored_column(program, cursor_id, column_index, target_register, resolver)?;
@@ -84,6 +92,19 @@ pub(super) fn do_emit_table_column(
         }
     }
     Ok(())
+}
+
+fn context_table(context: &SelfTableContext) -> Option<Arc<BTreeTable>> {
+    match context {
+        SelfTableContext::ForDML { table, .. } => Some(Arc::clone(table)),
+        SelfTableContext::ForSelect {
+            table_ref_id,
+            referenced_tables,
+        } => referenced_tables
+            .find_table_by_internal_id(*table_ref_id)?
+            .1
+            .btree(),
+    }
 }
 
 pub fn emit_stored_column(

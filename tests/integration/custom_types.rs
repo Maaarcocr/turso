@@ -47,7 +47,7 @@ mod tests {
     fn test_new_numeric_functions_need_custom_types() {
         let db = TempDatabase::new_empty();
         let conn = db.connect_limbo();
-        for name in ["numeric_key", "numeric_neg", "numeric_abs"] {
+        for name in ["numeric_key", "numeric_neg", "numeric_abs", "numeric_sum"] {
             assert_that!(conn.execute(format!("SELECT {name}('1')")))
                 .err()
                 .display_string()
@@ -56,9 +56,12 @@ mod tests {
         let opts = turso_core::DatabaseOpts::new().with_custom_types(true);
         let db = TempDatabase::builder().with_opts(opts).build();
         let conn = db.connect_limbo();
-        let rows: Vec<(String, String)> =
-            conn.exec_rows("SELECT numeric_neg('1.50'), numeric_abs('-2')");
-        assert_eq!(rows, vec![("-1.50".to_string(), "2".to_string())]);
+        let rows: Vec<(String, String, String)> =
+            conn.exec_rows("SELECT numeric_neg('1.50'), numeric_abs('-2'), numeric_sum('1.5')");
+        assert_eq!(
+            rows,
+            vec![("-1.50".to_string(), "2".to_string(), "1.5".to_string())]
+        );
     }
 
     #[test]

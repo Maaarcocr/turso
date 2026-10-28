@@ -161,7 +161,7 @@ OPERATOR '+' (money, money) RETURNS money money_add
 OPERATOR '<' (money, money) money_lt
 ```
 
-A type in a signature is a registered type, one of `integer`, `real`, `text` and `blob`, or `any` (any value, passed unchanged). A signature with one type is a prefix operator; only `-` is supported: `OPERATOR '-' (money) RETURNS money money_neg` makes `-m` call `money_neg(m)`. With `RETURNS`, the result has that type, so the type's operators apply to it again: `(a + b) + c` calls `money_add` twice. An operator without a signature accepts two values of its own type (and, for `+`, `-`, `*`, `/` and `%` on a type whose DECODE returns the stored value unchanged, any other value), and its result has no type.
+A type in a signature is a registered type, one of `integer`, `real`, `text` and `blob`, or `any` (any value, passed unchanged). A type name of several words, such as `double precision`, can be written without quotes in the operand list, in `CAST FROM` and `CAST TO` lists and in `FUNCTION` arguments; after `RETURNS` it must be quoted (`RETURNS "double precision"`). A signature with one type is a prefix operator; only `-` is supported: `OPERATOR '-' (money) RETURNS money money_neg` makes `-m` call `money_neg(m)`. With `RETURNS`, the result has that type, so the type's operators apply to it again: `(a + b) + c` calls `money_add` twice. An operator without a signature accepts two values of its own type (and, for `+`, `-`, `*`, `/` and `%` on a type whose DECODE returns the stored value unchanged, any other value), and its result has no type.
 
 The operator is chosen from the signatures of the operands' types. A literal string, `NULL` or a `?` parameter takes the type of the other operand. Other values fit a signature only if they have its type, or a `CAST ... AS IMPLICIT` clause allows the conversion. The signature with the most operands of exactly its types wins; two equally good signatures are an error (`operator is not unique`). When no signature fits, the standard SQLite operator is used.
 
@@ -202,7 +202,7 @@ The `<` operator is special: it controls how values of this type are sorted in O
 
 - **`KEY`**: A type with a `KEY` (see below) is sorted by its key in ORDER BY, GROUP BY and window PARTITION BY and ORDER BY, whatever its `<` says.
 - **`OPERATOR '<'`** (no function name): Uses the base type's native comparison of the stored values for ordering. This is sufficient for types where the encoded form sorts correctly (e.g., text dates in ISO 8601 format).
-- **`OPERATOR '<' my_compare`**: `my_compare(a, b)` is used by `<`, `>`, `<=` and `>=` in expressions. Sorting calls only the comparison functions built into Turso, such as `numeric_lt`; for any other function, ORDER BY, MIN and MAX sort the stored values, so give such a type a `KEY` that sorts like `my_compare`.
+- **`OPERATOR '<' my_compare`**: `my_compare(a, b)` is used by `<`, `>`, `<=` and `>=` in expressions. Sorting calls only the comparison functions built into Turso: `numeric_lt`, `uint64_lt`, `datetime_micros_lt` and `time_micros_lt` (see [Storage and conversion functions](#storage-and-conversion-functions)); for any other function, ORDER BY, MIN and MAX sort the stored values, so give such a type a `KEY` that sorts like `my_compare`.
 - **No `<` operator**: The type cannot be used in ORDER BY or CREATE INDEX.
 
 ```sql
@@ -227,7 +227,7 @@ The `=` operator, when defined, is also used to derive `!=`. The `<` operator is
 
 ### FUNCTION
 
-`FUNCTION name(arg-type, ...) RETURNS type function-name` makes a call `name(...)` whose arguments fit the listed types call `function-name` instead, and gives the result the `RETURNS` type. The argument types follow the rules of operator signatures. At least one argument must have this type; calls with other argument types use the ordinary function. Aggregate functions cannot be replaced this way.
+`FUNCTION name(arg-type, ...) RETURNS type function-name` makes a call `name(...)` whose arguments fit the listed types call `function-name` instead, and gives the result the `RETURNS` type. The argument types follow the rules of operator signatures. At least one argument must have this type; calls with other argument types use the ordinary function. Of the aggregate functions, only `sum` can be replaced, and only by an aggregate built into Turso: `FUNCTION sum(numeric) RETURNS numeric numeric_sum` makes `sum` add exactly. A type that replaces `sum` also changes `avg`: `avg(x)` becomes `sum(x) / count(x)` with the type's own `/`, so its scale follows the division rule of the type. Other aggregates keep using the values as SQLite sees them.
 
 ```sql
 CREATE TYPE money(value any) BASE text
@@ -241,7 +241,7 @@ CREATE TYPE money(value any) BASE text
 
 `KEY key-expr` gives a key for a value of the type: an expression of `value` (the value as DECODE returns it) whose result is equal for two values exactly when the type's `=` says they are equal. `SELECT DISTINCT`, aggregates with `DISTINCT` such as `count(DISTINCT x)`, `GROUP BY`, `UNION`, `INTERSECT`, `EXCEPT`, hash joins, and the partitions and peer groups of window functions compare these keys instead of the values, and output one of the values they compared equal. The columns of a compound SELECT have the type of their branches when every branch has it or is converted to it, as for `CASE`. A window frame `RANGE` with an offset (`RANGE BETWEEN 1 PRECEDING AND CURRENT ROW`) is an error when the window's ORDER BY value has a custom type. Without `KEY`, they compare the values, and a join on a type whose `=` is a function is not run as a hash join.
 
-The built-in `numeric` type has `KEY numeric_key(value)`, so `2`, `2.0` and `2.00` count as one value. `numeric_key(x)` returns a blob that sorts like the numbers.
+The built-in `numeric` type has `KEY numeric_key(value)`, so `2`, `2.0` and `2.00` count as one value. `numeric_key(x)` returns a blob that sorts like the numbers. `numeric` values are stored as this blob, so an index on a `numeric` column is used for ranges such as `p > 1.5`, for `ORDER BY p`, and for `min(p)` and `max(p)`.
 
 ### DEFAULT
 
@@ -286,6 +286,34 @@ CREATE TYPE email BASE text
     END
     DECODE value;
 ```
+
+## Storage and conversion functions
+
+These functions are available when custom types are enabled. They are meant for ENCODE, DECODE, ASSIGN, KEY and OPERATOR clauses, and can also be called in queries. Each returns NULL when an argument is NULL, except `conversion_error`.
+
+`conversion_error(kind, message)` stops the statement with a conversion error of the given kind: `'out of range'`, `'invalid value'`, `'too long'` or `'no more keys'`. Any other kind is an error of its own. When the error happens while INSERT or UPDATE stores a value in a table created by a dialect frontend, the error also names the column and the row number.
+
+```sql
+CREATE TYPE percent BASE integer
+    ENCODE CASE WHEN value BETWEEN 0 AND 100 THEN value
+           ELSE conversion_error('out of range', 'percent must be between 0 and 100') END
+    DECODE value;
+```
+
+| Function | Description |
+|----------|-------------|
+| `int64_add(a, b)`, `int64_sub(a, b)`, `int64_mul(a, b)`, `int64_neg(a)` | 64-bit integer arithmetic that fails with `out of range` instead of switching to a real result. |
+| `uint64_encode(value)`, `uint64_decode(stored)` | Unsigned 64-bit integers, 0 to 18446744073709551615. Values up to 9223372036854775807 are stored as integers, larger ones as an 8-byte big-endian blob, so stored values sort in numeric order. Decoding returns an integer, or text above 9223372036854775807. |
+| `uint64_lt(a, b)`, `uint64_eq(a, b)` | Compare two unsigned 64-bit values. |
+| `uint64_add(a, b)`, `uint64_sub(a, b)`, `uint64_mul(a, b)` | Unsigned 64-bit arithmetic that fails with `out of range` outside 0 to 18446744073709551615. One operand may be a negative integer, as in MySQL: with `OPERATOR '+' (T, integer) RETURNS T uint64_add` and `OPERATOR '+' (integer, T) RETURNS T uint64_add`, `CAST(5 AS T) + -3` is `2` and `CAST(5 AS T) + -6` is out of range. Such a type should not also declare `CAST FROM integer AS IMPLICIT`: an integer operand could then fit both `(T, T)` and `(T, integer)`, and the operator would not be unique. |
+| `date_days_encode(text)`, `date_days_decode(stored)` | A `YYYY-MM-DD` date, years 0000 to 9999, stored as a day number. |
+| `datetime_micros_encode(text, fsp)`, `datetime_micros_decode(stored, fsp)` | A `YYYY-MM-DD HH:MM:SS[.f]` date and time stored as microseconds. `fsp` (0 to 6) is the number of fraction digits; more digits are rounded half away from zero. |
+| `time_micros_encode(text, fsp)`, `time_micros_decode(stored, fsp)` | A `[-]H:MM:SS[.f]` time of up to 9 hour digits stored as microseconds, with `fsp` as above. |
+| `datetime_micros_lt(a, b)`, `time_micros_lt(a, b)` | Compare two date-times or two times as points in time, not as text. |
+| `enumeration_encode(value, labels)`, `enumeration_decode(stored, labels)` | A label stored as its position, starting at 1. `labels` is the list of labels as SQL string literals joined by commas, such as `'small','large'`. |
+| `label_set_encode(value, labels)`, `label_set_decode(stored, labels)` | A comma-separated set of labels stored as a bit mask in the order of `labels`; at most 64 labels. |
+
+The encode functions accept only the forms shown and fail with `invalid value` otherwise; converting other input is the job of an ASSIGN expression.
 
 ## CAST Support
 
@@ -375,7 +403,7 @@ Turso provides the following built-in custom types in STRICT tables:
 | `time` | text | -- | ISO 8601 time (HH:MM:SS), validated on insert. |
 | `timestamp` | text | -- | ISO 8601 datetime, validated on insert. |
 | `timestamptz` | text | -- | ISO 8601 datetime with the same validation and normalization as `timestamp`. PostgreSQL-compatible name; the stored text carries no offset. |
-| `numeric(P,S)` | blob | `precision`, `scale` | Fixed-point decimal with P total digits and S decimal places. Values with more decimal places are rounded half away from zero (`1.505` becomes `1.51`). Without parameters the value is not limited. Supports arithmetic operators, `-x` and `abs(x)`, whose results are numeric; integers and reals are converted to numeric. Division keeps at least 16 significant digits and at least as many decimal places as either operand, as in PostgreSQL (`1.55 / 3` is `0.51666666666666666667`). |
+| `numeric(P,S)` | blob | `precision`, `scale` | Fixed-point decimal with P total digits and S decimal places. Values with more decimal places are rounded half away from zero (`1.505` becomes `1.51`). Without parameters the value is not limited. Supports arithmetic operators, `-x` and `abs(x)`, whose results are numeric; integers and reals are converted to numeric. `sum` and `avg` are exact (`numeric_sum`); `total` stays REAL. Division keeps at least 16 significant digits and at least as many decimal places as either operand, as in PostgreSQL (`1.55 / 3` is `0.51666666666666666667`). A `numeric(P,S)` value reads back with S decimal places; a value without parameters reads back without trailing zeros (`'1.50'` reads back as `1.5`). Values are stored in an order-preserving form, so indexes on `numeric` columns serve ranges and ORDER BY. Values written by older versions of Turso are still read, but indexes on `numeric` columns written by older versions do not sort them correctly: dump and reload such a database after upgrading. |
 | `uuid` | blob | -- | UUID stored as 16-byte blob, displayed as string. Default: `uuid4_str()`. |
 | `inet` | text | -- | Validated IP address (IPv4 or IPv6). |
 | `cidr` | text | -- | Network address in CIDR notation. Stored as given; no validation yet. |

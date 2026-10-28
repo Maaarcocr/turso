@@ -2875,9 +2875,7 @@ impl PostgreSQLTranslator {
                     let quoted = format!("'{}'", s.sval.replace('\'', "''"));
                     Ok(ast::Expr::Literal(ast::Literal::String(quoted)))
                 }
-                pg_query::protobuf::a_const::Val::Fval(f) => {
-                    Ok(ast::Expr::Literal(ast::Literal::Numeric(f.fval.clone())))
-                }
+                pg_query::protobuf::a_const::Val::Fval(f) => Ok(numeric_constant(&f.fval)),
                 pg_query::protobuf::a_const::Val::Boolval(b) => {
                     // SQLite uses 0/1 for booleans
                     Ok(ast::Expr::Literal(ast::Literal::Numeric(
@@ -3531,6 +3529,16 @@ impl PostgreSQLTranslator {
                 });
             }
         }
+
+        let args = if func_call.agg_within_group
+            && matches!(
+                func_name.to_ascii_lowercase().as_str(),
+                "percentile_cont" | "percentile_disc"
+            ) {
+            args.into_iter().map(fraction_as_double).collect()
+        } else {
+            args
+        };
 
         let translated_order = self.translate_order_by(&func_call.agg_order)?;
         let (order_by, within_group) = if func_call.agg_within_group {
@@ -4976,9 +4984,10 @@ fn pg_type_name_to_ast_type(type_name: &pg_query::protobuf::TypeName) -> Option<
     let name = match pg_type.to_uppercase().as_str() {
         "INTEGER" | "INT" | "INT4" | "SMALLINT" | "INT2" | "BIGINT" | "INT8" | "SERIAL"
         | "BIGSERIAL" | "SMALLSERIAL" | "OID" | "REGCLASS" | "REGTYPE" => "INTEGER",
-        "REAL" | "FLOAT4" | "DOUBLE PRECISION" | "FLOAT8" | "NUMERIC" | "DECIMAL" | "MONEY" => {
-            "REAL"
+        "NUMERIC" | "DECIMAL" => {
+            return Some(numeric_cast_type(type_name));
         }
+        "REAL" | "FLOAT4" | "DOUBLE PRECISION" | "FLOAT8" | "MONEY" => "REAL",
         // For CAST expressions, map all text-like PG types to TEXT and
         // boolean to INTEGER for SQLite VDBE compatibility
         "BOOLEAN" | "BOOL" => "INTEGER",
@@ -4999,6 +5008,65 @@ fn pg_type_name_to_ast_type(type_name: &pg_query::protobuf::TypeName) -> Option<
         size: None,
         array_dimensions: type_name.array_bounds.len() as u32,
     })
+}
+
+fn numeric_constant(text: &str) -> ast::Expr {
+    if text.parse::<i64>().is_ok() {
+        return ast::Expr::Literal(ast::Literal::Numeric(text.to_string()));
+    }
+    ast::Expr::Cast {
+        expr: Box::new(ast::Expr::Literal(ast::Literal::String(format!(
+            "'{text}'"
+        )))),
+        type_name: Some(ast::Type {
+            name: "numeric".to_string(),
+            size: literal_precision_and_scale(text),
+            array_dimensions: 0,
+        }),
+    }
+}
+
+fn literal_precision_and_scale(text: &str) -> Option<ast::TypeSize> {
+    let (whole, fraction) = text.split_once('.')?;
+    if !whole
+        .bytes()
+        .chain(fraction.bytes())
+        .all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let scale = fraction.len();
+    let precision = (whole.trim_start_matches('0').len() + scale).max(1);
+    let number = |n: usize| Box::new(ast::Expr::Literal(ast::Literal::Numeric(n.to_string())));
+    Some(ast::TypeSize::TypeSize(number(precision), number(scale)))
+}
+
+fn fraction_as_double(fraction: Box<ast::Expr>) -> Box<ast::Expr> {
+    if matches!(fraction.as_ref(), ast::Expr::Array { .. }) {
+        return fraction;
+    }
+    Box::new(ast::Expr::Cast {
+        expr: fraction,
+        type_name: Some(ast::Type {
+            name: "REAL".to_string(),
+            size: None,
+            array_dimensions: 0,
+        }),
+    })
+}
+
+fn numeric_cast_type(type_name: &pg_query::protobuf::TypeName) -> ast::Type {
+    let number = |n: &i64| Box::new(ast::Expr::Literal(ast::Literal::Numeric(n.to_string())));
+    let size = match integer_typmods(type_name).as_slice() {
+        [precision, scale] => Some(ast::TypeSize::TypeSize(number(precision), number(scale))),
+        [precision] => Some(ast::TypeSize::TypeSize(number(precision), number(&0))),
+        _ => None,
+    };
+    ast::Type {
+        name: "numeric".to_string(),
+        size,
+        array_dimensions: type_name.array_bounds.len() as u32,
+    }
 }
 
 fn extract_type_name_from_typename(
@@ -5082,12 +5150,16 @@ fn extract_type_name(col_def: &pg_query::protobuf::ColumnDef) -> Result<String, 
 /// Extract integer type modifiers from a column definition.
 /// For `varchar(50)` this returns `[50]`, for `numeric(10, 2)` returns `[10, 2]`.
 fn extract_integer_typmods(col_def: &pg_query::protobuf::ColumnDef) -> Vec<i64> {
+    match &col_def.type_name {
+        Some(type_name) => integer_typmods(type_name),
+        None => vec![],
+    }
+}
+
+fn integer_typmods(type_name: &pg_query::protobuf::TypeName) -> Vec<i64> {
     use pg_query::protobuf::a_const::Val;
     use pg_query::protobuf::node::Node;
 
-    let Some(type_name) = &col_def.type_name else {
-        return vec![];
-    };
     type_name
         .typmods
         .iter()
@@ -6205,13 +6277,8 @@ mod tests {
                     panic!("Expected expression result column");
                 }
 
-                // Check float literal
                 if let ast::ResultColumn::Expr(expr, _) = &columns[2] {
-                    if let ast::Expr::Literal(ast::Literal::Numeric(n)) = &**expr {
-                        assert_eq!(n, "3.14");
-                    } else {
-                        panic!("Expected numeric literal");
-                    }
+                    assert_eq!(expr.to_string(), "CAST ('3.14' AS numeric (3, 2))");
                 } else {
                     panic!("Expected expression result column");
                 }

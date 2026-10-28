@@ -68,6 +68,20 @@ pub(crate) fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError>
             };
             Ok(ast::Expr::Unary(op, Box::new(translate_expr(operand)?)))
         }
+        Expr::BinaryOp {
+            left,
+            op: op @ (BinaryOperator::Arrow | BinaryOperator::LongArrow),
+            right,
+        } => {
+            let extracted = function_call(
+                "JSON_EXTRACT",
+                vec![translate_expr(left)?, translate_expr(right)?],
+            );
+            Ok(match op {
+                BinaryOperator::LongArrow => function_call("JSON_UNQUOTE", vec![extracted]),
+                _ => extracted,
+            })
+        }
         Expr::BinaryOp { left, op, right } => Ok(ast::Expr::Binary(
             Box::new(translate_expr(left)?),
             translate_binary_operator(op).ok_or_else(|| unsupported_expr(expr))?,
@@ -195,21 +209,25 @@ fn translate_function(function: &Function) -> Result<ast::Expr, MysqlParserError
     let args = args
         .iter()
         .map(|arg| match arg {
-            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => translate_expr(expr).map(Box::new),
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => translate_expr(expr),
             _ => Err(unsupported_function(function)),
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(ast::Expr::FunctionCall {
-        name: ast::Name::exact(identifier.value.clone()),
+    Ok(function_call(&identifier.value, args))
+}
+
+fn function_call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {
+    ast::Expr::FunctionCall {
+        name: ast::Name::exact(name.to_string()),
         distinctness: None,
-        args,
+        args: args.into_iter().map(Box::new).collect(),
         order_by: Vec::new(),
         within_group: Vec::new(),
         filter_over: ast::FunctionTail {
             filter_clause: None,
             over_clause: None,
         },
-    })
+    }
 }
 
 fn current_time_literal(expr: &Expr) -> Result<Option<ast::Literal>, MysqlParserError> {

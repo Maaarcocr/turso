@@ -1390,7 +1390,7 @@ fn emit_update_insns<'a>(
     let row_number_reg = target_table
         .table
         .btree()
-        .filter(|btree_table| btree_table.dialect_marker.is_some())
+        .filter(|btree_table| t_ctx.resolver.schema().uses_name_table(btree_table))
         .map(|_| crate::translate::expr::emit_row_number_counter(program));
     if let Some(btree_table) = target_table.table.btree() {
         if btree_table.is_strict {
@@ -1470,11 +1470,27 @@ fn emit_update_insns<'a>(
                 // use the new rowid register; otherwise use the current rowid (beg).
                 let new_rowid_reg = effective_rowid_reg;
 
+                let new_values = decoded_unset_columns(
+                    program,
+                    &t_ctx.resolver,
+                    &btree_table,
+                    start,
+                    &layout,
+                    &updated_column_indices,
+                )?;
+
                 // Compute virtual columns for NEW values
                 //TODO only emit required virtual columns
                 if let Table::BTree(ref btree) = target_table.table {
-                    let new_ctx =
-                        DmlColumnContext::layout(columns, start, new_rowid_reg, layout.clone());
+                    let new_ctx = DmlColumnContext::from_column_reg_mapping(columns.iter().zip(
+                        new_values.iter().enumerate().map(|(i, reg)| {
+                            if columns[i].is_rowid_alias() {
+                                new_rowid_reg
+                            } else {
+                                *reg
+                            }
+                        }),
+                    ));
                     compute_virtual_columns(
                         program,
                         &btree.columns_topo_sort()?,
@@ -1484,8 +1500,8 @@ fn emit_update_insns<'a>(
                     )?;
                 }
 
-                let new_registers = (0..col_len)
-                    .map(|i| layout.to_register(start, i))
+                let new_registers = new_values
+                    .into_iter()
                     .chain(std::iter::once(new_rowid_reg))
                     .collect();
 
@@ -1667,14 +1683,14 @@ fn emit_update_insns<'a>(
                 .is_some_and(expr_references_virtual)
         });
 
-        // compute virtual columns pre-encoding, so that we can type-check them later
-        if btree.is_strict
-            || update_affects_virtual_columns
-            || has_before_triggers
-            || has_after_triggers
-            || has_returning
-            || has_check_constraints
-            || index_references_virtual_column
+        if !table_encodes_values(btree, &t_ctx.resolver)
+            && (btree.is_strict
+                || update_affects_virtual_columns
+                || has_before_triggers
+                || has_after_triggers
+                || has_returning
+                || has_check_constraints
+                || index_references_virtual_column)
         {
             let dml_ctx =
                 DmlColumnContext::layout(cols, start, effective_rowid_reg, layout.clone());
@@ -1777,6 +1793,24 @@ fn emit_update_insns<'a>(
                 &layout,
                 row_number_reg,
             )?;
+            if btree_table.has_virtual_columns
+                && table_encodes_values(&btree_table, &t_ctx.resolver)
+            {
+                let dml_ctx = DmlColumnContext::layout(
+                    btree_table.columns(),
+                    start,
+                    effective_rowid_reg,
+                    layout.clone(),
+                )
+                .with_encoded_values();
+                compute_virtual_columns(
+                    program,
+                    &btree_table.columns_topo_sort()?,
+                    &dml_ctx,
+                    &t_ctx.resolver,
+                    &btree_table,
+                )?;
+            }
 
             // Post-encode TypeCheck: validate encoded values match storage type.
             program.emit_insn(Insn::TypeCheck {
@@ -2650,7 +2684,8 @@ fn emit_update_insns<'a>(
                             "UPDATE on virtual table has no btree".into(),
                         )
                     })?;
-                    let new_ctx = DmlColumnContext::layout(columns, start, beg, layout.clone());
+                    let new_ctx = DmlColumnContext::layout(columns, start, beg, layout.clone())
+                        .with_encoded_values();
                     compute_virtual_columns(
                         program,
                         &btree_table.columns_topo_sort()?,
@@ -2663,7 +2698,8 @@ fn emit_update_insns<'a>(
                     if let Some(ref old_regs) = preserved_old_registers {
                         let pairs = columns.iter().zip(old_regs.iter().copied());
                         //TODO only emit required virtual columns
-                        let old_ctx = DmlColumnContext::from_column_reg_mapping(pairs);
+                        let old_ctx =
+                            DmlColumnContext::from_column_reg_mapping(pairs).with_encoded_values();
                         compute_virtual_columns(
                             program,
                             &btree_table.columns_topo_sort()?,
@@ -2731,4 +2767,48 @@ fn emit_update_insns<'a>(
     t_ctx.resolver.register_affinities.clear();
     t_ctx.resolver.register_collations.clear();
     Ok(())
+}
+
+fn table_encodes_values(table: &BTreeTable, resolver: &Resolver) -> bool {
+    table.is_strict
+        && table
+            .columns()
+            .iter()
+            .any(|column| resolver.schema().column_type_def(column, true).is_some())
+}
+
+fn decoded_unset_columns(
+    program: &mut ProgramBuilder,
+    resolver: &Resolver,
+    table: &BTreeTable,
+    start: usize,
+    layout: &ColumnLayout,
+    updated_columns: &ColumnMask,
+) -> Result<Vec<usize>> {
+    table
+        .columns()
+        .iter()
+        .enumerate()
+        .map(|(i, column)| {
+            let reg = layout.to_register(start, i);
+            let stored_encoded = table.is_strict
+                && !updated_columns.get(i)
+                && !column.is_virtual_generated()
+                && !column.is_rowid_alias()
+                && resolver
+                    .schema()
+                    .column_resolved_type(column, true)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|resolved| resolved.chain.iter().any(|td| td.decode().is_some()));
+            if !stored_encoded {
+                return Ok(reg);
+            }
+            let decoded = program.alloc_register();
+            crate::translate::expr::emit_user_facing_column_value(
+                program, reg, decoded, column, true, resolver,
+            )?;
+            Ok(decoded)
+        })
+        .collect()
 }
