@@ -118,6 +118,7 @@ pub(crate) fn translate_drop(statement: &Statement) -> Result<ast::Stmt, MysqlPa
             })
         }
         (ObjectType::Index, Some(_)) if !*if_exists => translate_drop_index(names),
+        (ObjectType::View, None) => crate::ddl_view::translate_drop_view(names, *if_exists),
         _ => Err(MysqlParserError::Unsupported(format!(
             "`{statement}` is not available"
         ))),

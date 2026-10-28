@@ -1,6 +1,8 @@
 use super::decimal_number::{Decimal, Rounding};
 use super::number_text::{self, Reading};
-use super::{binary_string_in_number_column, integer_parameter, invalid_value, out_of_range};
+use super::{
+    binary_string_in_number_column, integer, integer_parameter, invalid_value, out_of_range,
+};
 use std::cmp::Ordering;
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{LimboError, Numeric, Result, Value};
@@ -78,6 +80,12 @@ macro_rules! comparisons {
 macro_rules! functions {
     ($quoted:literal) => {
         concat!(
+            "FUNCTION __mysql_cast_as_signed(",
+            $quoted,
+            ") RETURNS integer __mysql_decimal_cast_as_signed ",
+            "FUNCTION __mysql_cast_as_unsigned(",
+            $quoted,
+            ") RETURNS integer __mysql_decimal_cast_as_unsigned ",
             "FUNCTION round(",
             $quoted,
             ") RETURNS decimal __mysql_decimal_round ",
@@ -341,6 +349,38 @@ fn leading_decimal(bytes: &[u8]) -> std::result::Result<Decimal, bool> {
         Some(number) => Decimal::from_text_number(&number).ok_or_else(|| number.is_negative()),
         None => Ok(Decimal::zero()),
     }
+}
+
+pub(super) fn decimal_cast_as_signed(args: &[Value]) -> Result<Value> {
+    integer::signed_result(decimal_bits(&args[0], false))
+}
+
+pub(super) fn decimal_cast_as_unsigned(args: &[Value]) -> Result<Value> {
+    integer::unsigned_result(decimal_bits(&args[0], true))
+}
+
+fn decimal_bits(value: &Value, unsigned: bool) -> Option<u64> {
+    let text = match value {
+        Value::Null => return None,
+        Value::Numeric(Numeric::Integer(number)) => return Some(*number as u64),
+        Value::Numeric(Numeric::Float(double)) => {
+            return Some(integer::double_bits(f64::from(*double)))
+        }
+        Value::Text(text) => text.as_str(),
+        Value::Blob(bytes) => return Some(integer::text_bits(bytes)),
+    };
+    let Some(decimal) = Decimal::parse(text) else {
+        return Some(integer::text_bits(text.as_bytes()));
+    };
+    let whole = decimal.rounded(0, Rounding::HalfAwayFromZero);
+    if let Some(number) = whole.to_i64() {
+        return Some(number as u64);
+    }
+    Some(match (whole.is_negative(), unsigned) {
+        (true, _) => i64::MIN as u64,
+        (false, false) => i64::MAX as u64,
+        (false, true) => whole.to_text().parse::<u64>().unwrap_or(u64::MAX),
+    })
 }
 
 fn precision_and_scale(precision: &Value, scale: &Value) -> Option<(u32, u32)> {
