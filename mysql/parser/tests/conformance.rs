@@ -524,6 +524,30 @@ fn reports_ddl_that_mysql_rejects() {
             name: "identifier longer than 64 characters",
             sql: "CREATE TABLE abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm (id INT)",
         },
+        SqlCase {
+            name: "invalid date",
+            sql: "SELECT DATE '2018-02-30'",
+        },
+        SqlCase {
+            name: "comparison of two collations",
+            sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs = 'A' COLLATE utf8mb4_0900_as_ci",
+        },
+        SqlCase {
+            name: "collated STRCMP of a binary string",
+            sql: "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_cs, 0xff)",
+        },
+        SqlCase {
+            name: "unknown storage engine",
+            sql: "CREATE TABLE t (id INT) ENGINE=NoSuchEngine",
+        },
+        SqlCase {
+            name: "SQLite STRICT table",
+            sql: "CREATE TABLE t (a INT) STRICT",
+        },
+        SqlCase {
+            name: "type name MySQL does not have",
+            sql: "CREATE TABLE t (a INT, b ANY)",
+        },
     ];
 
     for case in cases {
@@ -930,10 +954,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT X'abc'",
         },
         SqlCase {
-            name: "invalid date",
-            sql: "SELECT DATE '2018-02-30'",
-        },
-        SqlCase {
             name: "datetime literal",
             sql: "SELECT DATETIME '2020-01-01 00:00:00'",
         },
@@ -956,14 +976,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "bit operation on a temporal literal with a fraction",
             sql: "SELECT TIME '10:00:00.5' & 1",
-        },
-        SqlCase {
-            name: "comparison of two collations",
-            sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs = 'A' COLLATE utf8mb4_0900_as_ci",
-        },
-        SqlCase {
-            name: "collated STRCMP of a binary string",
-            sql: "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_cs, 0xff)",
         },
         SqlCase {
             name: "LIKE under a case-sensitive collation",
@@ -1164,6 +1176,14 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "temporal compared with an invalid string",
             sql: "SELECT DATE '2020-01-01' = 'x'",
+        },
+        SqlCase {
+            name: "collations of a function result and a string",
+            sql: "SELECT LENGTH('a' COLLATE utf8mb4_0900_as_cs) = 'a' COLLATE utf8mb4_0900_as_ci",
+        },
+        SqlCase {
+            name: "invalid date in another format",
+            sql: "SELECT DATE '2018/02/30'",
         },
     ];
 

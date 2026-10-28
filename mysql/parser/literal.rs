@@ -341,8 +341,35 @@ fn typed_temporal(typed: &TypedString) -> Result<(Temporal, &str), MysqlParserEr
         DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
         other => return Err(unsupported(format!("typed literal `{other} '{text}'`"))),
     }
-    .ok_or_else(|| unsupported(format!("invalid {} literal '{text}'", typed.data_type)))?;
+    .ok_or_else(|| {
+        if typed.data_type == DataType::Date && is_impossible_date(text) {
+            MysqlParserError::Rejected(format!("incorrect DATE value: '{text}'"))
+        } else {
+            unsupported(format!("invalid {} literal '{text}'", typed.data_type))
+        }
+    })?;
     Ok((temporal, text))
+}
+
+fn is_impossible_date(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let shaped = bytes.len() == 10
+        && bytes.iter().enumerate().all(|(index, byte)| match index {
+            4 | 7 => *byte == b'-',
+            _ => byte.is_ascii_digit(),
+        });
+    if !shaped {
+        return false;
+    }
+    if text == "0000-00-00" {
+        return true;
+    }
+    let (Some(year), Some(month), Some(day)) =
+        (digits(&text[..4]), digits(&text[5..7]), digits(&text[8..]))
+    else {
+        return false;
+    };
+    month > 12 || ((1..=12).contains(&month) && day > days_in_month(year, month))
 }
 
 pub(crate) fn translate_temporal_text(
