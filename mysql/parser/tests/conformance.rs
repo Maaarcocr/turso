@@ -725,6 +725,37 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT 'abc', x'616263'",
         ),
         ("SELECT DATE '2018-5-1'", "SELECT '2018-05-01'"),
+        ("SELECT DATE '2020-01-01' + 0", "SELECT 20200101 + 0"),
+        (
+            "SELECT MAKEDATE(TIME '00:00:59', 1)",
+            "SELECT MAKEDATE (000059, 1)",
+        ),
+        (
+            "SELECT TIME '-01:00:00' < TIME '-10:00:00'",
+            "SELECT - 010000 < - 100000",
+        ),
+        (
+            "SELECT DATE '2020-1-1' = DATE '2020-01-01'",
+            "SELECT '2020-01-01' = '2020-01-01'",
+        ),
+        ("SELECT TIME '10:04:58' | 1", "SELECT 100458 | 1"),
+        ("SELECT TIME '-5 10:34:58' * 2", "SELECT - 1303458 * 2"),
+        (
+            "SELECT TIME '00:00:59.2132234' / 2",
+            "SELECT 000059.213223 / 2",
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58.5' - 1",
+            "SELECT 20000101103458.5 - 1",
+        ),
+        (
+            "SELECT 1.5e0 <= TIME '-101:34:58'",
+            "SELECT 1.5e0 <= - 1013458",
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58' = 20000101103458",
+            "SELECT 20000101103458 = 20000101103458",
+        ),
         (
             "SELECT DATE_ADD(d, INTERVAL 1 DAY), d - INTERVAL '1:1' MINUTE_SECOND",
             "SELECT DATE_ADD (d, 1, 'DAY'), DATE_SUB (d, '1:1', 'MINUTE_SECOND')",
@@ -859,8 +890,44 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 0x41 + 1",
         },
         SqlCase {
-            name: "temporal arithmetic",
-            sql: "SELECT DATE '2020-01-01' + 0",
+            name: "bit operation on a negative temporal literal",
+            sql: "SELECT TIME '-10:00:00' | 0",
+        },
+        SqlCase {
+            name: "bit operation on a temporal literal with a fraction",
+            sql: "SELECT TIME '10:00:00.5' & 1",
+        },
+        SqlCase {
+            name: "decimal compared with a timestamp",
+            sql: "SELECT 20000101103458.1234 >= TIMESTAMP '2000-01-01 10:34:58.123456'",
+        },
+        SqlCase {
+            name: "time compared with a timestamp",
+            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58' <= TIME '00:00:59'",
+        },
+        SqlCase {
+            name: "timestamps with different fractions compared",
+            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
+        },
+        SqlCase {
+            name: "shift of a temporal literal",
+            sql: "SELECT TIME '10:00:00' << 1",
+        },
+        SqlCase {
+            name: "modulo of a temporal literal",
+            sql: "SELECT 1.5e0 % TIMESTAMP '2000-01-01 10:34:58'",
+        },
+        SqlCase {
+            name: "bitwise not of a temporal literal",
+            sql: "SELECT ~DATE '2000-01-01'",
+        },
+        SqlCase {
+            name: "negated temporal literal with a fraction",
+            sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
+        },
+        SqlCase {
+            name: "fraction that rounds into the seconds",
+            sql: "SELECT TIME '10:00:00.9999995' + 0",
         },
         SqlCase {
             name: "div beyond bigint",
@@ -957,10 +1024,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "bit operation on a fraction",
             sql: "SELECT 5 & 1.5",
-        },
-        SqlCase {
-            name: "temporal compared with a number",
-            sql: "SELECT DATE '2020-01-01' = 1",
         },
         SqlCase {
             name: "column outside group by",

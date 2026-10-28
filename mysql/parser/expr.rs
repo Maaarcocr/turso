@@ -335,6 +335,9 @@ fn translate_unary(
     };
     let (op, operand_context) = match op {
         UnaryOperator::Minus if sign_context != Context::Bitwise => {
+            if temporal_has_fraction(expr) {
+                return Err(temporal_operand(expr, "unary `-`"));
+            }
             if let Some(digits) = number_literal(expr) {
                 if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
                     return Ok(exact_decimal(digits, true));
@@ -354,6 +357,9 @@ fn translate_unary(
         UnaryOperator::Minus => (ast::UnaryOperator::Negative, sign_context),
         UnaryOperator::Plus => return translate_in(expr, sign_context, context),
         UnaryOperator::Not | UnaryOperator::BangNot => (ast::UnaryOperator::Not, Context::Number),
+        UnaryOperator::BitwiseNot if temporal_type(expr).is_some() => {
+            return Err(temporal_operand(expr, "`~`"));
+        }
         UnaryOperator::BitwiseNot => (ast::UnaryOperator::BitwiseNot, Context::Arithmetic),
         other => {
             return Err(MysqlParserError::Unsupported(format!(
@@ -407,6 +413,16 @@ fn translate_binary(
             if matches!(left, Expr::Interval(_)) || matches!(right, Expr::Interval(_)) =>
         {
             return translate_interval_arithmetic(left, op, right, context)
+        }
+        BinaryOperator::Modulo | BinaryOperator::PGBitwiseShiftLeft
+            if temporal_type(left).is_some() || temporal_type(right).is_some() =>
+        {
+            let operand = if temporal_type(left).is_some() {
+                left
+            } else {
+                right
+            };
+            return Err(temporal_operand(operand, &format!("`{op}`")));
         }
         BinaryOperator::Plus => (ast::Operator::Add, Context::Arithmetic),
         BinaryOperator::Minus => (ast::Operator::Subtract, Context::Arithmetic),
@@ -545,17 +561,61 @@ fn translate_compared_value(
     other_side: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let (Some(own), Some(other)) = (temporal_type(expr), temporal_type(other_side)) {
+        let literal_context = match (own, other) {
+            (DataType::Time(..), DataType::Time(..)) => Context::Number,
+            (DataType::Date, DataType::Date) => Context::Value,
+            (DataType::Timestamp(..), DataType::Timestamp(..))
+                if fraction_length(expr) == fraction_length(other_side) =>
+            {
+                Context::Value
+            }
+            _ => {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "comparison of `{expr}` with `{other_side}`, which MySQL compares as DATETIME values, is not lowered yet"
+                )))
+            }
+        };
+        return translate_in(expr, literal_context, context);
+    }
     if let Some(data_type) = temporal_type(other_side) {
         if let Some(text) = string_literal(expr) {
             return translate_temporal_text(data_type, text);
         }
-        if is_literal(expr) && temporal_type(expr).is_none() {
+        if number_literal(expr)
+            .is_some_and(|digits| is_decimal_literal(digits) && same_double(digits, other_side))
+        {
+            return Err(MysqlParserError::Unsupported(format!(
+                "comparison of `{other_side}` with the DECIMAL `{expr}`, which MySQL compares as DOUBLE, is not lowered yet"
+            )));
+        }
+        if is_literal(expr)
+            && temporal_type(expr).is_none()
+            && comparison_context(expr) != Context::Number
+        {
             return Err(MysqlParserError::Unsupported(format!(
                 "comparison of `{other_side}` with `{expr}`, which MySQL converts to a temporal value, is not lowered yet"
             )));
         }
     }
     translate_in(expr, comparison_context(other_side), context)
+}
+
+fn same_double(digits: &str, temporal: &Expr) -> bool {
+    let Expr::TypedString(typed) = temporal else {
+        return temporal_type(temporal).is_some();
+    };
+    let value = match translate_typed_string(typed, Context::Number) {
+        Ok(ast::Expr::Literal(ast::Literal::Numeric(number))) => number.parse::<f64>().ok(),
+        Ok(ast::Expr::Unary(ast::UnaryOperator::Negative, inner)) => match *inner {
+            ast::Expr::Literal(ast::Literal::Numeric(number)) => {
+                number.parse::<f64>().ok().map(|number| -number)
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+    value.is_none_or(|value| digits.parse::<f64>().ok() == Some(value))
 }
 
 fn comparison_context(other_side: &Expr) -> Context {
@@ -1221,6 +1281,30 @@ fn translate_temporal_cast(
             vec![value, number(cast_precision(precision))],
         ),
     })
+}
+
+fn temporal_operand(expr: &Expr, operator: &str) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "temporal literal `{expr}` as an operand of {operator}, which MySQL computes as BIGINT UNSIGNED or DOUBLE, is not lowered yet"
+    ))
+}
+
+fn temporal_has_fraction(expr: &Expr) -> bool {
+    fraction_length(expr) > 0
+}
+
+fn fraction_length(expr: &Expr) -> usize {
+    match expr {
+        Expr::TypedString(typed) => match &typed.value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text
+                .trim()
+                .split_once('.')
+                .map_or(0, |(_, fraction)| fraction.len().min(6)),
+            _ => 0,
+        },
+        Expr::Nested(inner) => fraction_length(inner),
+        _ => 0,
+    }
 }
 
 fn temporal_outside_a_value_position(expr: &Expr) -> MysqlParserError {
@@ -1923,7 +2007,21 @@ fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Contex
         {
             Context::Number
         }
+        _ if temporal_type(args[position]).is_some()
+            && (reads_number(upper_name, position, args)
+                || reads_temporal_as_number(upper_name, position)) =>
+        {
+            Context::Number
+        }
         _ => Context::Value,
+    }
+}
+
+fn reads_temporal_as_number(upper_name: &str, position: usize) -> bool {
+    match upper_name {
+        "MAKEDATE" | "MAKETIME" | "PERIOD_ADD" | "PERIOD_DIFF" => true,
+        "FROM_UNIXTIME" | "SEC_TO_TIME" | "FROM_DAYS" => position == 0,
+        _ => false,
     }
 }
 
