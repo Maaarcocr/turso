@@ -1,5 +1,6 @@
 use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
+use crate::json;
 use crate::literal::{
     binary_literal_as_double, binary_literal_value, negated_binary_literal, translate_as_bytes,
     translate_introduced_string, translate_temporal_text, translate_typed_string,
@@ -35,10 +36,13 @@ pub(crate) fn translate_condition(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if json::is_json_value(expr) {
+        return json::translate_truth(expr, context);
+    }
     translate_in(expr, Context::Number, context)
 }
 
-fn translate_in(
+pub(crate) fn translate_in(
     expr: &Expr,
     literal_context: Context,
     context: &mut TranslationContext,
@@ -373,6 +377,9 @@ fn translate_unary(
                     _ => Err(decimals_of_negated_binary_literal_show(expr)),
                 };
             }
+            if temporal_has_fraction(expr) {
+                return Err(temporal_operand(expr, "unary `-`"));
+            }
             if let Some(digits) = number_literal(expr) {
                 if is_decimal_literal(digits)
                     || exceeds_unsigned_bigint(digits)
@@ -386,6 +393,9 @@ fn translate_unary(
                     ))));
                 }
             }
+            if json::is_json_value(expr) {
+                return json::translate_negation(expr, context);
+            }
             if number_literal(expr).is_none() {
                 let negated = translate_in(expr, sign_context, context)?;
                 return Ok(times_minus_one(negated));
@@ -394,7 +404,15 @@ fn translate_unary(
         }
         UnaryOperator::Minus => (ast::UnaryOperator::Negative, sign_context),
         UnaryOperator::Plus => return translate_in(expr, sign_context, context),
-        UnaryOperator::Not | UnaryOperator::BangNot => (ast::UnaryOperator::Not, Context::Number),
+        UnaryOperator::Not | UnaryOperator::BangNot => {
+            return Ok(ast::Expr::unary(
+                ast::UnaryOperator::Not,
+                translate_condition(expr, context)?,
+            ))
+        }
+        UnaryOperator::BitwiseNot if temporal_type(expr).is_some() => {
+            return Err(temporal_operand(expr, "`~`"));
+        }
         UnaryOperator::BitwiseNot if is_binary_string(expr) => {
             return Err(binary_string_outside_arithmetic(&op))
         }
@@ -413,7 +431,7 @@ fn translate_unary(
 
 /// `-x` as `x * -1`, which gives the same value, so that the product has
 /// the type and the scale of `x` when `x` is a DECIMAL.
-fn times_minus_one(expr: ast::Expr) -> ast::Expr {
+pub(crate) fn times_minus_one(expr: ast::Expr) -> ast::Expr {
     let minus_one = ast::Expr::unary(
         ast::UnaryOperator::Negative,
         ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
@@ -425,7 +443,7 @@ fn times_minus_one(expr: ast::Expr) -> ast::Expr {
     ))
 }
 
-fn number_literal(expr: &Expr) -> Option<&str> {
+pub(crate) fn number_literal(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Value(value) => match &value.value {
             Value::Number(digits, false) => Some(digits),
@@ -465,6 +483,45 @@ fn translate_binary(
         {
             return translate_interval_arithmetic(left, op, right, context)
         }
+        BinaryOperator::Modulo | BinaryOperator::PGBitwiseShiftLeft
+            if temporal_type(left).is_some() || temporal_type(right).is_some() =>
+        {
+            let operand = if temporal_type(left).is_some() {
+                left
+            } else {
+                right
+            };
+            return Err(temporal_operand(operand, &format!("`{op}`")));
+        }
+        BinaryOperator::Plus
+        | BinaryOperator::Minus
+        | BinaryOperator::Multiply
+        | BinaryOperator::Divide
+        | BinaryOperator::Modulo
+            if json::is_json_value(left) || json::is_json_value(right) =>
+        {
+            let left = json::translate_arithmetic_operand(left, context)?;
+            let right = json::translate_arithmetic_operand(right, context)?;
+            let operator = match op {
+                BinaryOperator::Plus => ast::Operator::Add,
+                BinaryOperator::Minus => ast::Operator::Subtract,
+                BinaryOperator::Multiply => ast::Operator::Multiply,
+                BinaryOperator::Divide => ast::Operator::Divide,
+                _ => return Ok(function_call("__mysql_json_remainder", vec![left, right])),
+            };
+            return Ok(ast::Expr::binary(left, operator, right));
+        }
+        BinaryOperator::And | BinaryOperator::Or | BinaryOperator::StringConcat => {
+            let operator = match op {
+                BinaryOperator::And => ast::Operator::And,
+                _ => ast::Operator::Or,
+            };
+            return Ok(ast::Expr::binary(
+                translate_condition(left, context)?,
+                operator,
+                translate_condition(right, context)?,
+            ));
+        }
         BinaryOperator::Plus => return arithmetic(ast::Operator::Add, context),
         BinaryOperator::Minus => return arithmetic(ast::Operator::Subtract, context),
         BinaryOperator::Multiply => return arithmetic(ast::Operator::Multiply, context),
@@ -474,8 +531,6 @@ fn translate_binary(
         BinaryOperator::BitwiseOr => (ast::Operator::BitwiseOr, Context::Bitwise),
         BinaryOperator::BitwiseAnd => (ast::Operator::BitwiseAnd, Context::Bitwise),
         BinaryOperator::PGBitwiseShiftRight => (ast::Operator::RightShift, Context::Bitwise),
-        BinaryOperator::And => (ast::Operator::And, Context::Number),
-        BinaryOperator::Or | BinaryOperator::StringConcat => (ast::Operator::Or, Context::Number),
         BinaryOperator::Eq => return comparison(left, ast::Operator::Equals, right, context),
         BinaryOperator::NotEq => return comparison(left, ast::Operator::NotEquals, right, context),
         BinaryOperator::Lt => return comparison(left, ast::Operator::Less, right, context),
@@ -752,6 +807,9 @@ fn comparison(
     right: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if json::is_json_value(left) || json::is_json_value(right) {
+        return json::translate_comparison(left, operator, right, context);
+    }
     let lhs = translate_compared(left, right, context)?;
     let rhs = translate_compared(right, left, context)?;
     Ok(ast::Expr::binary(lhs, operator, rhs))
@@ -776,17 +834,61 @@ fn translate_compared_value(
     other_side: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let (Some(own), Some(other)) = (temporal_type(expr), temporal_type(other_side)) {
+        let literal_context = match (own, other) {
+            (DataType::Time(..), DataType::Time(..)) => Context::Number,
+            (DataType::Date, DataType::Date) => Context::Value,
+            (DataType::Timestamp(..), DataType::Timestamp(..))
+                if fraction_length(expr) == fraction_length(other_side) =>
+            {
+                Context::Value
+            }
+            _ => {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "comparison of `{expr}` with `{other_side}`, which MySQL compares as DATETIME values, is not lowered yet"
+                )))
+            }
+        };
+        return translate_in(expr, literal_context, context);
+    }
     if let Some(data_type) = temporal_type(other_side) {
         if let Some(text) = string_literal(expr) {
             return translate_temporal_text(data_type, text);
         }
-        if is_literal(expr) && temporal_type(expr).is_none() {
+        if number_literal(expr)
+            .is_some_and(|digits| is_decimal_literal(digits) && same_double(digits, other_side))
+        {
+            return Err(MysqlParserError::Unsupported(format!(
+                "comparison of `{other_side}` with the DECIMAL `{expr}`, which MySQL compares as DOUBLE, is not lowered yet"
+            )));
+        }
+        if is_literal(expr)
+            && temporal_type(expr).is_none()
+            && comparison_context(expr) != Context::Number
+        {
             return Err(MysqlParserError::Unsupported(format!(
                 "comparison of `{other_side}` with `{expr}`, which MySQL converts to a temporal value, is not lowered yet"
             )));
         }
     }
     translate_in(expr, comparison_context(other_side), context)
+}
+
+fn same_double(digits: &str, temporal: &Expr) -> bool {
+    let Expr::TypedString(typed) = temporal else {
+        return temporal_type(temporal).is_some();
+    };
+    let value = match translate_typed_string(typed, Context::Number) {
+        Ok(ast::Expr::Literal(ast::Literal::Numeric(number))) => number.parse::<f64>().ok(),
+        Ok(ast::Expr::Unary(ast::UnaryOperator::Negative, inner)) => match *inner {
+            ast::Expr::Literal(ast::Literal::Numeric(number)) => {
+                number.parse::<f64>().ok().map(|number| -number)
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+    value.is_none_or(|value| digits.parse::<f64>().ok() == Some(value))
 }
 
 fn comparison_context(other_side: &Expr) -> Context {
@@ -987,7 +1089,7 @@ fn binary_string_outside_arithmetic(op: &dyn std::fmt::Display) -> MysqlParserEr
     ))
 }
 
-fn is_binary_literal(expr: &Expr) -> bool {
+pub(crate) fn is_binary_literal(expr: &Expr) -> bool {
     match expr {
         Expr::Value(value) => matches!(
             value.value,
@@ -1290,7 +1392,7 @@ fn negation(expr: ast::Expr) -> ast::Expr {
     parenthesized(ast::Expr::unary(ast::UnaryOperator::Not, expr))
 }
 
-fn parenthesized(expr: ast::Expr) -> ast::Expr {
+pub(crate) fn parenthesized(expr: ast::Expr) -> ast::Expr {
     ast::Expr::Parenthesized(vec![Box::new(expr)])
 }
 
@@ -1316,7 +1418,6 @@ fn translate_like(
     escape: Option<&sqlparser::ast::ValueWithSpan>,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let lhs = translate_in(expr, Context::Text, context)?;
     let escape = match escape {
         Some(escape) => match &escape.value {
             Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)
@@ -1332,6 +1433,11 @@ fn translate_like(
         },
         None => Some('\\'),
     };
+    if json::is_json_value(expr) || json::is_json_value(pattern) {
+        let escape = escape.expect("a LIKE escape is one character");
+        return json::translate_like(expr, negated, pattern, escape, context);
+    }
+    let lhs = translate_in(expr, Context::Text, context)?;
     let (rhs, escape) = match (string_literal(pattern), escape) {
         (Some(text), Some(escape)) if !text.contains(escape) => (string_expr(text), None),
         (Some(text), Some(escape)) => (
@@ -1350,7 +1456,7 @@ fn translate_like(
     ))
 }
 
-fn string_literal(expr: &Expr) -> Option<&str> {
+pub(crate) fn string_literal(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Value(value) => match &value.value {
             Value::SingleQuotedString(text)
@@ -1400,10 +1506,12 @@ fn translate_cast(
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     let (target, operand_context) = match data_type {
-        DataType::Signed => (type_name("SIGNED"), Context::Number),
-        DataType::SignedInteger => (type_name("SIGNED INTEGER"), Context::Number),
-        DataType::Unsigned => (type_name("UNSIGNED"), Context::Number),
-        DataType::UnsignedInteger => (type_name("UNSIGNED INTEGER"), Context::Number),
+        DataType::Signed | DataType::SignedInteger => {
+            return translate_integer_cast(expr, "__mysql_cast_as_signed", context)
+        }
+        DataType::Unsigned | DataType::UnsignedInteger => {
+            return translate_integer_cast(expr, "__mysql_cast_as_unsigned", context)
+        }
         DataType::Double(ExactNumberInfo::None) => (type_name("DOUBLE"), Context::Number),
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
@@ -1441,6 +1549,25 @@ fn translate_cast(
     ))
 }
 
+fn translate_integer_cast(
+    expr: &Expr,
+    name: &str,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let operand = match number_literal(expr) {
+        Some(digits) if exceeds_unsigned_bigint(digits) => exact_decimal(digits, false),
+        Some(digits)
+            if digits
+                .parse::<u64>()
+                .is_ok_and(|number| number > i64::MAX as u64) =>
+        {
+            string_expr(digits)
+        }
+        _ => translate_in(expr, Context::Number, context)?,
+    };
+    Ok(function_call(name, vec![operand]))
+}
+
 fn translate_cast_as_json(
     expr: &Expr,
     literal_context: Context,
@@ -1465,7 +1592,7 @@ pub(crate) fn failing_json_cast(text: &str) -> ast::Expr {
     function_call("__mysql_cast_as_json", vec![string_expr(text)])
 }
 
-fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
+pub(crate) fn json_outside_a_value_position(expr: &Expr) -> MysqlParserError {
     MysqlParserError::Unsupported(format!(
         "JSON value `{expr}` in a comparison, a computation or a function MySQL evaluates lazily is not lowered yet"
     ))
@@ -1508,6 +1635,30 @@ fn translate_temporal_cast(
             vec![value, number(cast_precision(precision))],
         ),
     })
+}
+
+fn temporal_operand(expr: &Expr, operator: &str) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "temporal literal `{expr}` as an operand of {operator}, which MySQL computes as BIGINT UNSIGNED or DOUBLE, is not lowered yet"
+    ))
+}
+
+fn temporal_has_fraction(expr: &Expr) -> bool {
+    fraction_length(expr) > 0
+}
+
+fn fraction_length(expr: &Expr) -> usize {
+    match expr {
+        Expr::TypedString(typed) => match &typed.value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text
+                .trim()
+                .split_once('.')
+                .map_or(0, |(_, fraction)| fraction.len().min(6)),
+            _ => 0,
+        },
+        Expr::Nested(inner) => fraction_length(inner),
+        _ => 0,
+    }
 }
 
 fn temporal_outside_a_value_position(expr: &Expr) -> MysqlParserError {
@@ -1564,7 +1715,7 @@ fn cast_precision(precision: u64) -> u64 {
     precision
 }
 
-fn has_a_temporal_type(expr: &Expr) -> bool {
+pub(crate) fn has_a_temporal_type(expr: &Expr) -> bool {
     match expr {
         Expr::TypedString(_) => true,
         Expr::Nested(inner) => has_a_temporal_type(inner),
@@ -2133,12 +2284,23 @@ fn function_arguments(
             if is_result && (results.doubles || negated_binary(arg).is_some()) {
                 return translate_result(arg, results, context);
             }
+            if reads_only_text(upper_name, position) {
+                if let Some(text) = json::temporal_json_text(arg) {
+                    return Ok(text);
+                }
+            }
             if is_json_cast(arg)
                 && !upper_name.starts_with("JSON_")
+                && (!json::is_json_value_that_succeeds(arg)
+                    || compares_by_collation(upper_name)
+                    || args.iter().any(|other| is_binary_string(other)))
                 && (evaluates_arguments_lazily(upper_name)
                     || !other_arguments_are_present_values(&args, position))
             {
                 return Err(json_outside_a_value_position(arg));
+            }
+            if upper_name == "IF" && position == 0 {
+                return translate_condition(arg, context);
             }
             if is_json_value_position(upper_name, position) {
                 return translate_json_value(arg, context);
@@ -2245,6 +2407,22 @@ fn unnamed_arguments(list: &FunctionArgumentList) -> Result<Vec<&Expr>, MysqlPar
         .collect()
 }
 
+fn reads_only_text(upper_name: &str, position: usize) -> bool {
+    match upper_name {
+        "CONCAT" | "CONCAT_WS" | "STRCMP" | "SHA" | "SHA1" | "MD5" | "CRC32" | "TO_BASE64"
+        | "FROM_BASE64" | "HEX" | "UNHEX" => true,
+        "SHA2" => position == 0,
+        _ => false,
+    }
+}
+
+fn compares_by_collation(upper_name: &str) -> bool {
+    matches!(
+        upper_name,
+        "FIELD" | "GREATEST" | "LEAST" | "LOCATE" | "INSTR" | "POSITION" | "FIND_IN_SET"
+    )
+}
+
 fn evaluates_arguments_lazily(upper_name: &str) -> bool {
     matches!(upper_name, "CONCAT_WS" | "ELT" | "MAKE_SET")
 }
@@ -2301,9 +2479,23 @@ fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Contex
         {
             Context::Number
         }
+        _ if temporal_type(args[position]).is_some()
+            && (reads_number(upper_name, position, args)
+                || reads_temporal_as_number(upper_name, position)) =>
+        {
+            Context::Number
+        }
         _ if BINARY_STRING_FUNCTIONS.contains(&upper_name) => Context::Bytes,
         _ if DATE_TIME_FUNCTIONS.contains(&upper_name) => Context::DateTimeArgument,
         _ => Context::Value,
+    }
+}
+
+fn reads_temporal_as_number(upper_name: &str, position: usize) -> bool {
+    match upper_name {
+        "MAKEDATE" | "MAKETIME" | "PERIOD_ADD" | "PERIOD_DIFF" => true,
+        "FROM_UNIXTIME" | "SEC_TO_TIME" | "FROM_DAYS" => position == 0,
+        _ => false,
     }
 }
 
@@ -2351,7 +2543,7 @@ fn hex_or_bit_literal(expr: &Expr) -> Option<&Value> {
     }
 }
 
-fn translate_json_value(
+pub(crate) fn translate_json_value(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
@@ -2363,7 +2555,7 @@ fn translate_json_value(
     })
 }
 
-fn is_boolean(expr: &Expr) -> bool {
+pub(crate) fn is_boolean(expr: &Expr) -> bool {
     match expr {
         Expr::Value(value) => matches!(value.value, Value::Boolean(_)),
         Expr::BinaryOp { op, .. } => matches!(
@@ -2507,7 +2699,7 @@ fn translate_frame_bound(
     })
 }
 
-fn function_call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {
+pub(crate) fn function_call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {
     ast::Expr::FunctionCall {
         name: ast::Name::exact(name.to_string()),
         distinctness: None,

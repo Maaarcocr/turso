@@ -290,11 +290,12 @@ pub(crate) fn translate_typed_string(
 ) -> Result<ast::Expr, MysqlParserError> {
     let (temporal, text) = typed_temporal(typed)?;
     match context {
-        Context::Arithmetic | Context::Bitwise => Err(unsupported(format!(
-            "{} literal '{text}' in arithmetic",
+        Context::Bitwise if temporal.is_whole_and_unsigned() => Ok(temporal.number()),
+        Context::Bitwise => Err(unsupported(format!(
+            "bit operation on {} literal '{text}', which MySQL computes as BIGINT UNSIGNED,",
             typed.data_type
         ))),
-        Context::Number => Ok(temporal.number()),
+        Context::Number | Context::Arithmetic => Ok(temporal.number()),
         Context::Value | Context::Bytes | Context::DateTimeArgument | Context::Text => Ok(
             ast::Expr::Literal(ast::Literal::String(quote_string(&temporal.text()))),
         ),
@@ -374,6 +375,15 @@ impl Temporal {
         let date = parse_date(&text[..split])?;
         let time = parse_clock(text[split + 1..].trim_start())?;
         (time.hours < 24).then_some(Temporal::Timestamp(date, time))
+    }
+
+    fn is_whole_and_unsigned(&self) -> bool {
+        match self {
+            Temporal::Date(_) => true,
+            Temporal::Time(time) | Temporal::Timestamp(_, time) => {
+                !time.negative && time.fraction.is_empty()
+            }
+        }
     }
 
     fn text(&self) -> String {
@@ -533,15 +543,22 @@ fn parse_clock(text: &str) -> Option<Time> {
 fn split_fraction(text: &str) -> Option<(&str, String)> {
     match text.split_once('.') {
         Some((whole, fraction))
-            if !fraction.is_empty()
-                && fraction.len() <= 6
-                && fraction.bytes().all(|byte| byte.is_ascii_digit()) =>
+            if !fraction.is_empty() && fraction.bytes().all(|byte| byte.is_ascii_digit()) =>
         {
-            Some((whole, fraction.to_string()))
+            Some((whole, rounded_fraction(fraction)?))
         }
         Some(_) => None,
         None => Some((text, String::new())),
     }
+}
+
+fn rounded_fraction(fraction: &str) -> Option<String> {
+    if fraction.len() <= 6 {
+        return Some(fraction.to_string());
+    }
+    let kept: u32 = fraction[..6].parse().ok()?;
+    let rounded = kept + u32::from(fraction.as_bytes()[6] >= b'5');
+    (rounded < 1_000_000).then(|| format!("{rounded:06}"))
 }
 
 fn small_number(text: &str) -> Option<u32> {
@@ -563,6 +580,42 @@ fn digits(text: &str) -> Option<u32> {
 
 fn unsupported(what: String) -> MysqlParserError {
     MysqlParserError::Unsupported(format!("{what} is not lowered yet"))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TemporalKind {
+    Date,
+    Time,
+    DateTime,
+}
+
+pub(crate) struct TemporalLiteral {
+    pub(crate) kind: TemporalKind,
+    pub(crate) text: String,
+    pub(crate) within_a_day: bool,
+}
+
+pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
+    let (Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)) = &typed.value.value
+    else {
+        return None;
+    };
+    let temporal = match &typed.data_type {
+        DataType::Date => Temporal::date(text),
+        DataType::Time(None, TimezoneInfo::None) => Temporal::time(text),
+        DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
+        _ => None,
+    }?;
+    let (kind, within_a_day) = match &temporal {
+        Temporal::Date(_) => (TemporalKind::Date, true),
+        Temporal::Time(time) => (TemporalKind::Time, !time.negative && time.hours < 24),
+        Temporal::Timestamp(..) => (TemporalKind::DateTime, true),
+    };
+    Some(TemporalLiteral {
+        kind,
+        text: temporal.text(),
+        within_a_day,
+    })
 }
 
 #[cfg(test)]

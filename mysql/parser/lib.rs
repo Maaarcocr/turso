@@ -11,12 +11,14 @@ mod ddl_default;
 mod ddl_expr;
 mod ddl_index;
 mod ddl_type;
+mod ddl_view;
 mod dialect;
 mod dml;
 mod expr;
 mod function_names;
 mod insert;
 mod invalid_json;
+mod json;
 mod literal;
 mod names;
 mod query;
@@ -73,6 +75,7 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
         Statement::AlterTable(alter_table) => ddl_alter::translate_alter_table(alter_table),
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement),
+        Statement::CreateView(create_view) => ddl_view::translate_create_view(create_view),
         Statement::Set(set) => session::translate_set(set),
         Statement::Insert(insert) => insert::translate_insert(insert),
         Statement::Update(update) => dml::translate_update(update),

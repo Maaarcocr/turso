@@ -675,7 +675,15 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT greeting", "SELECT greeting"),
         ("SELECT 1 + 2, -1, NOT TRUE", "SELECT 1 + 2, - 1, NOT TRUE"),
         ("SELECT VERSION()", "SELECT VERSION ()"),
-        ("SELECT CAST(1 AS SIGNED)", "SELECT CAST (1 AS SIGNED)"),
+        ("SELECT CAST(1 AS SIGNED)", "SELECT __mysql_cast_as_signed (1)"),
+        (
+            "SELECT CONVERT(18446744073709551615, UNSIGNED)",
+            "SELECT __mysql_cast_as_unsigned ('18446744073709551615')",
+        ),
+        (
+            "SELECT CAST(99999999999999999999 AS SIGNED)",
+            "SELECT __mysql_cast_as_signed (CAST ('99999999999999999999' AS DECIMAL (20, 0)))",
+        ),
         (
             "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
             "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
@@ -725,6 +733,37 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT 'abc', x'616263'",
         ),
         ("SELECT DATE '2018-5-1'", "SELECT '2018-05-01'"),
+        ("SELECT DATE '2020-01-01' + 0", "SELECT 20200101 + 0"),
+        (
+            "SELECT MAKEDATE(TIME '00:00:59', 1)",
+            "SELECT MAKEDATE (000059, 1)",
+        ),
+        (
+            "SELECT TIME '-01:00:00' < TIME '-10:00:00'",
+            "SELECT - 010000 < - 100000",
+        ),
+        (
+            "SELECT DATE '2020-1-1' = DATE '2020-01-01'",
+            "SELECT '2020-01-01' = '2020-01-01'",
+        ),
+        ("SELECT TIME '10:04:58' | 1", "SELECT 100458 | 1"),
+        ("SELECT TIME '-5 10:34:58' * 2", "SELECT - 1303458 * 2"),
+        (
+            "SELECT TIME '00:00:59.2132234' / 2",
+            "SELECT 000059.213223 / 2",
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58.5' - 1",
+            "SELECT 20000101103458.5 - 1",
+        ),
+        (
+            "SELECT 1.5e0 <= TIME '-101:34:58'",
+            "SELECT 1.5e0 <= - 1013458",
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58' = 20000101103458",
+            "SELECT 20000101103458 = 20000101103458",
+        ),
         (
             "SELECT DATE_ADD(d, INTERVAL 1 DAY), d - INTERVAL '1:1' MINUTE_SECOND",
             "SELECT DATE_ADD (d, 1, 'DAY'), DATE_SUB (d, '1:1', 'MINUTE_SECOND')",
@@ -785,6 +824,22 @@ fn lowers_select_statements_to_shared_ast() {
         (
             "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",
             "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), - 9223372036854775808",
+        ),
+        (
+            "SELECT CAST('[1]' AS JSON) = 1, JSON_ARRAY(1) <=> CAST(TRUE AS JSON), CAST(1 AS JSON) < DATE '2000-01-01'",
+            "SELECT (__mysql_json_compare (__mysql_cast_as_json ('[1]'), 1) = 0), __mysql_json_null_safe_equal (JSON_ARRAY (1), __mysql_cast_boolean_as_json (TRUE)), (__mysql_json_compare (__mysql_cast_as_json (1), CAST ('2000-01-01' AS DATE)) < 0)",
+        ),
+        (
+            "SELECT JSON_EXTRACT('0.4', '$') > 0, j -> '$.a' = 'x'",
+            "SELECT (__mysql_json_compare (JSON_EXTRACT ('0.4', '$'), 0) > 0), (__mysql_json_compare (JSON_EXTRACT (j, '$.a'), 'x') = 0)",
+        ),
+        (
+            "SELECT NOT CAST('0' AS JSON), -CAST('1' AS JSON), CAST('1' AS JSON) + 1, 1.5e0 % CAST('1.1' AS JSON)",
+            "SELECT NOT __mysql_json_truth (__mysql_cast_as_json ('0')), ((__mysql_json_double (__mysql_cast_as_json ('1'))) * - 1), __mysql_json_double (__mysql_cast_as_json ('1')) + 1, __mysql_json_remainder (1.5e0, __mysql_json_double (__mysql_cast_as_json ('1.1')))",
+        ),
+        (
+            "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
+            "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\'), CONCAT (__mysql_cast_as_json ('\"12:34:56.000000\"')), MD5 (__mysql_cast_as_json ('\"2000-01-01\"'))",
         ),
     ];
 
@@ -875,8 +930,44 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 0x41 + a",
         },
         SqlCase {
-            name: "temporal arithmetic",
-            sql: "SELECT DATE '2020-01-01' + 0",
+            name: "bit operation on a negative temporal literal",
+            sql: "SELECT TIME '-10:00:00' | 0",
+        },
+        SqlCase {
+            name: "bit operation on a temporal literal with a fraction",
+            sql: "SELECT TIME '10:00:00.5' & 1",
+        },
+        SqlCase {
+            name: "decimal compared with a timestamp",
+            sql: "SELECT 20000101103458.1234 >= TIMESTAMP '2000-01-01 10:34:58.123456'",
+        },
+        SqlCase {
+            name: "time compared with a timestamp",
+            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58' <= TIME '00:00:59'",
+        },
+        SqlCase {
+            name: "timestamps with different fractions compared",
+            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
+        },
+        SqlCase {
+            name: "shift of a temporal literal",
+            sql: "SELECT TIME '10:00:00' << 1",
+        },
+        SqlCase {
+            name: "modulo of a temporal literal",
+            sql: "SELECT 1.5e0 % TIMESTAMP '2000-01-01 10:34:58'",
+        },
+        SqlCase {
+            name: "bitwise not of a temporal literal",
+            sql: "SELECT ~DATE '2000-01-01'",
+        },
+        SqlCase {
+            name: "negated temporal literal with a fraction",
+            sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
+        },
+        SqlCase {
+            name: "fraction that rounds into the seconds",
+            sql: "SELECT TIME '10:00:00.9999995' + 0",
         },
         SqlCase {
             name: "div beyond bigint",
@@ -987,10 +1078,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 5 & 1.5",
         },
         SqlCase {
-            name: "temporal compared with a number",
-            sql: "SELECT DATE '2020-01-01' = 1",
-        },
-        SqlCase {
             name: "column outside group by",
             sql: "SELECT a, b FROM t GROUP BY a",
         },
@@ -1009,6 +1096,26 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "json in a lazily evaluated function",
             sql: "SELECT CONCAT_WS(NULL, CAST(a AS JSON))",
+        },
+        SqlCase {
+            name: "json compared with a column",
+            sql: "SELECT CAST(1 AS JSON) = a",
+        },
+        SqlCase {
+            name: "json of an integer above the signed range in a comparison",
+            sql: "SELECT CAST(18446744073709551615 AS JSON) = 1",
+        },
+        SqlCase {
+            name: "json in a bit operation",
+            sql: "SELECT CAST(1 AS JSON) | 1",
+        },
+        SqlCase {
+            name: "json time of more than a day read as text",
+            sql: "SELECT CONCAT(CAST(TIME '25:00:00' AS JSON))",
+        },
+        SqlCase {
+            name: "json date read as a date",
+            sql: "SELECT DAYOFWEEK(CAST(DATE '2000-01-01' AS JSON))",
         },
         SqlCase {
             name: "temporal compared with an invalid string",
@@ -1046,7 +1153,8 @@ fn known_parser_gaps_return_errors() {
 fn lowering_rejects_unsupported_statement_families() {
     let cases = [
         "TRUNCATE TABLE users",
-        "CREATE VIEW v AS SELECT 1",
+        "CREATE OR REPLACE VIEW v AS SELECT 1",
+        "DROP VIEW a, b",
         "ALTER TABLE users ADD INDEX name_key (name)",
         "ALTER TABLE users MODIFY COLUMN name VARCHAR(20)",
         "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
@@ -1065,7 +1173,6 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1, a = 2",
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
-        "REPLACE INTO users VALUES (1)",
         "SHOW TABLES",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
@@ -1093,6 +1200,28 @@ fn lowering_rejects_unsupported_statement_families() {
 }
 
 #[test]
+fn lowers_views() {
+    let cases = [
+        (
+            "CREATE VIEW v AS SELECT id, name FROM users WHERE id > 1",
+            "CREATE VIEW v AS SELECT id, name FROM users WHERE id > 1",
+        ),
+        (
+            "CREATE ALGORITHM=MERGE DEFINER=`root`@`localhost` SQL SECURITY INVOKER VIEW `v` (`a`, b) AS SELECT 1, 2",
+            "CREATE VIEW `v` (`a`, b) AS SELECT 1, 2",
+        ),
+        ("DROP VIEW v", "DROP VIEW v"),
+        ("DROP VIEW IF EXISTS v", "DROP VIEW IF EXISTS v"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
 fn lowers_insert_forms() {
     let cases = [
         (
@@ -1112,6 +1241,15 @@ fn lowers_insert_forms() {
             "INSERT INTO t (a) SELECT b FROM u WHERE b > 1",
         ),
         ("INSERT INTO t () VALUES ()", "INSERT INTO t DEFAULT VALUES"),
+        (
+            "REPLACE INTO t (a, b) VALUES (1, 'x')",
+            "REPLACE INTO t (a, b) VALUES (1, 'x')",
+        ),
+        ("REPLACE t SET a = 1", "REPLACE INTO t (a) VALUES (1)"),
+        (
+            "REPLACE INTO t SELECT * FROM u",
+            "REPLACE INTO t SELECT * FROM u",
+        ),
     ];
 
     for (sql, expected) in cases {

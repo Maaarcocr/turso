@@ -276,7 +276,7 @@ fn string_literal(expr: &Expr) -> Option<&str> {
 
 const MAXIMUM_DEPTH: usize = 100;
 
-fn mysql_rejects_json_text(text: &str) -> bool {
+pub(crate) fn mysql_rejects_json_text(text: &str) -> bool {
     if text.contains('\0') {
         return false;
     }

@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
 
+use turso_core::types::TextSubtype;
 use turso_core::{Numeric, Result, Value};
 
-use super::collation::compare;
+use super::collation::{compare, compare_bytes};
 
 use super::convert::{double, integer, is_non_binary, string, string_converted_to_text, Str};
 
@@ -127,11 +128,18 @@ pub(super) fn strcmp(args: &[Value]) -> Result<Value> {
     let (Some(left), Some(right)) = (string(&args[0]), string(&args[1])) else {
         return Ok(Value::Null);
     };
-    Ok(Value::from_i64(match compare(&left, &right) {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
-    }))
+    let binary = args.iter().any(|arg| match arg {
+        Value::Text(text) => text.subtype == TextSubtype::Json,
+        Value::Blob(_) => true,
+        Value::Null | Value::Numeric(_) => false,
+    });
+    Ok(Value::from_i64(
+        match compare_bytes(left.as_bytes(), right.as_bytes(), binary) {
+            Ordering::Less => -1,
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+        },
+    ))
 }
 
 pub(super) fn greatest(args: &[Value]) -> Result<Value> {

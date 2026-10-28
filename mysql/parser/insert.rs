@@ -4,8 +4,7 @@ use crate::query::{translate_subquery, TranslationContext};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     Assignment, AssignmentTarget, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Ident,
-    Insert, ObjectName, ObjectNamePart, OnInsert, Query, SetExpr, SqliteOnConflict, TableObject,
-    Values,
+    Insert, ObjectName, ObjectNamePart, OnInsert, Query, SetExpr, TableObject, Values,
 };
 use turso_parser::ast;
 
@@ -13,9 +12,12 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
     if insert.ignore {
         return Err(unsupported("INSERT IGNORE".to_string()));
     }
-    if insert.replace_into || matches!(insert.or, Some(SqliteOnConflict::Replace)) {
-        return Err(unsupported("REPLACE".to_string()));
+    if insert.replace_into && insert.on.is_some() {
+        return Err(unsupported(format!(
+            "REPLACE with a conflict clause `{insert}`"
+        )));
     }
+    let or_conflict = insert.replace_into.then_some(ast::ResolveType::Replace);
     if !is_plain_insert(insert) {
         return Err(unsupported(format!("INSERT clause in `{insert}`")));
     }
@@ -38,6 +40,7 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
                         return Err(unsupported(format!("INSERT of empty rows `{insert}`")));
                     }
                     return Ok(insert_statement(
+                        or_conflict,
                         tbl_name,
                         Vec::new(),
                         ast::InsertBody::DefaultValues,
@@ -75,6 +78,7 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
         Some(other) => return Err(unsupported(format!("INSERT conflict clause `{other}`"))),
     };
     Ok(insert_statement(
+        or_conflict,
         tbl_name,
         columns,
         ast::InsertBody::Select(select, upsert),
@@ -82,13 +86,14 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
 }
 
 fn insert_statement(
+    or_conflict: Option<ast::ResolveType>,
     tbl_name: ast::QualifiedName,
     columns: Vec<ast::Name>,
     body: ast::InsertBody,
 ) -> ast::Stmt {
     ast::Stmt::Insert {
         with: None,
-        or_conflict: None,
+        or_conflict,
         tbl_name,
         columns,
         body,
