@@ -787,8 +787,8 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT NOT __mysql_json_truth (__mysql_cast_as_json ('0')), ((__mysql_json_double (__mysql_cast_as_json ('1'))) * - 1), __mysql_json_double (__mysql_cast_as_json ('1')) + 1, __mysql_json_remainder (1.5e0, __mysql_json_double (__mysql_cast_as_json ('1.1')))",
         ),
         (
-            "SELECT CAST('[1]' AS JSON) LIKE '[1]'",
-            "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\')",
+            "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
+            "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\'), CONCAT (__mysql_cast_as_json ('\"12:34:56.000000\"')), MD5 (__mysql_cast_as_json ('\"2000-01-01\"'))",
         ),
     ];
 
@@ -1005,6 +1005,14 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "json in a bit operation",
             sql: "SELECT CAST(1 AS JSON) | 1",
+        },
+        SqlCase {
+            name: "json time of more than a day read as text",
+            sql: "SELECT CONCAT(CAST(TIME '25:00:00' AS JSON))",
+        },
+        SqlCase {
+            name: "json date read as a date",
+            sql: "SELECT DAYOFWEEK(CAST(DATE '2000-01-01' AS JSON))",
         },
         SqlCase {
             name: "temporal compared with an invalid string",

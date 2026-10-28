@@ -451,6 +451,7 @@ pub(crate) enum TemporalKind {
 pub(crate) struct TemporalLiteral {
     pub(crate) kind: TemporalKind,
     pub(crate) text: String,
+    pub(crate) within_a_day: bool,
 }
 
 pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
@@ -464,14 +465,15 @@ pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
         DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
         _ => None,
     }?;
-    let kind = match &temporal {
-        Temporal::Date(_) => TemporalKind::Date,
-        Temporal::Time(_) => TemporalKind::Time,
-        Temporal::Timestamp(..) => TemporalKind::DateTime,
+    let (kind, within_a_day) = match &temporal {
+        Temporal::Date(_) => (TemporalKind::Date, true),
+        Temporal::Time(time) => (TemporalKind::Time, !time.negative && time.hours < 24),
+        Temporal::Timestamp(..) => (TemporalKind::DateTime, true),
     };
     Some(TemporalLiteral {
         kind,
         text: temporal.text(),
+        within_a_day,
     })
 }
 

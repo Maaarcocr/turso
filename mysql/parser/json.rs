@@ -267,6 +267,33 @@ fn compared_operand(
     }
 }
 
+pub(crate) fn temporal_json_text(expr: &Expr) -> Option<ast::Expr> {
+    let Expr::TypedString(typed) = unnested(json_cast_operand(expr)?) else {
+        return None;
+    };
+    let literal = temporal_literal(typed).filter(|literal| literal.within_a_day)?;
+    let printed = match literal.kind {
+        TemporalKind::Date => literal.text,
+        TemporalKind::Time | TemporalKind::DateTime => {
+            let (whole, fraction) = literal
+                .text
+                .split_once('.')
+                .unwrap_or((literal.text.as_str(), ""));
+            if fraction.len() > 6 {
+                return None;
+            }
+            format!("{whole}.{fraction:0<6}")
+        }
+    };
+    let json = format!("\"{printed}\"");
+    Some(function_call(
+        "__mysql_cast_as_json",
+        vec![ast::Expr::Literal(ast::Literal::String(
+            crate::names::quote_string(&json),
+        ))],
+    ))
+}
+
 fn temporal_operand(expr: &Expr) -> Option<ast::Expr> {
     let Expr::TypedString(typed) = unnested(expr) else {
         return None;
@@ -379,6 +406,9 @@ fn like_operand(
 ) -> Result<ast::Expr, MysqlParserError> {
     if !is_json_value(expr) {
         return translate_in(expr, Context::Text, context);
+    }
+    if let Some(text) = temporal_json_text(expr) {
+        return Ok(text);
     }
     if !json_value_succeeds(expr) {
         return Err(json_outside_a_value_position(expr));

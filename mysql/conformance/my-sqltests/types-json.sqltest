@@ -1,6 +1,7 @@
 # Owned specs for JSON values in comparisons, conditions, arithmetic, LIKE,
-# REGEXP_LIKE and STRCMP. Every expected value was recorded from MySQL 8.4.10
-# (mysql/conformance/target.toml) and copied from specs/vitess/evalengine.
+# REGEXP_LIKE and STRCMP, and for JSON dates and times read as text. Every
+# expected value was recorded from MySQL 8.4.10 (mysql/conformance/target.toml)
+# and copied from specs/vitess/evalengine.
 
 @database :memory:
 
@@ -184,6 +185,34 @@ test json-strcmp-compares-the-json-text {
 }
 expect {
     -1
+}
+
+test json-time-in-concat {
+    SELECT CONCAT('10:04:58', cast(time '12:34:56' as json));
+}
+expect {
+    10:04:58"12:34:56.000000"
+}
+
+test json-datetime-in-concat {
+    SELECT CONCAT('103458.123456', cast(timestamp '2000-01-01 12:34:58' as json));
+}
+expect {
+    103458.123456"2000-01-01 12:34:58.000000"
+}
+
+test json-date-in-md5 {
+    SELECT MD5(cast(date '2000-01-01' as json));
+}
+expect {
+    a3de844fcc0196b8373c9b319eddc249
+}
+
+test json-time-in-to-base64 {
+    SELECT TO_BASE64(cast(time '12:34:56' as json));
+}
+expect {
+    IjEyOjM0OjU2LjAwMDAwMCI=
 }
 
 test json-arguments-of-maketime {

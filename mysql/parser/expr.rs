@@ -1877,6 +1877,11 @@ fn function_arguments(
             if doubles && results.clone().any(|result| result == position) {
                 return translate_result(arg, true, context);
             }
+            if reads_only_text(upper_name, position) {
+                if let Some(text) = json::temporal_json_text(arg) {
+                    return Ok(text);
+                }
+            }
             if is_json_cast(arg)
                 && !upper_name.starts_with("JSON_")
                 && (!json::is_json_value_that_succeeds(arg)
@@ -1918,6 +1923,15 @@ fn unnamed_arguments(list: &FunctionArgumentList) -> Result<Vec<&Expr>, MysqlPar
             ))),
         })
         .collect()
+}
+
+fn reads_only_text(upper_name: &str, position: usize) -> bool {
+    match upper_name {
+        "CONCAT" | "CONCAT_WS" | "STRCMP" | "SHA" | "SHA1" | "MD5" | "CRC32" | "TO_BASE64"
+        | "FROM_BASE64" | "HEX" | "UNHEX" => true,
+        "SHA2" => position == 0,
+        _ => false,
+    }
 }
 
 fn compares_by_collation(upper_name: &str) -> bool {
