@@ -5,7 +5,7 @@ use turso_core::{LimboError, Result, Value};
 use super::collation::compare_bytes;
 
 use super::convert::{
-    bytes_value, integer, string, string_converted_to_text, Str, MAX_ALLOWED_PACKET,
+    bytes_value, integer, is_non_binary, string, string_converted_to_text, Str, MAX_ALLOWED_PACKET,
 };
 
 #[derive(Clone, Copy)]
@@ -98,7 +98,7 @@ pub(super) fn insert(args: &[Value]) -> Result<Value> {
         string(&args[0]),
         integer(&args[1]),
         integer(&args[2]),
-        string_converted_to_text(&args[3], matches!(args[0], Value::Text(_)))?,
+        string_converted_to_text(&args[3], is_non_binary(&args[0]))?,
     ) else {
         return Ok(Value::Null);
     };
@@ -138,7 +138,7 @@ pub(super) fn instr(args: &[Value]) -> Result<Value> {
 }
 
 fn find(haystack: &Value, needle: &Value, position: Option<&Value>) -> Result<Value> {
-    let convert_binary = matches!(haystack, Value::Text(_)) || matches!(needle, Value::Text(_));
+    let convert_binary = is_non_binary(haystack);
     let (Some(haystack), Some(needle)) = (
         string_converted_to_text(haystack, convert_binary)?,
         string_converted_to_text(needle, convert_binary)?,
@@ -239,7 +239,7 @@ fn pad(args: &[Value], side: Side) -> Result<Value> {
     let (Some(text), Some(count), Some(padding)) = (
         string(&args[0]),
         integer(&args[1]),
-        string_converted_to_text(&args[2], matches!(args[0], Value::Text(_)))?,
+        string_converted_to_text(&args[2], is_non_binary(&args[0]))?,
     ) else {
         return Ok(Value::Null);
     };
@@ -300,12 +300,14 @@ pub(super) fn concat_ws(args: &[Value]) -> Result<Value> {
 }
 
 pub(super) fn replace(args: &[Value]) -> Result<Value> {
-    let subject_is_text = matches!(args[0], Value::Text(_));
-    let (Some(text), Some(from), Some(to)) = (
-        string(&args[0]),
-        string_converted_to_text(&args[1], subject_is_text)?,
-        string_converted_to_text(&args[2], subject_is_text)?,
-    ) else {
+    let subject_is_text = is_non_binary(&args[0]);
+    let Some(text) = string(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    let Some(from) = string_converted_to_text(&args[1], subject_is_text)? else {
+        return Ok(Value::Null);
+    };
+    let Some(to) = string_converted_to_text(&args[2], subject_is_text)? else {
         return Ok(Value::Null);
     };
     if from.len() == 0 {
@@ -550,7 +552,7 @@ pub(super) fn find_in_set(args: &[Value]) -> Result<Value> {
 pub(super) fn substring_index(args: &[Value]) -> Result<Value> {
     let (Some(text), Some(delimiter), Some(count)) = (
         string(&args[0]),
-        string_converted_to_text(&args[1], matches!(args[0], Value::Text(_)))?,
+        string_converted_to_text(&args[1], is_non_binary(&args[0]))?,
         integer(&args[2]),
     ) else {
         return Ok(Value::Null);
