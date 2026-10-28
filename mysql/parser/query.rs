@@ -18,9 +18,16 @@ pub(crate) struct TranslationContext {
     parameter_count: u32,
     expression_depth: usize,
     select_list_runs_once: bool,
+    tables_read: Vec<ast::Name>,
 }
 
 impl TranslationContext {
+    pub(crate) fn reads_table(&self, table: &ast::Name) -> bool {
+        self.tables_read
+            .iter()
+            .any(|read| read.as_str().eq_ignore_ascii_case(table.as_str()))
+    }
+
     pub(crate) fn enter_expression(&mut self) -> Result<(), MysqlParserError> {
         if self.expression_depth >= MAX_EXPR_DEPTH {
             return Err(MysqlParserError::Unsupported(format!(
@@ -598,7 +605,7 @@ fn function_arguments(function: &Function) -> Option<Vec<&Expr>> {
     }
 }
 
-fn child_expressions(expr: &Expr) -> Option<Vec<&Expr>> {
+pub(crate) fn child_expressions(expr: &Expr) -> Option<Vec<&Expr>> {
     Some(match expr {
         Expr::Value(_) | Expr::TypedString(_) | Expr::Prefixed { .. } => Vec::new(),
         Expr::Nested(inner)
@@ -663,7 +670,7 @@ fn child_expressions(expr: &Expr) -> Option<Vec<&Expr>> {
     })
 }
 
-fn only_changes_the_plan(hint: &OptimizerHint) -> bool {
+pub(crate) fn only_changes_the_plan(hint: &OptimizerHint) -> bool {
     let text = hint.text.to_ascii_uppercase();
     !text.contains("SET_VAR") && !text.contains("MAX_EXECUTION_TIME")
 }
@@ -892,6 +899,7 @@ fn translate_table_factor(
             index_hints,
         } if with_hints.is_empty() && partitions.is_empty() && index_hints.is_empty() => {
             let name = translate_table_name(name)?;
+            context.tables_read.push(name.name.clone());
             let alias = alias.as_ref().map(translate_table_alias).transpose()?;
             Ok(ast::SelectTable::Table(name, alias, None))
         }
@@ -922,7 +930,9 @@ fn translate_table_factor(
     }
 }
 
-fn translate_table_name(name: &ObjectName) -> Result<ast::QualifiedName, MysqlParserError> {
+pub(crate) fn translate_table_name(
+    name: &ObjectName,
+) -> Result<ast::QualifiedName, MysqlParserError> {
     match name.0.as_slice() {
         [ObjectNamePart::Identifier(table)] => {
             Ok(ast::QualifiedName::single(translate_identifier(table)?))
