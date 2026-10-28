@@ -1173,10 +1173,12 @@ fn translate_cast(
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     let (target, operand_context) = match data_type {
-        DataType::Signed => (type_name("SIGNED"), Context::Number),
-        DataType::SignedInteger => (type_name("SIGNED INTEGER"), Context::Number),
-        DataType::Unsigned => (type_name("UNSIGNED"), Context::Number),
-        DataType::UnsignedInteger => (type_name("UNSIGNED INTEGER"), Context::Number),
+        DataType::Signed | DataType::SignedInteger => {
+            return translate_integer_cast(expr, "__mysql_cast_as_signed", context)
+        }
+        DataType::Unsigned | DataType::UnsignedInteger => {
+            return translate_integer_cast(expr, "__mysql_cast_as_unsigned", context)
+        }
         DataType::Double(ExactNumberInfo::None) => (type_name("DOUBLE"), Context::Number),
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
@@ -1212,6 +1214,25 @@ fn translate_cast(
         translate_in(expr, operand_context, context)?,
         Some(target),
     ))
+}
+
+fn translate_integer_cast(
+    expr: &Expr,
+    name: &str,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let operand = match number_literal(expr) {
+        Some(digits) if exceeds_unsigned_bigint(digits) => exact_decimal(digits, false),
+        Some(digits)
+            if digits
+                .parse::<u64>()
+                .is_ok_and(|number| number > i64::MAX as u64) =>
+        {
+            string_expr(digits)
+        }
+        _ => translate_in(expr, Context::Number, context)?,
+    };
+    Ok(function_call(name, vec![operand]))
 }
 
 fn translate_cast_as_json(

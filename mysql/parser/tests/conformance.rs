@@ -675,7 +675,15 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT greeting", "SELECT greeting"),
         ("SELECT 1 + 2, -1, NOT TRUE", "SELECT 1 + 2, - 1, NOT TRUE"),
         ("SELECT VERSION()", "SELECT VERSION ()"),
-        ("SELECT CAST(1 AS SIGNED)", "SELECT CAST (1 AS SIGNED)"),
+        ("SELECT CAST(1 AS SIGNED)", "SELECT __mysql_cast_as_signed (1)"),
+        (
+            "SELECT CONVERT(18446744073709551615, UNSIGNED)",
+            "SELECT __mysql_cast_as_unsigned ('18446744073709551615')",
+        ),
+        (
+            "SELECT CAST(99999999999999999999 AS SIGNED)",
+            "SELECT __mysql_cast_as_signed (CAST ('99999999999999999999' AS DECIMAL (20, 0)))",
+        ),
         (
             "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
             "SELECT CASE WHEN TRUE THEN 1 ELSE 0 END",
