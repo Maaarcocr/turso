@@ -154,9 +154,11 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
 - Binary strings that are not NUL-free UTF-8 outside numeric contexts.
 - A JSON value in a comparison, arithmetic or a condition, except the
   failing select items above and the JSON comparisons, conditions and
-  arithmetic above, when it may fail (a cast of a column, a function result or
-  an integer literal above the signed BIGINT range, or a `JSON_*` call other
-  than `JSON_ARRAY` or `JSON_OBJECT` of literals): MySQL may never evaluate it.
+  arithmetic above, when it is a cast that may fail (of a column, a function
+  result or an integer literal above the signed BIGINT range) or contains
+  one: MySQL may never evaluate it. Other `JSON_*` calls and `->` are lowered
+  like JSON functions elsewhere, so an error they raise is reported even
+  where MySQL would not evaluate them.
   Also a JSON value compared with a column or a function result, or used with
   `IN`, `BETWEEN`, `DIV` or a bit operator: MySQL converts the other operand
   by its type.

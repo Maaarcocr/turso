@@ -134,6 +134,28 @@ fn json_value_succeeds(expr: &Expr) -> bool {
     }
 }
 
+fn is_lowered_operand(expr: &Expr) -> bool {
+    if json_cast_operand(expr).is_some() {
+        return json_value_succeeds(expr);
+    }
+    match unnested(expr) {
+        Expr::Function(function) => match json_function_name(function).as_deref() {
+            Some("JSON_ARRAY" | "JSON_OBJECT") => json_value_succeeds(expr),
+            _ => plain_arguments(function).is_some_and(|arguments| {
+                arguments
+                    .iter()
+                    .all(|arg| !is_json_value(arg) || is_lowered_operand(arg))
+            }),
+        },
+        Expr::BinaryOp {
+            op: BinaryOperator::Arrow,
+            left,
+            ..
+        } => !is_json_value(left) || is_lowered_operand(left),
+        _ => false,
+    }
+}
+
 fn member_succeeds(expr: &Expr) -> bool {
     if is_json_value(expr) {
         return json_value_succeeds(expr) && !is_opaque_or_temporal_cast(expr);
@@ -232,7 +254,7 @@ fn json_operand(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    if !json_value_succeeds(expr) {
+    if !is_lowered_operand(expr) {
         return Err(json_outside_a_value_position(expr));
     }
     match json_cast_operand(expr) {
@@ -410,7 +432,7 @@ fn like_operand(
     if let Some(text) = temporal_json_text(expr) {
         return Ok(text);
     }
-    if !json_value_succeeds(expr) {
+    if !is_lowered_operand(expr) {
         return Err(json_outside_a_value_position(expr));
     }
     translate_expr(expr, context)

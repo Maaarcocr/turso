@@ -783,6 +783,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT (__mysql_json_compare (__mysql_cast_as_json ('[1]'), 1) = 0), __mysql_json_null_safe_equal (JSON_ARRAY (1), __mysql_cast_boolean_as_json (TRUE)), (__mysql_json_compare (__mysql_cast_as_json (1), CAST ('2000-01-01' AS DATE)) < 0)",
         ),
         (
+            "SELECT JSON_EXTRACT('0.4', '$') > 0, j -> '$.a' = 'x'",
+            "SELECT (__mysql_json_compare (JSON_EXTRACT ('0.4', '$'), 0) > 0), (__mysql_json_compare (JSON_EXTRACT (j, '$.a'), 'x') = 0)",
+        ),
+        (
             "SELECT NOT CAST('0' AS JSON), -CAST('1' AS JSON), CAST('1' AS JSON) + 1, 1.5e0 % CAST('1.1' AS JSON)",
             "SELECT NOT __mysql_json_truth (__mysql_cast_as_json ('0')), ((__mysql_json_double (__mysql_cast_as_json ('1'))) * - 1), __mysql_json_double (__mysql_cast_as_json ('1')) + 1, __mysql_json_remainder (1.5e0, __mysql_json_double (__mysql_cast_as_json ('1.1')))",
         ),
