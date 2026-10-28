@@ -44,36 +44,39 @@ fn round_with(args: &[Value], rounding: Rounding) -> Result<Value> {
     };
     Ok(match number(&args[0]) {
         None => Value::Null,
-        Some(Number::Integer(value)) => Value::from_i64(round_signed(value, places, rounding)),
+        Some(Number::Integer(value)) => Value::from_i64(round_signed(value, places, rounding)?),
         Some(Number::Double(value)) => Value::from_f64(round_double(value, places, rounding)),
     })
 }
 
-fn round_signed(value: i64, places: Integer, rounding: Rounding) -> i64 {
+fn round_signed(value: i64, places: Integer, rounding: Rounding) -> Result<i64> {
     if !places.is_negative() {
-        return value;
+        return Ok(value);
     }
     let digits = places.value.unsigned_abs();
     if digits >= 20 {
-        return 0;
+        return Ok(0);
     }
     let factor = 10u64.pow(digits as u32);
     match rounding {
-        Rounding::Truncate if digits >= 19 => 0,
-        Rounding::Truncate => value / factor as i64 * factor as i64,
+        Rounding::Truncate if digits >= 19 => Ok(0),
+        Rounding::Truncate => Ok(value / factor as i64 * factor as i64),
         Rounding::Nearest => {
             let magnitude = value.unsigned_abs();
             let lower = magnitude / factor * factor;
             let rounded = if magnitude - lower < factor / 2 {
-                lower
+                Some(lower)
             } else {
-                lower.wrapping_add(factor)
+                lower.checked_add(factor)
             };
-            if value >= 0 {
-                rounded as i64
-            } else {
-                (rounded as i64).wrapping_neg()
-            }
+            let rounded = rounded.and_then(|rounded| {
+                if value >= 0 {
+                    i64::try_from(rounded).ok()
+                } else {
+                    0i64.checked_sub_unsigned(rounded)
+                }
+            });
+            rounded.ok_or_else(|| out_of_range("BIGINT"))
         }
     }
 }

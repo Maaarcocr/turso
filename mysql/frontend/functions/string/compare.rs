@@ -5,7 +5,7 @@ use turso_core::{Numeric, Result, Value};
 
 use super::collation::{compare, compare_bytes};
 
-use super::convert::{double, integer, string, string_converted_to_text, Str};
+use super::convert::{double, integer, is_non_binary, string, string_converted_to_text, Str};
 
 #[derive(Clone, Copy, PartialEq)]
 enum ComparisonType {
@@ -29,20 +29,22 @@ pub(super) fn field(args: &[Value]) -> Result<Value> {
     let mut candidates = args[1..].iter().enumerate();
     let found = match comparison {
         ComparisonType::String => {
-            let convert_binary = args.iter().any(|value| matches!(value, Value::Text(_)));
-            let strings = args
-                .iter()
-                .map(|value| string_converted_to_text(value, convert_binary))
-                .collect::<Result<Vec<_>>>()?;
-            let Some(target) = &strings[0] else {
+            let Some(target) = string(&args[0]) else {
                 return Ok(Value::from_i64(0));
             };
-            let binary = strings.iter().flatten().any(Str::is_binary);
-            strings[1..].iter().position(|value| {
-                value
-                    .as_ref()
-                    .is_some_and(|value| compare_strings(target, value, binary).is_eq())
-            })
+            let convert_binary = is_non_binary(&args[0]);
+            let binary = target.is_binary();
+            let mut found = None;
+            for (index, value) in candidates {
+                let Some(value) = string_converted_to_text(value, convert_binary)? else {
+                    continue;
+                };
+                if compare_strings(&target, &value, binary).is_eq() {
+                    found = Some(index);
+                    break;
+                }
+            }
+            found
         }
         ComparisonType::Integer => {
             let Some(target) = integer(&args[0]) else {

@@ -818,6 +818,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
         ),
         (
+            "SELECT 0xAACC, HEX(0xAACC), -0x2, 0xff + b'1001', 0x1 / 7, X'40' + -1.5e0, ABS(_binary X'40'), _binary '1' + 1",
+            "SELECT x'AACC', HEX (x'AACC'), -2e0, 255 + 9, 1 / 7, 64e0 + -1.5e0, ABS ('@'), 1e0 + 1",
+        ),
+        (
+            "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",
+            "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), - 9223372036854775808",
+        ),
+        (
             "SELECT CAST('[1]' AS JSON) = 1, JSON_ARRAY(1) <=> CAST(TRUE AS JSON), CAST(1 AS JSON) < DATE '2000-01-01'",
             "SELECT (__mysql_json_compare (__mysql_cast_as_json ('[1]'), 1) = 0), __mysql_json_null_safe_equal (JSON_ARRAY (1), __mysql_cast_boolean_as_json (TRUE)), (__mysql_json_compare (__mysql_cast_as_json (1), CAST ('2000-01-01' AS DATE)) < 0)",
         ),
@@ -910,8 +918,16 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT DATETIME '2020-01-01 00:00:00'",
         },
         SqlCase {
-            name: "unsigned arithmetic",
-            sql: "SELECT 0x41 + 1",
+            name: "unsigned arithmetic below zero",
+            sql: "SELECT 0x41 - 66",
+        },
+        SqlCase {
+            name: "unsigned arithmetic inside arithmetic",
+            sql: "SELECT (0x41 + 1) - 100",
+        },
+        SqlCase {
+            name: "unsigned arithmetic on a column",
+            sql: "SELECT 0x41 + a",
         },
         SqlCase {
             name: "bit operation on a negative temporal literal",
@@ -920,6 +936,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "bit operation on a temporal literal with a fraction",
             sql: "SELECT TIME '10:00:00.5' & 1",
+        },
+        SqlCase {
+            name: "ROUND of a BIGINT UNSIGNED literal",
+            sql: "SELECT ROUND(18446744073709551615, -1)",
         },
         SqlCase {
             name: "decimal compared with a timestamp",
@@ -1038,12 +1058,24 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "VALUES ROW(1), ROW(1, 2)",
         },
         SqlCase {
-            name: "bytes that are not utf-8",
-            sql: "SELECT CONCAT(0xAACC)",
+            name: "bytes that are not utf-8 joined with json",
+            sql: "SELECT CONCAT(JSON_ARRAY(), 0xAACC)",
         },
         SqlCase {
-            name: "binary string in a number context",
-            sql: "SELECT POW(2, _binary '3')",
+            name: "bytes that are not utf-8 compared with text",
+            sql: "SELECT 0xAACC = 'a'",
+        },
+        SqlCase {
+            name: "a negated hex literal whose decimals show",
+            sql: "SELECT -0x1 + 1.5",
+        },
+        SqlCase {
+            name: "a binary string compared as a date",
+            sql: "SELECT STRCMP(DATE '2000-01-01', 0xFF)",
+        },
+        SqlCase {
+            name: "binary string in a bit operation",
+            sql: "SELECT _binary '3' | 1",
         },
         SqlCase {
             name: "bit operation on a fraction",
@@ -1490,8 +1522,8 @@ fn lowers_numbers_with_the_same_text_as_the_sqlite_parser() {
     let cases = [
         "SELECT 1.5",
         "SELECT 1e3",
-        "SELECT 18446744073709551615",
-        "SELECT 9223372036854775808",
+        "SELECT 18446744073709551615 + 1",
+        "SELECT 9223372036854775808 * 2",
     ];
 
     for sql in cases {
