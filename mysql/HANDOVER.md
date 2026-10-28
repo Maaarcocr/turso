@@ -139,7 +139,10 @@ Earlier reviews and their findings are in `handover/reviews/`.
 - No SQLite fallback (decided 2026-10-28): the MySQL parse refuses anything
   it does not lower, so the score counts only statements run with MySQL's
   meaning. With the fallback the replay passed 274,308 specs; without it,
-  144,978 before INSERT, UPDATE and DELETE were lowered. Engine helper SQL
+  144,978 before INSERT, UPDATE and DELETE were lowered, and 265,252 after.
+  Of those 265,252, 2,938 expect an error and pass only because the frontend
+  refuses the statement (measured by requiring `unsupported MySQL syntax` in
+  each `expect error` block; 2,623 of them are vitess). Engine helper SQL
   (`StatementOrigin::InternalHelper`) is always parsed with the SQLite parser.
 - GPL/unclear-license sources (MySQL MTR, TiDB, MatrixOne) are used locally
   only: download scripts plus committed results (ids, hashes, outcomes), never
