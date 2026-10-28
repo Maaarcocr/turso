@@ -1652,6 +1652,29 @@ fn translate_like(
         let escape = escape.expect("a LIKE escape is one character");
         return json::translate_like(expr, negated, pattern, escape, context);
     }
+    if is_binary_literal(expr) || is_binary_literal(pattern) {
+        let escape = escape.expect("a LIKE escape is one character");
+        let mut operand = |operand: &Expr| {
+            if is_binary_literal(operand) {
+                translate_bytes(operand, context)
+            } else {
+                translate_in(operand, Context::Text, context)
+            }
+        };
+        let matched = function_call(
+            "__mysql_like_bin",
+            vec![
+                operand(expr)?,
+                operand(pattern)?,
+                string_expr(&escape.to_string()),
+            ],
+        );
+        return Ok(if negated {
+            ast::Expr::unary(ast::UnaryOperator::Not, matched)
+        } else {
+            matched
+        });
+    }
     let lhs = translate_in(expr, Context::Text, context)?;
     let (rhs, escape) = match (string_literal(pattern), escape) {
         (Some(text), Some(escape)) if !text.contains(escape) => (string_expr(text), None),
