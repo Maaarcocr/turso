@@ -170,6 +170,9 @@ fn prepare(
             "Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to {function}."
         )));
     }
+    if match_type.is_some_and(|match_type| matches!(match_type, Value::Null)) {
+        return Ok(None);
+    }
     let pattern = text_of(&pattern);
     if pattern.is_empty() {
         return Err(LimboError::InvalidArgument(
