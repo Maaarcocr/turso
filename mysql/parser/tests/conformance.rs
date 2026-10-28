@@ -854,6 +854,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_signed (__mysql_json_integer (__mysql_cast_as_json ('[]'))), CAST (__mysql_json_decimal (__mysql_cast_boolean_as_json (TRUE)) AS DECIMAL (3, 1)), __mysql_cast_as_unsigned (1.5), CAST (__mysql_json_double (JSON_ARRAY ()) AS DOUBLE)",
         ),
         (
+            "SELECT CAST(0xFF00 AS JSON), CAST(CAST(_binary 'a' AS JSON) AS SIGNED), UNIX_TIMESTAMP(CAST('[]' AS JSON)) + 1",
+            "SELECT __mysql_cast_as_json (x'FF00'), __mysql_cast_as_signed (__mysql_json_integer (x'61')), CAST (UNIX_TIMESTAMP (__mysql_cast_as_json ('[]')) AS DECIMAL (65, 6)) + 1",
+        ),
+        (
             "SELECT COLLATION('a'), COLLATION(_latin1 'a' ), COLLATION(RANDOM_BYTES(1))",
             "SELECT 'utf8mb4_0900_ai_ci', 'latin1_swedish_ci', 'binary'",
         ),

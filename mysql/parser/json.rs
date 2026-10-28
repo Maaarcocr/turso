@@ -1,7 +1,7 @@
 use crate::expr::{
     function_call, has_a_temporal_type, is_binary_literal, is_boolean,
     json_outside_a_value_position, number_literal, parenthesized, string_literal, times_minus_one,
-    translate_expr, translate_in, translate_json_value,
+    translate_bytes, translate_expr, translate_in, translate_json_value,
 };
 use crate::invalid_json::mysql_rejects_json_text;
 use crate::literal::{temporal_literal, Context, TemporalKind};
@@ -265,7 +265,7 @@ fn json_operand(
                 ))
             })
         }
-        Some(operand) if is_binary_literal(operand) => translate_expr(operand, context),
+        Some(operand) if is_binary_literal(operand) => translate_bytes(operand, context),
         _ => translate_expr(expr, context),
     }
 }
