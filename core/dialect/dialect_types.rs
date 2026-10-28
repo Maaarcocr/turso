@@ -665,6 +665,20 @@ mod tests {
     }
 
     #[test]
+    fn a_converted_operand_keeps_a_constant_expression_in_one_piece() {
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "constant-conversion.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        assert_eq!(
+            query(
+                &conn,
+                "SELECT NULLIF(99, 2), COUNT(*) * CASE WHEN 0 THEN 'abc' = 3 ELSE 4 END"
+            ),
+            ints(&[&[99, 4]])
+        );
+    }
+
+    #[test]
     fn comparisons_convert_by_the_class_rules() {
         let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
         let db = open_db(&io, "class-comparisons.db", marking()).unwrap();

@@ -98,7 +98,9 @@ pub fn translate_expr(
     target_register: usize,
     resolver: &Resolver,
 ) -> Result<usize> {
-    let constant_span = if expr.is_constant(resolver) {
+    let constant_span = if matches!(expr, ast::Expr::Register(_)) {
+        None
+    } else if expr.is_constant(resolver) {
         if !program.constant_span_is_open() {
             Some(program.constant_span_start())
         } else {
