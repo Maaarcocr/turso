@@ -1018,7 +1018,8 @@ fn known_parser_gaps_return_errors() {
 fn lowering_rejects_unsupported_statement_families() {
     let cases = [
         "TRUNCATE TABLE users",
-        "CREATE VIEW v AS SELECT 1",
+        "CREATE OR REPLACE VIEW v AS SELECT 1",
+        "DROP VIEW a, b",
         "ALTER TABLE users ADD INDEX name_key (name)",
         "ALTER TABLE users MODIFY COLUMN name VARCHAR(20)",
         "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
@@ -1037,7 +1038,6 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1, a = 2",
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
-        "REPLACE INTO users VALUES (1)",
         "SHOW TABLES",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
@@ -1065,6 +1065,28 @@ fn lowering_rejects_unsupported_statement_families() {
 }
 
 #[test]
+fn lowers_views() {
+    let cases = [
+        (
+            "CREATE VIEW v AS SELECT id, name FROM users WHERE id > 1",
+            "CREATE VIEW v AS SELECT id, name FROM users WHERE id > 1",
+        ),
+        (
+            "CREATE ALGORITHM=MERGE DEFINER=`root`@`localhost` SQL SECURITY INVOKER VIEW `v` (`a`, b) AS SELECT 1, 2",
+            "CREATE VIEW `v` (`a`, b) AS SELECT 1, 2",
+        ),
+        ("DROP VIEW v", "DROP VIEW v"),
+        ("DROP VIEW IF EXISTS v", "DROP VIEW IF EXISTS v"),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
 fn lowers_insert_forms() {
     let cases = [
         (
@@ -1084,6 +1106,15 @@ fn lowers_insert_forms() {
             "INSERT INTO t (a) SELECT b FROM u WHERE b > 1",
         ),
         ("INSERT INTO t () VALUES ()", "INSERT INTO t DEFAULT VALUES"),
+        (
+            "REPLACE INTO t (a, b) VALUES (1, 'x')",
+            "REPLACE INTO t (a, b) VALUES (1, 'x')",
+        ),
+        ("REPLACE t SET a = 1", "REPLACE INTO t (a) VALUES (1)"),
+        (
+            "REPLACE INTO t SELECT * FROM u",
+            "REPLACE INTO t SELECT * FROM u",
+        ),
     ];
 
     for (sql, expected) in cases {
