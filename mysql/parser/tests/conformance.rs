@@ -947,12 +947,28 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "VALUES ROW(1), ROW(1, 2)",
         },
         SqlCase {
-            name: "bytes that are not utf-8",
-            sql: "SELECT CONCAT(0xAACC)",
+            name: "bytes that are not utf-8 joined with json",
+            sql: "SELECT CONCAT(JSON_ARRAY(), 0xAACC)",
         },
         SqlCase {
-            name: "binary string in a number context",
-            sql: "SELECT POW(2, _binary '3')",
+            name: "bytes that are not utf-8 compared with text",
+            sql: "SELECT 0xAACC = 'a'",
+        },
+        SqlCase {
+            name: "a negated hex literal whose decimals show",
+            sql: "SELECT -0x1 + 1.5",
+        },
+        SqlCase {
+            name: "a binary string in arithmetic",
+            sql: "SELECT _binary '1' + 1",
+        },
+        SqlCase {
+            name: "a binary string compared as a date",
+            sql: "SELECT STRCMP(DATE '2000-01-01', 0xFF)",
+        },
+        SqlCase {
+            name: "binary string in a bit operation",
+            sql: "SELECT _binary '3' | 1",
         },
         SqlCase {
             name: "bit operation on a fraction",

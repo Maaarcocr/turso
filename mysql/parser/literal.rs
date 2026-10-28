@@ -6,10 +6,21 @@ use turso_parser::ast;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Context {
     Value,
+    Bytes,
+    DateTimeArgument,
     Number,
     Bitwise,
     Arithmetic,
     Text,
+}
+
+impl Context {
+    pub(crate) fn is_value(self) -> bool {
+        matches!(
+            self,
+            Context::Value | Context::Bytes | Context::DateTimeArgument
+        )
+    }
 }
 
 pub(crate) fn translate_value(
@@ -65,13 +76,7 @@ pub(crate) fn translate_introduced_string(
     };
     let charset = introducer.value.to_ascii_lowercase();
     match charset.as_str() {
-        "_binary" if matches!(context, Context::Value | Context::Text) => {
-            binary_literal(bytes, context)
-        }
-        "_binary" => Err(unsupported(
-            "a binary string in a numeric context, which MySQL reads as text and Turso as bytes,"
-                .to_string(),
-        )),
+        "_binary" => binary_string(bytes, context),
         "_utf8mb4" | "_utf8mb3" | "_utf8" => text_literal(bytes),
         "_ascii" | "_latin1" if bytes.is_ascii() => text_literal(bytes),
         _ => Err(unsupported(format!(
@@ -100,16 +105,64 @@ fn binary_literal(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlPa
                 number.to_string(),
             )))
         }
-        Context::Text | Context::Value
-            if bytes.contains(&0) || std::str::from_utf8(&bytes).is_err() =>
-        {
-            Err(unsupported(
-                "a binary string that is not NUL-free UTF-8 outside a numeric context".to_string(),
-            ))
-        }
+        Context::Bytes | Context::DateTimeArgument => Ok(blob_literal(&bytes)),
+        Context::Text | Context::Value if !is_plain_text(&bytes) => Err(not_plain_text()),
         Context::Text => text_literal(bytes),
         Context::Value => Ok(blob_literal(&bytes)),
     }
+}
+
+fn binary_string(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlParserError> {
+    match context {
+        Context::Value | Context::Bytes | Context::Text => binary_literal(bytes, context),
+        Context::DateTimeArgument if is_plain_text(&bytes) => text_literal(bytes),
+        Context::DateTimeArgument => Err(not_plain_text()),
+        Context::Number => {
+            let end = bytes
+                .iter()
+                .position(|byte| *byte == 0 || !byte.is_ascii())
+                .unwrap_or(bytes.len());
+            text_literal(bytes[..end].to_vec())
+        }
+        Context::Arithmetic | Context::Bitwise => Err(unsupported(
+            "a binary string in arithmetic or a bit operation, which MySQL reads as text and Turso as bytes,"
+                .to_string(),
+        )),
+    }
+}
+
+pub(crate) fn negated_binary_literal(value: &Value) -> Result<ast::Expr, MysqlParserError> {
+    let bytes = match value {
+        Value::HexStringLiteral(digits) => hex_bytes(digits)?,
+        Value::SingleQuotedByteStringLiteral(bits) => bit_bytes(bits)?,
+        other => return Err(unsupported(format!("negated literal `{other}`"))),
+    };
+    if bytes.len() > 8 {
+        return Err(unsupported(
+            "a negated binary literal longer than 8 bytes".to_string(),
+        ));
+    }
+    let number = bytes
+        .iter()
+        .fold(0u64, |value, byte| (value << 8) | u64::from(*byte));
+    if number >= FIXED_DOUBLE_DIGITS_LIMIT {
+        return Err(unsupported(format!(
+            "a negated binary literal of {number}, which MySQL shows as a DOUBLE with fixed digits,"
+        )));
+    }
+    Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
+        "-{number}e0"
+    ))))
+}
+
+const FIXED_DOUBLE_DIGITS_LIMIT: u64 = 1_000_000_000_000_000;
+
+fn is_plain_text(bytes: &[u8]) -> bool {
+    !bytes.contains(&0) && std::str::from_utf8(bytes).is_ok()
+}
+
+fn not_plain_text() -> MysqlParserError {
+    unsupported("a binary string that is not NUL-free UTF-8 outside a numeric context".to_string())
 }
 
 fn blob_literal(bytes: &[u8]) -> ast::Expr {
@@ -176,6 +229,27 @@ pub(crate) fn translate_typed_string(
     typed: &TypedString,
     context: Context,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let (temporal, text) = typed_temporal(typed)?;
+    match context {
+        Context::Arithmetic | Context::Bitwise => Err(unsupported(format!(
+            "{} literal '{text}' in arithmetic",
+            typed.data_type
+        ))),
+        Context::Number => Ok(temporal.number()),
+        Context::Value | Context::Bytes | Context::DateTimeArgument | Context::Text => Ok(
+            ast::Expr::Literal(ast::Literal::String(quote_string(&temporal.text()))),
+        ),
+    }
+}
+
+pub(crate) fn translate_typed_string_as_bytes(
+    typed: &TypedString,
+) -> Result<ast::Expr, MysqlParserError> {
+    let (temporal, _) = typed_temporal(typed)?;
+    Ok(blob_literal(temporal.text().as_bytes()))
+}
+
+fn typed_temporal(typed: &TypedString) -> Result<(Temporal, &str), MysqlParserError> {
     let text = match &typed.value.value {
         Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text,
         other => return Err(unsupported(format!("typed literal value `{other}`"))),
@@ -187,16 +261,7 @@ pub(crate) fn translate_typed_string(
         other => return Err(unsupported(format!("typed literal `{other} '{text}'`"))),
     }
     .ok_or_else(|| unsupported(format!("invalid {} literal '{text}'", typed.data_type)))?;
-    match context {
-        Context::Arithmetic | Context::Bitwise => Err(unsupported(format!(
-            "{} literal '{text}' in arithmetic",
-            typed.data_type
-        ))),
-        Context::Number => Ok(temporal.number()),
-        Context::Value | Context::Text => Ok(ast::Expr::Literal(ast::Literal::String(
-            quote_string(&temporal.text()),
-        ))),
-    }
+    Ok((temporal, text))
 }
 
 pub(crate) fn translate_temporal_text(

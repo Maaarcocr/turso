@@ -791,6 +791,83 @@ test invalid-utf8-binary-located-in-text-is-an-error {
 expect error {
 }
 
+# mysql-error: 3854 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test invalid-utf8-binary-located-in-a-number-is-an-error {
+    SELECT LOCATE(0xAACC, 1);
+}
+expect error {
+}
+
+test text-located-in-invalid-utf8-binary-is-not-converted {
+    SELECT POSITION("a" IN 0xAACC);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test invalid-utf8-binary-replaced-into-a-number-is-an-error {
+    SELECT REPLACE(-1, 0xAACC, "a");
+}
+expect error {
+}
+
+test replace-returns-null-before-converting-a-later-argument {
+    SELECT REPLACE(-1, NULL, 0xAACC);
+}
+expect {
+    NULL
+}
+
+# mysql-error: 3854 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test pad-converts-invalid-utf8-padding-before-reading-the-count {
+    SELECT LPAD(1, -1, 0xAACC);
+}
+expect error {
+}
+
+# mysql-error: 3854 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test insert-converts-invalid-utf8-before-checking-for-null {
+    SELECT INSERT(0123, NULL, 9223372036854775808, 0xAACC);
+}
+expect error {
+}
+
+test field-stops-at-the-first-match-before-converting-later-arguments {
+    SELECT FIELD("a", "a", 0xAACC);
+}
+expect {
+    1
+}
+
+test field-of-null-returns-zero-before-converting {
+    SELECT FIELD(NULL, '123', 0xAACC);
+}
+expect {
+    0
+}
+
+# mysql-error: 3854 Cannot convert string '\xAA\xCC' from binary to utf8mb4
+test field-converts-invalid-utf8-it-reaches {
+    SELECT FIELD('123', NULL, 0xAACC);
+}
+expect error {
+}
+
+test invalid-utf8-binary-length-counts-bytes {
+    SELECT LENGTH(0xAACC);
+}
+expect {
+    2
+}
+
+# mysql-error: 1690 BIGINT value is out of range in 'round(9223372036854775807,-(1))'
+test round-of-integer-past-bigint-is-out-of-range {
+    SELECT ROUND(9223372036854775807, -1);
+}
+expect error {
+}
+
 # mysql-error: 1690 BIGINT value is out of range in 'abs(-(9223372036854775808))'
 test abs-of-minimum-bigint-is-out-of-range {
     SELECT ABS(-9223372036854775808);

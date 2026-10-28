@@ -14,6 +14,7 @@ mod ddl_type;
 mod dialect;
 mod dml;
 mod expr;
+mod function_names;
 mod insert;
 mod invalid_json;
 mod literal;
@@ -22,6 +23,7 @@ mod query;
 mod session;
 mod split;
 
+pub use function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 pub use split::{first_statement, split_statements, StatementSpan};
 
 #[derive(Debug, Error)]

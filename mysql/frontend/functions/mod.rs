@@ -79,3 +79,24 @@ pub(crate) enum DecimalArgument {
     Count,
     Double,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_lowering_names_functions_this_frontend_implements() {
+        for name in turso_mysql_parser::BINARY_STRING_FUNCTIONS {
+            assert!(
+                (1..=6).any(|count| string::accepts(name, count)),
+                "{name} is not a string function"
+            );
+        }
+        for name in turso_mysql_parser::DATE_TIME_FUNCTIONS {
+            assert!(
+                (1..=3).any(|count| datetime::accepts(name, count)),
+                "{name} is not a date and time function"
+            );
+        }
+    }
+}
