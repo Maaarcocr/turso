@@ -778,6 +778,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT ELT(0x2, 0x41), FIELD(0x61, 97), FIELD(0x61, 'a'), BIN(0x5), CONV(0xFF, 7, 0x10)",
             "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
         ),
+        (
+            "SELECT 0xAACC, HEX(0xAACC), -0x2, 0xff + b'1001', 0x1 / 7, X'40' + -1.5e0, ABS(_binary X'40')",
+            "SELECT x'AACC', HEX (x'AACC'), -2e0, 255 + 9, 1 / 7, 64e0 + -1.5e0, ABS ('@')",
+        ),
     ];
 
     for (sql, expected) in cases {
@@ -855,8 +859,16 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT DATETIME '2020-01-01 00:00:00'",
         },
         SqlCase {
-            name: "unsigned arithmetic",
-            sql: "SELECT 0x41 + 1",
+            name: "unsigned arithmetic below zero",
+            sql: "SELECT 0x41 - 66",
+        },
+        SqlCase {
+            name: "unsigned arithmetic inside arithmetic",
+            sql: "SELECT (0x41 + 1) - 100",
+        },
+        SqlCase {
+            name: "unsigned arithmetic on a column",
+            sql: "SELECT 0x41 + a",
         },
         SqlCase {
             name: "temporal arithmetic",

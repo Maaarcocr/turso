@@ -132,19 +132,7 @@ fn binary_string(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlPar
 }
 
 pub(crate) fn negated_binary_literal(value: &Value) -> Result<ast::Expr, MysqlParserError> {
-    let bytes = match value {
-        Value::HexStringLiteral(digits) => hex_bytes(digits)?,
-        Value::SingleQuotedByteStringLiteral(bits) => bit_bytes(bits)?,
-        other => return Err(unsupported(format!("negated literal `{other}`"))),
-    };
-    if bytes.len() > 8 {
-        return Err(unsupported(
-            "a negated binary literal longer than 8 bytes".to_string(),
-        ));
-    }
-    let number = bytes
-        .iter()
-        .fold(0u64, |value, byte| (value << 8) | u64::from(*byte));
+    let number = binary_literal_value(value)?;
     if number >= FIXED_DOUBLE_DIGITS_LIMIT {
         return Err(unsupported(format!(
             "a negated binary literal of {number}, which MySQL shows as a DOUBLE with fixed digits,"
@@ -153,6 +141,29 @@ pub(crate) fn negated_binary_literal(value: &Value) -> Result<ast::Expr, MysqlPa
     Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
         "-{number}e0"
     ))))
+}
+
+pub(crate) fn binary_literal_as_double(value: &Value) -> Result<ast::Expr, MysqlParserError> {
+    let number = binary_literal_value(value)?;
+    Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
+        "{number}e0"
+    ))))
+}
+
+pub(crate) fn binary_literal_value(value: &Value) -> Result<u64, MysqlParserError> {
+    let bytes = match value {
+        Value::HexStringLiteral(digits) => hex_bytes(digits)?,
+        Value::SingleQuotedByteStringLiteral(bits) => bit_bytes(bits)?,
+        other => return Err(unsupported(format!("binary literal `{other}`"))),
+    };
+    if bytes.len() > 8 {
+        return Err(unsupported(
+            "a binary literal longer than 8 bytes in arithmetic".to_string(),
+        ));
+    }
+    Ok(bytes
+        .iter()
+        .fold(0u64, |value, byte| (value << 8) | u64::from(*byte)))
 }
 
 const FIXED_DOUBLE_DIGITS_LIMIT: u64 = 1_000_000_000_000_000;

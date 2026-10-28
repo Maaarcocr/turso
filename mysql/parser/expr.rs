@@ -1,9 +1,9 @@
 use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::literal::{
-    negated_binary_literal, translate_as_bytes, translate_introduced_string,
-    translate_temporal_text, translate_typed_string, translate_typed_string_as_bytes,
-    translate_value, Context,
+    binary_literal_as_double, binary_literal_value, negated_binary_literal, translate_as_bytes,
+    translate_introduced_string, translate_temporal_text, translate_typed_string,
+    translate_typed_string_as_bytes, translate_value, Context,
 };
 use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
@@ -64,7 +64,9 @@ fn translate_node(
         Expr::Identifier(identifier) => translate_identifier_expr(identifier),
         Expr::CompoundIdentifier(parts) => translate_compound_identifier(parts),
         Expr::UnaryOp { op, expr } => translate_unary(*op, expr, literal_context, context),
-        Expr::BinaryOp { left, op, right } => translate_binary(left, op, right, context),
+        Expr::BinaryOp { left, op, right } => {
+            translate_binary(left, op, right, literal_context, context)
+        }
         Expr::IsNull(inner) => translate_null_test(inner, false, Context::Value, context),
         Expr::IsNotNull(inner) => translate_null_test(inner, true, Context::Value, context),
         Expr::IsUnknown(inner) => translate_null_test(inner, false, Context::Number, context),
@@ -418,21 +420,23 @@ fn translate_binary(
     left: &Expr,
     op: &BinaryOperator,
     right: &Expr,
+    parent_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let arithmetic = |operator, context: &mut TranslationContext| {
+        arithmetic(left, operator, right, parent_context, context)
+    };
     let (operator, literal_context) = match op {
         BinaryOperator::Plus | BinaryOperator::Minus
             if matches!(left, Expr::Interval(_)) || matches!(right, Expr::Interval(_)) =>
         {
             return translate_interval_arithmetic(left, op, right, context)
         }
-        BinaryOperator::Plus => return arithmetic(left, ast::Operator::Add, right, context),
-        BinaryOperator::Minus => return arithmetic(left, ast::Operator::Subtract, right, context),
-        BinaryOperator::Multiply => {
-            return arithmetic(left, ast::Operator::Multiply, right, context)
-        }
-        BinaryOperator::Divide => return arithmetic(left, ast::Operator::Divide, right, context),
-        BinaryOperator::Modulo => (ast::Operator::Modulus, Context::Arithmetic),
+        BinaryOperator::Plus => return arithmetic(ast::Operator::Add, context),
+        BinaryOperator::Minus => return arithmetic(ast::Operator::Subtract, context),
+        BinaryOperator::Multiply => return arithmetic(ast::Operator::Multiply, context),
+        BinaryOperator::Divide => return arithmetic(ast::Operator::Divide, context),
+        BinaryOperator::Modulo => return arithmetic(ast::Operator::Modulus, context),
         BinaryOperator::PGBitwiseShiftLeft => (ast::Operator::LeftShift, Context::Arithmetic),
         BinaryOperator::BitwiseOr => (ast::Operator::BitwiseOr, Context::Bitwise),
         BinaryOperator::BitwiseAnd => (ast::Operator::BitwiseAnd, Context::Bitwise),
@@ -509,11 +513,123 @@ fn arithmetic(
     left: &Expr,
     operator: ast::Operator,
     right: &Expr,
+    parent_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(unsigned) = unsigned_arithmetic(left, operator, right, parent_context, context)? {
+        return Ok(unsigned);
+    }
+    if operator == ast::Operator::Modulus {
+        return operation(left, operator, right, Context::Arithmetic, context);
+    }
     let lhs = arithmetic_operand(left, right, context)?;
     let rhs = arithmetic_operand(right, left, context)?;
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+fn unsigned_arithmetic(
+    left: &Expr,
+    operator: ast::Operator,
+    right: &Expr,
+    parent_context: Context,
+    context: &mut TranslationContext,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let (left_binary, right_binary) = (hex_or_bit_literal(left), hex_or_bit_literal(right));
+    if left_binary.is_none() && right_binary.is_none() {
+        return Ok(None);
+    }
+    let left_kind = OperandKind::of(left)?;
+    let right_kind = OperandKind::of(right)?;
+    let (Some(left_kind), Some(right_kind)) = (left_kind, right_kind) else {
+        return Ok(None);
+    };
+    let keeps_unsigned = !matches!(left_kind, OperandKind::Decimal | OperandKind::Null)
+        && !matches!(right_kind, OperandKind::Decimal | OperandKind::Null)
+        && operator != ast::Operator::Divide;
+    if keeps_unsigned {
+        let (OperandKind::Integer(lhs), OperandKind::Integer(rhs)) = (left_kind, right_kind) else {
+            return Ok(None);
+        };
+        if parent_context == Context::Arithmetic {
+            return Err(MysqlParserError::Unsupported(format!(
+                "`{left} {operator} {right}` inside arithmetic, where its BIGINT UNSIGNED type changes the result, is not lowered yet"
+            )));
+        }
+        let result = match operator {
+            ast::Operator::Add => lhs.checked_add(rhs),
+            ast::Operator::Subtract => lhs.checked_sub(rhs),
+            ast::Operator::Multiply => lhs.checked_mul(rhs),
+            ast::Operator::Modulus => Some(if rhs == 0 { 0 } else { lhs % rhs }),
+            _ => return Ok(None),
+        };
+        if !result.is_some_and(|result| (0..=i128::from(i64::MAX)).contains(&result)) {
+            return Err(MysqlParserError::Unsupported(format!(
+                "`{left} {operator} {right}`, which MySQL computes as BIGINT UNSIGNED outside the BIGINT range, is not lowered yet"
+            )));
+        }
+    }
+    let lhs = unsigned_operand(left, left_binary, context)?;
+    let rhs = unsigned_operand(right, right_binary, context)?;
+    Ok(Some(ast::Expr::binary(lhs, operator, rhs)))
+}
+
+fn unsigned_operand(
+    expr: &Expr,
+    binary: Option<&Value>,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let Some(literal) = binary else {
+        return translate_in(expr, Context::Arithmetic, context);
+    };
+    let value = i64::try_from(binary_literal_value(literal)?).map_err(|_| {
+        MysqlParserError::Unsupported(format!(
+            "`{expr}` above the BIGINT range in arithmetic is not lowered yet"
+        ))
+    })?;
+    Ok(ast::Expr::Literal(ast::Literal::Numeric(value.to_string())))
+}
+
+#[derive(Clone, Copy)]
+enum OperandKind {
+    Integer(i128),
+    Decimal,
+    Null,
+}
+
+impl OperandKind {
+    fn of(expr: &Expr) -> Result<Option<OperandKind>, MysqlParserError> {
+        if let Some(literal) = hex_or_bit_literal(expr) {
+            return Ok(Some(OperandKind::Integer(i128::from(
+                binary_literal_value(literal)?,
+            ))));
+        }
+        if is_null_literal(expr) {
+            return Ok(Some(OperandKind::Null));
+        }
+        let Some(digits) = signed_number_literal(expr) else {
+            return Ok(None);
+        };
+        if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
+            return Ok(Some(OperandKind::Decimal));
+        }
+        let Ok(magnitude) = digits.parse::<i64>() else {
+            return Ok(None);
+        };
+        let value = i128::from(magnitude);
+        Ok(Some(OperandKind::Integer(if is_negated(expr) {
+            -value
+        } else {
+            value
+        })))
+    }
+}
+
+fn is_null_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => matches!(value.value, Value::Null),
+        Expr::Nested(inner) => is_null_literal(inner),
+        _ => false,
+    }
 }
 
 fn arithmetic_operand(
@@ -521,11 +637,15 @@ fn arithmetic_operand(
     other_operand: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    match negated_binary(expr) {
-        Some(literal) if is_double_literal(other_operand) || is_text_literal(other_operand) => {
-            negated_binary_literal(literal)
-        }
-        _ => translate_in(expr, Context::Arithmetic, context),
+    if !is_double_literal(other_operand) && !is_text_literal(other_operand) {
+        return translate_in(expr, Context::Arithmetic, context);
+    }
+    if let Some(literal) = negated_binary(expr) {
+        return negated_binary_literal(literal);
+    }
+    match hex_or_bit_literal(expr) {
+        Some(literal) => binary_literal_as_double(literal),
+        None => translate_in(expr, Context::Arithmetic, context),
     }
 }
 

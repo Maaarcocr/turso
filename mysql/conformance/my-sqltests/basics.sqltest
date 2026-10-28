@@ -153,6 +153,27 @@ expect {
     0.3333333333333333|1e15|0.0000001|2.5|100
 }
 
+test hex-and-bit-literals-in-integer-arithmetic {
+    SELECT 0xff + b'1001', X'ff' * 7, 9223372036854775807 - 0x1, x'09' % 255, 0x1 / 7;
+}
+expect {
+    264|1785|9223372036854775806|9|0.1429
+}
+
+test hex-and-bit-literals-with-doubles-strings-and-decimals {
+    SELECT X'40' + -1.5e0, '103458foo' + 0b1001, 0b1001 + -1.5;
+}
+expect {
+    62.5|103467|7.5
+}
+
+test binary-literals-keep-bytes-that-are-not-utf8 {
+    SELECT LENGTH(0xAACC), hex(0xAACC), hex(0x0);
+}
+expect {
+    2|AACC|00
+}
+
 test create-table {
     CREATE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR(100));
 }
