@@ -44,11 +44,40 @@ pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
         "REGEXP_REPLACE" => &[3, 4],
         "ELT" | "MAKE_SET" | "SPACE" | "HEX" => &[0],
         "EXPORT_SET" => &[0, 4],
-        "ASCII" | "BIT_LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" | "CONCAT" | "CONCAT_WS"
-        | "FIND_IN_SET" | "INSTR" | "LCASE" | "LENGTH" | "LOWER" | "OCTET_LENGTH" | "ORD"
-        | "POSITION" | "REPLACE" | "REVERSE" | "STRCMP" | "UCASE" | "UPPER" | "CRC32" | "MD5"
-        | "SHA" | "SHA1" | "TO_BASE64" | "REGEXP" | "REGEXP_LIKE" | "__MYSQL_TRIM"
-        | "__MYSQL_LTRIM" | "__MYSQL_RTRIM" | "__MYSQL_LIKE_BIN" => &[],
+        "ASCII"
+        | "BIT_LENGTH"
+        | "CHAR_LENGTH"
+        | "CHARACTER_LENGTH"
+        | "CONCAT"
+        | "CONCAT_WS"
+        | "FIND_IN_SET"
+        | "INSTR"
+        | "LCASE"
+        | "LENGTH"
+        | "LOWER"
+        | "OCTET_LENGTH"
+        | "ORD"
+        | "POSITION"
+        | "REPLACE"
+        | "REVERSE"
+        | "STRCMP"
+        | "UCASE"
+        | "UPPER"
+        | "CRC32"
+        | "MD5"
+        | "SHA"
+        | "SHA1"
+        | "TO_BASE64"
+        | "REGEXP"
+        | "REGEXP_LIKE"
+        | "__MYSQL_COLLATED_FIELD"
+        | "__MYSQL_COLLATED_GREATEST"
+        | "__MYSQL_COLLATED_LEAST"
+        | "__MYSQL_COLLATED_STRCMP"
+        | "__MYSQL_TRIM"
+        | "__MYSQL_LTRIM"
+        | "__MYSQL_RTRIM"
+        | "__MYSQL_LIKE_BIN" => &[],
         _ => return DecimalArgument::Double,
     };
     if counts.contains(&position) {
@@ -103,6 +132,10 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("INTERVAL", 2..) => compare::interval,
         ("LEAST", 2..) => compare::least,
         ("STRCMP", 2) => compare::strcmp,
+        ("__MYSQL_COLLATED_FIELD", 3..) => compare::collated_field,
+        ("__MYSQL_COLLATED_GREATEST", 3..) => compare::collated_greatest,
+        ("__MYSQL_COLLATED_LEAST", 3..) => compare::collated_least,
+        ("__MYSQL_COLLATED_STRCMP", 3) => compare::collated_strcmp,
 
         ("ASCII", 1) => text::ascii,
         ("BIT_LENGTH", 1) => text::bit_length,

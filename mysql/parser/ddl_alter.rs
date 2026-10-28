@@ -1,5 +1,6 @@
 use crate::ddl_column::Column;
 use crate::ddl_index::{drop_index_statement, translate_drop_index};
+use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::MysqlParserError;
 use sqlparser::ast::{
@@ -37,7 +38,9 @@ pub(crate) fn translate_alter_table(
             if_not_exists: false,
             column_def,
             column_position: None,
-        } => ast::AlterTableBody::AddColumn(Column::from_mysql(column_def)?.into_definition()?),
+        } => ast::AlterTableBody::AddColumn(
+            Column::from_mysql(column_def)?.into_definition(DEFAULT_COLLATION)?,
+        ),
         AlterTableOperation::DropColumn {
             has_column_keyword: _,
             column_names,

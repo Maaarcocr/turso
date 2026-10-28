@@ -93,7 +93,7 @@ fn lowers_basic_create_table_to_shared_ast() {
     assert_eq!(
         statement.to_string(),
         "CREATE TABLE users (\
-         id INT PRIMARY KEY NOT NULL, name VARCHAR (100), bio VARCHAR (1000)) STRICT"
+         id INT PRIMARY KEY NOT NULL, name VARCHAR (100) COLLATE \"und-u-ks-level1\", bio VARCHAR (1000) COLLATE \"und-u-ks-level1\") STRICT"
     );
 
     let ast::Stmt::CreateTable {
@@ -167,7 +167,7 @@ fn lowers_create_table_if_not_exists_and_preserves_identifiers() {
     assert_eq!(
         statement.to_string(),
         "CREATE TABLE IF NOT EXISTS `select` (\
-         `primary` INT PRIMARY KEY NOT NULL, `display``name` VARCHAR (100)) STRICT"
+         `primary` INT PRIMARY KEY NOT NULL, `display``name` VARCHAR (100) COLLATE \"und-u-ks-level1\") STRICT"
     );
 
     let ast::Stmt::CreateTable {
@@ -203,8 +203,12 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
             "CREATE TABLE t (a TINYINT (1) DEFAULT 1, b DECIMAL UNSIGNED (10, 2), c FLOAT (7, 3), d BIT (3)) STRICT",
         ),
         (
+            "CREATE TABLE t (a CHAR(2), b TEXT COLLATE utf8mb4_bin, c VARCHAR(3) CHARACTER SET utf8mb4) DEFAULT COLLATE utf8mb4_0900_bin",
+            "CREATE TABLE t (a CHAR (2) COLLATE BINARY, b TEXT COLLATE RTRIM, c VARCHAR (3) COLLATE \"und-u-ks-level1\") STRICT",
+        ),
+        (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
-            "CREATE TABLE t (e ENUM NOT NULL DEFAULT 'x' CHECK (e IN ('x', 'y')), s \"SET\" DEFAULT 'r,w' CHECK (s IN ('', 'r', 'w', 'r,w')), j LONGTEXT CHECK (json_valid (j)), t TINYTEXT) STRICT",
+            "CREATE TABLE t (e ENUM NOT NULL DEFAULT 'x' CHECK (e IN ('x', 'y')), s \"SET\" DEFAULT 'r,w' CHECK (s IN ('', 'r', 'w', 'r,w')), j LONGTEXT CHECK (json_valid (j)), t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
         ),
         (
             "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
@@ -212,7 +216,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
-            "CREATE TABLE t (id INT, email VARCHAR (50), CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE) STRICT",
+            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE) STRICT",
         ),
         (
             "CREATE TABLE t (a INT, b INT AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2))",
@@ -348,7 +352,7 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
         },
         SqlCase {
             name: "other collation",
-            sql: "CREATE TABLE users(name VARCHAR(10) COLLATE utf8mb4_0900_as_cs)",
+            sql: "CREATE TABLE users(name VARCHAR(10) COLLATE utf8mb4_general_ci)",
         },
         SqlCase {
             name: "on update current timestamp",
@@ -735,6 +739,22 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT DATE '2018-5-1'", "SELECT '2018-05-01'"),
         ("SELECT DATE '2020-01-01' + 0", "SELECT 20200101 + 0"),
         (
+            "SELECT 'a' = 'A', 'b' IN ('B'), _binary 'a' = 'A'",
+            "SELECT 'a' COLLATE \"und-u-ks-level1\" = 'A', 'b' COLLATE \"und-u-ks-level1\" IN ('B'), 'a' = 'A'",
+        ),
+        (
+            "SELECT 'a' COLLATE utf8mb4_0900_as_cs = 'A'",
+            "SELECT 'a' COLLATE \"und-u-ks-level3\" = 'A'",
+        ),
+        (
+            "SELECT 'a' = 'A' COLLATE utf8mb4_bin",
+            "SELECT 'a' = 'A' COLLATE RTRIM",
+        ),
+        (
+            "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_ci, 'A')",
+            "SELECT __mysql_collated_strcmp ('utf8mb4_0900_as_ci', 'a' COLLATE \"und-u-ks-level2\", 'A')",
+        ),
+        (
             "SELECT MAKEDATE(TIME '00:00:59', 1)",
             "SELECT MAKEDATE (000059, 1)",
         ),
@@ -895,7 +915,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "collation",
-            sql: "SELECT a COLLATE utf8mb4_bin FROM t",
+            sql: "SELECT a COLLATE utf8mb4_general_ci FROM t",
         },
         SqlCase {
             name: "cast to date",
@@ -936,6 +956,26 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "bit operation on a temporal literal with a fraction",
             sql: "SELECT TIME '10:00:00.5' & 1",
+        },
+        SqlCase {
+            name: "comparison of two collations",
+            sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs = 'A' COLLATE utf8mb4_0900_as_ci",
+        },
+        SqlCase {
+            name: "collated STRCMP of a binary string",
+            sql: "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_cs, 0xff)",
+        },
+        SqlCase {
+            name: "LIKE under a case-sensitive collation",
+            sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs LIKE 'A'",
+        },
+        SqlCase {
+            name: "LOCATE under a case-sensitive collation",
+            sql: "SELECT LOCATE('a' COLLATE utf8mb4_0900_as_cs, 'A')",
+        },
+        SqlCase {
+            name: "collation of a latin1 string",
+            sql: "SELECT _latin1 'a' COLLATE utf8mb4_0900_as_cs",
         },
         SqlCase {
             name: "ROUND of a BIGINT UNSIGNED literal",
