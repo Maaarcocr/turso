@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
-use turso_core::{Numeric, Result, Value};
+use turso_core::{LimboError, Numeric, Result, Value};
 
-use super::collation::compare;
+use super::collation::Collation;
 
 use super::convert::{double, integer, string, string_converted_to_text, Str};
 
@@ -19,7 +19,57 @@ enum Number {
     Double(f64),
 }
 
+#[derive(Clone, Copy)]
+struct Comparison {
+    collation: Collation,
+    explicit: bool,
+}
+
+const DEFAULT_COMPARISON: Comparison = Comparison {
+    collation: Collation::AccentInsensitive,
+    explicit: false,
+};
+
 pub(super) fn field(args: &[Value]) -> Result<Value> {
+    field_in(DEFAULT_COMPARISON, args)
+}
+
+pub(super) fn collated_field(args: &[Value]) -> Result<Value> {
+    let (comparison, args) = collated(args)?;
+    field_in(comparison, args)
+}
+
+pub(super) fn collated_strcmp(args: &[Value]) -> Result<Value> {
+    let (comparison, args) = collated(args)?;
+    strcmp_in(comparison, args)
+}
+
+pub(super) fn collated_greatest(args: &[Value]) -> Result<Value> {
+    let (comparison, args) = collated(args)?;
+    extreme(comparison, args, Ordering::Greater)
+}
+
+pub(super) fn collated_least(args: &[Value]) -> Result<Value> {
+    let (comparison, args) = collated(args)?;
+    extreme(comparison, args, Ordering::Less)
+}
+
+fn collated(args: &[Value]) -> Result<(Comparison, &[Value])> {
+    let [Value::Text(name), rest @ ..] = args else {
+        return Err(LimboError::InternalError(
+            "a collated comparison function takes a collation name first".to_string(),
+        ));
+    };
+    let collation = Collation::named(name.as_str())
+        .ok_or_else(|| LimboError::InternalError(format!("unknown collation {}", name.as_str())))?;
+    let comparison = Comparison {
+        collation,
+        explicit: true,
+    };
+    Ok((comparison, rest))
+}
+
+fn field_in(rules: Comparison, args: &[Value]) -> Result<Value> {
     let comparison = args
         .iter()
         .map(comparison_type)
@@ -36,11 +86,11 @@ pub(super) fn field(args: &[Value]) -> Result<Value> {
             let Some(target) = &strings[0] else {
                 return Ok(Value::from_i64(0));
             };
-            let binary = strings.iter().flatten().any(Str::is_binary);
+            let binary = !rules.explicit && strings.iter().flatten().any(Str::is_binary);
             strings[1..].iter().position(|value| {
-                value
-                    .as_ref()
-                    .is_some_and(|value| compare_strings(target, value, binary).is_eq())
+                value.as_ref().is_some_and(|value| {
+                    compare_strings(rules.collation, target, value, binary).is_eq()
+                })
             })
         }
         ComparisonType::Integer => {
@@ -122,25 +172,32 @@ fn sorted_interval(target: &Number, bounds: &[Value]) -> i64 {
 }
 
 pub(super) fn strcmp(args: &[Value]) -> Result<Value> {
+    strcmp_in(DEFAULT_COMPARISON, args)
+}
+
+fn strcmp_in(comparison: Comparison, args: &[Value]) -> Result<Value> {
     let (Some(left), Some(right)) = (string(&args[0]), string(&args[1])) else {
         return Ok(Value::Null);
     };
-    Ok(Value::from_i64(match compare(&left, &right) {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
-    }))
+    let binary = !comparison.explicit && (left.is_binary() || right.is_binary());
+    Ok(Value::from_i64(
+        match compare_strings(comparison.collation, &left, &right, binary) {
+            Ordering::Less => -1,
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+        },
+    ))
 }
 
 pub(super) fn greatest(args: &[Value]) -> Result<Value> {
-    extreme(args, Ordering::Greater)
+    extreme(DEFAULT_COMPARISON, args, Ordering::Greater)
 }
 
 pub(super) fn least(args: &[Value]) -> Result<Value> {
-    extreme(args, Ordering::Less)
+    extreme(DEFAULT_COMPARISON, args, Ordering::Less)
 }
 
-fn extreme(args: &[Value], wanted: Ordering) -> Result<Value> {
+fn extreme(comparison: Comparison, args: &[Value], wanted: Ordering) -> Result<Value> {
     if args.iter().any(|value| matches!(value, Value::Null)) {
         return Ok(Value::Null);
     }
@@ -148,14 +205,16 @@ fn extreme(args: &[Value], wanted: Ordering) -> Result<Value> {
         .iter()
         .any(|value| matches!(value, Value::Text(_) | Value::Blob(_)))
     {
-        let binary = args.iter().any(|value| matches!(value, Value::Blob(_)));
+        let binary =
+            !comparison.explicit && args.iter().any(|value| matches!(value, Value::Blob(_)));
         let strings: Vec<Str> = args
             .iter()
             .map(|value| string(value).expect("the arguments are not NULL"))
             .collect();
         let mut best = &strings[0];
         for candidate in &strings[1..] {
-            if compare_strings(candidate, best, binary) == wanted {
+            let ordering = compare_strings(comparison.collation, candidate, best, binary);
+            if ordering == wanted || (wanted == Ordering::Greater && ordering.is_eq()) {
                 best = candidate;
             }
         }
@@ -185,11 +244,11 @@ fn extreme(args: &[Value], wanted: Ordering) -> Result<Value> {
     })
 }
 
-fn compare_strings(left: &Str, right: &Str, binary: bool) -> Ordering {
+fn compare_strings(collation: Collation, left: &Str, right: &Str, binary: bool) -> Ordering {
     if binary {
         left.as_bytes().cmp(right.as_bytes())
     } else {
-        compare(left, right)
+        collation.compare_bytes(left.as_bytes(), right.as_bytes())
     }
 }
 

@@ -58,7 +58,7 @@ Compatibility no-ops (accepted, with no effect in Turso):
 
 - `ENGINE=InnoDB` (other engines are not lowered), `DEFAULT CHARSET`/`CHARACTER SET` `utf8mb4`, `ROW_FORMAT` `DEFAULT`/`DYNAMIC`/`COMPACT`/`REDUNDANT`, `STATS_PERSISTENT`/`STATS_AUTO_RECALC`/`STATS_SAMPLE_PAGES`, `AUTO_INCREMENT=1`, and table `COMMENT`.
 - Column and index `COMMENT`, `USING BTREE`/`USING HASH` (InnoDB also builds a B-tree for `HASH`), and `ALGORITHM=`/`LOCK=` on `CREATE INDEX`.
-- `CHARACTER SET utf8mb4` and `COLLATE` `utf8mb4_0900_ai_ci`, `utf8mb4_general_ci`, `utf8mb4_unicode_ci`, `utf8mb4_0900_bin`, `utf8mb4_bin` on columns and tables (see gaps).
+- `CHARACTER SET utf8mb4` and `COLLATE` `utf8mb4_0900_ai_ci`, `utf8mb4_0900_as_ci`, `utf8mb4_0900_as_cs`, `utf8mb4_ja_0900_as_cs`, `utf8mb4_ja_0900_as_cs_ks`, `utf8mb4_0900_bin`, `utf8mb4_bin` on columns and tables. `CHAR`, `VARCHAR` and `TEXT` columns get a `COLLATE` constraint with the matching ICU collation (`und-u-ks-level1` for `utf8mb4_0900_ai_ci`, `BINARY` for `utf8mb4_0900_bin`, `RTRIM` for the PAD SPACE `utf8mb4_bin`), taken from the column, else `utf8mb4_0900_ai_ci` when the column names a character set, else the table default, so comparisons, sorting, grouping, joins and unique keys on them follow the MySQL collation. `utf8mb4_general_ci` and `utf8mb4_unicode_ci` (PAD SPACE, older weights) are refused.
 - Non-unique `KEY`/`INDEX` inside `CREATE TABLE`: secondary indexes do not change query results. The index is not created, so `DROP INDEX` on it fails.
 - Inline column `REFERENCES`, which MySQL itself parses and ignores.
 - `CHECK (...) NOT ENFORCED`, which MySQL does not check.
@@ -66,7 +66,7 @@ Compatibility no-ops (accepted, with no effect in Turso):
 
 Known gaps:
 
-- Collations: Turso compares strings byte by byte, so columns declared (or defaulting to) a case- or accent-insensitive collation compare, sort, group and enforce uniqueness case-sensitively. Only the `_bin` collations match exactly (`utf8mb4_bin` also ignores trailing spaces in MySQL).
+- Collations: `ALTER TABLE ... ADD COLUMN` gives a string column without its own collation `utf8mb4_0900_ai_ci`, also when the table was created with another default collation. `LIKE`, `REGEXP` and the string functions use `utf8mb4_0900_ai_ci` on columns declared with another collation. `ENUM` and `SET` columns compare byte by byte. Comparisons between string literals use `utf8mb4_0900_ai_ci`; comparisons of other string expressions without a column (function results, subqueries) still compare byte by byte.
 - Decimal literals reach a column as doubles until exact decimals exist, so `1.50` is stored in a `VARCHAR` as `1.5`, a double literal such as `2.5e0` or a `DOUBLE` column value rounds half away from zero into an integer column (MySQL rounds it to even), a negative double such as `-0.4e0` fails in an unsigned integer column (MySQL stores 0, and fails only for the decimal `-0.4`), and `DECIMAL(p,s)` values are neither rounded to the scale nor checked against the precision and are shown without trailing zeros. `FLOAT` is double precision; `FLOAT(M,D)`/`DOUBLE(M,D)` values are shown without trailing zeros.
 - A double stored in a `CHAR`/`VARCHAR` whose shortest MySQL text is longer than the column fails (1406), where MySQL rounds it to fit.
 - A binary string or hexadecimal literal stored in an integer, `BIT`, `YEAR`, `FLOAT`/`DOUBLE` or `DECIMAL` column fails (1366), because a hexadecimal literal is not yet told apart from a binary string; MySQL stores `X'3132'` as 12594 and a binary string `'12'` as 12.
@@ -144,6 +144,8 @@ Lowered:
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(x AS TEXT)`, `CAST(x AS BLOB)` |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
+| `COLLATE utf8mb4_0900_ai_ci`, `_as_ci`, `_as_cs`, `utf8mb4_ja_0900_as_cs`, `utf8mb4_ja_0900_as_cs_ks` on a `utf8mb4` operand; `COLLATE utf8mb4_bin` | `COLLATE "und-u-ks-level1"`, `"und-u-ks-level2"`, `"und-u-ks-level3"`, `"ja-u-ks-level3"`, `"ja-u-ks-level4"`; `COLLATE RTRIM`. `FIELD`, `GREATEST`, `LEAST` and `STRCMP` with an explicit collation compare under it; two different explicit collations, and `LIKE`, `REGEXP`, `LOCATE`, `INSTR`, `POSITION`, `FIND_IN_SET` and `NULLIF` under a collation other than `utf8mb4_0900_ai_ci`, are refused |
+| A comparison, `IN` list or `BETWEEN` whose operands are all `utf8mb4` string literals | The left operand gets `COLLATE "und-u-ks-level1"`, MySQL's `utf8mb4_0900_ai_ci` |
 | Integer, decimal and scientific literals, `TRUE`, `FALSE`, `NULL` | The same literal text the SQLite parser keeps (decimals and integers above the signed 64-bit range are still SQLite numbers) |
 | `'...'`, `"..."`, `N'...'` | Text (`"..."` is a string, never an identifier) |
 | `X'..'`, `0x..`, `b'..'`, `0b..` | A blob; in a comparison with a number, a logical operator, a condition, a numeric function argument, a numeric `CAST`, or `\|`, `&`, `>>`, `^`, the unsigned integer value; in a comparison with a string, text. Function arguments MySQL reads as numbers are also the value: the index of `ELT`, the bits of `MAKE_SET` and `EXPORT_SET`, the counts and positions of `LEFT`, `RIGHT`, `SUBSTRING`/`SUBSTR`/`MID`, `INSERT`, `LOCATE`, `SUBSTRING_INDEX`, `LPAD`, `RPAD`, `REPEAT` and `SPACE`, the length of `SHA2`, the bases of `CONV`, every argument of `INTERVAL`, and every argument of `FIELD` when another argument is a number (`FIELD(0x61, 97)` is 1, `FIELD(0x61, 'a')` compares bytes). `CONV`, `BIN` and `OCT` of a hex or bit literal convert its value whatever the base: `__mysql_conv_binary_literal(bytes, from, to)` |
@@ -196,7 +198,7 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables (`@a`, `@@x`), `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
-  collation, `CAST` to `YEAR`, `BINARY` or with a character set,
+  collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set,
   `CONVERT(... USING ...)` with any other character set, and `^` over
   function calls or subqueries.
 - `CAST` to `DATE`, `DATETIME` or `TIME` in a comparison, arithmetic, a

@@ -537,9 +537,23 @@ fn comparison(
     right: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let explicit = single_explicit_collation(&[left, right])?;
     let lhs = translate_compared(left, right, context)?;
     let rhs = translate_compared(right, left, context)?;
+    let lhs = default_collated(lhs, explicit, &[left, right]);
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+fn default_collated(lhs: ast::Expr, explicit: Option<String>, operands: &[&Expr]) -> ast::Expr {
+    let literals_only = operands
+        .iter()
+        .all(|operand| collation_of(operand) == Some(DEFAULT_COLLATION));
+    if explicit.is_none() && literals_only {
+        let sequence = collation_sequence(DEFAULT_COLLATION).expect("the default collation maps");
+        ast::Expr::collate(lhs, ast::Name::exact(sequence.to_string()))
+    } else {
+        lhs
+    }
 }
 
 fn translate_compared(
@@ -687,10 +701,13 @@ fn translate_in_list(
     negated: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let operands = std::iter::once(expr).chain(list).collect::<Vec<_>>();
+    let explicit = single_explicit_collation(&operands)?;
     let lhs = match list.first() {
         Some(first) => translate_compared(expr, first, context)?,
         None => translate_expr(expr, context)?,
     };
+    let lhs = default_collated(lhs, explicit, &operands);
     let rhs = list
         .iter()
         .map(|item| translate_compared(item, expr, context).map(Box::new))
@@ -723,7 +740,9 @@ fn translate_between(
     high: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let explicit = single_explicit_collation(&[expr, low, high])?;
     let lhs = translate_compared(expr, low, context)?;
+    let lhs = default_collated(lhs, explicit, &[expr, low, high]);
     let start = translate_compared(low, expr, context)?;
     let end = translate_compared(high, expr, context)?;
     Ok(ast::Expr::between(lhs, negated, start, end))
@@ -767,6 +786,7 @@ fn translate_regexp(
     pattern: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    ensure_default_collation(&[expr, pattern], "REGEXP")?;
     if string_literal(pattern).is_some_and(str::is_empty) {
         return Err(MysqlParserError::Unsupported(
             "an empty regular expression, which MySQL rejects at run time, is not lowered yet"
@@ -883,14 +903,14 @@ fn translate_result(
 }
 
 fn is_string_literal(expr: &Expr) -> bool {
-    matches!(
-        expr,
-        Expr::Value(value)
-            if matches!(
-                value.value,
-                Value::SingleQuotedString(_) | Value::DoubleQuotedString(_)
-            )
-    )
+    match expr {
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::SingleQuotedString(_) | Value::DoubleQuotedString(_)
+        ),
+        Expr::Collate { expr, .. } => is_string_literal(expr),
+        _ => false,
+    }
 }
 
 fn is_double_literal(expr: &Expr) -> bool {
@@ -1014,6 +1034,7 @@ fn translate_position(
     haystack: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    ensure_default_collation(&[needle, haystack], "POSITION")?;
     let needle = translate_expr(needle, context)?;
     let haystack = translate_expr(haystack, context)?;
     Ok(function_call("LOCATE", vec![needle, haystack]))
@@ -1089,6 +1110,7 @@ fn translate_like(
     escape: Option<&sqlparser::ast::ValueWithSpan>,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    ensure_default_collation(&[expr, pattern], "LIKE")?;
     let lhs = translate_in(expr, Context::Text, context)?;
     let escape = match escape {
         Some(escape) => match &escape.value {
@@ -1490,14 +1512,97 @@ fn translate_collate(
     collation: &ObjectName,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    match single_name(collation)?.to_ascii_lowercase().as_str() {
-        "binary" | "utf8mb4_0900_bin" => Ok(ast::Expr::collate(
-            translate_expr(expr, context)?,
-            ast::Name::exact("BINARY".to_string()),
-        )),
-        other => Err(MysqlParserError::Unsupported(format!(
-            "collation `{other}` is not lowered yet"
+    let name = single_name(collation)?.to_ascii_lowercase();
+    let Some(sequence) = collation_sequence(&name) else {
+        return Err(MysqlParserError::Unsupported(format!(
+            "collation `{name}` is not lowered yet"
+        )));
+    };
+    if !matches!(name.as_str(), "binary" | "utf8mb4_0900_bin")
+        && collation_of(expr).is_some_and(|operand| !operand.starts_with("utf8mb4_"))
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "collation `{name}` of `{expr}`, which is not a utf8mb4 string, is not lowered yet"
+        )));
+    }
+    Ok(ast::Expr::collate(
+        translate_expr(expr, context)?,
+        ast::Name::exact(sequence.to_string()),
+    ))
+}
+
+pub(crate) fn collation_sequence(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "utf8mb4_0900_ai_ci" => "und-u-ks-level1",
+        "utf8mb4_0900_as_ci" => "und-u-ks-level2",
+        "utf8mb4_0900_as_cs" => "und-u-ks-level3",
+        "utf8mb4_ja_0900_as_cs" => "ja-u-ks-level3",
+        "utf8mb4_ja_0900_as_cs_ks" => "ja-u-ks-level4",
+        "binary" | "utf8mb4_0900_bin" => "BINARY",
+        "utf8mb4_bin" => "RTRIM",
+        _ => return None,
+    })
+}
+
+fn explicit_collations(expr: &Expr, found: &mut Vec<String>) -> Result<(), MysqlParserError> {
+    match expr {
+        Expr::Collate { expr, collation } => {
+            let name = single_name(collation)?.to_ascii_lowercase();
+            if !found.contains(&name) {
+                found.push(name);
+            }
+            explicit_collations(expr, found)
+        }
+        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => {
+            explicit_collations(inner, found)
+        }
+        Expr::BinaryOp { left, right, .. } => {
+            explicit_collations(left, found)?;
+            explicit_collations(right, found)
+        }
+        Expr::Function(function) => match &function.args {
+            FunctionArguments::List(list) => list.args.iter().try_for_each(|arg| match arg {
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) => explicit_collations(arg, found),
+                _ => Ok(()),
+            }),
+            _ => Ok(()),
+        },
+        Expr::Value(_)
+        | Expr::Identifier(_)
+        | Expr::CompoundIdentifier(_)
+        | Expr::TypedString(_)
+        | Expr::Prefixed { .. }
+        | Expr::Subquery(_) => Ok(()),
+        other if other.to_string().to_ascii_uppercase().contains("COLLATE") => {
+            Err(MysqlParserError::Unsupported(format!(
+                "a collation inside `{other}` is not lowered yet"
+            )))
+        }
+        _ => Ok(()),
+    }
+}
+
+fn single_explicit_collation(exprs: &[&Expr]) -> Result<Option<String>, MysqlParserError> {
+    let mut found = Vec::new();
+    for expr in exprs {
+        explicit_collations(expr, &mut found)?;
+    }
+    match found.as_slice() {
+        [] => Ok(None),
+        [name] => Ok(Some(name.clone())),
+        _ => Err(MysqlParserError::Unsupported(format!(
+            "operands with the collations {}, which MySQL rejects as an illegal mix, are not lowered yet",
+            found.join(", ")
         ))),
+    }
+}
+
+fn ensure_default_collation(exprs: &[&Expr], operation: &str) -> Result<(), MysqlParserError> {
+    match single_explicit_collation(exprs)? {
+        Some(name) if name != DEFAULT_COLLATION => Err(MysqlParserError::Unsupported(format!(
+            "{operation} under collation `{name}` is not lowered yet"
+        ))),
+        _ => Ok(()),
     }
 }
 
@@ -1590,6 +1695,9 @@ fn translate_function(
         FunctionArguments::Subquery(_) => return Err(unsupported_function(function)),
     };
     if identifier.quote_style.is_none() && over.is_none() {
+        if let Some(expr) = translate_collated_function(&upper_name, list, context)? {
+            return Ok(expr);
+        }
         if let Some(expr) = translate_special_function(&upper_name, list, context)? {
             return Ok(expr);
         }
@@ -1660,6 +1768,55 @@ fn translate_function_without_parentheses(
         return Err(unsupported_function(function));
     }
     Ok(current_time_literal(upper_name).unwrap_or_else(|| function_call(upper_name, Vec::new())))
+}
+
+fn translate_collated_function(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+    context: &mut TranslationContext,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let collated = matches!(upper_name, "FIELD" | "GREATEST" | "LEAST" | "STRCMP");
+    let compares = matches!(
+        upper_name,
+        "FIND_IN_SET"
+            | "INSTR"
+            | "LOCATE"
+            | "NULLIF"
+            | "REGEXP_INSTR"
+            | "REGEXP_LIKE"
+            | "REGEXP_REPLACE"
+            | "REGEXP_SUBSTR"
+    );
+    if !collated && !compares {
+        return Ok(None);
+    }
+    let args = unnamed_arguments(list)?;
+    let Some(collation) = single_explicit_collation(&args)? else {
+        return Ok(None);
+    };
+    if !collated {
+        ensure_default_collation(&args, upper_name)?;
+        return Ok(None);
+    }
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} with a collation and these clauses is not lowered yet"
+        )));
+    }
+    if let Some(temporal) = args
+        .iter()
+        .find(|arg| temporal_type(arg).is_some() || has_a_temporal_type(arg))
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} of `{temporal}` and a string with a collation, which MySQL compares as temporal values, is not lowered yet"
+        )));
+    }
+    let mut translated = vec![string_expr(&collation)];
+    translated.extend(function_arguments(upper_name, list, context)?);
+    Ok(Some(function_call(
+        &format!("__mysql_collated_{}", upper_name.to_ascii_lowercase()),
+        translated,
+    )))
 }
 
 fn translate_special_function(
@@ -1789,7 +1946,7 @@ fn collation_of(expr: &Expr) -> Option<&'static str> {
     }
 }
 
-const DEFAULT_COLLATION: &str = "utf8mb4_0900_ai_ci";
+pub(crate) const DEFAULT_COLLATION: &str = "utf8mb4_0900_ai_ci";
 
 const UTF8MB4_COLLATIONS: &[&str] = &[
     "utf8mb4_0900_ai_ci",
@@ -1799,6 +1956,8 @@ const UTF8MB4_COLLATIONS: &[&str] = &[
     "utf8mb4_bin",
     "utf8mb4_general_ci",
     "utf8mb4_unicode_ci",
+    "utf8mb4_ja_0900_as_cs",
+    "utf8mb4_ja_0900_as_cs_ks",
 ];
 
 fn function_shape(function: &Function) -> Option<(String, Vec<&Expr>)> {

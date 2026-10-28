@@ -1,10 +1,9 @@
-use crate::ddl_column::{
-    ensure_supported_charset, ensure_supported_collation, translate_check, Column,
-};
+use crate::ddl_column::{ensure_supported_charset, supported_collation, translate_check, Column};
 use crate::ddl_index::{
     index_options_have_no_effect, is_btree_or_hash, translate_key_parts, KeyPart,
 };
 use crate::ddl_type::ensure_key_length;
+use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::query::{translate_subquery, TranslationContext};
 use crate::MysqlParserError;
@@ -140,11 +139,11 @@ pub(crate) fn translate_create_table(
                 .to_string(),
         ));
     }
-    translate_table_options(table_options)?;
+    let table_collation = translate_table_options(table_options)?;
     let table_name = translate_ddl_name(name)?;
     let body = match (query, columns.is_empty() && constraints.is_empty()) {
         (Some(query), true) => translate_select_body(query)?,
-        (None, false) => translate_columns_and_constraints(columns, constraints)?,
+        (None, false) => translate_columns_and_constraints(columns, constraints, &table_collation)?,
         (Some(_), false) => {
             return Err(MysqlParserError::Unsupported(
                 "CREATE TABLE with both column definitions and a SELECT is not available"
@@ -176,6 +175,7 @@ fn translate_select_body(query: &Query) -> Result<ast::CreateTableBody, MysqlPar
 fn translate_columns_and_constraints(
     columns: &[ColumnDef],
     constraints: &[TableConstraint],
+    table_collation: &str,
 ) -> Result<ast::CreateTableBody, MysqlParserError> {
     let columns = columns
         .iter()
@@ -198,7 +198,7 @@ fn translate_columns_and_constraints(
     } = table;
     let columns = columns
         .into_iter()
-        .map(Column::into_definition)
+        .map(|column| column.into_definition(table_collation))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::CreateTableBody::ColumnsAndConstraints {
         columns,
@@ -210,9 +210,10 @@ fn translate_columns_and_constraints(
     })
 }
 
-fn translate_table_options(options: &CreateTableOptions) -> Result<(), MysqlParserError> {
+fn translate_table_options(options: &CreateTableOptions) -> Result<String, MysqlParserError> {
+    let mut collation = DEFAULT_COLLATION.to_string();
     let options = match options {
-        CreateTableOptions::None => return Ok(()),
+        CreateTableOptions::None => return Ok(collation),
         CreateTableOptions::Plain(options) => options,
         other => {
             return Err(MysqlParserError::Unsupported(format!(
@@ -221,13 +222,22 @@ fn translate_table_options(options: &CreateTableOptions) -> Result<(), MysqlPars
         }
     };
     for option in options {
+        if let SqlOption::KeyValue { key, value } = option {
+            if matches!(
+                key.value.to_ascii_uppercase().as_str(),
+                "DEFAULT COLLATE" | "COLLATE"
+            ) {
+                collation = supported_collation(&option_word(value)?)?;
+                continue;
+            }
+        }
         if !table_option_has_no_effect(option)? {
             return Err(MysqlParserError::Unsupported(format!(
                 "table option `{option}` is not available"
             )));
         }
     }
-    Ok(())
+    Ok(collation)
 }
 
 fn table_option_has_no_effect(option: &SqlOption) -> Result<bool, MysqlParserError> {
@@ -243,10 +253,6 @@ fn table_option_has_no_effect(option: &SqlOption) -> Result<bool, MysqlParserErr
         SqlOption::KeyValue { key, value } => match key.value.to_ascii_uppercase().as_str() {
             "DEFAULT CHARSET" | "CHARSET" | "DEFAULT CHARACTER SET" | "CHARACTER SET" => {
                 ensure_supported_charset(&option_word(value)?)?;
-                Ok(true)
-            }
-            "DEFAULT COLLATE" | "COLLATE" => {
-                ensure_supported_collation(&option_word(value)?)?;
                 Ok(true)
             }
             "AUTO_INCREMENT" => Ok(matches!(

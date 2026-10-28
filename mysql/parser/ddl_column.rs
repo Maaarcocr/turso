@@ -1,6 +1,7 @@
 use crate::ddl_default::resolve_default;
 use crate::ddl_expr::{translate_default, translate_expr, DefaultValue};
 use crate::ddl_type::{translate_column_type, ColumnType, Family};
+use crate::expr::{collation_sequence, DEFAULT_COLLATION};
 use crate::names::translate_ddl_identifier;
 use crate::MysqlParserError;
 use sqlparser::ast::{
@@ -22,6 +23,8 @@ pub(crate) struct Column {
     default: Option<DefaultValue>,
     checks: Vec<(Option<ast::Name>, ast::Expr)>,
     generated: Option<(ast::Expr, ast::GeneratedColumnType)>,
+    collation: Option<String>,
+    charset: bool,
 }
 
 impl Column {
@@ -43,6 +46,8 @@ impl Column {
             default: None,
             checks: Vec::new(),
             generated: None,
+            collation: None,
+            charset: false,
         };
         for option in options {
             lowered.apply_option(option, data_type)?;
@@ -81,7 +86,10 @@ impl Column {
         Ok(())
     }
 
-    pub(crate) fn into_definition(self) -> Result<ast::ColumnDefinition, MysqlParserError> {
+    pub(crate) fn into_definition(
+        self,
+        table_collation: &str,
+    ) -> Result<ast::ColumnDefinition, MysqlParserError> {
         let Column {
             name,
             column_type,
@@ -94,6 +102,8 @@ impl Column {
             default,
             checks,
             generated,
+            collation,
+            charset,
         } = self;
         if auto_increment && !primary_key && !unique && !in_key {
             return Err(MysqlParserError::Rejected(format!(
@@ -134,6 +144,22 @@ impl Column {
             constraints.push(constraint(ast::ColumnConstraint::Default(Box::new(
                 default,
             ))));
+        }
+        if matches!(
+            column_type.family,
+            Family::Char { .. } | Family::Varchar { .. } | Family::Text
+        ) {
+            let collation = match (&collation, charset) {
+                (Some(collation), _) => collation.as_str(),
+                (None, true) => DEFAULT_COLLATION,
+                (None, false) => table_collation,
+            };
+            let sequence = collation_sequence(collation).ok_or_else(|| {
+                MysqlParserError::Unsupported(format!("collation `{collation}` is not available"))
+            })?;
+            constraints.push(constraint(ast::ColumnConstraint::Collate {
+                collation_name: ast::Name::exact(sequence.to_string()),
+            }));
         }
         if let Some(value_check) = column_type.value_check(&name) {
             constraints.push(check(value_check));
@@ -203,9 +229,10 @@ impl Column {
             }
             ColumnOption::CharacterSet(charset) if self.column_type.is_character_string() => {
                 ensure_supported_charset(charset)?;
+                self.charset = true;
             }
             ColumnOption::Collation(collation) if !self.column_type.is_binary() => {
-                ensure_supported_collation(collation)?;
+                self.collation = Some(supported_collation(collation)?);
             }
             ColumnOption::Collation(collation) => {
                 return Err(MysqlParserError::Rejected(format!(
@@ -260,12 +287,9 @@ pub(crate) fn ensure_supported_charset(charset: &ObjectName) -> Result<(), Mysql
     }
 }
 
-pub(crate) fn ensure_supported_collation(collation: &ObjectName) -> Result<(), MysqlParserError> {
-    match single_word(collation).as_deref() {
-        Some(
-            "utf8mb4_0900_ai_ci" | "utf8mb4_general_ci" | "utf8mb4_unicode_ci" | "utf8mb4_0900_bin"
-            | "utf8mb4_bin",
-        ) => Ok(()),
+pub(crate) fn supported_collation(collation: &ObjectName) -> Result<String, MysqlParserError> {
+    match single_word(collation) {
+        Some(name) if name != "binary" && collation_sequence(&name).is_some() => Ok(name),
         _ => Err(MysqlParserError::Unsupported(format!(
             "collation `{collation}` is not available"
         ))),
