@@ -1896,6 +1896,12 @@ fn compute_greedy_join_order<'a>(
 
 /// For each table, the tables that must come before it in any join order.
 fn required_lhs_by_table(joined_tables: &[JoinedTable]) -> Result<Vec<TableMask>> {
+    let is_semi_or_anti = |table: &JoinedTable| {
+        table
+            .join_info
+            .as_ref()
+            .is_some_and(|join_info| join_info.is_semi_or_anti())
+    };
     let mut required_lhs_by_table = vec![TableMask::default(); joined_tables.len()];
     for (j, joined_table) in joined_tables.iter().enumerate() {
         // LEFT/FULL OUTER, SEMI, and ANTI joins all require the RHS table
@@ -1906,6 +1912,21 @@ fn required_lhs_by_table(joined_tables: &[JoinedTable]) -> Result<Vec<TableMask>
             .is_some_and(|j| j.is_ordering_constrained())
         {
             for i in 0..j {
+                if is_semi_or_anti(&joined_tables[i]) && !is_semi_or_anti(joined_table) {
+                    continue;
+                }
+                required_lhs_by_table[j].set(i)?;
+            }
+        }
+    }
+    // A semi/anti-join loop exits to its nearest non-semi/anti ancestor once its
+    // body has run, so only other semi/anti-join loops may be nested inside it.
+    for (j, joined_table) in joined_tables.iter().enumerate() {
+        if !is_semi_or_anti(joined_table) {
+            continue;
+        }
+        for (i, other) in joined_tables.iter().enumerate() {
+            if !is_semi_or_anti(other) {
                 required_lhs_by_table[j].set(i)?;
             }
         }
@@ -2206,9 +2227,22 @@ fn compute_naive_left_deep_plan<'a>(
     let n = joined_tables.len();
     turso_assert_greater_than!(n, 0);
 
+    let is_semi_or_anti = |table: &JoinedTable| {
+        table
+            .join_info
+            .as_ref()
+            .is_some_and(|join_info| join_info.is_semi_or_anti())
+    };
     let join_order = joined_tables
         .iter()
         .enumerate()
+        .filter(|(_, t)| !is_semi_or_anti(t))
+        .chain(
+            joined_tables
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| is_semi_or_anti(t)),
+        )
         .map(|(i, t)| JoinOrderMember {
             table_id: t.internal_id,
             original_idx: i,
@@ -2217,11 +2251,12 @@ fn compute_naive_left_deep_plan<'a>(
         .collect::<Vec<_>>();
 
     // Start with first table
+    let first = join_order[0].original_idx;
     let mut best_plan = join_lhs_and_rhs(
         None,
         initial_input_cardinality,
-        &joined_tables[0],
-        &constraints[0],
+        &joined_tables[first],
+        &constraints[first],
         constraints,
         base_table_rows,
         &join_order[..1],
@@ -2245,11 +2280,12 @@ fn compute_naive_left_deep_plan<'a>(
 
     // Add remaining tables one at a time from left to right
     for i in 1..n {
+        let table_idx = join_order[i].original_idx;
         best_plan = join_lhs_and_rhs(
             best_plan.as_ref(),
             initial_input_cardinality,
-            &joined_tables[i],
-            &constraints[i],
+            &joined_tables[table_idx],
+            &constraints[table_idx],
             constraints,
             base_table_rows,
             &join_order[..=i],
