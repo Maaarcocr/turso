@@ -18,6 +18,7 @@ pub(crate) struct TranslationContext {
     parameter_count: u32,
     expression_depth: usize,
     select_list_runs_once: bool,
+    pub(crate) inserted_row_is_readable: bool,
 }
 
 impl TranslationContext {

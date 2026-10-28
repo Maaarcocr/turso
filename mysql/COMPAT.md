@@ -200,6 +200,35 @@ leading number rather than MySQL's 20000101, and a decimal literal reaches the
 cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
 `.125000`).
 
+## `INSERT`
+
+`mysql/parser/insert.rs` lowers `INSERT [INTO] t [(columns)]` with a
+`VALUES` list (several rows allowed), a `SELECT` (also a `UNION` or `WITH`
+query), or `SET c = expr, ...`, and `INSERT INTO t () VALUES ()` to
+`DEFAULT VALUES`. `LOW_PRIORITY`, `DELAYED` and `HIGH_PRIORITY` are
+accepted and have no effect.
+
+`ON DUPLICATE KEY UPDATE c = expr, ...` after `VALUES` lowers to Turso's
+upsert, `INSERT ... ON CONFLICT DO UPDATE SET ...` without a conflict
+target, which like MySQL updates the row whose primary or unique key the
+inserted row duplicates (also a row inserted earlier by the same
+statement). `VALUES(c)` is `excluded.c`, the value the row would have
+inserted, and `t.c` targets and references of the inserted table drop the
+qualifier.
+
+Refused: `INSERT IGNORE`, `REPLACE`, `DEFAULT` as a value, a schema-qualified
+table, `ON DUPLICATE KEY UPDATE` after a `SELECT` (MySQL lets the update read
+the selected columns), the `AS alias` row alias, an `INSERT ... SET` or
+update that assigns a column twice, an `INSERT ... SET` value that reads a
+column, and an update assignment that reads a column an earlier assignment
+wrote (MySQL assigns left to right, so `a = a + 1, b = a` sets `b` to the new
+`a`, while the upsert reads the old row).
+
+Known differences: the affected-row count is SQLite's (1 per inserted or
+updated row) rather than MySQL's 2 for an update and 0 for an unchanged
+row; an update consumes no `AUTO_INCREMENT` value; and Turso checks foreign
+keys only after `SET FOREIGN_KEY_CHECKS = 1`.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or
