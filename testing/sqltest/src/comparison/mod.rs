@@ -70,10 +70,17 @@ fn normalize_whitespace(s: &str) -> String {
         .join(" ")
 }
 
+/// The MySQL frontend's refusal of a statement it cannot lower with MySQL's
+/// meaning. A refusal is not the error MySQL raises, so it never matches one.
+const MYSQL_REFUSAL: &str = "unsupported MySQL syntax:";
+
 /// Compare when expecting an error
 fn compare_error(actual: &QueryResult, expected_pattern: Option<&str>) -> ComparisonResult {
     match (&actual.error, expected_pattern) {
         (None, _) => ComparisonResult::mismatch("expected error but query succeeded"),
+        (Some(err), _) if err.contains(MYSQL_REFUSAL) => ComparisonResult::mismatch(format!(
+            "expected error but the statement was refused: {err}"
+        )),
         (Some(_err), None) => {
             // Any error is fine
             ComparisonResult::Match
@@ -138,6 +145,21 @@ mod tests {
         let expectation = Expectation::Error(None);
 
         assert!(compare(&actual, &expectation).is_match());
+    }
+
+    #[test]
+    fn test_compare_error_refusal() {
+        let actual =
+            QueryResult::error("Parse error: unsupported MySQL syntax: x is not lowered yet");
+
+        assert!(!compare(&actual, &Expectation::Error(None)).is_match());
+        assert!(
+            !compare(
+                &actual,
+                &Expectation::Error(Some("Parse error".to_string()))
+            )
+            .is_match()
+        );
     }
 
     #[test]
