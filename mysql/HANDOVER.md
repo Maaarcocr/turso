@@ -132,13 +132,15 @@ Earlier reviews and their findings are in `handover/reviews/`.
   the pinned MySQL 8.4.10 container and checked in. Hand-written unit tests are
   not a goal.
 - Minimal core additions, mirroring what the PostgreSQL frontend needs. A
-  frontend-only fix is preferred when it is enough (e.g. the `&&`/`@>` refusal
-  in the SQLite fallback stays in `mysql/frontend/lib.rs`).
+  frontend-only fix is preferred when it is enough.
 - Custom types and the PostgreSQL frontend are experimental and may break;
   plain SQLite with custom types off must stay exactly unchanged (same
   bytecode).
-- The MySQL parse falls back to SQLite for anything not lowered, like the
-  PostgreSQL frontend; no statement-origin plumbing in core.
+- No SQLite fallback (decided 2026-10-28): the MySQL parse refuses anything
+  it does not lower, so the score counts only statements run with MySQL's
+  meaning. With the fallback the replay passed 274,308 specs; without it,
+  144,978 before INSERT, UPDATE and DELETE were lowered. Engine helper SQL
+  (`StatementOrigin::InternalHelper`) is always parsed with the SQLite parser.
 - GPL/unclear-license sources (MySQL MTR, TiDB, MatrixOne) are used locally
   only: download scripts plus committed results (ids, hashes, outcomes), never
   their SQL.

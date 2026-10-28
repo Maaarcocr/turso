@@ -231,13 +231,12 @@ handoff.
 - Cycle 2, basic executable `CREATE TABLE`, is integrated on top of upstream
   `main` without any shared-core changes.
 
-Parser policy (mirrors the PostgreSQL frontend): `MySqlDialect::parse` falls
-back to SQLite parsing whenever the MySQL parser or lowering cannot handle the
-text. Engine-generated helper SQL is canonical SQLite text and depends on this
-fallback, so no statement-origin plumbing exists in core. The consequence is
-that SQL the MySQL layer does not lower yet may still execute with SQLite
-semantics; the recorded MySQL spec corpus, not hand-written rejection tests, is
-what catches any resulting divergence.
+Parser policy: `MySqlDialect::parse` runs only what the MySQL parser and
+lowering handle and refuses everything else with an unsupported-syntax error.
+There is no SQLite fallback, so the replay score counts only statements run
+with MySQL's meaning. Engine-generated helper SQL (statements prepared with
+`StatementOrigin::InternalHelper`) is canonical SQLite text and is always
+parsed with the SQLite parser, whatever the connection's dialect.
 
 Priority: specs first. Grow the recorded MySQL 8.4.10 spec corpus and make it
 pass. Hand-written unit tests are not a goal in themselves.
