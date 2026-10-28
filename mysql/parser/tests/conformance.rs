@@ -779,8 +779,12 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
         ),
         (
-            "SELECT 0xAACC, HEX(0xAACC), -0x2, 0xff + b'1001', 0x1 / 7, X'40' + -1.5e0, ABS(_binary X'40')",
-            "SELECT x'AACC', HEX (x'AACC'), -2e0, 255 + 9, 1 / 7, 64e0 + -1.5e0, ABS ('@')",
+            "SELECT 0xAACC, HEX(0xAACC), -0x2, 0xff + b'1001', 0x1 / 7, X'40' + -1.5e0, ABS(_binary X'40'), _binary '1' + 1",
+            "SELECT x'AACC', HEX (x'AACC'), -2e0, 255 + 9, 1 / 7, 64e0 + -1.5e0, ABS ('@'), 1e0 + 1",
+        ),
+        (
+            "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",
+            "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), - 9223372036854775808",
         ),
     ];
 
@@ -969,10 +973,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "a negated hex literal whose decimals show",
             sql: "SELECT -0x1 + 1.5",
-        },
-        SqlCase {
-            name: "a binary string in arithmetic",
-            sql: "SELECT _binary '1' + 1",
         },
         SqlCase {
             name: "a binary string compared as a date",
@@ -1380,8 +1380,8 @@ fn lowers_numbers_with_the_same_text_as_the_sqlite_parser() {
     let cases = [
         "SELECT 1.5",
         "SELECT 1e3",
-        "SELECT 18446744073709551615",
-        "SELECT 9223372036854775808",
+        "SELECT 18446744073709551615 + 1",
+        "SELECT 9223372036854775808 * 2",
     ];
 
     for sql in cases {

@@ -117,6 +117,7 @@ fn binary_string(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlPar
         Context::Value | Context::Bytes | Context::Text => binary_literal(bytes, context),
         Context::DateTimeArgument if is_plain_text(&bytes) => text_literal(bytes),
         Context::DateTimeArgument => Err(not_plain_text()),
+        Context::Arithmetic => double_of_text(&bytes),
         Context::Number => {
             let end = bytes
                 .iter()
@@ -124,11 +125,58 @@ fn binary_string(bytes: Vec<u8>, context: Context) -> Result<ast::Expr, MysqlPar
                 .unwrap_or(bytes.len());
             text_literal(bytes[..end].to_vec())
         }
-        Context::Arithmetic | Context::Bitwise => Err(unsupported(
-            "a binary string in arithmetic or a bit operation, which MySQL reads as text and Turso as bytes,"
+        Context::Bitwise => Err(unsupported(
+            "a binary string in a bit operation, which MySQL computes on its bytes or its text,"
                 .to_string(),
         )),
     }
+}
+
+fn double_of_text(bytes: &[u8]) -> Result<ast::Expr, MysqlParserError> {
+    let start = bytes
+        .iter()
+        .position(|byte| !matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c))
+        .unwrap_or(bytes.len());
+    let text = &bytes[start..];
+    let mut end = usize::from(matches!(text.first(), Some(b'+' | b'-')));
+    let digits = |from: usize| {
+        from + text[from..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count()
+    };
+    let whole_end = digits(end);
+    let mut mantissa_end = whole_end;
+    if text.get(whole_end) == Some(&b'.') {
+        mantissa_end = digits(whole_end + 1);
+    }
+    let has_digits = mantissa_end > end + usize::from(mantissa_end > whole_end);
+    if has_digits {
+        end = mantissa_end;
+        if matches!(text.get(end), Some(b'e' | b'E')) {
+            let sign = usize::from(matches!(text.get(end + 1), Some(b'+' | b'-')));
+            let exponent_end = digits(end + 1 + sign);
+            if exponent_end > end + 1 + sign {
+                end = exponent_end;
+            }
+        }
+    }
+    let value = if has_digits {
+        std::str::from_utf8(&text[..end])
+            .ok()
+            .and_then(|number| number.parse::<f64>().ok())
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    if !value.is_finite() {
+        return Err(unsupported(
+            "a binary string beyond the DOUBLE range in arithmetic".to_string(),
+        ));
+    }
+    Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
+        "{value:e}"
+    ))))
 }
 
 pub(crate) fn negated_binary_literal(value: &Value) -> Result<ast::Expr, MysqlParserError> {

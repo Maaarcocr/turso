@@ -210,6 +210,12 @@ fn translate_value_expr(
             Ok(exact_decimal(digits, false))
         }
         Value::Number(digits, false)
+            if matches!(literal_context, Context::Value | Context::Bytes)
+                && exceeds_signed_bigint(digits) =>
+        {
+            Ok(exact_decimal(digits, false))
+        }
+        Value::Number(digits, false)
             if literal_context != Context::Bitwise && is_decimal_literal(digits) =>
         {
             Ok(match kept_digits(digits) {
@@ -275,6 +281,18 @@ fn exceeds_unsigned_bigint(digits: &str) -> bool {
     significant.bytes().all(|byte| byte.is_ascii_digit())
         && (significant.len() > 20
             || (significant.len() == 20 && significant > "18446744073709551615"))
+}
+
+fn exceeds_signed_bigint(digits: &str) -> bool {
+    digits
+        .parse::<u64>()
+        .is_ok_and(|value| value > i64::MAX as u64)
+}
+
+fn exceeds_negated_bigint(digits: &str) -> bool {
+    digits
+        .parse::<u64>()
+        .is_ok_and(|value| value > i64::MIN.unsigned_abs())
 }
 
 fn is_decimal_literal(digits: &str) -> bool {
@@ -356,7 +374,10 @@ fn translate_unary(
                 };
             }
             if let Some(digits) = number_literal(expr) {
-                if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
+                if is_decimal_literal(digits)
+                    || exceeds_unsigned_bigint(digits)
+                    || exceeds_negated_bigint(digits)
+                {
                     return Ok(exact_decimal(digits, true));
                 }
                 if digits.contains(['e', 'E']) {
@@ -374,6 +395,9 @@ fn translate_unary(
         UnaryOperator::Minus => (ast::UnaryOperator::Negative, sign_context),
         UnaryOperator::Plus => return translate_in(expr, sign_context, context),
         UnaryOperator::Not | UnaryOperator::BangNot => (ast::UnaryOperator::Not, Context::Number),
+        UnaryOperator::BitwiseNot if is_binary_string(expr) => {
+            return Err(binary_string_outside_arithmetic(&op))
+        }
         UnaryOperator::BitwiseNot => (ast::UnaryOperator::BitwiseNot, Context::Arithmetic),
         other => {
             return Err(MysqlParserError::Unsupported(format!(
@@ -426,6 +450,15 @@ fn translate_binary(
     let arithmetic = |operator, context: &mut TranslationContext| {
         arithmetic(left, operator, right, parent_context, context)
     };
+    if matches!(
+        op,
+        BinaryOperator::Modulo
+            | BinaryOperator::PGBitwiseShiftLeft
+            | BinaryOperator::MyIntegerDivide
+    ) && (is_binary_string(left) || is_binary_string(right))
+    {
+        return Err(binary_string_outside_arithmetic(op));
+    }
     let (operator, literal_context) = match op {
         BinaryOperator::Plus | BinaryOperator::Minus
             if matches!(left, Expr::Interval(_)) || matches!(right, Expr::Interval(_)) =>
@@ -938,6 +971,20 @@ fn translate_regexp_operand(
         Context::Text
     };
     translate_in(expr, literal_context, context)
+}
+
+fn is_binary_string(expr: &Expr) -> bool {
+    match expr {
+        Expr::Prefixed { prefix, .. } => prefix.value.eq_ignore_ascii_case("_binary"),
+        Expr::Nested(inner) => is_binary_string(inner),
+        _ => false,
+    }
+}
+
+fn binary_string_outside_arithmetic(op: &dyn std::fmt::Display) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "a binary string as an operand of `{op}`, which MySQL computes on its bytes or as a DOUBLE Turso truncates, is not lowered yet"
+    ))
 }
 
 fn is_binary_literal(expr: &Expr) -> bool {
