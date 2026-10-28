@@ -524,3 +524,23 @@ fn schema_names_with_backslashes_are_found_after_create() -> turso_core::Result<
     connection.execute(r"DROP TABLE `a\b`")?;
     Ok(())
 }
+
+#[test]
+fn connections_check_foreign_keys_from_the_start() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE parent (id INT PRIMARY KEY)")?;
+    connection.execute(
+        "CREATE TABLE child (id INT PRIMARY KEY, parent_id INT, FOREIGN KEY (parent_id) REFERENCES parent (id))",
+    )?;
+    connection.execute("INSERT INTO parent VALUES (1)")?;
+    connection.execute("INSERT INTO child VALUES (1, 1)")?;
+    connection
+        .execute("INSERT INTO child VALUES (2, 9)")
+        .expect_err("a child row without a parent must be rejected");
+    connection
+        .execute("DELETE FROM parent WHERE id = 1")
+        .expect_err("a referenced parent row must not be deleted");
+    connection.execute("SET FOREIGN_KEY_CHECKS = 0")?;
+    connection.execute("INSERT INTO child VALUES (2, 9)")?;
+    Ok(())
+}

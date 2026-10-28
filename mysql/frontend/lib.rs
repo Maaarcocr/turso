@@ -105,7 +105,8 @@ impl Dialect for MySqlDialect {
 }
 
 /// Opens the database at `path` on `io` with the MySQL dialect and returns a
-/// connection to it.
+/// connection to it that checks foreign keys, as a MySQL session starts with
+/// `FOREIGN_KEY_CHECKS = 1`.
 pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
     let database = Database::open(
         io,
@@ -113,7 +114,9 @@ pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
         turso_core::OpenOptions::new(Arc::new(MySqlDialect))
             .db_opts(turso_core::DatabaseOpts::new().with_generated_columns(true)),
     )?;
-    database.connect(turso_core::ConnectOpts::new())
+    let connection = database.connect(turso_core::ConnectOpts::new())?;
+    connection.set_foreign_keys_enabled(true);
+    Ok(connection)
 }
 
 /// Opens (creating it if needed) the database file at `path` with the MySQL

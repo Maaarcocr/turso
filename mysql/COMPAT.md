@@ -75,7 +75,7 @@ Known gaps:
 - Temporal values are stored as given, without MySQL's validation, normalization, or `TIMESTAMP` time-zone conversion (only defaults are normalized).
 - `ENUM` sorts and compares by text, not by member position; numeric `ENUM` and `SET` values (member indexes and bitmasks) and member names in another letter case are rejected instead of converted; `SET` values must list members in definition order.
 - Unlike InnoDB, a failed insert does not use up an `AUTO_INCREMENT` value.
-- `FOREIGN KEY` constraints are stored but Turso does not enforce them unless `PRAGMA foreign_keys` is on.
+- `FOREIGN KEY` constraints are enforced from the start of a connection, as MySQL starts with `FOREIGN_KEY_CHECKS = 1`. Turso checks them like SQLite: values are compared as stored, so a key between `ENUM` columns compares member names where MySQL compares member indexes (`'cat'` matches `'rat'` when both are member 1).
 - `CREATE TABLE ... AS SELECT` gives a result column the type of the column it reads (also through `MAX`/`MIN`), `BIGINT` to integer literals, `COUNT(...)` and integer arithmetic, `DOUBLE` to double literals and double arithmetic, and `LONGTEXT` to everything else (string literals, `CONCAT(...)`, `SUM(...)`, `AVG(...)`, arithmetic on `DECIMAL`), where MySQL picks a `VARCHAR(n)`, `INT` or `DECIMAL(p,s)` from the expression.
 - `CREATE TABLE ... AS SELECT` copies only the column type. `NOT NULL` and `DEFAULT` of the columns it reads are not copied, and neither are the `CHECK`s that hold the members of `ENUM` and `SET` columns and the validity of `JSON` columns, so the new table accepts any text there. MySQL keeps all of these.
 - Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, spatial `SRID` and `SPATIAL` keys, `FULLTEXT` keys, functional key parts, unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
@@ -225,8 +225,7 @@ wrote (MySQL assigns left to right, so `a = a + 1, b = a` sets `b` to the new
 
 Known differences: the affected-row count is SQLite's (1 per inserted or
 updated row) rather than MySQL's 2 for an update and 0 for an unchanged
-row; an update consumes no `AUTO_INCREMENT` value; and Turso checks foreign
-keys only after `SET FOREIGN_KEY_CHECKS = 1`.
+row; and an update consumes no `AUTO_INCREMENT` value.
 
 ## Session settings (`SET`)
 
@@ -243,8 +242,7 @@ Everything else is refused: user variables
 (`SET @a = 1`, Turso has no session variables yet), other values of these
 variables (`sql_mode`, `time_zone`, `autocommit = 0` and character sets
 change the semantics of later statements), `GLOBAL` scope, and other
-variables. Turso does not check foreign keys until `FOREIGN_KEY_CHECKS` is
-set to 1, while MySQL checks them by default.
+variables.
 
 ## JSON functions
 
