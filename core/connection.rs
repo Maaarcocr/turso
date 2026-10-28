@@ -1005,7 +1005,7 @@ impl Connection {
                 drop(syms);
                 let cmd = {
                     crate::stack::trace_stack!("schema_retry_parse");
-                    let (cmd, _) = self.parse_sql(input)?;
+                    let (cmd, _) = self.parse_sql_with_origin(input, origin)?;
                     let Some(cmd) = cmd else {
                         return Err(err);
                     };
@@ -1077,7 +1077,7 @@ impl Connection {
 
             let (cmd, byte_offset_end) = {
                 crate::stack::trace_stack!("parse");
-                self.parse_sql(sql)?
+                self.parse_sql_with_origin(sql, origin)?
             };
             let cmd = match cmd {
                 Some(cmd) => cmd,
@@ -1779,6 +1779,19 @@ impl Connection {
 
     pub(crate) fn parse_sql(&self, sql: &str) -> Result<(Option<Cmd>, usize)> {
         crate::dialect::marker::parse_statement(self.db.dialect().as_ref(), sql)
+    }
+
+    pub(crate) fn parse_sql_with_origin(
+        &self,
+        sql: &str,
+        origin: StatementOrigin,
+    ) -> Result<(Option<Cmd>, usize)> {
+        match origin {
+            StatementOrigin::InternalHelper => {
+                crate::dialect::marker::parse_statement(&crate::SqliteDialect, sql)
+            }
+            StatementOrigin::Root | StatementOrigin::Subprogram => self.parse_sql(sql),
+        }
     }
 
     #[cfg(feature = "fs")]

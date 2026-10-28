@@ -508,3 +508,19 @@ fn connection_remains_usable_after_a_prepare_error() -> turso_core::Result<()> {
     connection.close()?;
     Ok(())
 }
+
+#[test]
+fn schema_names_with_backslashes_are_found_after_create() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(r"CREATE TABLE `a\b` (`x\y` INT)")?;
+    connection.execute(r"CREATE INDEX `i\n` ON `a\b` (`x\y`)")?;
+    connection.execute(r"INSERT INTO `a\b` VALUES (7)")?;
+    let mut statement = connection.prepare(r"SELECT `x\y` FROM `a\b` WHERE `x\y` = 7")?;
+    assert_eq!(
+        statement.run_collect_rows()?,
+        vec![vec![Value::from_i64(7)]]
+    );
+    connection.execute(r"DROP INDEX `i\n` ON `a\b`")?;
+    connection.execute(r"DROP TABLE `a\b`")?;
+    Ok(())
+}
