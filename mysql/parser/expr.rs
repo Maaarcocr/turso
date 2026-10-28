@@ -758,7 +758,12 @@ fn translate_case(
         .iter()
         .map(|case| &case.result)
         .chain(else_result)
-        .any(is_double_literal);
+        .any(is_double_literal)
+        && !conditions
+            .iter()
+            .map(|case| &case.result)
+            .chain(else_result)
+            .any(is_string_literal);
     let when_then_pairs = conditions
         .iter()
         .map(|case| {
@@ -781,8 +786,9 @@ fn translate_case(
 }
 
 /// Translates one result of a CASE, IF, IFNULL or COALESCE. When another
-/// result is a DOUBLE literal, MySQL computes them all as DOUBLE, so an exact
-/// number literal becomes the same number written as a DOUBLE.
+/// result is a DOUBLE literal and none is a string literal, MySQL computes them
+/// all as DOUBLE, so an exact number literal becomes the same number written as
+/// a DOUBLE.
 fn translate_result(
     expr: &Expr,
     doubles: bool,
@@ -799,6 +805,17 @@ fn translate_result(
         }
         _ => translate_expr(expr, context),
     }
+}
+
+fn is_string_literal(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Value(value)
+            if matches!(
+                value.value,
+                Value::SingleQuotedString(_) | Value::DoubleQuotedString(_)
+            )
+    )
 }
 
 fn is_double_literal(expr: &Expr) -> bool {
@@ -1518,7 +1535,10 @@ fn function_arguments(
     let results = result_positions(upper_name, args.len());
     let doubles = results
         .clone()
-        .any(|position| is_double_literal(args[position]));
+        .any(|position| is_double_literal(args[position]))
+        && !results
+            .clone()
+            .any(|position| is_string_literal(args[position]));
     args.iter()
         .enumerate()
         .map(|(position, arg)| {
