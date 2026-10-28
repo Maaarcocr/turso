@@ -16,6 +16,7 @@ mod dml;
 mod expr;
 mod insert;
 mod invalid_json;
+mod json;
 mod literal;
 mod names;
 mod query;
