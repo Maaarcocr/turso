@@ -1911,8 +1911,8 @@ fn required_lhs_by_table(joined_tables: &[JoinedTable]) -> Result<Vec<TableMask>
             .as_ref()
             .is_some_and(|j| j.is_ordering_constrained())
         {
-            for i in 0..j {
-                if is_semi_or_anti(&joined_tables[i]) && !is_semi_or_anti(joined_table) {
+            for (i, earlier) in joined_tables[..j].iter().enumerate() {
+                if is_semi_or_anti(earlier) && !is_semi_or_anti(joined_table) {
                     continue;
                 }
                 required_lhs_by_table[j].set(i)?;
