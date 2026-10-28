@@ -817,6 +817,22 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT ELT(0x2, 0x41), FIELD(0x61, 97), FIELD(0x61, 'a'), BIN(0x5), CONV(0xFF, 7, 0x10)",
             "SELECT ELT (2, x'41'), FIELD (97, 97), FIELD (x'61', 'a'), __mysql_conv_binary_literal (x'05', 10, 2), __mysql_conv_binary_literal (x'FF', 7, 16)",
         ),
+        (
+            "SELECT CAST('[1]' AS JSON) = 1, JSON_ARRAY(1) <=> CAST(TRUE AS JSON), CAST(1 AS JSON) < DATE '2000-01-01'",
+            "SELECT (__mysql_json_compare (__mysql_cast_as_json ('[1]'), 1) = 0), __mysql_json_null_safe_equal (JSON_ARRAY (1), __mysql_cast_boolean_as_json (TRUE)), (__mysql_json_compare (__mysql_cast_as_json (1), CAST ('2000-01-01' AS DATE)) < 0)",
+        ),
+        (
+            "SELECT JSON_EXTRACT('0.4', '$') > 0, j -> '$.a' = 'x'",
+            "SELECT (__mysql_json_compare (JSON_EXTRACT ('0.4', '$'), 0) > 0), (__mysql_json_compare (JSON_EXTRACT (j, '$.a'), 'x') = 0)",
+        ),
+        (
+            "SELECT NOT CAST('0' AS JSON), -CAST('1' AS JSON), CAST('1' AS JSON) + 1, 1.5e0 % CAST('1.1' AS JSON)",
+            "SELECT NOT __mysql_json_truth (__mysql_cast_as_json ('0')), ((__mysql_json_double (__mysql_cast_as_json ('1'))) * - 1), __mysql_json_double (__mysql_cast_as_json ('1')) + 1, __mysql_json_remainder (1.5e0, __mysql_json_double (__mysql_cast_as_json ('1.1')))",
+        ),
+        (
+            "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
+            "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\'), CONCAT (__mysql_cast_as_json ('\"12:34:56.000000\"')), MD5 (__mysql_cast_as_json ('\"2000-01-01\"'))",
+        ),
     ];
 
     for (sql, expected) in cases {
@@ -1052,6 +1068,26 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "json in a lazily evaluated function",
             sql: "SELECT CONCAT_WS(NULL, CAST(a AS JSON))",
+        },
+        SqlCase {
+            name: "json compared with a column",
+            sql: "SELECT CAST(1 AS JSON) = a",
+        },
+        SqlCase {
+            name: "json of an integer above the signed range in a comparison",
+            sql: "SELECT CAST(18446744073709551615 AS JSON) = 1",
+        },
+        SqlCase {
+            name: "json in a bit operation",
+            sql: "SELECT CAST(1 AS JSON) | 1",
+        },
+        SqlCase {
+            name: "json time of more than a day read as text",
+            sql: "SELECT CONCAT(CAST(TIME '25:00:00' AS JSON))",
+        },
+        SqlCase {
+            name: "json date read as a date",
+            sql: "SELECT DAYOFWEEK(CAST(DATE '2000-01-01' AS JSON))",
         },
         SqlCase {
             name: "temporal compared with an invalid string",

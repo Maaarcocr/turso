@@ -29,6 +29,9 @@ pub(crate) fn execute_typed(
     args: &[Value],
     arg_types: &[ArgumentType],
 ) -> Option<Result<Value>> {
+    if let Some(result) = json::execute_typed(name, args, arg_types) {
+        return Some(result);
+    }
     if let Some(result) = decimal::execute_typed(name, args, arg_types) {
         return Some(result);
     }

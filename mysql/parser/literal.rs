@@ -458,6 +458,42 @@ fn unsupported(what: String) -> MysqlParserError {
     MysqlParserError::Unsupported(format!("{what} is not lowered yet"))
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TemporalKind {
+    Date,
+    Time,
+    DateTime,
+}
+
+pub(crate) struct TemporalLiteral {
+    pub(crate) kind: TemporalKind,
+    pub(crate) text: String,
+    pub(crate) within_a_day: bool,
+}
+
+pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
+    let (Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)) = &typed.value.value
+    else {
+        return None;
+    };
+    let temporal = match &typed.data_type {
+        DataType::Date => Temporal::date(text),
+        DataType::Time(None, TimezoneInfo::None) => Temporal::time(text),
+        DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
+        _ => None,
+    }?;
+    let (kind, within_a_day) = match &temporal {
+        Temporal::Date(_) => (TemporalKind::Date, true),
+        Temporal::Time(time) => (TemporalKind::Time, !time.negative && time.hours < 24),
+        Temporal::Timestamp(..) => (TemporalKind::DateTime, true),
+    };
+    Some(TemporalLiteral {
+        kind,
+        text: temporal.text(),
+        within_a_day,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
