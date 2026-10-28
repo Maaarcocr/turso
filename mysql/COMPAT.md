@@ -148,7 +148,7 @@ Lowered:
 | `'...'`, `"..."`, `N'...'` | Text (`"..."` is a string, never an identifier) |
 | `X'..'`, `0x..`, `b'..'`, `0b..` | A blob; in a comparison with a number, a logical operator, a condition, a numeric function argument, a numeric `CAST`, or `\|`, `&`, `>>`, `^`, the unsigned integer value; in a comparison with a string, text. Function arguments MySQL reads as numbers are also the value: the index of `ELT`, the bits of `MAKE_SET` and `EXPORT_SET`, the counts and positions of `LEFT`, `RIGHT`, `SUBSTRING`/`SUBSTR`/`MID`, `INSERT`, `LOCATE`, `SUBSTRING_INDEX`, `LPAD`, `RPAD`, `REPEAT` and `SPACE`, the length of `SHA2`, the bases of `CONV`, every argument of `INTERVAL`, and every argument of `FIELD` when another argument is a number (`FIELD(0x61, 97)` is 1, `FIELD(0x61, 'a')` compares bytes). `CONV`, `BIN` and `OCT` of a hex or bit literal convert its value whatever the base: `__mysql_conv_binary_literal(bytes, from, to)` |
 | `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` is a blob |
-| `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); a string literal compared with one is converted the same way (`DATE '2018-05-01' = '2018-5-1'`); in a logical operator, a condition or a numeric function argument, the number MySQL uses (`20180501`) |
+| `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); a string literal compared with one is converted the same way (`DATE '2018-05-01' = '2018-5-1'`); in arithmetic, a comparison with a number, a logical operator, a condition or a numeric function argument (including `MAKEDATE`, `MAKETIME`, `SEC_TO_TIME`, `FROM_UNIXTIME`, `FROM_DAYS` and `PERIOD_*`), the number MySQL uses (`20180501`, `-1013458`, `103458.5`), with fractions past 6 digits rounded; `TIME '..'` compared with `TIME '..'` as numbers |
 | `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which are refused |
 
 Refused, because Turso cannot run it with MySQL's meaning yet:
@@ -161,11 +161,13 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   not round to tens.
 - `REGEXP` with an empty pattern or over binary strings, row values inside row
   values, `VALUES` rows of different lengths: MySQL raises an error.
-- Hex, bit and temporal literals in arithmetic (`+ - * / DIV % MOD`, unary
-  `-`/`+`/`~`, `<<`): MySQL computes hex and bit literals as BIGINT UNSIGNED,
-  which fails on negative results, and temporal arithmetic can overflow.
-  `DIV` with a literal outside the BIGINT range, bit operations on fractional
-  or out-of-range number literals, and `_binary` strings in numeric contexts.
+- Hex and bit literals in arithmetic (`+ - * / DIV % MOD`, unary
+  `-`/`+`/`~`, `<<`): MySQL computes them as BIGINT UNSIGNED, which fails on
+  negative results. Temporal literals under `%`, `<<` and `~`, in bit
+  operations when negative or fractional, and negated when fractional: MySQL
+  computes those as BIGINT UNSIGNED or DOUBLE. `DIV` with a literal outside
+  the BIGINT range, bit operations on fractional or out-of-range number
+  literals, and `_binary` strings in numeric contexts.
 - Binary strings that are not NUL-free UTF-8 outside numeric contexts.
 - `CAST(x AS JSON)` in a comparison, arithmetic or a condition, except the
   failing select items above: MySQL compares and computes JSON values by JSON
@@ -175,8 +177,11 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   not a non-NULL literal: MySQL stops evaluating arguments at the first NULL
   (`MAKEDATE(CAST('x' AS JSON), NULL)` is NULL) or never evaluates unused
   ones, while Turso evaluates every argument and reports the invalid JSON.
-- Temporal literals compared with a number, or with a string that is not a
-  valid value of their type; `DATETIME '..'`; invalid temporal literals; odd
+- Temporal literals compared with a string that is not a valid value of their
+  type, with a DECIMAL literal that has the same DOUBLE value (MySQL compares
+  them as DOUBLE), or with a temporal literal of another type or, for
+  `TIMESTAMP`, with another number of fractional digits (MySQL compares them
+  as DATETIME values); `DATETIME '..'`; invalid temporal literals; odd
   `X'...'` digits; character set introducers other than the ones above.
 - Expressions nested deeper than 100 levels (the SQLite parser's limit).
 - A grouped `SELECT` (with `GROUP BY`, or with an aggregate and no `GROUP BY`)
