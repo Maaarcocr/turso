@@ -42,7 +42,8 @@ pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
         "ASCII" | "BIT_LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" | "CONCAT" | "CONCAT_WS"
         | "FIND_IN_SET" | "INSTR" | "LCASE" | "LENGTH" | "LOWER" | "OCTET_LENGTH" | "ORD"
         | "POSITION" | "REPLACE" | "REVERSE" | "STRCMP" | "UCASE" | "UPPER" | "CRC32" | "MD5"
-        | "SHA" | "SHA1" | "TO_BASE64" | "REGEXP" | "REGEXP_LIKE" => &[],
+        | "SHA" | "SHA1" | "TO_BASE64" | "REGEXP" | "REGEXP_LIKE" | "__MYSQL_TRIM"
+        | "__MYSQL_LTRIM" | "__MYSQL_RTRIM" => &[],
         _ => return DecimalArgument::Double,
     };
     if counts.contains(&position) {

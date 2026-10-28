@@ -235,10 +235,7 @@ mod tests {
 
     #[test]
     fn sqlite_fallback_refuses_array_operators() {
-        for sql in [
-            "SELECT CAST('x' AS JSON) && 1",
-            "SELECT CAST('x' AS JSON) @> 1",
-        ] {
+        for sql in ["SELECT SQL_NO_CACHE 1 && 1", "SELECT SQL_NO_CACHE 1 @> 1"] {
             let error = MySqlDialect.parse(sql).expect_err(sql);
             assert!(error.to_string().contains("array operators"), "{error}");
         }
@@ -246,7 +243,7 @@ mod tests {
 
     #[test]
     fn sqlite_fallback_stops_reading_tokens_at_a_lexer_error() {
-        let sql = "SELECT CAST('x' AS JSON) = 'a\\'b'";
+        let sql = "SELECT SQL_NO_CACHE 1 = 'a\\'b'";
         assert!(MySqlDialect.parse(sql).is_err(), "{sql}");
     }
 
