@@ -5,6 +5,7 @@ mod collation;
 mod compare;
 mod convert;
 mod hash;
+mod like;
 mod network;
 mod numeric;
 mod regexp;
@@ -17,6 +18,10 @@ type Function = fn(&[Value]) -> Result<Value>;
 /// A value read as MySQL reads it where it needs a DOUBLE.
 pub(super) fn double_argument(value: &Value) -> f64 {
     convert::double(value).unwrap_or(0.0)
+}
+
+pub(super) fn text_to_double(bytes: &[u8]) -> f64 {
+    convert::string_to_double(bytes)
 }
 
 /// The integer at the start of a string, as MySQL reads a string where it
@@ -43,7 +48,7 @@ pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
         | "FIND_IN_SET" | "INSTR" | "LCASE" | "LENGTH" | "LOWER" | "OCTET_LENGTH" | "ORD"
         | "POSITION" | "REPLACE" | "REVERSE" | "STRCMP" | "UCASE" | "UPPER" | "CRC32" | "MD5"
         | "SHA" | "SHA1" | "TO_BASE64" | "REGEXP" | "REGEXP_LIKE" | "__MYSQL_TRIM"
-        | "__MYSQL_LTRIM" | "__MYSQL_RTRIM" => &[],
+        | "__MYSQL_LTRIM" | "__MYSQL_RTRIM" | "__MYSQL_LIKE_BIN" => &[],
         _ => return DecimalArgument::Double,
     };
     if counts.contains(&position) {
@@ -153,6 +158,8 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("IS_IPV6", 1) => network::is_ipv6,
         ("IS_UUID", 1) => network::is_uuid,
         ("UUID_TO_BIN", 1 | 2) => network::uuid_to_bin,
+
+        ("__MYSQL_LIKE_BIN", 3) => like::like_bin,
 
         ("REGEXP", 2) => regexp::regexp_operator,
         ("REGEXP_INSTR", 2..=6) => regexp::regexp_instr,

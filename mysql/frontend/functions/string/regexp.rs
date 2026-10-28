@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use fancy_regex::{Captures, Regex};
 
+use turso_core::types::TextSubtype;
 use turso_core::{LimboError, Result, Value};
 
 use super::convert::{integer, string, Str};
@@ -158,8 +159,12 @@ fn prepare(
     };
     let subject_binary = matches!(args[0], Value::Blob(_));
     let pattern_binary = pattern.is_binary();
-    let mixes_binary_and_text = (subject_binary && matches!(args[1], Value::Text(_)))
-        || (pattern_binary && matches!(args[0], Value::Text(_)));
+    let json = args[..2]
+        .iter()
+        .any(|arg| matches!(arg, Value::Text(text) if text.subtype == TextSubtype::Json));
+    let mixes_binary_and_text = !json
+        && ((subject_binary && matches!(args[1], Value::Text(_)))
+            || (pattern_binary && matches!(args[0], Value::Text(_))));
     if mixes_binary_and_text {
         return Err(LimboError::InvalidArgument(format!(
             "Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to {function}."
@@ -173,7 +178,7 @@ fn prepare(
     }
     let binary = subject_binary || pattern_binary;
     let mut flags = Flags {
-        case_insensitive: !binary,
+        case_insensitive: !binary && !json,
         multiline: false,
         dot_matches_all: false,
         unix_lines: false,
