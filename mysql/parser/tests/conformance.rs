@@ -1038,7 +1038,6 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1, a = 2",
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
-        "REPLACE INTO users VALUES (1)",
         "SHOW TABLES",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
@@ -1107,6 +1106,15 @@ fn lowers_insert_forms() {
             "INSERT INTO t (a) SELECT b FROM u WHERE b > 1",
         ),
         ("INSERT INTO t () VALUES ()", "INSERT INTO t DEFAULT VALUES"),
+        (
+            "REPLACE INTO t (a, b) VALUES (1, 'x')",
+            "REPLACE INTO t (a, b) VALUES (1, 'x')",
+        ),
+        ("REPLACE t SET a = 1", "REPLACE INTO t (a) VALUES (1)"),
+        (
+            "REPLACE INTO t SELECT * FROM u",
+            "REPLACE INTO t SELECT * FROM u",
+        ),
     ];
 
     for (sql, expected) in cases {
