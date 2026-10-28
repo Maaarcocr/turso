@@ -60,6 +60,7 @@ pub(crate) fn translate_introduced_string(
     introducer: &Ident,
     value: &Expr,
     context: Context,
+    latin1_as_text: bool,
 ) -> Result<ast::Expr, MysqlParserError> {
     if introducer.quote_style.is_some() {
         return Err(unsupported(format!("introducer `{introducer}`")));
@@ -79,6 +80,9 @@ pub(crate) fn translate_introduced_string(
         "_binary" => binary_string(bytes, context),
         "_utf8mb4" | "_utf8mb3" | "_utf8" => text_literal(bytes),
         "_ascii" | "_latin1" if bytes.is_ascii() => text_literal(bytes),
+        "_latin1" if latin1_as_text && !bytes.contains(&0) => {
+            text_literal(latin1_text(&bytes).into_bytes())
+        }
         _ => Err(unsupported(format!(
             "character set introducer `{introducer}` with this value"
         ))),
@@ -104,6 +108,30 @@ pub(crate) fn is_utf8_binary_literal(expr: &Expr) -> bool {
         _ => return false,
     };
     bytes.is_ok_and(|bytes| std::str::from_utf8(&bytes).is_ok())
+}
+
+const CP1252: [char; 32] = [
+    '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
+    '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}', '\u{017D}', '\u{008F}',
+    '\u{0090}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
+    '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{009D}', '\u{017E}', '\u{0178}',
+];
+
+pub(crate) fn is_latin1_char(character: char) -> bool {
+    match u32::from(character) {
+        0x80..=0x9F | 0x100.. => CP1252.contains(&character),
+        _ => true,
+    }
+}
+
+fn latin1_text(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&byte| match byte {
+            0x80..=0x9F => CP1252[usize::from(byte - 0x80)],
+            _ => char::from(byte),
+        })
+        .collect()
 }
 
 pub(crate) fn translate_as_bytes(value: &Value) -> Result<ast::Expr, MysqlParserError> {

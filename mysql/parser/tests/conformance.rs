@@ -846,6 +846,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
         ),
         (
+            "SELECT LPAD(_latin1 0xFF, 3, 1), CONCAT('\u{4e2d}', _latin1 0x80), RPAD('\u{4e2d}', 2, _latin1 0xFF)",
+            "SELECT LPAD ('\u{ff}', 3, 1), CONCAT ('\u{4e2d}', '\u{20ac}'), RPAD ('\u{4e2d}', 2, '\u{ff}')",
+        ),
+        (
             "SELECT COLLATION('a'), COLLATION(_latin1 'a' ), COLLATION(RANDOM_BYTES(1))",
             "SELECT 'utf8mb4_0900_ai_ci', 'latin1_swedish_ci', 'binary'",
         ),
@@ -948,6 +952,26 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "latin1 text",
             sql: "SELECT _latin1'\u{e9}'",
+        },
+        SqlCase {
+            name: "byte length of latin1 text",
+            sql: "SELECT LENGTH(_latin1 0xFF)",
+        },
+        SqlCase {
+            name: "latin1 padded with text latin1 lacks",
+            sql: "SELECT RPAD(_latin1 0xFF, 3, '\u{4e2d}')",
+        },
+        SqlCase {
+            name: "latin1 padded to a length where its byte size decides the packet limit",
+            sql: "SELECT LPAD(_latin1 0xFF, 20000000, 1)",
+        },
+        SqlCase {
+            name: "latin1 text selected from a table",
+            sql: "SELECT CONCAT(_latin1 0xFF) FROM t",
+        },
+        SqlCase {
+            name: "latin1 text next to a binary string",
+            sql: "SELECT REPLACE(0xC3BF, _latin1 0xFF, 'z')",
         },
         SqlCase {
             name: "odd hex digits",
