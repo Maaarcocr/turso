@@ -48,7 +48,7 @@ LOCAL_SPECS_REPORT ?= $(TARGET_ROOT)/mysql-local-specs-report.json
 # address-space limit of each process (see tools/replay.py)
 SPECS_JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 SPECS_TIMEOUT ?= 30
-SPECS_MEMORY_MB ?= 2048
+SPECS_MEMORY_MB ?= 0
 REPLAY_OPTIONS = --sqltest $(SQLTEST_BIN) --jobs $(SPECS_JOBS) --timeout $(SPECS_TIMEOUT) \
 	--memory-mb $(SPECS_MEMORY_MB)
 

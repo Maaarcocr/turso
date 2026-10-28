@@ -149,9 +149,12 @@ sources under `specs/` and replays them with `tools/replay.py`
 - Every file runs in its own `sqltest run --backend tursomysql --jobs 1`
   process, `SPECS_JOBS` (default: the CPU count) at a time, largest files
   first. Memory is bounded by the largest file, not by the corpus.
-- Each process runs under an address-space limit (`SPECS_MEMORY_MB`, default
-  2048), so a spec that makes Turso allocate without bound aborts its process
-  at once instead of exhausting the machine. A file whose process crashes (or
+- `SPECS_MEMORY_MB` sets an address-space limit for each process (default 0,
+  no limit). A limit makes a spec that allocates without bound abort its
+  process at once instead of exhausting the machine, but it has to grow with
+  the CPU count: the runtime and the allocator reserve address space per
+  thread, so 2048 makes most specs fail on a 24-core machine. A file whose
+  process crashes (or
   runs for over an hour) is replayed again one test per process: a test that
   crashes alone is an error carrying the end of its stderr, and every other
   test of the file keeps its real outcome.

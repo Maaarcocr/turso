@@ -249,8 +249,8 @@ def main(argv=None):
                         help="sqltest processes at a time (default: CPU count)")
     parser.add_argument("--timeout", type=int, default=30,
                         help="seconds one setup or test block may run (default: 30)")
-    parser.add_argument("--memory-mb", type=int, default=2048,
-                        help="address-space limit of each process in MiB, 0 for none (default: 2048)")
+    parser.add_argument("--memory-mb", type=int, default=0,
+                        help="address-space limit of each process in MiB, 0 for none (default: 0)")
     parser.add_argument("--process-timeout", type=int, default=3600,
                         help="seconds one process may run before it is killed (default: 3600)")
     parser.add_argument("--include-local", action="store_true", help="also replay specs/local/")
