@@ -184,8 +184,9 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   10^15 or more, which MySQL shows with fixed digits rather than an exponent.
 - `STRCMP` of a binary string and a `DATE` or `TIMESTAMP` literal: MySQL
   reads the string as a date and fails on it.
-- `ROUND`/`TRUNCATE` of an integer literal above `BIGINT` by a negated hex or
-  bit literal: MySQL rounds it as `BIGINT UNSIGNED` and fails on overflow.
+- `ROUND`/`TRUNCATE` of an integer literal above `BIGINT`, unless the places
+  are `NULL` or -20 or less: MySQL rounds it as `BIGINT UNSIGNED` (and fails
+  on overflow), while Turso would round its DOUBLE.
 - `CHAR` of a negated DOUBLE literal outside `BIGINT`: MySQL fails on it.
 - A JSON value in a comparison, arithmetic or a condition, except the
   failing select items above and the JSON comparisons, conditions and

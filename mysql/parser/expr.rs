@@ -2268,7 +2268,12 @@ fn function_arguments(
         ));
     }
     if let ("ROUND" | "TRUNCATE", [value, places]) = (upper_name, args.as_slice()) {
-        if is_unsigned_bigint_literal(value) && negated_binary(places).is_some() {
+        let result_ignores_value = matches!(places, Expr::Value(literal) if literal.value == Value::Null)
+            || (is_negated(places)
+                && signed_number_literal(places)
+                    .and_then(|digits| digits.parse::<f64>().ok())
+                    .is_some_and(|digits| digits >= 20.0));
+        if is_unsigned_bigint_literal(value) && !result_ignores_value {
             return Err(MysqlParserError::Unsupported(format!(
                 "{upper_name} of `{value}` by `{places}`, which MySQL computes as BIGINT UNSIGNED, is not lowered yet"
             )));

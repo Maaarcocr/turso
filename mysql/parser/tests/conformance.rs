@@ -938,6 +938,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT TIME '10:00:00.5' & 1",
         },
         SqlCase {
+            name: "ROUND of a BIGINT UNSIGNED literal",
+            sql: "SELECT ROUND(18446744073709551615, -1)",
+        },
+        SqlCase {
             name: "decimal compared with a timestamp",
             sql: "SELECT 20000101103458.1234 >= TIMESTAMP '2000-01-01 10:34:58.123456'",
         },
