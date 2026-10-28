@@ -85,6 +85,27 @@ pub(crate) fn translate_introduced_string(
     }
 }
 
+pub(crate) fn is_utf8_binary_literal(expr: &Expr) -> bool {
+    let bytes = match expr {
+        Expr::Value(value) => match &value.value {
+            Value::HexStringLiteral(digits) => hex_bytes(digits),
+            Value::SingleQuotedByteStringLiteral(bits) => bit_bytes(bits),
+            _ => return false,
+        },
+        Expr::Prefixed { value, .. } => match value.as_ref() {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(_) | Value::DoubleQuotedString(_) => return true,
+                Value::HexStringLiteral(digits) => hex_bytes(digits),
+                _ => return false,
+            },
+            _ => return false,
+        },
+        Expr::Nested(inner) => return is_utf8_binary_literal(inner),
+        _ => return false,
+    };
+    bytes.is_ok_and(|bytes| std::str::from_utf8(&bytes).is_ok())
+}
+
 pub(crate) fn translate_as_bytes(value: &Value) -> Result<ast::Expr, MysqlParserError> {
     let bytes = match value {
         Value::HexStringLiteral(digits) => hex_bytes(digits)?,
