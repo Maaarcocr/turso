@@ -1720,6 +1720,23 @@ fn translate_cast(
     literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let numeric = matches!(
+        data_type,
+        DataType::Signed
+            | DataType::SignedInteger
+            | DataType::Unsigned
+            | DataType::UnsignedInteger
+            | DataType::Double(ExactNumberInfo::None)
+            | DataType::Real
+            | DataType::Float(ExactNumberInfo::None)
+            | DataType::Decimal(_)
+    );
+    if numeric && json::is_json_value(expr) {
+        if let Some(number) = json::number_cast_operand(expr) {
+            return translate_cast(number, data_type, literal_context, context);
+        }
+        return translate_json_numeric_cast(expr, data_type, context);
+    }
     let (target, operand_context) = match data_type {
         DataType::Signed | DataType::SignedInteger => {
             return translate_integer_cast(expr, "__mysql_cast_as_signed", context)
@@ -1762,6 +1779,43 @@ fn translate_cast(
         translate_in(expr, operand_context, context)?,
         Some(target),
     ))
+}
+
+fn translate_json_numeric_cast(
+    expr: &Expr,
+    data_type: &DataType,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let coerced = |coercion, context: &mut TranslationContext| {
+        json::translate_numeric_coercion(expr, coercion, context)
+    };
+    Ok(match data_type {
+        DataType::Signed | DataType::SignedInteger => function_call(
+            "__mysql_cast_as_signed",
+            vec![coerced("__mysql_json_integer", context)?],
+        ),
+        DataType::Unsigned | DataType::UnsignedInteger => function_call(
+            "__mysql_cast_as_unsigned",
+            vec![coerced("__mysql_json_integer", context)?],
+        ),
+        DataType::Decimal(precision) => ast::Expr::cast(
+            coerced("__mysql_json_decimal", context)?,
+            Some(decimal_type(precision)),
+        ),
+        DataType::Double(ExactNumberInfo::None) => ast::Expr::cast(
+            coerced("__mysql_json_double", context)?,
+            Some(type_name("DOUBLE")),
+        ),
+        DataType::Real => ast::Expr::cast(
+            coerced("__mysql_json_double", context)?,
+            Some(type_name("REAL")),
+        ),
+        DataType::Float(ExactNumberInfo::None) => ast::Expr::cast(
+            coerced("__mysql_json_double", context)?,
+            Some(type_name("FLOAT")),
+        ),
+        other => unreachable!("`{other}` is not a numeric cast target"),
+    })
 }
 
 fn translate_integer_cast(

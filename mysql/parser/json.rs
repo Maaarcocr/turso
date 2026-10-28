@@ -384,6 +384,55 @@ pub(crate) fn translate_number(
     ))
 }
 
+pub(crate) fn number_cast_operand(expr: &Expr) -> Option<&Expr> {
+    let operand = json_cast_operand(expr)?;
+    let digits = match unnested(operand) {
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus | UnaryOperator::Plus,
+            expr,
+        } => number_literal(expr)?,
+        other => number_literal(other)?,
+    };
+    (fits_bigint(digits) && !digits.contains(['e', 'E'])).then_some(operand)
+}
+
+pub(crate) fn translate_numeric_coercion(
+    expr: &Expr,
+    coercion: &str,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let coerced = match json_cast_operand(expr) {
+        Some(operand) => match unnested(operand) {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(text)
+                | Value::DoubleQuotedString(text)
+                | Value::NationalStringLiteral(text) => !is_numeric_json_string(text),
+                Value::Number(digits, _) => fits_bigint(digits),
+                _ => true,
+            },
+            Expr::Prefixed { prefix, value } => {
+                prefix.value.eq_ignore_ascii_case("_binary")
+                    || string_literal(value).is_some_and(|text| !is_numeric_json_string(text))
+            }
+            Expr::TypedString(_) | Expr::UnaryOp { .. } => true,
+            other => is_boolean(other),
+        },
+        None => matches!(
+            unnested(expr),
+            Expr::Function(function)
+                if matches!(json_function_name(function).as_deref(), Some("JSON_ARRAY" | "JSON_OBJECT"))
+        ),
+    };
+    if !coerced {
+        return Err(json_outside_a_value_position(expr));
+    }
+    Ok(function_call(coercion, vec![json_operand(expr, context)?]))
+}
+
+fn is_numeric_json_string(text: &str) -> bool {
+    text.trim_start().starts_with('"') && text.bytes().any(|byte| byte.is_ascii_digit())
+}
+
 pub(crate) fn translate_arithmetic_operand(
     expr: &Expr,
     context: &mut TranslationContext,
