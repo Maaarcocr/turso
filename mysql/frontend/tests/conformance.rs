@@ -141,7 +141,7 @@ fn typed_tables_keep_their_marker_column_types_and_integer_keys_after_reopen(
             stored,
             &vec![Value::build_text(
                 "/* turso_dialect:mysql rowid_alias */ CREATE TABLE t (id BIGINT UNSIGNED NOT NULL \
-                 PRIMARY KEY AUTOINCREMENT, n TINYINT, c CHAR(3), b BINARY(2), v VARCHAR(2)) STRICT"
+                 PRIMARY KEY AUTOINCREMENT, n TINYINT, c CHAR(3) COLLATE \"und-u-ks-level1\", b BINARY(2), v VARCHAR(2) COLLATE \"und-u-ks-level1\") STRICT"
             )]
         );
         connection.execute("INSERT INTO t (n, c, b, v) VALUES (7, 'd', 'yz', 'ok')")?;
