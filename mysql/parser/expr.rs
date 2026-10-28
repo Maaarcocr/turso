@@ -2473,7 +2473,13 @@ fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Contex
         }
         "IF" if position == 0 => Context::Number,
         "CONCAT_WS" if position == 0 => Context::Text,
-        "CONCAT" | "CONCAT_WS" if args.iter().any(|arg| is_json_function(arg)) => Context::Value,
+        "CONCAT" | "CONCAT_WS" | "STRCMP"
+            if args
+                .iter()
+                .any(|arg| is_json_function(arg) || json::is_json_value(arg)) =>
+        {
+            Context::Value
+        }
         _ if hex_or_bit_literal(args[position]).is_some()
             && reads_number(upper_name, position, args) =>
         {
