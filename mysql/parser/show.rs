@@ -26,7 +26,10 @@ pub(crate) fn translate_show_tables(
     let filter = match filter_position {
         None => String::new(),
         Some(ShowStatementFilterPosition::Suffix(ShowStatementFilter::Like(pattern))) => {
-            format!(" WHERE name GLOB '{}'", glob_pattern(pattern)?.replace('\'', "''"))
+            format!(
+                " WHERE name GLOB '{}'",
+                glob_pattern(pattern)?.replace('\'', "''")
+            )
         }
         Some(_) => return Err(unsupported(&format!("SHOW TABLES filter in `{options}`"))),
     };

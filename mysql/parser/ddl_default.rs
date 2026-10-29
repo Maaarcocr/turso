@@ -417,7 +417,7 @@ struct Time {
 }
 
 impl Date {
-    fn to_text(&self) -> String {
+    fn to_text(self) -> String {
         format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
 
@@ -462,12 +462,16 @@ impl Time {
             .filter(|precision| *precision <= 6)
             .ok_or_else(unsupported)?;
         let microseconds = format!("{:0<6}", &self.fraction[..self.fraction.len().min(6)]);
-        let mut total = (u64::from(self.hours) * 3600
-            + u64::from(self.minutes) * 60
-            + u64::from(self.seconds))
-            * 1_000_000
-            + microseconds.parse::<u64>().expect("the fraction is digits");
-        if self.fraction.as_bytes().get(6).is_some_and(|digit| *digit >= b'5') {
+        let mut total =
+            (u64::from(self.hours) * 3600 + u64::from(self.minutes) * 60 + u64::from(self.seconds))
+                * 1_000_000
+                + microseconds.parse::<u64>().expect("the fraction is digits");
+        if self
+            .fraction
+            .as_bytes()
+            .get(6)
+            .is_some_and(|digit| *digit >= b'5')
+        {
             total += 1;
         }
         let unit = 10u64.pow(6 - precision);

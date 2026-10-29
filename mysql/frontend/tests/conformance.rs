@@ -245,7 +245,10 @@ fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<
         query(connection, sql).map(|rows| rows[0].clone())
     };
     assert_eq!(
-        one(&first, "SELECT GET_LOCK('conformance_lock', 0), GET_LOCK('CONFORMANCE_LOCK', 5)")?,
+        one(
+            &first,
+            "SELECT GET_LOCK('conformance_lock', 0), GET_LOCK('CONFORMANCE_LOCK', 5)"
+        )?,
         vec![Value::from_i64(1), Value::from_i64(1)]
     );
     assert_eq!(

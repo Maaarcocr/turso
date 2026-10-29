@@ -41,7 +41,9 @@ struct LockHolder {
 static USER_LOCKS: LazyLock<Mutex<HashMap<String, LockHolder>>> = LazyLock::new(Mutex::default);
 
 fn user_locks() -> std::sync::MutexGuard<'static, HashMap<String, LockHolder>> {
-    USER_LOCKS.lock().expect("the user-level locks are not poisoned")
+    USER_LOCKS
+        .lock()
+        .expect("the user-level locks are not poisoned")
 }
 
 /// A user variable's value, and whether a string value has MySQL's default
@@ -97,9 +99,8 @@ pub(crate) fn execute(
         ONE_JOINED_ROW => one_joined_row(args),
         "GET_LOCK" => session(connection).and_then(|session| session.get_lock(args)),
         "RELEASE_LOCK" => session(connection).and_then(|session| session.release_lock(args)),
-        "IS_FREE_LOCK" => lock_name(&args[0]).map(|name| {
-            Value::from_i64(i64::from(!user_locks().contains_key(&name)))
-        }),
+        "IS_FREE_LOCK" => lock_name(&args[0])
+            .map(|name| Value::from_i64(i64::from(!user_locks().contains_key(&name)))),
         "IS_USED_LOCK" => lock_name(&args[0]).map(|name| {
             user_locks()
                 .get(&name)
