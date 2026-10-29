@@ -3123,7 +3123,8 @@ fn literal_result_digits(
     let Some(digits) = literal_decimals(arg) else {
         return Ok(None);
     };
-    if let Some(number) = signed_number_literal(arg).filter(|number| !is_exact_as_a_double(number))
+    if let Some(number) = signed_number_literal(arg)
+        .filter(|number| !is_exact_as_a_double(number) && !saturates(upper_name, number))
     {
         let whole = number.split_once('.').map_or(number, |(whole, _)| whole);
         if upper_name == "CONVERT_TZ" && !is_negated(arg) && whole.len() == 14 {
@@ -3144,6 +3145,14 @@ fn literal_result_digits(
     } else {
         LiteralResult::DateTime(digits)
     }))
+}
+
+/// A number of 12 or more integer digits, which SEC_TO_TIME saturates and
+/// MAKETIME and FROM_UNIXTIME reject as NULL whatever its other digits.
+fn saturates(upper_name: &str, digits: &str) -> bool {
+    let whole = digits.split_once('.').map_or(digits, |(whole, _)| whole);
+    matches!(upper_name, "SEC_TO_TIME" | "MAKETIME" | "FROM_UNIXTIME")
+        && whole.trim_start_matches('0').len() >= 12
 }
 
 fn is_exact_as_a_double(digits: &str) -> bool {
