@@ -555,7 +555,7 @@ pub(crate) fn translate_like(
     })
 }
 
-fn like_operand(
+pub(crate) fn like_operand(
     expr: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {

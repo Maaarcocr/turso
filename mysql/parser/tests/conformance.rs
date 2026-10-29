@@ -608,6 +608,10 @@ fn reports_decimal_casts_that_mysql_rejects() {
             sql: "SELECT CONCAT(CAST(1 AS JSON), 0xFF)",
         },
         SqlCase {
+            name: "a binary string that is not UTF-8 under an explicit collation in LIKE",
+            sql: "SELECT 0xFF LIKE 'a' COLLATE utf8mb4_0900_as_cs",
+        },
+        SqlCase {
             name: "a string latin1 lacks converted to a latin1 subject",
             sql: "SELECT LPAD(_latin1 0xFF, -1, '中')",
         },
@@ -845,6 +849,10 @@ fn lowers_select_statements_to_shared_ast() {
         (
             "SELECT TIME '10:04:58' * 0b1001, NULL * 1 + x'09', 18446744073709551615 + 0x0, -9223372036854775808 % 0x9, TIME '5 10:34:58.9' / 0xFF666F6F626172FF, TRUE AND 0xFF666F6F626172FF, _utf8 'foobar' + x'09'",
             "SELECT 904122, NULL * 1 + 9, CAST ('18446744073709551615' AS DECIMAL (20, 0)), -8, 1303458.9 / CAST ('18403519451478717183' AS DECIMAL (20, 0)), TRUE AND 1, 'foobar' + 9e0",
+        ),
+        (
+            "SELECT 'abc' COLLATE utf8mb4_0900_as_cs LIKE 'A%', 1.5 NOT LIKE _utf8mb4 '1._' COLLATE utf8mb4_bin",
+            "SELECT __mysql_like_bin ('abc', 'A%', '\\'), NOT __mysql_like_bin (1.5, '1._', '\\')",
         ),
         (
             "SELECT 18446744073709551615 * 1 - NULL",
@@ -1189,8 +1197,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT TIMESTAMP '2000-01-01 23:59:59.5' & 1",
         },
         SqlCase {
-            name: "LIKE under a case-sensitive collation",
-            sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs LIKE 'A'",
+            name: "LIKE under a case-sensitive collation beyond printable ASCII",
+            sql: "SELECT 'a\u{e9}' COLLATE utf8mb4_0900_as_cs LIKE 'A%'",
         },
         SqlCase {
             name: "LOCATE under a case-sensitive collation",

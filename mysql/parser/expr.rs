@@ -2532,6 +2532,13 @@ fn translate_like(
     escape: Option<&sqlparser::ast::ValueWithSpan>,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(matched) = case_sensitive_ascii_like(expr, pattern, escape, context)? {
+        return Ok(if negated {
+            ast::Expr::unary(ast::UnaryOperator::Not, matched)
+        } else {
+            matched
+        });
+    }
     ensure_default_collation(&[expr, pattern], "LIKE")?;
     let escape = match escape {
         Some(escape) => match &escape.value {
@@ -2609,6 +2616,101 @@ pub(crate) fn string_literal(expr: &Expr) -> Option<&str> {
 
 fn string_expr(text: &str) -> ast::Expr {
     ast::Expr::Literal(ast::Literal::String(quote_string(text)))
+}
+
+/// `LIKE` under an explicit `utf8mb4_0900_as_cs`, `utf8mb4_0900_bin` or
+/// `utf8mb4_bin` of literals whose text is printable ASCII, where those
+/// collations order characters as their bytes: `__mysql_like_bin`. MySQL
+/// converts every operand to the explicit collation's `utf8mb4`, so a hex,
+/// bit or `_binary` literal that is not UTF-8 is rejected.
+fn case_sensitive_ascii_like(
+    expr: &Expr,
+    pattern: &Expr,
+    escape: Option<&sqlparser::ast::ValueWithSpan>,
+    context: &mut TranslationContext,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    fn printable(text: &str) -> bool {
+        text.bytes().all(|byte| (0x20..0x7f).contains(&byte))
+    }
+    fn collated(expr: &Expr) -> &Expr {
+        match expr {
+            Expr::Collate { expr, .. } | Expr::Nested(expr) => collated(expr),
+            other => other,
+        }
+    }
+    fn operand(expr: &Expr) -> Result<Option<&Expr>, MysqlParserError> {
+        let expr = collated(expr);
+        if is_binary_literal(expr) {
+            let Some(bytes) = binary_literal_bytes(expr) else {
+                return Ok(None);
+            };
+            return match String::from_utf8(bytes) {
+                Ok(text) => Ok(printable(&text).then_some(expr)),
+                Err(_) => Err(MysqlParserError::Rejected(format!(
+                    "cannot convert the binary string `{expr}` of LIKE to utf8mb4"
+                ))),
+            };
+        }
+        if json::is_json_value(expr) {
+            let literal_cast = matches!(
+                expr,
+                Expr::Cast { expr: inner, data_type: DataType::JSON, .. } if is_literal(inner)
+            );
+            let text = expr.to_string();
+            return Ok((literal_cast && printable(&text) && !text.contains('\\')).then_some(expr));
+        }
+        let text = match expr {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => Some(text),
+                Value::Number(..) | Value::Boolean(_) | Value::Null => None,
+                _ => return Ok(None),
+            },
+            Expr::Prefixed { prefix, value } => {
+                match (prefix.value.to_ascii_lowercase().as_str(), value.as_ref()) {
+                    ("_utf8mb4" | "_utf8mb3" | "_utf8", Expr::Value(value)) => match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                            Some(text)
+                        }
+                        _ => return Ok(None),
+                    },
+                    _ => return Ok(None),
+                }
+            }
+            Expr::TypedString(_) => None,
+            _ if signed_number_literal(expr).is_some() || is_null_valued(expr) => None,
+            _ => return Ok(None),
+        };
+        Ok(text.is_none_or(|text| printable(text)).then_some(expr))
+    }
+    let Some(name) = single_explicit_collation(&[expr, pattern])? else {
+        return Ok(None);
+    };
+    if !matches!(
+        name.to_ascii_lowercase().as_str(),
+        "utf8mb4_0900_as_cs" | "utf8mb4_0900_bin" | "utf8mb4_bin"
+    ) {
+        return Ok(None);
+    }
+    let escape = match escape.map(|escape| &escape.value) {
+        None => '\\',
+        Some(Value::SingleQuotedString(text) | Value::DoubleQuotedString(text))
+            if text.len() == 1 && printable(text) =>
+        {
+            text.chars().next().expect("the escape has one character")
+        }
+        Some(_) => return Ok(None),
+    };
+    let (Some(subject), Some(matched)) = (operand(expr)?, operand(pattern)?) else {
+        return Ok(None);
+    };
+    Ok(Some(function_call(
+        "__mysql_like_bin",
+        vec![
+            json::like_operand(subject, context)?,
+            json::like_operand(matched, context)?,
+            string_expr(&escape.to_string()),
+        ],
+    )))
 }
 
 fn with_dangling_escape_doubled(pattern: &str, escape: char) -> String {
