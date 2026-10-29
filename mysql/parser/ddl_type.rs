@@ -18,7 +18,6 @@ const BYTES_PER_CHARACTER: u64 = 4;
 const TINY_LENGTH: u64 = 255;
 const REGULAR_LENGTH: u64 = 65_535;
 const MEDIUM_LENGTH: u64 = 16_777_215;
-const NUMERIC_KEY_BYTES: u64 = 8;
 
 pub(crate) struct ColumnType {
     pub(crate) declared: ast::Type,
@@ -272,7 +271,41 @@ impl ColumnType {
             {
                 prefix.unwrap_or(*length)
             }
-            (_, None) => NUMERIC_KEY_BYTES,
+            (Family::Integer { max, .. }, None) => match max {
+                ..=255 => 1,
+                ..=65_535 => 2,
+                ..=16_777_215 => 3,
+                ..=4_294_967_295 => 4,
+                _ => 8,
+            },
+            (Family::Bit { width }, None) => width.div_ceil(8),
+            (
+                Family::Decimal {
+                    precision, scale, ..
+                },
+                None,
+            ) => decimal_bytes(precision - scale) + decimal_bytes(*scale),
+            (Family::Float { .. }, None) if self.declared.name.starts_with("FLOAT") => 4,
+            (Family::Float { .. }, None) => 8,
+            (Family::Date, None) => 3,
+            (Family::Time { precision }, None) => 3 + precision.div_ceil(2),
+            (Family::Timestamp { precision }, None) => 4 + precision.div_ceil(2),
+            (Family::Datetime { precision }, None) => 5 + precision.div_ceil(2),
+            (Family::Year, None) => 1,
+            (Family::Enum(members), None) if members.len() <= 255 => 1,
+            (Family::Enum(_), None) => 2,
+            (Family::Set(members), None) => match members.len().div_ceil(8) {
+                0 | 1 => 1,
+                bytes @ 2..=4 => bytes as u64,
+                _ => 8,
+            },
+            (
+                Family::Char { .. }
+                | Family::Varchar { .. }
+                | Family::Binary { .. }
+                | Family::Varbinary { .. },
+                None,
+            ) => unreachable!("a whole string column is measured by its length"),
             (_, Some(_)) => {
                 return Err(MysqlParserError::Rejected(format!(
                     "prefix key on column `{column}` is not a valid MySQL key part"
@@ -284,6 +317,13 @@ impl ColumnType {
         }
         Ok(bytes)
     }
+}
+
+/// The bytes of InnoDB's binary DECIMAL format for `digits` digits on one
+/// side of the point: four per nine digits and the rest by `DIG2BYTES`.
+fn decimal_bytes(digits: u64) -> u64 {
+    const DIG2BYTES: [u64; 9] = [0, 1, 1, 2, 2, 3, 3, 4, 4];
+    digits / 9 * 4 + DIG2BYTES[(digits % 9) as usize]
 }
 
 pub(crate) fn ensure_key_length(total_bytes: u64) -> Result<(), MysqlParserError> {

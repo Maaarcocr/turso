@@ -509,6 +509,14 @@ fn reports_ddl_that_mysql_rejects() {
             sql: "CREATE TABLE users(name VARCHAR(1000), KEY name_key (name))",
         },
         SqlCase {
+            name: "key of strings and two BIGINTs longer than 3072 bytes",
+            sql: "CREATE TABLE t (a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e BIGINT, f BIGINT, UNIQUE KEY k (a, b, c, e, f))",
+        },
+        SqlCase {
+            name: "key of strings and a DATETIME(6) longer than 3072 bytes",
+            sql: "CREATE TABLE t (a VARCHAR(766), e DATETIME(6), f TINYINT, UNIQUE KEY k (a, e, f))",
+        },
+        SqlCase {
             name: "prefix key on an integer",
             sql: "CREATE TABLE users(id INT, KEY id_key (id(4)))",
         },
@@ -577,6 +585,27 @@ fn reports_ddl_that_mysql_rejects() {
             case.name,
             case.sql
         );
+    }
+}
+
+#[test]
+fn measures_key_parts_by_their_innodb_size() {
+    for columns in [
+        "e TINYINT, f TINYINT",
+        "e INT, f INT",
+        "e INT UNSIGNED, f MEDIUMINT",
+        "e DECIMAL(10, 2), f YEAR",
+        "e DATETIME(2), f DATE",
+        "e TIMESTAMP(6), f FLOAT",
+        "e TIME(6), f BIT(9)",
+        "e DOUBLE",
+        "e ENUM('x'), f SET('x', 'y')",
+    ] {
+        let sql = format!(
+            "CREATE TABLE t (a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), {columns}, UNIQUE KEY k (a, b, c, e{}))",
+            if columns.contains("f ") { ", f" } else { "" }
+        );
+        parse_and_translate(&sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
 }
 
