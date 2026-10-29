@@ -37,7 +37,18 @@ pub(crate) struct TranslationContext {
 
 impl TranslationContext {
     pub(crate) fn reads_table(&self, table: &ast::Name) -> bool {
-        self.tables_read
+        self.reads_table_since(0, table)
+    }
+
+    /// How many table reads the translation has met so far, a mark for
+    /// [`Self::reads_table_since`].
+    pub(crate) fn tables_read_count(&self) -> usize {
+        self.tables_read.len()
+    }
+
+    /// Whether a table read met after `mark` reads `table`.
+    pub(crate) fn reads_table_since(&self, mark: usize, table: &ast::Name) -> bool {
+        self.tables_read[mark..]
             .iter()
             .any(|read| read.as_str().eq_ignore_ascii_case(table.as_str()))
     }
@@ -754,7 +765,7 @@ fn contains_aggregate(expr: &Expr) -> bool {
     }
 }
 
-fn is_aggregate(function: &Function) -> bool {
+pub(crate) fn is_aggregate(function: &Function) -> bool {
     function.over.is_none()
         && matches!(
             function.name.to_string().to_ascii_uppercase().as_str(),
@@ -998,7 +1009,7 @@ fn is_plain_wildcard(options: &WildcardAdditionalOptions) -> bool {
         && opt_alias.is_none()
 }
 
-fn translate_from(
+pub(crate) fn translate_from(
     from: &[TableWithJoins],
     context: &mut TranslationContext,
 ) -> Result<Option<ast::FromClause>, MysqlParserError> {

@@ -2,7 +2,7 @@ use crate::ddl_default::resolve_default;
 use crate::ddl_expr::{translate_default, translate_expr, DefaultValue};
 use crate::ddl_type::{translate_column_type, ColumnType, Family};
 use crate::expr::{collation_sequence, DEFAULT_COLLATION};
-use crate::names::translate_ddl_identifier;
+use crate::names::{translate_column_name, translate_ddl_identifier};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     CheckConstraint, ColumnDef, ColumnOption, ColumnOptionDef, DataType, GeneratedAs,
@@ -35,7 +35,7 @@ impl Column {
             options,
         } = column;
         let mut lowered = Column {
-            name: translate_ddl_identifier(name)?,
+            name: translate_column_name(name)?,
             column_type: translate_column_type(data_type)?,
             not_null: false,
             explicit_null: false,
@@ -167,9 +167,6 @@ impl Column {
                 column_type.match_labels_exactly();
             }
             _ => {}
-        }
-        if let Some(value_check) = column_type.value_check(&name) {
-            constraints.push(check(value_check));
         }
         for (check_name, expr) in checks {
             constraints.push(ast::NamedColumnConstraint {
@@ -367,13 +364,6 @@ fn constraint(constraint: ast::ColumnConstraint) -> ast::NamedColumnConstraint {
         name: None,
         constraint,
     }
-}
-
-fn check(expr: ast::Expr) -> ast::NamedColumnConstraint {
-    constraint(ast::ColumnConstraint::Check {
-        expr: Box::new(expr),
-        source: None,
-    })
 }
 
 fn unsupported_option(option: &ColumnOption) -> MysqlParserError {

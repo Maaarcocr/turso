@@ -237,6 +237,43 @@ fn tables_made_by_create_table_as_select_keep_their_column_types_after_reopen(
     Ok(())
 }
 
+#[test]
+fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<()> {
+    let first = open_memory()?;
+    let second = open_memory()?;
+    let one = |connection: &Arc<turso_core::Connection>, sql: &str| {
+        query(connection, sql).map(|rows| rows[0].clone())
+    };
+    assert_eq!(
+        one(
+            &first,
+            "SELECT GET_LOCK('conformance_lock', 0), GET_LOCK('CONFORMANCE_LOCK', 5)"
+        )?,
+        vec![Value::from_i64(1), Value::from_i64(1)]
+    );
+    assert_eq!(
+        one(
+            &second,
+            "SELECT GET_LOCK('conformance_lock', 0), RELEASE_LOCK('conformance_lock'),              IS_FREE_LOCK('conformance_lock'), IS_USED_LOCK('conformance_lock') <> CONNECTION_ID()"
+        )?,
+        vec![Value::from_i64(0), Value::from_i64(0), Value::from_i64(0), Value::from_i64(1)]
+    );
+    let error = second
+        .execute("SELECT GET_LOCK('conformance_lock', 1)")
+        .expect_err("waiting for a lock is refused");
+    assert!(error.to_string().contains("not supported yet"), "{error}");
+    first.close()?;
+    drop(first);
+    assert_eq!(
+        one(
+            &second,
+            "SELECT GET_LOCK('conformance_lock', 0), RELEASE_ALL_LOCKS(), RELEASE_LOCK('conformance_lock')"
+        )?,
+        vec![Value::from_i64(1), Value::from_i64(1), Value::Null]
+    );
+    Ok(())
+}
+
 fn query(
     connection: &Arc<turso_core::Connection>,
     sql: &str,
@@ -414,6 +451,111 @@ fn user_variables_keep_their_values_for_the_session() -> turso_core::Result<()> 
     }
     let other = open_memory()?;
     assert_eq!(query(&other, "SELECT @a")?, vec![vec![Value::Null]]);
+    Ok(())
+}
+
+#[test]
+fn json_columns_store_mysql_documents() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id INT PRIMARY KEY, j JSON, s TEXT)")?;
+    connection.execute(
+        r#"INSERT INTO t VALUES (1, '{"b":2,  "a":[1,2], "aa": true, "b": 3}', '{"a": 1}')"#,
+    )?;
+    let texts = |sql: &str| -> turso_core::Result<Vec<Vec<String>>> {
+        Ok(query(&connection, sql)?
+            .into_iter()
+            .map(|row| row.iter().map(ToString::to_string).collect())
+            .collect())
+    };
+    assert_eq!(
+        texts("SELECT j, JSON_ARRAY(j), JSON_ARRAY(s), JSON_TYPE(j) FROM t")?,
+        vec![vec![
+            r#"{"a": [1, 2], "b": 3, "aa": true}"#,
+            r#"[{"a": [1, 2], "b": 3, "aa": true}]"#,
+            r#"["{\"a\": 1}"]"#,
+            "OBJECT",
+        ]]
+    );
+    for (value, error) in [
+        ("'{bad'", "ERROR 3140"),
+        ("1", "ERROR 3140"),
+        ("X'7B7D'", "ERROR 3144"),
+    ] {
+        let sql = format!("UPDATE t SET j = {value}");
+        let failure = connection.execute(&sql).expect_err(&sql);
+        assert!(failure.to_string().contains(error), "{sql}: {failure}");
+    }
+    Ok(())
+}
+
+#[test]
+fn temporal_columns_store_the_text_mysql_stores() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id INT PRIMARY KEY, a DATETIME(6), b DATETIME, c DATE, d TIME(2), e TIMESTAMP)",
+    )?;
+    connection.execute(
+        "INSERT INTO t VALUES (1, '2024-3-5 9:4:5.25', '2024-03-05T10:00:00', '2024-3-5 00:00:00', '1:2:3.4', '1970-01-01 00:00:01')",
+    )?;
+    connection.execute("UPDATE t SET b = '2024-02-29 23:59:59.5'")?;
+    assert_eq!(
+        query(&connection, "SELECT a, b, c, d, e FROM t")?,
+        vec![vec![
+            Value::build_text("2024-03-05 09:04:05.250000"),
+            Value::build_text("2024-03-01 00:00:00"),
+            Value::build_text("2024-03-05"),
+            Value::build_text("01:02:03.40"),
+            Value::build_text("1970-01-01 00:00:01"),
+        ]]
+    );
+    for (rejected, column, value) in [
+        ("Incorrect datetime value", "b", "'2024-02-30 00:00:00'"),
+        ("Incorrect datetime value", "e", "'1970-01-01 00:00:00'"),
+        ("Incorrect date value", "c", "'2024-00-05'"),
+        ("Incorrect time value", "d", "'839:00:00'"),
+        ("not supported yet", "b", "'9999-12-31 23:59:59.5'"),
+        ("not supported yet", "d", "'-00:00:00.001'"),
+        ("not supported yet", "c", "'2024-02-01 10:00:00'"),
+        ("not supported yet", "b", "20240201"),
+    ] {
+        let sql = format!("UPDATE t SET {column} = {value}");
+        let error = connection.execute(&sql).expect_err(&sql);
+        assert!(error.to_string().contains(rejected), "{sql}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE a (id INT PRIMARY KEY, v INT)")?;
+    connection.execute("CREATE TABLE b (id INT, w INT)")?;
+    connection.execute("INSERT INTO a VALUES (1, 0), (2, 0), (3, 0)")?;
+    connection.execute("INSERT INTO b VALUES (1, 10), (2, 20), (2, 30), (3, 40)")?;
+    let rows = |connection: &Arc<turso_core::Connection>| {
+        query(connection, "SELECT id, v FROM a ORDER BY id")
+    };
+    connection.execute("UPDATE a JOIN b ON b.id = a.id SET a.v = a.v + 1")?;
+    let once = vec![
+        vec![Value::from_i64(1), Value::from_i64(1)],
+        vec![Value::from_i64(2), Value::from_i64(1)],
+        vec![Value::from_i64(3), Value::from_i64(1)],
+    ];
+    assert_eq!(rows(&connection)?, once);
+    let error = connection
+        .execute("UPDATE a JOIN b ON b.id = a.id SET a.v = b.w")
+        .expect_err("row 2 takes the values of one of two joined rows");
+    assert!(error.to_string().contains("not supported yet"), "{error}");
+    assert_eq!(rows(&connection)?, once);
+    connection.execute("UPDATE a JOIN b ON b.id = a.id SET a.v = b.w WHERE b.w <> 30")?;
+    assert_eq!(
+        rows(&connection)?,
+        vec![
+            vec![Value::from_i64(1), Value::from_i64(10)],
+            vec![Value::from_i64(2), Value::from_i64(20)],
+            vec![Value::from_i64(3), Value::from_i64(40)],
+        ]
+    );
     Ok(())
 }
 

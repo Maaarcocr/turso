@@ -208,15 +208,15 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
-            "CREATE TABLE t (e ENUM ('''x'',''y''') NOT NULL DEFAULT 'x', s \"SET\" ('''r'',''w''') DEFAULT 'r,w', j LONGTEXT CHECK (json_valid (j)), t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
+            "CREATE TABLE t (e ENUM ('''x'',''y''') NOT NULL DEFAULT 'x', s \"SET\" ('''r'',''w''') DEFAULT 'r,w', j JSON, t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
         ),
         (
             "CREATE TABLE t (e ENUM('a,b','c''d') COLLATE utf8mb4_0900_bin, s SET('x') COLLATE utf8mb4_0900_as_ci)",
             "CREATE TABLE t (e ENUM ('''a,b'',''c''''d''', 1), s \"SET\" ('''x''')) STRICT",
         ),
         (
-            "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP) STRICT",
+            "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP, r DATETIME DEFAULT '2020-12-31 23:59:59.5')",
+            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP, r DATETIME DEFAULT '2021-01-01 00:00:00') STRICT",
         ),
         (
             "CREATE TABLE t (a DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), b TIMESTAMP(3) DEFAULT NOW(3), c DATETIME DEFAULT CURRENT_TIMESTAMP(0))",
@@ -244,7 +244,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (j JSON, b INT AS (j->>'$.b'))",
-            "CREATE TABLE t (j LONGTEXT CHECK (json_valid (j)), b INT GENERATED ALWAYS AS (JSON_UNQUOTE (JSON_EXTRACT (j, '$.b'))) VIRTUAL) STRICT",
+            "CREATE TABLE t (j JSON, b INT GENERATED ALWAYS AS (JSON_UNQUOTE (JSON_EXTRACT (j, '$.b'))) VIRTUAL) STRICT",
         ),
         (
             "CREATE UNIQUE INDEX idx USING BTREE ON t (a DESC, b)",
@@ -305,6 +305,10 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
         SqlCase {
             name: "like",
             sql: "CREATE TABLE users LIKE source_users",
+        },
+        SqlCase {
+            name: "column named rowid",
+            sql: "CREATE TABLE users(RowId INT)",
         },
         SqlCase {
             name: "columns and a select",
@@ -373,10 +377,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
         SqlCase {
             name: "invisible column",
             sql: "CREATE TABLE users(id INT INVISIBLE)",
-        },
-        SqlCase {
-            name: "datetime default that needs rounding",
-            sql: "CREATE TABLE users(seen DATETIME DEFAULT '2020-01-01 00:00:00.5')",
         },
         SqlCase {
             name: "named inline primary key",
@@ -1613,7 +1613,7 @@ fn lowering_rejects_unsupported_statement_families() {
         "DROP TABLE a, b",
         "DROP TEMPORARY TABLE users",
         "CREATE INDEX name_key ON users (name(10))",
-        "INSERT IGNORE INTO users VALUES (1)",
+        "INSERT IGNORE INTO users () VALUES ()",
         "INSERT INTO users VALUES (DEFAULT)",
         "INSERT INTO users SET id = 1, name = id",
         "INSERT INTO users SET id = 1, id = 2",
@@ -1624,7 +1624,11 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1, a = 2",
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
-        "SHOW TABLES",
+        "REPLACE IGNORE INTO t VALUES (1, 2)",
+        "SHOW TABLES FROM app",
+        "SHOW TABLES WHERE Tables_in_main = 'a'",
+        r"SHOW TABLES LIKE 'a\_b'",
+        "SHOW COLUMNS FROM users",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
         "USE app",
@@ -1732,6 +1736,61 @@ fn lowers_on_duplicate_key_update_to_an_upsert() {
 }
 
 #[test]
+fn lowers_insert_ignore_to_an_upsert_that_does_nothing() {
+    let cases = [
+        (
+            "INSERT IGNORE INTO t VALUES (1, 2), (3, 4)",
+            "INSERT INTO t VALUES (1, 2), (3, 4) ON CONFLICT DO NOTHING",
+        ),
+        (
+            "INSERT IGNORE t (a) SELECT b FROM u",
+            "INSERT INTO t (a) SELECT b FROM u ON CONFLICT DO NOTHING",
+        ),
+        (
+            "INSERT IGNORE INTO t SET a = 1",
+            "INSERT INTO t (a) VALUES (1) ON CONFLICT DO NOTHING",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
+fn lowers_show_tables_to_a_query_of_the_schema() {
+    let names = "SELECT __mysql_schema_name(sql) AS name, type FROM sqlite_schema \
+                 WHERE type IN ('table', 'view') AND lower(substr(name, 1, 7)) <> 'sqlite_' \
+                 AND substr(name, 1, 16) <> '__turso_internal'";
+    let cases = [
+        (
+            "SHOW TABLES".to_string(),
+            format!("SELECT name AS Tables_in_main FROM ({names}) ORDER BY name"),
+        ),
+        (
+            "SHOW FULL TABLES LIKE 'a%_[*?'".to_string(),
+            format!(
+                "SELECT name AS Tables_in_main, CASE type WHEN 'view' THEN 'VIEW' ELSE 'BASE TABLE' END AS Table_type \
+                 FROM ({names}) WHERE name GLOB 'a*?[[][*][?]' ORDER BY name"
+            ),
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(&sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        let Ok(Some(ast::Cmd::Stmt(expected))) =
+            turso_parser::parser::Parser::new(expected.as_bytes()).next_cmd()
+        else {
+            panic!("the expected SQL of {sql} must parse as a statement");
+        };
+        assert_eq!(statement.to_string(), expected.to_string(), "SQL: {sql}");
+    }
+}
+
+#[test]
 fn lowers_single_table_update_and_delete() {
     let cases = [
         ("UPDATE users SET id = 2", "UPDATE users SET id = 2"),
@@ -1798,6 +1857,38 @@ fn lowers_single_table_update_and_delete() {
             "DELETE FROM users WHERE id IN (SELECT user_id FROM banned)",
         ),
         ("DELETE FROM quick", "DELETE FROM quick"),
+        (
+            "UPDATE users SET qty = ? WHERE id > ? ORDER BY name DESC, id LIMIT ?",
+            "UPDATE users SET qty = ?1 WHERE rowid IN (SELECT rowid FROM users WHERE id > ?2 ORDER BY name DESC, id LIMIT ?3)",
+        ),
+        (
+            "UPDATE users AS u SET qty = 1 ORDER BY u.id LIMIT 2",
+            "UPDATE users AS u SET qty = 1 WHERE rowid IN (SELECT rowid FROM users AS u ORDER BY u.id LIMIT 2)",
+        ),
+        (
+            "DELETE FROM users WHERE qty = 0 ORDER BY id LIMIT 1",
+            "DELETE FROM users WHERE rowid IN (SELECT rowid FROM users WHERE qty = 0 ORDER BY id LIMIT 1)",
+        ),
+        (
+            "DELETE users FROM users JOIN banned ON banned.user_id = users.id WHERE banned.until > ?",
+            "DELETE FROM users WHERE rowid IN (SELECT users.rowid FROM users JOIN banned ON banned.user_id = users.id WHERE banned.until > ?1)",
+        ),
+        (
+            "DELETE u FROM users AS u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id IS NULL",
+            "DELETE FROM users WHERE rowid IN (SELECT u.rowid FROM users AS u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id ISNULL)",
+        ),
+        (
+            "DELETE FROM users USING users JOIN banned ON banned.user_id = users.id",
+            "DELETE FROM users WHERE rowid IN (SELECT users.rowid FROM users JOIN banned ON banned.user_id = users.id)",
+        ),
+        (
+            "UPDATE users JOIN stock ON stock.id = users.id SET users.qty = stock.qty WHERE stock.qty > ?",
+            "UPDATE users AS __mysql_target SET qty = __mysql_rows.__mysql_value_0 FROM (SELECT users.rowid AS __mysql_rowid, stock.qty AS __mysql_value_0, count (1) AS __mysql_matches FROM users JOIN stock ON stock.id = users.id WHERE (stock.qty > ?1) AND users.rowid NOTNULL GROUP BY users.rowid) AS __mysql_rows WHERE __mysql_target.rowid = __mysql_rows.__mysql_rowid AND __mysql_one_joined_row (__mysql_rows.__mysql_matches)",
+        ),
+        (
+            "UPDATE users u JOIN stock s ON s.id = u.id SET u.qty = u.qty + 1, u.name = 'x'",
+            "UPDATE users AS __mysql_target SET qty = __mysql_rows.__mysql_value_0, name = __mysql_rows.__mysql_value_1 FROM (SELECT u.rowid AS __mysql_rowid, u.qty + 1 AS __mysql_value_0, 'x' AS __mysql_value_1, count (1) AS __mysql_matches FROM users u JOIN stock s ON s.id = u.id WHERE u.rowid NOTNULL GROUP BY u.rowid) AS __mysql_rows WHERE __mysql_target.rowid = __mysql_rows.__mysql_rowid",
+        ),
     ];
 
     for (sql, expected) in cases {
@@ -1847,8 +1938,12 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE users AS u SET users.qty = 1",
         },
         SqlCase {
-            name: "update order by",
-            sql: "UPDATE users SET qty = 1 ORDER BY id",
+            name: "update ordered by a column it assigns",
+            sql: "UPDATE users SET id = id + 1 ORDER BY id DESC",
+        },
+        SqlCase {
+            name: "update ordered by a position",
+            sql: "UPDATE users SET qty = 1 ORDER BY 1 LIMIT 1",
         },
         SqlCase {
             name: "update limit",
@@ -1863,8 +1958,24 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE IGNORE users SET qty = 1",
         },
         SqlCase {
-            name: "multi-table update",
-            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = other.qty",
+            name: "multi-table update of two tables",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = 1, other.qty = 2",
+        },
+        SqlCase {
+            name: "multi-table update of an unqualified column",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET qty = 1",
+        },
+        SqlCase {
+            name: "multi-table update of a derived table",
+            sql: "UPDATE users JOIN (SELECT 1 AS id) AS d ON users.id = d.id SET d.id = 2",
+        },
+        SqlCase {
+            name: "multi-table update with an aggregate",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = COUNT(*)",
+        },
+        SqlCase {
+            name: "multi-table update whose subquery reads the target",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = (SELECT MAX(qty) FROM users)",
         },
         SqlCase {
             name: "update returning",
@@ -1883,10 +1994,6 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE users SET qty = 1 WHERE id IN (SELECT id FROM users)",
         },
         SqlCase {
-            name: "delete order by limit",
-            sql: "DELETE FROM users ORDER BY id LIMIT 1",
-        },
-        SqlCase {
             name: "delete limit",
             sql: "DELETE FROM users LIMIT 1",
         },
@@ -1903,12 +2010,20 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "DELETE IGNORE FROM users",
         },
         SqlCase {
-            name: "multi-table delete",
-            sql: "DELETE users FROM users JOIN other ON users.id = other.id",
+            name: "delete from two tables",
+            sql: "DELETE users, other FROM users JOIN other ON users.id = other.id",
         },
         SqlCase {
-            name: "delete using",
-            sql: "DELETE FROM users USING users JOIN other",
+            name: "delete target spelled in another case than its table",
+            sql: "DELETE USERS FROM users JOIN other ON users.id = other.id",
+        },
+        SqlCase {
+            name: "delete through the table name of an aliased table",
+            sql: "DELETE users FROM users AS u JOIN other ON u.id = other.id",
+        },
+        SqlCase {
+            name: "delete using from two tables",
+            sql: "DELETE FROM users, other USING users JOIN other",
         },
         SqlCase {
             name: "delete returning",

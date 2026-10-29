@@ -1,8 +1,9 @@
 use super::unsupported_value;
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::types::TextSubtype;
-use turso_core::{LimboError, Result, Value};
+use turso_core::{LimboError, Numeric, Result, Value};
 use turso_mysql_parser::datetime::parse::{parse_datetime, DateFlags};
+use turso_mysql_parser::{temporal_text, MysqlParserError, TemporalColumn};
 
 macro_rules! compared {
     ($left:expr, $right:expr, $function:literal) => {
@@ -26,13 +27,15 @@ macro_rules! compared {
 }
 
 macro_rules! temporal {
-    ($name:literal, $parameters:literal, $operators:expr) => {
+    ($name:literal, $parameters:literal, $assign:literal, $operators:expr) => {
         DialectType {
             name: $name,
             storage: StorageType::Text,
             parameters: $parameters,
             behaviour: concat!(
-                "ASSIGN __mysql_assign_text(value, NULL) ",
+                "ASSIGN ",
+                $assign,
+                " ",
                 "CAST __mysql_sqlite_cast(value, 'TEXT') ",
                 $operators,
                 "FUNCTION __mysql_cast_as_signed(\"",
@@ -75,20 +78,91 @@ pub(super) const TYPES: [DialectType; 4] = [
     temporal!(
         "date",
         "",
+        "__mysql_assign_date(value)",
         dated!("\"date\"", "\"datetime\"", "\"timestamp\"")
     ),
     temporal!(
         "datetime",
         "precision integer DEFAULT 0",
+        "__mysql_assign_datetime(value, precision)",
         dated!("\"datetime\"", "\"date\"", "\"timestamp\"")
     ),
     temporal!(
         "timestamp",
         "precision integer DEFAULT 0",
+        "__mysql_assign_timestamp(value, precision)",
         dated!("\"timestamp\"", "\"date\"", "\"datetime\"")
     ),
-    temporal!("time", "precision integer DEFAULT 0", ""),
+    temporal!(
+        "time",
+        "precision integer DEFAULT 0",
+        "__mysql_assign_time(value, precision)",
+        ""
+    ),
 ];
+
+/// The text MySQL stores for a value assigned to a `DATE` column; see
+/// [`assign`].
+pub(super) fn assign_date(args: &[Value]) -> Result<Value> {
+    assign(&args[0], TemporalColumn::Date, "date")
+}
+
+pub(super) fn assign_datetime(args: &[Value]) -> Result<Value> {
+    assign(
+        &args[0],
+        TemporalColumn::Datetime(precision(&args[1])?),
+        "datetime",
+    )
+}
+
+pub(super) fn assign_timestamp(args: &[Value]) -> Result<Value> {
+    assign(
+        &args[0],
+        TemporalColumn::Timestamp(precision(&args[1])?),
+        "datetime",
+    )
+}
+
+pub(super) fn assign_time(args: &[Value]) -> Result<Value> {
+    assign(&args[0], TemporalColumn::Time(precision(&args[1])?), "time")
+}
+
+/// A string assigned to a temporal column becomes the canonical text MySQL
+/// stores (`2024-3-5 9:4:5` is `2024-03-05 09:04:05`, padded to the column's
+/// fractional digits). One MySQL rejects fails as its error 1292 does; a
+/// number, a binary string, a JSON value, and a string whose conversion is not
+/// available yet are refused.
+fn assign(value: &Value, column: TemporalColumn, type_name: &str) -> Result<Value> {
+    let text = match value {
+        Value::Null => return Ok(Value::Null),
+        Value::Text(text) if text.subtype != TextSubtype::Json => text.as_str(),
+        _ => {
+            return Err(unsupported_value(format!(
+                "`{value}` assigned to a {} column",
+                type_name.to_ascii_uppercase()
+            )))
+        }
+    };
+    match temporal_text(column, text) {
+        Ok(canonical) => Ok(Value::build_text(canonical)),
+        Err(MysqlParserError::Rejected(_)) => Err(LimboError::InvalidArgument(format!(
+            "Incorrect {type_name} value: '{text}'"
+        ))),
+        Err(_) => Err(unsupported_value(format!(
+            "`{text}` assigned to a {} column, which needs a conversion that",
+            type_name.to_ascii_uppercase()
+        ))),
+    }
+}
+
+fn precision(value: &Value) -> Result<u64> {
+    match value {
+        Value::Numeric(Numeric::Integer(precision @ 0..=6)) => Ok(precision.unsigned_abs()),
+        other => Err(LimboError::InternalError(format!(
+            "a temporal column has 0 to 6 fractional digits, not {other}"
+        ))),
+    }
+}
 
 /// Whether the left operand is the earlier datetime, reading both as MySQL
 /// reads the operands of a comparison with a `DATE`, `DATETIME` or

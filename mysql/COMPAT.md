@@ -37,12 +37,12 @@ Typed tables are STRICT tables that core marks with `/* turso_dialect:mysql */` 
 | `BINARY(n)`/`VARBINARY(n)`, `TINYBLOB`/`BLOB`/`MEDIUMBLOB`/`LONGBLOB` | blob | at most the type's length in bytes, else 1406; `BINARY(n)` pads with zero bytes; text and numbers are stored as their bytes. Binary columns compare with text literals byte by byte |
 | `GEOMETRY`, `POINT`, `LINESTRING`, `POLYGON`, `MULTI*`, `GEOMETRYCOLLECTION` | blob | only `NULL`: every other value fails (1416) |
 | `DECIMAL(p,s)` [`UNSIGNED`] | integer when the value is a whole number in the signed 64-bit range, otherwise double (until exact decimals) | text is read as a number; other text fails with 1265 where MySQL reports 1366; negative `UNSIGNED` fails (1264) |
-| `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)` | text, as given (until temporal storage) | numbers become text |
+| `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)` | text in MySQL's form: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS[.fraction]`, `[-]HH:MM:SS[.fraction]`, with the column's `p` fractional digits | a string of numbers separated by `-`, `:`, a space or `T` is normalized (`2024-3-5 9:4:5` is `2024-03-05 09:04:05`, `10:00:00.5` in `DATETIME(6)` is `10:00:00.500000`, a `DATE` takes a datetime whose time is zero); fractional digits beyond `p` are rounded as MySQL rounds them, to microseconds by the seventh digit and then half up (`23:59:59.5` in a `DATETIME` is the next day); an invalid or zero date, a time out of range and a `TIMESTAMP` outside 1970-2038 fail like MySQL (1292); a rounding past year 9999 or `838:59:59`, a negative zero time, a time in a `DATE`, other string forms, numbers, binary strings and JSON values are refused |
 
 A `DATE`, `DATETIME` or `TIMESTAMP` value compares with a value of its own type as text, and with a string or a value of the other two types as the datetimes MySQL reads them as (`d = '2020-1-2'` is true for `2020-01-02`, `d = dt` compares `2020-01-02` as `2020-01-02 00:00:00`). A string MySQL's datetime parser rejects fails (1525, `d >= 'not a valid date'`); a zero date or a date with a zero month or day, a number, a binary string, a JSON value and a `TIME` value are refused there.
 | `YEAR` | integer from 0 to 2155 | as the integer types |
 | `BIT(n)` | integer from 0 to 2^n - 1 (at most 9223372036854775807 for `BIT(64)`) | as the integer types; values outside the range fail (1406). MySQL reads text as a binary string, Turso as a number |
-| `JSON` | `LONGTEXT` with `CHECK (json_valid(...))` (until a JSON type) | as `LONGTEXT` |
+| `JSON` | text: the document in MySQL's form (`{"a": [1, 2], "b": 2, "aa": true}`: keys ordered by length and then bytes, the last of duplicate keys kept, `", "` and `": "` between items) | text must be a JSON document (3140); numbers fail as in MySQL (3140, "may need CAST") and binary strings with 3144. JSON functions read a value of the column as a JSON document, as they read the result of another JSON function (`JSON_ARRAY(j)` nests the document). Comparisons of the column with other values, `ORDER BY` and `MIN`/`MAX` still compare its text, where MySQL compares JSON values |
 | `ENUM(...)` | text: an assigned value becomes the member it names (ignoring trailing spaces, and ASCII letter case unless the column's collation is case-sensitive) or the member at its position (an integer, or a string of at most five digits); anything else fails (1265) | numbers become text |
 | `SET(...)` | text: an assigned value becomes the members it names, or those of the bits of an integer, listed in definition order; anything else fails (1265) | numbers become text |
 
@@ -50,7 +50,7 @@ The conversion also applies to `UPDATE`, `INSERT ... SELECT`, defaults, generate
 
 A single integer primary key column is the table's rowid, so rows are read in primary key order, as InnoDB returns them. The exception is a `BIGINT UNSIGNED` key without `AUTO_INCREMENT`: it is an ordinary primary key, so it can hold values above 9223372036854775807, and rows are read in insertion order. `AUTO_INCREMENT` is available on that column: `NULL`, `0` or an omitted value takes the next value, a deleted maximum is never reused, and when the next value does not fit the type the insert fails (MySQL reports a duplicate key, 1062). `UPDATE` stores `0` and rejects `NULL` (1048). A primary key without `AUTO_INCREMENT` rejects `NULL` like MySQL. Primary key columns are `NOT NULL`. A `NOT NULL` `ENUM` without a default takes its first member, as in MySQL.
 
-`DEFAULT` literals are checked against the column type the way MySQL checks them and stored in the form MySQL stores them (integers rounded, `DECIMAL(p,s)` and `FLOAT(M,D)` rounded to their scale, numbers in string columns kept as written, dates and times normalized to `YYYY-MM-DD HH:MM:SS[.fraction]`, `ENUM`/`SET` members spelled as declared, trailing spaces removed for `CHAR`). `CURRENT_TIMESTAMP(n)`/`NOW(n)` defaults are available for `DATETIME(n)` and `TIMESTAMP(n)` with the same `n` (MySQL rejects any other), and parenthesized expression defaults are lowered as expressions. A default MySQL rejects, or one that needs rounding of fractional seconds, is not lowered.
+`DEFAULT` literals are checked against the column type the way MySQL checks them and stored in the form MySQL stores them (integers rounded, `DECIMAL(p,s)` and `FLOAT(M,D)` rounded to their scale, numbers in string columns kept as written, dates and times normalized to `YYYY-MM-DD HH:MM:SS[.fraction]`, `ENUM`/`SET` members spelled as declared, trailing spaces removed for `CHAR`). `CURRENT_TIMESTAMP(n)`/`NOW(n)` defaults are available for `DATETIME(n)` and `TIMESTAMP(n)` with the same `n` (MySQL rejects any other), and parenthesized expression defaults are lowered as expressions. A default MySQL rejects fails, and one in a temporal form the assignment of a value does not take (see the column types above) is not lowered.
 
 `CREATE TABLE` keys are validated like InnoDB does: a `BLOB`/`TEXT` key part needs a prefix length, `JSON` columns cannot be key parts, a prefix must fit the column and be on a string, a key is at most 3072 bytes, key names are distinct, and key columns must exist.
 
@@ -314,7 +314,15 @@ statement). `VALUES(c)` is `excluded.c`, the value the row would have
 inserted, and `t.c` targets and references of the inserted table drop the
 qualifier.
 
-Refused: `INSERT IGNORE`, `DEFAULT` as a value, a schema-qualified
+`INSERT IGNORE` lowers to `INSERT ... ON CONFLICT DO NOTHING`, which like
+MySQL skips a row whose primary or unique key duplicates a stored row or one
+inserted earlier by the same statement. MySQL's `IGNORE` also turns other
+errors into warnings: it stores the implicit default for `NULL` in a `NOT
+NULL` column, skips rows that fail a `CHECK` or foreign key, and adjusts
+values that do not fit the column. Those rows still fail here, with the
+error the statement has without `IGNORE`.
+
+Refused: `INSERT IGNORE` with `ON DUPLICATE KEY UPDATE` or `() VALUES ()`, `DEFAULT` as a value, a schema-qualified
 table, `ON DUPLICATE KEY UPDATE` after a `SELECT` (MySQL lets the update read
 the selected columns), the `AS alias` row alias, an `INSERT ... SET` or
 update that assigns a column twice, an `INSERT ... SET` value that reads a
@@ -325,6 +333,51 @@ wrote (MySQL assigns left to right, so `a = a + 1, b = a` sets `b` to the new
 Known differences: the affected-row count is SQLite's (1 per inserted or
 updated row) rather than MySQL's 2 for an update and 0 for an unchanged
 row; and an update consumes no `AUTO_INCREMENT` value.
+
+## `UPDATE` and `DELETE`
+
+`mysql/parser/dml.rs` lowers single-table `UPDATE` and `DELETE` as they are.
+The other forms find their rows by Turso's row id:
+
+- `UPDATE t SET ... WHERE c ORDER BY o LIMIT n` and `DELETE FROM t WHERE c
+  ORDER BY o LIMIT n` change the rows of `rowid IN (SELECT rowid FROM t WHERE
+  c ORDER BY o LIMIT n)`.
+- `DELETE t FROM t JOIN ... WHERE c` and `DELETE FROM t USING t JOIN ...` are
+  `DELETE FROM t WHERE rowid IN (SELECT t.rowid FROM t JOIN ... WHERE c)`.
+  Turso reads the whole subquery before it deletes a row, as MySQL finds the
+  rows before deleting them.
+- `UPDATE t JOIN ... SET t.c = v WHERE c` is an `UPDATE ... FROM` over the
+  joined rows grouped by `t.rowid`. Turso computes the grouped rows before it
+  changes one, so a join of `t` with itself (or with a derived table that
+  reads `t`) reads the old rows, as MySQL does when it buffers such a join.
+  MySQL changes each target row once, with the values of the first joined row
+  that matches it. When a value may read another table, a target row that
+  several joined rows match is refused at run time, and the statement changes
+  no row.
+
+Refused: `LIMIT` without `ORDER BY` (MySQL changes the first rows it reads,
+in an order Turso does not share); an ordered `UPDATE` that assigns a column
+it orders by (`SET k = k + 1 ORDER BY k DESC` avoids duplicate keys only in
+MySQL's order); `ORDER BY` a position; a multi-table `UPDATE` that changes
+more than one table, assigns a column without its table name (MySQL finds the
+table by its columns), or whose values or condition may hold an aggregate or a
+window function; a multi-table `DELETE` from several tables; a target that
+is not exactly one table of the join; a subquery in the values or condition
+that reads the target table (MySQL's error 1093); and the `LOW_PRIORITY`,
+`QUICK` and `IGNORE` modifiers. Since the row id is how these statements find
+their rows, `CREATE TABLE` and `ALTER TABLE ... RENAME COLUMN` refuse a column
+named `rowid`, which MySQL allows.
+
+## `SHOW TABLES`
+
+`SHOW [FULL] TABLES [LIKE 'pattern']` lists the tables and views of the
+database from `sqlite_schema`, with the case each was created with (read from
+its stored SQL, since Turso keeps `sqlite_schema.name` in lower case), in byte
+order and with a pattern that matches with case, as MySQL does with its
+default `lower_case_table_names = 0`. `FULL` adds `Table_type` (`BASE TABLE`
+or `VIEW`). The column is named `Tables_in_main`, after Turso's name for the
+database. A pattern with a `\` escape, `WHERE`, `FROM`/`IN` and the other
+`SHOW` statements are refused.
 
 ## Session settings (`SET`)
 
@@ -374,6 +427,19 @@ fixes reads as that constant: `sql_mode`, `time_zone` (`+00:00`),
 `max_execution_time`, `sql_safe_updates`, `default_week_format`,
 `div_precision_increment`, `group_concat_max_len`, `max_allowed_packet` and
 `default_storage_engine`. `@@global.` and other variables are refused.
+
+### Connection id and user-level locks
+
+`CONNECTION_ID()` is a number that identifies the session among those of the
+process. `GET_LOCK`, `RELEASE_LOCK`, `RELEASE_ALL_LOCKS`, `IS_FREE_LOCK` and
+`IS_USED_LOCK` keep MySQL's user-level locks: a lock belongs to the session
+that took it (as many times as it took it) until it releases it or closes,
+names are compared without case, and a `NULL`, empty or longer than 64
+characters name fails (3057). Like MySQL's, which belong to the server, the
+locks are shared by every session of the process. `GET_LOCK` of a lock that
+another session holds returns 0 with a timeout of 0 and is refused with any
+other timeout, since it would wait. Names that are not ASCII and values other
+than strings and integers are refused.
 
 ## JSON functions
 

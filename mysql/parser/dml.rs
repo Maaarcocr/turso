@@ -1,13 +1,14 @@
-use crate::expr::{translate_condition, translate_expr};
+use crate::expr::{function_call, translate_condition, translate_expr};
 use crate::names::translate_identifier;
 use crate::query::{
-    child_expressions, only_changes_the_plan, translate_table_name, TranslationContext,
+    child_expressions, is_aggregate, only_changes_the_plan, translate_from,
+    translate_order_by_expr, translate_table_name, TranslationContext,
 };
 use crate::MysqlParserError;
 use sqlparser::ast::{
     Assignment, AssignmentTarget, Delete, Expr, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArguments, Ident, ObjectName, ObjectNamePart, TableAlias, TableFactor, TableWithJoins,
-    Update,
+    FunctionArguments, Ident, ObjectName, ObjectNamePart, OrderByExpr, TableAlias, TableFactor,
+    TableWithJoins, Update,
 };
 use turso_parser::ast;
 
@@ -41,18 +42,30 @@ pub(crate) fn translate_update(update: &Update) -> Result<ast::Stmt, MysqlParser
     if from.is_some() {
         return Err(unsupported(format!("multi-table UPDATE `{update}`")));
     }
-    if !order_by.is_empty() || limit.is_some() {
-        return Err(unsupported(format!(
-            "UPDATE with ORDER BY or LIMIT, which Turso's UPDATE cannot express, `{update}`"
-        )));
+    if !table.joins.is_empty() {
+        if !order_by.is_empty() || limit.is_some() {
+            return Err(MysqlParserError::Rejected(format!(
+                "MySQL has no ORDER BY or LIMIT for a multi-table UPDATE like `{update}`"
+            )));
+        }
+        return translate_multi_table_update(table, assignments, selection.as_ref());
     }
     let target = Target::from_table(table, "UPDATE", UPDATE_MODIFIERS)?;
     let mut context = TranslationContext::default();
     let sets = translate_assignments(&target, assignments, &mut context)?;
-    let where_clause = selection
-        .as_ref()
-        .map(|condition| translate_condition(condition, &mut context).map(Box::new))
-        .transpose()?;
+    let condition = translate_selection(selection.as_ref(), &mut context)?;
+    let where_clause = if order_by.is_empty() && limit.is_none() {
+        condition
+    } else {
+        ensure_order_is_not_assigned(&target, assignments, order_by)?;
+        Some(Box::new(rows_in_order(
+            &target,
+            condition,
+            order_by,
+            limit.as_ref(),
+            &mut context,
+        )?))
+    };
     target.ensure_not_read_by_subquery(&context, "UPDATE")?;
     Ok(ast::Stmt::Update(ast::Update {
         with: None,
@@ -106,20 +119,62 @@ pub(crate) fn translate_delete(delete: &Delete) -> Result<ast::Stmt, MysqlParser
             )));
         }
     };
-    let ([table], true, None) = (from.as_slice(), tables.is_empty(), using) else {
-        return Err(unsupported(format!("multi-table DELETE `{delete}`")));
+    let multi_table = match (tables.as_slice(), using) {
+        ([], None) => None,
+        ([], Some(joined)) => Some((
+            from.iter()
+                .map(|table| match table {
+                    TableWithJoins {
+                        relation:
+                            TableFactor::Table {
+                                name, alias: None, ..
+                            },
+                        joins,
+                    } if joins.is_empty() => Ok(name),
+                    _ => Err(unsupported(format!("DELETE target `{table}`"))),
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            joined.as_slice(),
+        )),
+        (targets, None) => Some((targets.iter().collect(), from.as_slice())),
+        (_, Some(_)) => {
+            return Err(MysqlParserError::Unsupported(format!(
+                "`{delete}` is not MySQL syntax"
+            )));
+        }
     };
-    if !order_by.is_empty() || limit.is_some() {
-        return Err(unsupported(format!(
-            "DELETE with ORDER BY or LIMIT, which Turso's DELETE cannot express, `{delete}`"
-        )));
+    if let Some((targets, joined)) = multi_table {
+        if !order_by.is_empty() || limit.is_some() {
+            return Err(MysqlParserError::Rejected(format!(
+                "MySQL has no ORDER BY or LIMIT for a multi-table DELETE like `{delete}`"
+            )));
+        }
+        let [target] = targets.as_slice() else {
+            return Err(unsupported(format!(
+                "DELETE from several tables `{delete}`"
+            )));
+        };
+        return translate_multi_table_delete(target, joined, selection.as_ref());
     }
+    let [table] = from.as_slice() else {
+        return Err(MysqlParserError::Unsupported(format!(
+            "`{delete}` is not MySQL syntax"
+        )));
+    };
     let target = Target::from_table(table, "DELETE", &[])?;
     let mut context = TranslationContext::default();
-    let where_clause = selection
-        .as_ref()
-        .map(|condition| translate_condition(condition, &mut context).map(Box::new))
-        .transpose()?;
+    let condition = translate_selection(selection.as_ref(), &mut context)?;
+    let where_clause = if order_by.is_empty() && limit.is_none() {
+        condition
+    } else {
+        Some(Box::new(rows_in_order(
+            &target,
+            condition,
+            order_by,
+            limit.as_ref(),
+            &mut context,
+        )?))
+    };
     target.ensure_not_read_by_subquery(&context, "DELETE")?;
     Ok(ast::Stmt::Delete {
         with: None,
@@ -128,6 +183,469 @@ pub(crate) fn translate_delete(delete: &Delete) -> Result<ast::Stmt, MysqlParser
         where_clause,
         returning: Vec::new(),
     })
+}
+
+fn translate_selection(
+    selection: Option<&Expr>,
+    context: &mut TranslationContext,
+) -> Result<Option<Box<ast::Expr>>, MysqlParserError> {
+    selection
+        .map(|condition| translate_condition(condition, context).map(Box::new))
+        .transpose()
+}
+
+/// `rowid IN (SELECT rowid FROM target WHERE condition ORDER BY ... LIMIT
+/// n)`: the rows a single-table UPDATE or DELETE with ORDER BY or LIMIT
+/// changes. Without ORDER BY, MySQL changes the first rows it reads, in an
+/// order Turso does not share, so LIMIT alone is refused.
+fn rows_in_order(
+    target: &Target,
+    condition: Option<Box<ast::Expr>>,
+    order_by: &[OrderByExpr],
+    limit: Option<&Expr>,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if order_by.is_empty() {
+        return Err(unsupported(
+            "LIMIT without ORDER BY in UPDATE or DELETE, whose rows MySQL picks in the order it reads them,"
+                .to_string(),
+        ));
+    }
+    if let Some(term) = order_by
+        .iter()
+        .find(|term| matches!(term.expr, Expr::Value(_)))
+    {
+        return Err(unsupported(format!(
+            "ORDER BY `{term}` in UPDATE or DELETE"
+        )));
+    }
+    let order_by = order_by
+        .iter()
+        .map(|term| translate_order_by_expr(term, context))
+        .collect::<Result<Vec<_>, _>>()?;
+    let limit = limit
+        .map(|count| {
+            translate_expr(count, context).map(|count| ast::Limit {
+                expr: Box::new(count),
+                offset: None,
+            })
+        })
+        .transpose()?;
+    let ast::QualifiedName {
+        namespace,
+        name,
+        alias,
+    } = target.name.clone();
+    let table = ast::SelectTable::Table(
+        ast::QualifiedName {
+            namespace,
+            name,
+            alias: None,
+        },
+        alias.map(ast::As::As),
+        None,
+    );
+    Ok(ast::Expr::InSelect {
+        lhs: Box::new(rowid()),
+        not: false,
+        rhs: Box::new(select(
+            vec![ast::ResultColumn::Expr(Box::new(rowid()), None)],
+            ast::FromClause {
+                select: Box::new(table),
+                joins: Vec::new(),
+            },
+            condition,
+            None,
+            order_by,
+            limit,
+        )),
+    })
+}
+
+/// MySQL changes the rows of an ordered UPDATE one after another, so whether
+/// `UPDATE t SET k = k + 1 ORDER BY k DESC` meets a duplicate key depends on
+/// that order, which Turso does not follow.
+fn ensure_order_is_not_assigned(
+    target: &Target,
+    assignments: &[Assignment],
+    order_by: &[OrderByExpr],
+) -> Result<(), MysqlParserError> {
+    let mut ordered = Vec::new();
+    for term in order_by {
+        if !column_names(&term.expr, &mut ordered) {
+            return Err(unsupported(format!("UPDATE ordered by `{}`", term.expr)));
+        }
+    }
+    for assignment in assignments {
+        let AssignmentTarget::ColumnName(name) = &assignment.target else {
+            return Err(unsupported(format!(
+                "assignment to `{}`",
+                assignment.target
+            )));
+        };
+        let column = target.column(name)?;
+        if ordered.iter().any(|ordered| same_column(ordered, column)) {
+            return Err(unsupported(format!(
+                "UPDATE ordered by `{column}`, which it assigns, and whose duplicate keys MySQL meets in the order it changes rows,"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn column_names<'a>(expr: &'a Expr, names: &mut Vec<&'a Ident>) -> bool {
+    match expr {
+        Expr::Identifier(column) => {
+            names.push(column);
+            true
+        }
+        Expr::CompoundIdentifier(parts) => match parts.last() {
+            Some(column) => {
+                names.push(column);
+                true
+            }
+            None => false,
+        },
+        Expr::Function(function) => function_arguments(function)
+            .is_ok_and(|args| args.into_iter().all(|arg| column_names(arg, names))),
+        other => child_expressions(other)
+            .is_some_and(|children| children.into_iter().all(|child| column_names(child, names))),
+    }
+}
+
+/// `DELETE target FROM joined WHERE condition` (or `DELETE FROM target USING
+/// joined ...`) as `DELETE FROM table WHERE rowid IN (SELECT target.rowid
+/// FROM joined WHERE condition)`. Turso reads the whole subquery before it
+/// deletes a row, as MySQL finds the rows before it deletes them.
+fn translate_multi_table_delete(
+    target: &ObjectName,
+    joined: &[TableWithJoins],
+    selection: Option<&Expr>,
+) -> Result<ast::Stmt, MysqlParserError> {
+    let [ObjectNamePart::Identifier(qualifier)] = target.0.as_slice() else {
+        return Err(unsupported(format!("DELETE target `{target}`")));
+    };
+    let target = JoinedTable::find(joined, qualifier, "DELETE")?;
+    let mut context = TranslationContext::default();
+    let from = translate_from(joined, &mut context)?
+        .ok_or_else(|| unsupported(format!("DELETE from `{qualifier}`")))?;
+    let read_by_join = context.tables_read_count();
+    let condition = translate_selection(selection, &mut context)?;
+    target.ensure_not_read_since(&context, read_by_join, "DELETE")?;
+    Ok(ast::Stmt::Delete {
+        with: None,
+        tbl_name: target.table,
+        indexed: None,
+        where_clause: Some(Box::new(ast::Expr::InSelect {
+            lhs: Box::new(rowid()),
+            not: false,
+            rhs: Box::new(select(
+                vec![ast::ResultColumn::Expr(
+                    Box::new(ast::Expr::Qualified(target.qualifier, rowid_name())),
+                    None,
+                )],
+                from,
+                condition,
+                None,
+                Vec::new(),
+                None,
+            )),
+        })),
+        returning: Vec::new(),
+    })
+}
+
+/// `UPDATE target JOIN other ... SET target.c = v WHERE condition` as
+///
+/// ```sql
+/// UPDATE table AS __mysql_target SET c = __mysql_rows.__mysql_value_1
+/// FROM (SELECT target.rowid AS __mysql_rowid, v AS __mysql_value_1,
+///              count(1) AS __mysql_matches
+///       FROM target JOIN other ... WHERE condition AND target.rowid IS NOT NULL
+///       GROUP BY target.rowid) AS __mysql_rows
+/// WHERE __mysql_target.rowid = __mysql_rows.__mysql_rowid
+/// ```
+///
+/// Turso reads the grouped rows before it changes one, as MySQL does when it
+/// joins a table with itself. MySQL changes a target row once, with the
+/// values of the first joined row that matches it; when the values may read
+/// another table, a row that several joined rows match is refused at run
+/// time by `__mysql_one_joined_row`.
+fn translate_multi_table_update(
+    table: &TableWithJoins,
+    assignments: &[Assignment],
+    selection: Option<&Expr>,
+) -> Result<ast::Stmt, MysqlParserError> {
+    if let TableFactor::Table { name, .. } = &table.relation {
+        if is_modifier(name, UPDATE_MODIFIERS) {
+            return Err(unsupported(format!("UPDATE modifier in `UPDATE {table}`")));
+        }
+    }
+    let qualifier = match assignments.first().map(|assignment| &assignment.target) {
+        Some(AssignmentTarget::ColumnName(name)) => match identifiers(name)?.as_slice() {
+            [qualifier, _] => *qualifier,
+            _ => {
+                return Err(unsupported(format!(
+                    "multi-table UPDATE assignment to `{name}`, whose table MySQL finds by its columns,"
+                )));
+            }
+        },
+        _ => return Err(unsupported(format!("UPDATE of `{table}`"))),
+    };
+    let joined = JoinedTable::find(std::slice::from_ref(table), qualifier, "UPDATE")?;
+    let target = Target {
+        name: joined.table.clone(),
+        qualifier,
+    };
+    for assignment in assignments {
+        if may_aggregate(&assignment.value) {
+            return Err(unsupported(format!(
+                "UPDATE value `{}`, which may aggregate,",
+                assignment.value
+            )));
+        }
+    }
+    if let Some(condition) = selection.filter(|condition| may_aggregate(condition)) {
+        return Err(unsupported(format!(
+            "UPDATE condition `{condition}`, which may aggregate,"
+        )));
+    }
+    let mut context = TranslationContext::default();
+    let from = translate_from(std::slice::from_ref(table), &mut context)?
+        .ok_or_else(|| unsupported(format!("UPDATE of `{table}`")))?;
+    let read_by_join = context.tables_read_count();
+    let sets = translate_assignments(&target, assignments, &mut context)?;
+    let condition = translate_selection(selection, &mut context)?;
+    joined.ensure_not_read_since(&context, read_by_join, "UPDATE")?;
+
+    let target_rowid = || ast::Expr::Qualified(joined.qualifier.clone(), rowid_name());
+    let name = |text: &str| ast::Name::exact(text.to_string());
+    let rows = || name("__mysql_rows");
+    let value_name = |index: usize| name(&format!("__mysql_value_{index}"));
+    let mut columns = vec![ast::ResultColumn::Expr(
+        Box::new(target_rowid()),
+        Some(ast::As::As(name("__mysql_rowid"))),
+    )];
+    let mut outer_sets = Vec::with_capacity(sets.len());
+    for (index, set) in sets.into_iter().enumerate() {
+        columns.push(ast::ResultColumn::Expr(
+            set.expr,
+            Some(ast::As::As(value_name(index))),
+        ));
+        outer_sets.push(ast::Set {
+            col_names: set.col_names,
+            expr: Box::new(ast::Expr::Qualified(rows(), value_name(index))),
+        });
+    }
+    columns.push(ast::ResultColumn::Expr(
+        Box::new(function_call(
+            "count",
+            vec![ast::Expr::Literal(ast::Literal::Numeric("1".to_string()))],
+        )),
+        Some(ast::As::As(name("__mysql_matches"))),
+    ));
+    let matched = ast::Expr::NotNull(Box::new(target_rowid()));
+    let condition = match condition {
+        None => matched,
+        Some(condition) => ast::Expr::binary(
+            ast::Expr::Parenthesized(vec![condition]),
+            ast::Operator::And,
+            matched,
+        ),
+    };
+    let grouped = select(
+        columns,
+        from,
+        Some(Box::new(condition)),
+        Some(ast::GroupBy {
+            exprs: vec![Box::new(target_rowid())],
+            having: None,
+        }),
+        Vec::new(),
+        None,
+    );
+    let mut where_clause = ast::Expr::binary(
+        ast::Expr::Qualified(name("__mysql_target"), rowid_name()),
+        ast::Operator::Equals,
+        ast::Expr::Qualified(rows(), name("__mysql_rowid")),
+    );
+    if !assignments
+        .iter()
+        .all(|assignment| reads_only(&assignment.value, qualifier))
+    {
+        where_clause = ast::Expr::binary(
+            where_clause,
+            ast::Operator::And,
+            function_call(
+                "__mysql_one_joined_row",
+                vec![ast::Expr::Qualified(rows(), name("__mysql_matches"))],
+            ),
+        );
+    }
+    Ok(ast::Stmt::Update(ast::Update {
+        with: None,
+        or_conflict: None,
+        tbl_name: ast::QualifiedName {
+            alias: Some(name("__mysql_target")),
+            ..joined.table
+        },
+        indexed: None,
+        sets: outer_sets,
+        from: Some(ast::FromClause {
+            select: Box::new(ast::SelectTable::Select {
+                select: grouped,
+                alias: Some(ast::As::As(rows())),
+                lateral: false,
+            }),
+            joins: Vec::new(),
+        }),
+        where_clause: Some(Box::new(where_clause)),
+        returning: Vec::new(),
+    }))
+}
+
+/// The table of a join that a multi-table UPDATE or DELETE changes: the one
+/// whose alias, or name when it has none, is `qualifier`.
+struct JoinedTable {
+    table: ast::QualifiedName,
+    qualifier: ast::Name,
+}
+
+impl JoinedTable {
+    fn find(
+        joined: &[TableWithJoins],
+        qualifier: &Ident,
+        statement: &str,
+    ) -> Result<Self, MysqlParserError> {
+        let mut found = Vec::new();
+        for table in joined {
+            tables_named(table, qualifier, &mut found);
+        }
+        let [name] = found.as_slice() else {
+            return Err(unsupported(format!(
+                "{statement} target `{qualifier}`, which is not one table of the join,"
+            )));
+        };
+        Ok(Self {
+            table: translate_table_name(name)?,
+            qualifier: translate_identifier(qualifier)?,
+        })
+    }
+
+    fn ensure_not_read_since(
+        &self,
+        context: &TranslationContext,
+        mark: usize,
+        statement: &str,
+    ) -> Result<(), MysqlParserError> {
+        if context.reads_table_since(mark, &self.table.name) {
+            return Err(unsupported(format!(
+                "{statement} whose subquery reads the target table `{}`, which MySQL rejects unless it materializes the subquery,",
+                self.table.name.as_str()
+            )));
+        }
+        Ok(())
+    }
+}
+
+fn tables_named<'a>(table: &'a TableWithJoins, qualifier: &Ident, found: &mut Vec<&'a ObjectName>) {
+    let factors =
+        std::iter::once(&table.relation).chain(table.joins.iter().map(|join| &join.relation));
+    for factor in factors {
+        match factor {
+            TableFactor::Table { name, alias, .. } => {
+                let named = match alias {
+                    Some(alias) => Some(&alias.name),
+                    None => match name.0.last() {
+                        Some(ObjectNamePart::Identifier(identifier)) => Some(identifier),
+                        _ => None,
+                    },
+                };
+                if named.is_some_and(|named| named.value == qualifier.value) {
+                    found.push(name);
+                }
+            }
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => tables_named(table_with_joins, qualifier, found),
+            _ => {}
+        }
+    }
+}
+
+/// Whether `expr` reads no column but `qualifier.column`: then every joined
+/// row that matches a target row gives it the same values.
+fn reads_only(expr: &Expr, qualifier: &Ident) -> bool {
+    match expr {
+        Expr::Identifier(_) => false,
+        Expr::CompoundIdentifier(parts) => {
+            matches!(parts.as_slice(), [table, _] if same_column(table, qualifier))
+        }
+        Expr::Function(function) => function_arguments(function)
+            .is_ok_and(|args| args.into_iter().all(|arg| reads_only(arg, qualifier))),
+        Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => false,
+        other => child_expressions(other).is_some_and(|children| {
+            children
+                .into_iter()
+                .all(|child| reads_only(child, qualifier))
+        }),
+    }
+}
+
+/// Whether `expr` may hold an aggregate or a window function outside a
+/// subquery, which MySQL rejects in UPDATE and that the grouped rows of a
+/// multi-table UPDATE would compute.
+fn may_aggregate(expr: &Expr) -> bool {
+    match expr {
+        Expr::Function(function) => {
+            function.over.is_some()
+                || is_aggregate(function)
+                || function_arguments(function)
+                    .map_or(true, |args| args.into_iter().any(may_aggregate))
+        }
+        Expr::Identifier(_)
+        | Expr::CompoundIdentifier(_)
+        | Expr::Subquery(_)
+        | Expr::Exists { .. } => false,
+        Expr::InSubquery { expr, .. } => may_aggregate(expr),
+        other => {
+            child_expressions(other).is_none_or(|children| children.into_iter().any(may_aggregate))
+        }
+    }
+}
+
+fn select(
+    columns: Vec<ast::ResultColumn>,
+    from: ast::FromClause,
+    where_clause: Option<Box<ast::Expr>>,
+    group_by: Option<ast::GroupBy>,
+    order_by: Vec<ast::SortedColumn>,
+    limit: Option<ast::Limit>,
+) -> ast::Select {
+    ast::Select {
+        with: None,
+        body: ast::SelectBody {
+            select: ast::OneSelect::Select {
+                distinctness: None,
+                columns,
+                from: Some(from),
+                where_clause,
+                group_by,
+                window_clause: Vec::new(),
+            },
+            compounds: Vec::new(),
+        },
+        order_by,
+        limit,
+    }
+}
+
+fn rowid_name() -> ast::Name {
+    ast::Name::exact("rowid".to_string())
+}
+
+fn rowid() -> ast::Expr {
+    ast::Expr::Id(rowid_name())
 }
 
 struct Target<'a> {
@@ -279,10 +797,11 @@ fn columns_read<'a>(
             Ok(())
         }
         Expr::CompoundIdentifier(parts) => match parts.as_slice() {
-            [qualifier, column] if qualifier.value == target.qualifier.value => {
+            [qualifier, column] if same_column(qualifier, target.qualifier) => {
                 read.push(column);
                 Ok(())
             }
+            [_, _] => Ok(()),
             _ => Err(unsupported(format!(
                 "column reference `{expr}` after another assignment"
             ))),

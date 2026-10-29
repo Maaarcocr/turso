@@ -18,7 +18,7 @@ macro_rules! text {
     };
 }
 
-pub(super) const TYPES: [DialectType; 6] = [
+pub(super) const TYPES: [DialectType; 7] = [
     DialectType {
         name: "char",
         storage: StorageType::Text,
@@ -37,6 +37,12 @@ pub(super) const TYPES: [DialectType; 6] = [
     text!("text", 65535),
     text!("mediumtext", 16777215),
     text!("longtext", NULL),
+    DialectType {
+        name: "json",
+        storage: StorageType::Text,
+        parameters: "",
+        behaviour: "ASSIGN __mysql_assign_json(value) CAST __mysql_cast_text(value)",
+    },
 ];
 
 pub(super) fn assign_char(args: &[Value]) -> Result<Value> {
