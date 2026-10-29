@@ -7,12 +7,13 @@ use crate::invalid_json::invalid_json_text_evaluated;
 use crate::names::translate_identifier;
 use crate::MysqlParserError;
 use sqlparser::ast::{
-    Cte, Distinct, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments, GroupByExpr,
-    Join, JoinConstraint, JoinOperator, LimitClause, NamedWindowDefinition, NamedWindowExpr,
-    ObjectName, ObjectNamePart, Offset, OffsetRows, OptimizerHint, OrderBy, OrderByExpr,
-    OrderByKind, Query, Select, SelectFlavor, SelectItem, SelectItemQualifiedWildcardKind,
-    SelectModifiers, SetExpr, SetOperator, SetQuantifier, TableAlias, TableFactor, TableWithJoins,
-    Value, Values, WildcardAdditionalOptions, With,
+    BinaryOperator, Cte, Distinct, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
+    GroupByExpr, Join, JoinConstraint, JoinOperator, LimitClause, NamedWindowDefinition,
+    NamedWindowExpr, ObjectName, ObjectNamePart, Offset, OffsetRows, OptimizerHint, OrderBy,
+    OrderByExpr, OrderByKind, Query, Select, SelectFlavor, SelectItem,
+    SelectItemQualifiedWildcardKind, SelectModifiers, SetExpr, SetOperator, SetQuantifier,
+    TableAlias, TableFactor, TableWithJoins, UnaryOperator, Value, Values,
+    WildcardAdditionalOptions, With,
 };
 use std::num::NonZeroU32;
 use turso_parser::{ast, MAX_EXPR_DEPTH};
@@ -466,6 +467,7 @@ fn may_break_only_full_group_by(select: &Select) -> bool {
     let groups = Grouping {
         exprs: grouping,
         aliases: &[],
+        table_names: &[],
     };
     let having_groups = Grouping {
         aliases: &aliases,
@@ -492,14 +494,18 @@ fn order_by_outside_the_rows<'a>(select: &Select, order_by: &'a OrderBy) -> Opti
         .iter()
         .map(projected_expr)
         .collect::<Vec<_>>();
-    let grouped = !group_by.is_empty()
-        || projections
-            .iter()
-            .flatten()
-            .any(|expr| contains_aggregate(expr))
+    let implicitly_grouped = projections
+        .iter()
+        .flatten()
+        .any(|expr| contains_aggregate(expr))
         || select.having.as_ref().is_some_and(contains_aggregate)
         || terms.iter().any(|term| contains_aggregate(&term.expr));
-    let mut exprs = if grouped {
+    if group_by.is_empty() && implicitly_grouped {
+        return None;
+    }
+    let table_names = single_table_names(select);
+    let table_names = table_names.iter().map(String::as_str).collect::<Vec<_>>();
+    let mut exprs = if !group_by.is_empty() {
         let mut grouping = group_by.iter().collect::<Vec<_>>();
         for term in group_by {
             grouping.extend(selected_by_group_term(term, select));
@@ -527,14 +533,73 @@ fn order_by_outside_the_rows<'a>(select: &Select, order_by: &'a OrderBy) -> Opti
             .then(|| selected_by_group_term(&term.expr, select))
             .flatten()
     }));
+    if !table_names.is_empty() {
+        if let Some(selection) = &select.selection {
+            fixed_by_the_where_clause(selection, &mut exprs);
+        }
+    }
     let groups = Grouping {
         exprs,
         aliases: &aliases,
+        table_names: &table_names,
     };
     terms
         .iter()
         .map(|term| &term.expr)
         .find(|term| !ordinal(term) && uses_ungrouped_column(term, &groups))
+}
+
+fn single_table_names(select: &Select) -> Vec<String> {
+    let [TableWithJoins { relation, joins }] = select.from.as_slice() else {
+        return Vec::new();
+    };
+    match relation {
+        TableFactor::Table { name, alias, .. } if joins.is_empty() => match alias {
+            Some(alias) => vec![alias.name.value.clone()],
+            None => name
+                .0
+                .last()
+                .and_then(ObjectNamePart::as_ident)
+                .map(|name| vec![name.value.clone()])
+                .unwrap_or_default(),
+        },
+        _ => Vec::new(),
+    }
+}
+
+fn fixed_by_the_where_clause<'a>(condition: &'a Expr, fixed: &mut Vec<&'a Expr>) {
+    fn is_constant(expr: &Expr) -> bool {
+        match without_parentheses(expr) {
+            Expr::Value(_) => true,
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => matches!(without_parentheses(expr), Expr::Value(_)),
+            _ => false,
+        }
+    }
+    match without_parentheses(condition) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => {
+            fixed_by_the_where_clause(left, fixed);
+            fixed_by_the_where_clause(right, fixed);
+        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } => {
+            for (column, value) in [(left, right), (right, left)] {
+                if column_name_of(without_parentheses(column)).is_some() && is_constant(value) {
+                    fixed.push(without_parentheses(column));
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 fn projected_expr(item: &SelectItem) -> Option<&Expr> {
@@ -569,13 +634,19 @@ fn selected_by_group_term<'a>(term: &Expr, select: &'a Select) -> Option<&'a Exp
 struct Grouping<'a> {
     exprs: Vec<&'a Expr>,
     aliases: &'a [&'a str],
+    table_names: &'a [&'a str],
 }
 
 impl Grouping<'_> {
     fn contains(&self, expr: &Expr) -> bool {
-        self.exprs
-            .iter()
-            .any(|grouped| without_parentheses(grouped) == without_parentheses(expr))
+        let expr = without_parentheses(expr);
+        self.exprs.iter().any(|grouped| {
+            let grouped = without_parentheses(grouped);
+            grouped == expr
+                || (!self.table_names.is_empty()
+                    && unqualified(grouped, self.table_names)
+                        == unqualified(expr, self.table_names))
+        })
     }
 
     fn contains_column(&self, name: &str, qualified: bool) -> bool {
@@ -588,6 +659,42 @@ impl Grouping<'_> {
                 column_name_of(without_parentheses(grouped))
                     .is_some_and(|column| column.eq_ignore_ascii_case(name))
             })
+    }
+}
+
+fn unqualified(expr: &Expr, table_names: &[&str]) -> Expr {
+    let strip = |expr: &Expr| Box::new(unqualified(expr, table_names));
+    match expr {
+        Expr::CompoundIdentifier(parts)
+            if parts.len() == 2
+                && table_names
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(&parts[0].value)) =>
+        {
+            Expr::Identifier(parts[1].clone())
+        }
+        Expr::Nested(inner) => unqualified(inner, table_names),
+        Expr::UnaryOp { op, expr } => Expr::UnaryOp {
+            op: *op,
+            expr: strip(expr),
+        },
+        Expr::BinaryOp { left, op, right } => Expr::BinaryOp {
+            left: strip(left),
+            op: op.clone(),
+            right: strip(right),
+        },
+        Expr::Function(function) => {
+            let mut function = function.clone();
+            if let FunctionArguments::List(list) = &mut function.args {
+                for arg in &mut list.args {
+                    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) = arg {
+                        *arg = unqualified(arg, table_names);
+                    }
+                }
+            }
+            Expr::Function(function)
+        }
+        other => other.clone(),
     }
 }
 

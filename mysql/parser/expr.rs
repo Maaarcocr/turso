@@ -2241,6 +2241,13 @@ fn translate_cast(
         }
         return translate_json_numeric_cast(expr, data_type, context);
     }
+    if matches!(
+        data_type,
+        DataType::Date | DataType::Datetime(_) | DataType::Time(_, TimezoneInfo::None)
+    ) && is_json_number_literal(expr)
+    {
+        return Ok(ast::Expr::Literal(ast::Literal::Null));
+    }
     let shows_text = match data_type {
         DataType::Char(_) | DataType::Character(_) => true,
         DataType::Custom(name, _) => is_nchar(name),
@@ -2419,6 +2426,20 @@ fn translate_cast_as_json(
         "__mysql_cast_as_json"
     };
     Ok(function_call(name, vec![value]))
+}
+
+fn is_json_number_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_json_number_literal(inner),
+        Expr::Cast {
+            kind: CastKind::Cast,
+            expr,
+            data_type: DataType::JSON,
+            array: false,
+            format: None,
+        } => signed_number_literal(expr).is_some(),
+        _ => false,
+    }
 }
 
 fn shows_as_a_double(digits: &str) -> bool {

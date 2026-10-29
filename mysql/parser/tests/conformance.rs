@@ -819,6 +819,18 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
         ),
         (
+            "SELECT a FROM t WHERE b = 3 GROUP BY a ORDER BY b, t.a",
+            "SELECT a FROM t WHERE b = 3 GROUP BY a ORDER BY b, t.a",
+        ),
+        (
+            "SELECT COUNT(*) FROM t ORDER BY b",
+            "SELECT COUNT (*) FROM t ORDER BY b",
+        ),
+        (
+            "SELECT CAST(CAST(0.000 AS JSON) AS DATE)",
+            "SELECT NULL",
+        ),
+        (
             "SELECT 'FOO' IN ('foo', 1), 64 NOT IN ('64', 'bar'), CASE 'abc' WHEN 'xyz' THEN 1 WHEN 0 THEN 2 END, GREATEST(-1, 0x1, TIMESTAMP '2020-12-31 23:59:59')",
             "SELECT ('FOO' COLLATE \"und-u-ks-level1\" = 'foo' OR 0e0 = 1e0), NOT (6.4e1 = 6.4e1 OR 6.4e1 = 0e0), CASE 0e0 WHEN 0e0 THEN 1 WHEN 0e0 THEN 2 END, '2020-12-31 23:59:59'",
         ),
