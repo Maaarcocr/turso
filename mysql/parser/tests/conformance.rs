@@ -219,6 +219,10 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
             "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP) STRICT",
         ),
         (
+            "CREATE TABLE t (a DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), b TIMESTAMP(3) DEFAULT NOW(3), c DATETIME DEFAULT CURRENT_TIMESTAMP(0))",
+            "CREATE TABLE t (a DATETIME (6) NOT NULL DEFAULT (NOW (6)), b TIMESTAMP (3) DEFAULT (NOW (3)), c DATETIME DEFAULT CURRENT_TIMESTAMP) STRICT",
+        ),
+        (
             "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
             "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE) STRICT",
         ),
@@ -371,10 +375,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(id INT INVISIBLE)",
         },
         SqlCase {
-            name: "current timestamp with fractional seconds",
-            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6))",
-        },
-        SqlCase {
             name: "datetime default that needs rounding",
             sql: "CREATE TABLE users(seen DATETIME DEFAULT '2020-01-01 00:00:00.5')",
         },
@@ -469,6 +469,22 @@ fn reports_ddl_that_mysql_rejects() {
             sql: "CREATE TABLE users(created INT DEFAULT CURRENT_TIMESTAMP)",
         },
         SqlCase {
+            name: "current timestamp with other fractional digits than the column",
+            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(3))",
+        },
+        SqlCase {
+            name: "current timestamp beyond microseconds",
+            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(7))",
+        },
+        SqlCase {
+            name: "default reading a user variable",
+            sql: "ALTER TABLE users ADD COLUMN i INT DEFAULT (@a)",
+        },
+        SqlCase {
+            name: "generated column reading a system variable",
+            sql: "CREATE TABLE users(i INT AS (@@version))",
+        },
+        SqlCase {
             name: "non-numeric integer default",
             sql: "CREATE TABLE users(id INT DEFAULT 'abc')",
         },
@@ -507,6 +523,14 @@ fn reports_ddl_that_mysql_rejects() {
         SqlCase {
             name: "key longer than 3072 bytes",
             sql: "CREATE TABLE users(name VARCHAR(1000), KEY name_key (name))",
+        },
+        SqlCase {
+            name: "key of strings and two BIGINTs longer than 3072 bytes",
+            sql: "CREATE TABLE t (a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e BIGINT, f BIGINT, UNIQUE KEY k (a, b, c, e, f))",
+        },
+        SqlCase {
+            name: "key of strings and a DATETIME(6) longer than 3072 bytes",
+            sql: "CREATE TABLE t (a VARCHAR(766), e DATETIME(6), f TINYINT, UNIQUE KEY k (a, e, f))",
         },
         SqlCase {
             name: "prefix key on an integer",
@@ -578,6 +602,43 @@ fn reports_ddl_that_mysql_rejects() {
             case.sql
         );
     }
+}
+
+#[test]
+fn measures_key_parts_by_their_innodb_size() {
+    for columns in [
+        "e TINYINT, f TINYINT",
+        "e INT, f INT",
+        "e INT UNSIGNED, f MEDIUMINT",
+        "e DECIMAL(10, 2), f YEAR",
+        "e DATETIME(2), f DATE",
+        "e TIMESTAMP(6), f FLOAT",
+        "e TIME(6), f BIT(9)",
+        "e DOUBLE",
+        "e ENUM('x'), f SET('x', 'y')",
+    ] {
+        let sql = format!(
+            "CREATE TABLE t (a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), {columns}, UNIQUE KEY k (a, b, c, e{}))",
+            if columns.contains("f ") { ", f" } else { "" }
+        );
+        parse_and_translate(&sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+}
+
+#[test]
+fn lowers_long_and_or_chains_as_balanced_trees() {
+    for operator in ["OR", "AND", "||"] {
+        let terms = (1..=2000)
+            .map(|n| format!("(a = {n})"))
+            .collect::<Vec<_>>()
+            .join(&format!(" {operator} "));
+        let sql = format!("DELETE FROM t WHERE {terms}");
+        parse_and_translate(&sql).unwrap_or_else(|error| panic!("{operator}: {error}"));
+    }
+    let lowered = parse_and_translate("SELECT a OR b OR c OR d AND e AND f")
+        .expect("a chain lowers")
+        .to_string();
+    assert_eq!(lowered, "SELECT a OR b OR c OR d AND e AND f");
 }
 
 #[test]
@@ -688,7 +749,7 @@ fn rejects_non_anonymous_parameters() {
     let error = translate(&numbered).expect_err("numbered placeholders must not lower");
     assert!(matches!(error, MysqlParserError::Unsupported(_)));
 
-    for sql in ["SELECT :named", "SELECT @named"] {
+    for sql in ["SELECT :named"] {
         match parse_one(sql) {
             Ok(statement) => {
                 let error = translate(&statement).expect_err("named placeholders must not lower");
@@ -755,6 +816,22 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT *", "SELECT *"),
         ("SELECT users.* FROM users", "SELECT users.* FROM users"),
         ("SELECT 1 FROM dual", "SELECT 1"),
+        (
+            "SELECT @a, @@version, @@SESSION.autocommit",
+            "SELECT __mysql_user_variable ('a'), '8.4.10', 1",
+        ),
+        (
+            "SELECT JSON_ARRAYAGG(a), JSON_OBJECTAGG(b, a) FROM t",
+            "SELECT __mysql_json_arrayagg (json_group_array (JSON_ARRAY (a))), __mysql_json_objectagg (json_group_array (JSON_OBJECT (b, a))) FROM t",
+        ),
+        (
+            "SELECT /*+ MAX_EXECUTION_TIME(2000) SET_VAR(sort_buffer_size=262144) */ id FROM t",
+            "SELECT id FROM t",
+        ),
+        (
+            "SELECT i.id FROM t AS i USE INDEX (a) JOIN u FORCE INDEX FOR JOIN (PRIMARY, b) IGNORE KEY (c)",
+            "SELECT i.id FROM t AS i JOIN u",
+        ),
         ("SELECT 1 WHERE TRUE", "SELECT 1 WHERE TRUE"),
         ("SELECT DISTINCT 1", "SELECT DISTINCT 1"),
         ("SELECT 1 GROUP BY 1", "SELECT 1 GROUP BY 1"),
@@ -1137,10 +1214,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t1 STRAIGHT_JOIN t2",
         },
         SqlCase {
-            name: "index hint",
-            sql: "SELECT a FROM t USE INDEX (i)",
-        },
-        SqlCase {
             name: "partition selection",
             sql: "SELECT a FROM t PARTITION (p0)",
         },
@@ -1153,16 +1226,28 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t FOR UPDATE",
         },
         SqlCase {
-            name: "user variable",
-            sql: "SELECT @a",
+            name: "global system variable",
+            sql: "SELECT @@global.sql_mode",
         },
         SqlCase {
-            name: "system variable",
-            sql: "SELECT @@version",
+            name: "system variable outside the target profile",
+            sql: "SELECT @@innodb_buffer_pool_size",
+        },
+        SqlCase {
+            name: "json aggregate as a window function",
+            sql: "SELECT JSON_ARRAYAGG(a) OVER () FROM t",
         },
         SqlCase {
             name: "setting hint",
             sql: "SELECT /*+ SET_VAR(sql_mode='') */ 1",
+        },
+        SqlCase {
+            name: "setting hint after a plan setting",
+            sql: "SELECT /*+ SET_VAR(sort_buffer_size=262144) SET_VAR(div_precision_increment=8) */ 1",
+        },
+        SqlCase {
+            name: "malformed setting hint",
+            sql: "SELECT /*+ SET_VAR */ 1",
         },
         SqlCase {
             name: "collation",
@@ -1543,7 +1628,8 @@ fn lowering_rejects_unsupported_statement_families() {
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
         "USE app",
-        "SET @answer = 42",
+        "SET @a = 1, @b = @a + 1",
+        "SET @a = 1, FOREIGN_KEY_CHECKS = 0",
         "SET NAMES latin1",
         "SET GLOBAL time_zone = 'UTC'",
         "SET time_zone = '+01:00'",
@@ -1690,6 +1776,10 @@ fn lowers_single_table_update_and_delete() {
             "UPDATE users SET qty = 1",
         ),
         ("UPDATE quick SET qty = 1", "UPDATE quick SET qty = 1"),
+        (
+            "UPDATE users USE INDEX (i) SET qty = 1",
+            "UPDATE users SET qty = 1",
+        ),
         ("DELETE FROM users", "DELETE FROM users"),
         (
             "DELETE FROM users WHERE id = 3",
@@ -1785,10 +1875,6 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE users PARTITION (p0) SET qty = 1",
         },
         SqlCase {
-            name: "update index hint",
-            sql: "UPDATE users USE INDEX (i) SET qty = 1",
-        },
-        SqlCase {
             name: "update setting hint",
             sql: "UPDATE /*+ SET_VAR(sql_mode='') */ users SET qty = 1",
         },
@@ -1870,6 +1956,14 @@ fn lowers_session_settings_of_the_target_profile() {
         ),
         ("SET FOREIGN_KEY_CHECKS = 0", "PRAGMA foreign_keys = 0"),
         ("SET time_zone = '+00:00', foreign_key_checks = ON", "PRAGMA foreign_keys = 1"),
+        (
+            "SET @Answer = 42, @s = 'x', @t = CONCAT('a', 'b'), time_zone = 'UTC'",
+            "SELECT 0 WHERE __mysql_set_user_variables ('answer', 0, 42, 's', 1, 'x', 't', 0, CONCAT ('a', 'b'))",
+        ),
+        (
+            "SET character_set_client = @saved, @a = 1",
+            "SELECT 0 WHERE __mysql_keep_session_settings ('character_set_client', __mysql_user_variable_value ('saved')) OR __mysql_set_user_variables ('a', 0, 1)",
+        ),
     ];
 
     for (sql, expected) in cases {

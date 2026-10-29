@@ -861,9 +861,48 @@ pub(crate) fn child_expressions(expr: &Expr) -> Option<Vec<&Expr>> {
     })
 }
 
+/// Whether a `/*+ ... */` block leaves the result of a statement that runs
+/// to completion unchanged: every hint other than `SET_VAR` only chooses a
+/// plan or bounds the run time (`MAX_EXECUTION_TIME`), and `SET_VAR` is
+/// accepted for the variables that only size buffers or steer the optimizer.
 pub(crate) fn only_changes_the_plan(hint: &OptimizerHint) -> bool {
-    let text = hint.text.to_ascii_uppercase();
-    !text.contains("SET_VAR") && !text.contains("MAX_EXECUTION_TIME")
+    const PLAN_VARIABLES: &[&str] = &[
+        "bulk_insert_buffer_size",
+        "eq_range_index_dive_limit",
+        "join_buffer_size",
+        "max_heap_table_size",
+        "max_seeks_for_key",
+        "optimizer_prune_level",
+        "optimizer_search_depth",
+        "optimizer_switch",
+        "range_optimizer_max_mem_size",
+        "read_buffer_size",
+        "read_rnd_buffer_size",
+        "sort_buffer_size",
+        "tmp_table_size",
+    ];
+    let text = hint.text.to_ascii_lowercase();
+    let mut rest = text.as_str();
+    while let Some(start) = rest.find("set_var") {
+        let preceded_by_word = rest[..start]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        rest = &rest[start + "set_var".len()..];
+        if preceded_by_word {
+            continue;
+        }
+        let Some(arguments) = rest.trim_start().strip_prefix('(') else {
+            return false;
+        };
+        let Some((variable, _)) = arguments.split_once('=') else {
+            return false;
+        };
+        if !PLAN_VARIABLES.contains(&variable.trim()) {
+            return false;
+        }
+    }
+    true
 }
 
 fn translate_projection(
@@ -1099,8 +1138,8 @@ fn translate_table_factor(
             partitions,
             json_path: None,
             sample: None,
-            index_hints,
-        } if with_hints.is_empty() && partitions.is_empty() && index_hints.is_empty() => {
+            index_hints: _,
+        } if with_hints.is_empty() && partitions.is_empty() => {
             let name = translate_table_name(name)?;
             context.tables_read.push(name.name.clone());
             let alias = alias.as_ref().map(translate_table_alias).transpose()?;

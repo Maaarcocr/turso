@@ -9,6 +9,7 @@ use turso_parser::ast;
 mod errors;
 mod format;
 mod functions;
+mod session;
 mod types;
 
 pub use errors::{mysql_error, MysqlError};
@@ -59,6 +60,9 @@ impl Dialect for MySqlDialect {
     }
 
     fn resolve_function(&self, name: &str, arg_count: usize) -> Result<Option<Func>> {
+        if let Some(function) = session::resolve(name, arg_count) {
+            return Ok(Some(function));
+        }
         if let Some(conversion) = types::resolve(name, arg_count) {
             return Ok(Some(conversion));
         }
@@ -68,12 +72,10 @@ impl Dialect for MySqlDialect {
         SqliteDialect.resolve_function(name, arg_count)
     }
 
-    fn exec_scalar_function(
-        &self,
-        _conn: &Connection,
-        name: &str,
-        args: &[Value],
-    ) -> Result<Value> {
+    fn exec_scalar_function(&self, conn: &Connection, name: &str, args: &[Value]) -> Result<Value> {
+        if let Some(result) = session::execute(conn, name, args, None) {
+            return result;
+        }
         types::execute(name, args)
             .or_else(|| functions::execute(name, args))
             .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
@@ -81,11 +83,14 @@ impl Dialect for MySqlDialect {
 
     fn exec_typed_scalar_function(
         &self,
-        _conn: &Connection,
+        conn: &Connection,
         name: &str,
         args: &[Value],
         arg_types: &[ArgumentType],
     ) -> Result<Value> {
+        if let Some(result) = session::execute(conn, name, args, Some(arg_types)) {
+            return result;
+        }
         types::execute(name, args)
             .or_else(|| functions::execute_typed(name, args, arg_types))
             .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
@@ -106,7 +111,7 @@ impl Dialect for MySqlDialect {
 
 /// Opens the database at `path` on `io` with the MySQL dialect and returns a
 /// connection to it that checks foreign keys, as a MySQL session starts with
-/// `FOREIGN_KEY_CHECKS = 1`.
+/// `FOREIGN_KEY_CHECKS = 1`, and keeps the session's user variables.
 pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
     let database = Database::open(
         io,
@@ -114,7 +119,7 @@ pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
         turso_core::OpenOptions::new(Arc::new(MySqlDialect))
             .db_opts(turso_core::DatabaseOpts::new().with_generated_columns(true)),
     )?;
-    let connection = database.connect(turso_core::ConnectOpts::new())?;
+    let connection = database.connect_with_context(Arc::new(session::Session::default()))?;
     connection.set_foreign_keys_enabled(true);
     Ok(connection)
 }

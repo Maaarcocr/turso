@@ -45,6 +45,8 @@ pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
     Some(match function {
         Function::Array => build::array(&call),
         Function::Object => build::object(&call),
+        Function::ArrayAggregate => build::array_aggregate(&call),
+        Function::ObjectAggregate => build::object_aggregate(&call),
         Function::Quote => build::quote_string(&call),
         Function::CastAsJson => build::cast_as_json(&call),
         Function::CastBooleanAsJson => build::cast_boolean_as_json(&call),
@@ -77,6 +79,8 @@ pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
 enum Function {
     Array,
     Object,
+    ArrayAggregate,
+    ObjectAggregate,
     Quote,
     CastAsJson,
     CastBooleanAsJson,
@@ -109,6 +113,8 @@ impl Function {
         Some(match name {
             "JSON_ARRAY" => Function::Array,
             "JSON_OBJECT" => Function::Object,
+            "__MYSQL_JSON_ARRAYAGG" => Function::ArrayAggregate,
+            "__MYSQL_JSON_OBJECTAGG" => Function::ObjectAggregate,
             "JSON_QUOTE" => Function::Quote,
             "__MYSQL_CAST_AS_JSON" => Function::CastAsJson,
             "__MYSQL_CAST_BOOLEAN_AS_JSON" => Function::CastBooleanAsJson,
@@ -143,6 +149,8 @@ impl Function {
             Function::Array => true,
             Function::Object => count % 2 == 0,
             Function::Quote
+            | Function::ArrayAggregate
+            | Function::ObjectAggregate
             | Function::CastAsJson
             | Function::CastBooleanAsJson
             | Function::Unquote
@@ -168,6 +176,8 @@ impl Function {
         match self {
             Function::Array => "json_array",
             Function::Object => "json_object",
+            Function::ArrayAggregate => "json_arrayagg",
+            Function::ObjectAggregate => "json_objectagg",
             Function::Quote => "json_quote",
             Function::CastAsJson | Function::CastBooleanAsJson => "cast_as_json",
             Function::Extract => "json_extract",

@@ -157,7 +157,7 @@ impl<'a> Target<'a> {
             partitions,
             json_path: None,
             sample: None,
-            index_hints,
+            index_hints: _,
         } = relation
         else {
             return Err(unsupported(format!("{statement} target `{relation}`")));
@@ -167,9 +167,9 @@ impl<'a> Target<'a> {
                 "{statement} modifier in `{statement} {relation}`"
             )));
         }
-        if !with_hints.is_empty() || !index_hints.is_empty() {
+        if !with_hints.is_empty() {
             return Err(unsupported(format!(
-                "index hints in {statement} target `{relation}`"
+                "table hints in {statement} target `{relation}`"
             )));
         }
         if !partitions.is_empty() {

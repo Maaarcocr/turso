@@ -50,7 +50,7 @@ The conversion also applies to `UPDATE`, `INSERT ... SELECT`, defaults, generate
 
 A single integer primary key column is the table's rowid, so rows are read in primary key order, as InnoDB returns them. The exception is a `BIGINT UNSIGNED` key without `AUTO_INCREMENT`: it is an ordinary primary key, so it can hold values above 9223372036854775807, and rows are read in insertion order. `AUTO_INCREMENT` is available on that column: `NULL`, `0` or an omitted value takes the next value, a deleted maximum is never reused, and when the next value does not fit the type the insert fails (MySQL reports a duplicate key, 1062). `UPDATE` stores `0` and rejects `NULL` (1048). A primary key without `AUTO_INCREMENT` rejects `NULL` like MySQL. Primary key columns are `NOT NULL`. A `NOT NULL` `ENUM` without a default takes its first member, as in MySQL.
 
-`DEFAULT` literals are checked against the column type the way MySQL checks them and stored in the form MySQL stores them (integers rounded, `DECIMAL(p,s)` and `FLOAT(M,D)` rounded to their scale, numbers in string columns kept as written, dates and times normalized to `YYYY-MM-DD HH:MM:SS[.fraction]`, `ENUM`/`SET` members spelled as declared, trailing spaces removed for `CHAR`). `CURRENT_TIMESTAMP`/`NOW()` defaults are available for `DATETIME` and `TIMESTAMP` without fractional seconds, and parenthesized expression defaults are lowered as expressions. A default MySQL rejects, or one that needs rounding of fractional seconds, is not lowered.
+`DEFAULT` literals are checked against the column type the way MySQL checks them and stored in the form MySQL stores them (integers rounded, `DECIMAL(p,s)` and `FLOAT(M,D)` rounded to their scale, numbers in string columns kept as written, dates and times normalized to `YYYY-MM-DD HH:MM:SS[.fraction]`, `ENUM`/`SET` members spelled as declared, trailing spaces removed for `CHAR`). `CURRENT_TIMESTAMP(n)`/`NOW(n)` defaults are available for `DATETIME(n)` and `TIMESTAMP(n)` with the same `n` (MySQL rejects any other), and parenthesized expression defaults are lowered as expressions. A default MySQL rejects, or one that needs rounding of fractional seconds, is not lowered.
 
 `CREATE TABLE` keys are validated like InnoDB does: a `BLOB`/`TEXT` key part needs a prefix length, `JSON` columns cannot be key parts, a prefix must fit the column and be on a string, a key is at most 3072 bytes, key names are distinct, and key columns must exist.
 
@@ -170,7 +170,8 @@ Lowered:
 | `_latin1 X'..'`/`_latin1 0x..` as an argument of `CONCAT`, `CONCAT_WS`, `ELT`, `FIELD` (compared as strings), `FIND_IN_SET`, `INSTR`, `LOCATE` or `SUBSTRING_INDEX` next to a hex, bit or `_binary` literal in another string argument, or of `INSERT`, `LPAD`, `REPLACE` or `RPAD` whose subject is such a literal | A blob of its bytes, since MySQL computes these calls on binary strings |
 | `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` is a blob where a hex literal is one, text in a date or time function argument, and in a numeric function argument the text MySQL parses (its bytes up to the first NUL or non-ASCII byte, so `_binary X'40'` is `'@'`, 0), and in `+ - * /` the DOUBLE MySQL parses from its text (`_binary 'foobar' * -1` is `-0`). A plain or `_utf8` string literal in `+ - * /` or under unary `-` is the DOUBLE MySQL reads from its text (the number it starts with, 0 for none), so `-'foobar'` is `-0` and `'' * TIME '-10:04:58'` is `-0`; compared with a column or other non-literal it keeps Turso's number conversion, as Turso compares a text column with a DOUBLE as text (`v IN (0e0)` is false for a `VARCHAR` `'0'`, where MySQL compares doubles) |
 | `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); a string literal compared with a `DATE` or `TIMESTAMP` one is converted the same way (`DATE '2018-05-01' = '2018-5-1'`), and one compared with a `TIME` stays a string, which MySQL compares with the canonical text under the default collation (`'5 10:34:58' > TIME '130:34:58.6'` is 1); in arithmetic, a comparison with a number, a logical operator, a condition or a numeric function argument (including `MAKEDATE`, `MAKETIME`, `SEC_TO_TIME`, `FROM_UNIXTIME`, `FROM_DAYS` and `PERIOD_*`), the number MySQL uses (`20180501`, `-1013458`, `103458.5`), with fractions past 6 digits rounded; `TIME '..'` compared with `TIME '..'` as numbers. A `DATE 'YYYY-MM-DD'` with a month above 12, a day past the end of its month, or `'0000-00-00'` fails like MySQL (1525) |
-| `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which are refused |
+| `/*+ ... */` optimizer hints | Ignored: they choose a plan or bound the run time (`MAX_EXECUTION_TIME`), which leaves the result of a statement that finishes unchanged. `SET_VAR` is accepted for variables that only size buffers or steer the optimizer (`sort_buffer_size`, `optimizer_switch`, ...) and refused for any other |
+| Index hints (`USE`, `FORCE`, `IGNORE` `INDEX`/`KEY`) | Ignored, in `SELECT` and `UPDATE`. An index name the table does not have is not rejected (MySQL's error 1176), since the frontend does not see the schema |
 
 Refused, because Turso cannot run it with MySQL's meaning yet:
 
@@ -263,11 +264,11 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   the decimal in the JSON value, Turso a DOUBLE. And of a `BINARY` cast:
   MySQL's opaque JSON value reaches other functions as a JSON string.
 - `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN` modifiers, `STRAIGHT_JOIN`
-  joins, index hints, `PARTITION (...)` selection, `INTO`, locking reads
+  joins, `PARTITION (...)` selection, `INTO`, locking reads
   (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`, `VALUES` without
   `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`, `INTERSECT
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
-- User and system variables (`@a`, `@@x`), `:name` and `?N` parameters,
+- User and system variables outside the cases under Session settings, `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
   collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set,
   `CONVERT(... USING ...)` with any other character set, and `^` over
@@ -336,11 +337,43 @@ assignments in one statement are allowed):
 | `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON`, `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
 | `FOREIGN_KEY_CHECKS` set to 0, 1, `ON`, `OFF`, `TRUE` or `FALSE` | `PRAGMA foreign_keys = 0/1`, which Turso applies at once, also inside a transaction, as MySQL does. Turso then checks foreign keys like SQLite: an `UPDATE` that writes the same key value is checked too, where InnoDB skips it |
 
-Everything else is refused: user variables
-(`SET @a = 1`, Turso has no session variables yet), other values of these
-variables (`sql_mode`, `time_zone`, `autocommit = 0` and character sets
-change the semantics of later statements), `GLOBAL` scope, and other
-variables.
+| `time_zone`, `sql_mode`, the character sets or `collation_connection` set to an expression (`SET character_set_client = @saved_cs_client` in mysqldump output) | `__mysql_keep_session_settings(name, value, ...)`, which accepts the values above when it runs and refuses any other |
+| `SET @a = x, @b = y` (user variables) | `SELECT 0 WHERE __mysql_set_user_variables('a', default_collation, x, ...)`, which stores the values in the connection's session (`turso_mysql::open_*` connections only) |
+
+Everything else is refused: other values of these variables (`sql_mode`,
+`time_zone`, `autocommit = 0` and character sets change the semantics of
+later statements), `GLOBAL` scope, other variables, and an assignment that
+reads a user variable assigned earlier in the same `SET` (the values are all
+read before any is stored).
+
+### User and system variables
+
+A user variable `@name` (case-insensitive) reads
+`__mysql_user_variable('name')`: NULL until it is set, then the value last
+assigned in the session. MySQL gives a variable the type and collation of the
+value assigned, so the frontend keeps what a plain value carries and refuses
+the rest:
+
+- integers, doubles, binary strings and NULL are kept;
+- a string is read back with `utf8mb4_0900_ai_ci`, so it is kept only when
+  its collation is known to be that: a string literal or another user
+  variable. A string from a column, a function such as `CONCAT` or a JSON
+  value, whose collation MySQL derives from that source, is refused when
+  read (it can still be passed to a `SET` of a setting);
+- `DECIMAL`, temporal, `ENUM`, `SET` and other typed values are refused when
+  assigned;
+- `@a := x` and `SELECT ... INTO @a` are not lowered.
+
+A system variable `@@name` or `@@session.name` whose value the target profile
+fixes reads as that constant: `sql_mode`, `time_zone` (`+00:00`),
+`transaction_isolation` (`REPEATABLE-READ`), the `character_set_*` and
+`collation_*` variables of the connection, server and database, `version`
+(`8.4.10`), `autocommit`, `auto_increment_increment`,
+`auto_increment_offset`, `unique_checks`, `explicit_defaults_for_timestamp`,
+`lower_case_table_names`, `sql_auto_is_null`, `transaction_read_only`,
+`max_execution_time`, `sql_safe_updates`, `default_week_format`,
+`div_precision_increment`, `group_concat_max_len`, `max_allowed_packet` and
+`default_storage_engine`. `@@global.` and other variables are refused.
 
 ## JSON functions
 
@@ -351,7 +384,8 @@ MySQL dialect, replacing SQLite's functions of the same name: `JSON_ARRAY`,
 `JSON_DEPTH`, `JSON_PRETTY`, `JSON_CONTAINS`, `JSON_CONTAINS_PATH`,
 `JSON_OVERLAPS`, `JSON_SEARCH`, `JSON_SET`, `JSON_INSERT`, `JSON_REPLACE`,
 `JSON_REMOVE`, `JSON_ARRAY_APPEND`, `JSON_ARRAY_INSERT`, `JSON_MERGE`,
-`JSON_MERGE_PRESERVE` and `JSON_MERGE_PATCH`. They follow MySQL 8.4.10:
+`JSON_MERGE_PRESERVE` and `JSON_MERGE_PATCH`, and the aggregates
+`JSON_ARRAYAGG` and `JSON_OBJECTAGG`. They follow MySQL 8.4.10:
 
 - JSON text is parsed like MySQL's RapidJSON parser, including its error
   positions, the nesting limit of 100, the last duplicate key winning, and its
@@ -393,9 +427,11 @@ these internal functions, which MySQL does not have:
 | `x MEMBER OF (y)` | `__mysql_member_of(x, y)` |
 | `doc -> path` | `JSON_EXTRACT(doc, path)` |
 | `doc ->> path` | `JSON_UNQUOTE(JSON_EXTRACT(doc, path))` |
+| `JSON_ARRAYAGG(x)` | `__mysql_json_arrayagg(json_group_array(JSON_ARRAY(x)))`: each row converts as a `JSON_ARRAY` value; no rows give NULL |
+| `JSON_OBJECTAGG(k, v)` | `__mysql_json_objectagg(json_group_array(JSON_OBJECT(k, v)))`: keys as in `JSON_OBJECT` (a NULL key fails with 3158), the last value of a repeated key wins; no rows give NULL |
 
-Not implemented: the aggregates `JSON_ARRAYAGG` and `JSON_OBJECTAGG` (a
-dialect cannot define aggregate functions yet), `JSON_TABLE`,
+Not implemented: `JSON_ARRAYAGG` and `JSON_OBJECTAGG` as window functions,
+`JSON_TABLE`,
 `JSON_SCHEMA_VALID`, `JSON_SCHEMA_VALIDATION_REPORT`, `JSON_STORAGE_SIZE`,
 `JSON_STORAGE_FREE` and the `RETURNING`/`ON EMPTY`/`ON ERROR` clauses of
 `JSON_VALUE`.

@@ -10,14 +10,15 @@ pub(crate) enum DefaultValue {
     Null,
     Number(String),
     Text(String),
-    CurrentTimestamp,
+    /// `CURRENT_TIMESTAMP(precision)` and its synonyms.
+    CurrentTimestamp(u64),
     Expression(ast::Expr),
 }
 
 pub(crate) fn translate_default(expr: &Expr) -> Result<DefaultValue, MysqlParserError> {
-    if let Some(literal) = current_time_literal(expr)? {
+    if let Some((literal, precision)) = current_time_literal(expr)? {
         return match literal {
-            ast::Literal::CurrentTimestamp => Ok(DefaultValue::CurrentTimestamp),
+            ast::Literal::CurrentTimestamp => Ok(DefaultValue::CurrentTimestamp(precision)),
             _ => Err(unsupported_default(expr)),
         };
     }
@@ -54,6 +55,13 @@ pub(crate) fn translate_default(expr: &Expr) -> Result<DefaultValue, MysqlParser
 
 pub(crate) fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError> {
     match expr {
+        Expr::Identifier(identifier)
+            if identifier.quote_style.is_none() && identifier.value.starts_with('@') =>
+        {
+            Err(MysqlParserError::Rejected(format!(
+                "`{identifier}`: column defaults, generated columns and CHECK constraints cannot read user or system variables"
+            )))
+        }
         Expr::Identifier(identifier) => Ok(ast::Expr::Id(translate_identifier(identifier)?)),
         Expr::Value(value) => translate_value(&value.value),
         Expr::Nested(inner) => Ok(ast::Expr::Parenthesized(vec![Box::new(translate_expr(
@@ -113,7 +121,10 @@ pub(crate) fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError>
             end: Box::new(translate_expr(high)?),
         }),
         Expr::Function(function) => match current_time_literal(expr)? {
-            Some(literal) => Ok(ast::Expr::Literal(literal)),
+            Some((literal, 0)) => Ok(ast::Expr::Literal(literal)),
+            Some(_) => Err(MysqlParserError::Unsupported(format!(
+                "`{expr}` with fractional seconds is not available"
+            ))),
             None => translate_function(function),
         },
         _ => Err(unsupported_expr(expr)),
@@ -230,7 +241,9 @@ fn function_call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {
     }
 }
 
-fn current_time_literal(expr: &Expr) -> Result<Option<ast::Literal>, MysqlParserError> {
+/// The current-time function `expr` calls, and the fractional digits it asks
+/// for.
+fn current_time_literal(expr: &Expr) -> Result<Option<(ast::Literal, u64)>, MysqlParserError> {
     let Expr::Function(function) = expr else {
         return Ok(None);
     };
@@ -245,24 +258,34 @@ fn current_time_literal(expr: &Expr) -> Result<Option<ast::Literal>, MysqlParser
         "CURRENT_TIME" | "CURTIME" => ast::Literal::CurrentTime,
         _ => return Ok(None),
     };
-    let without_precision = match &function.args {
-        FunctionArguments::None => true,
-        FunctionArguments::List(list) => {
-            list.args.is_empty()
-                || matches!(
-                    list.args.as_slice(),
-                    [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value)))]
-                        if matches!(&value.value, Value::Number(number, _) if number == "0")
-                )
-        }
-        FunctionArguments::Subquery(_) => false,
-    };
-    if !without_precision || identifier.quote_style.is_some() {
+    if identifier.quote_style.is_some() {
         return Err(MysqlParserError::Unsupported(format!(
-            "`{expr}` with fractional seconds is not available"
+            "`{expr}` with a quoted name is not available"
         )));
     }
-    Ok(Some(literal))
+    let precision = match &function.args {
+        FunctionArguments::None => Some(0),
+        FunctionArguments::List(list) => match list.args.as_slice() {
+            [] => Some(0),
+            [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value)))] => {
+                match &value.value {
+                    Value::Number(number, _) => number.parse::<u64>().ok(),
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+        FunctionArguments::Subquery(_) => None,
+    };
+    match precision {
+        Some(precision @ 0..=6) => Ok(Some((literal, precision))),
+        Some(_) => Err(MysqlParserError::Rejected(format!(
+            "`{expr}` asks for more than 6 fractional digits"
+        ))),
+        None => Err(MysqlParserError::Unsupported(format!(
+            "`{expr}` with that precision is not available"
+        ))),
+    }
 }
 
 fn unsupported_default(expr: &Expr) -> MysqlParserError {

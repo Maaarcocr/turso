@@ -1,6 +1,6 @@
 use crate::expr::translate_expr;
 use crate::names::translate_identifier;
-use crate::query::{translate_subquery, TranslationContext};
+use crate::query::{only_changes_the_plan, translate_subquery, TranslationContext};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     Assignment, AssignmentTarget, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Ident,
@@ -102,7 +102,7 @@ fn insert_statement(
 }
 
 fn is_plain_insert(insert: &Insert) -> bool {
-    insert.optimizer_hints.is_empty()
+    insert.optimizer_hints.iter().all(only_changes_the_plan)
         && insert.or.is_none()
         && insert.table_alias.is_none()
         && !insert.overwrite

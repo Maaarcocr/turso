@@ -1,4 +1,4 @@
-use turso_core::{Numeric, Result, Value};
+use turso_core::{LimboError, Numeric, Result, Value};
 
 use super::document::{quote, Json, Object};
 use super::{binary_string_error, is_json, json_result, mysql_error, text_result, Call};
@@ -8,6 +8,51 @@ pub(super) fn array(call: &Call) -> Result<Value> {
         .map(|index| call.value(index))
         .collect::<Result<Vec<_>>>()?;
     Ok(json_result(&Json::Array(items)))
+}
+
+pub(super) fn array_aggregate(call: &Call) -> Result<Value> {
+    let items = aggregated_rows(call)?
+        .into_iter()
+        .map(|row| match row {
+            Json::Array(mut items) if items.len() == 1 => Ok(items.remove(0)),
+            _ => Err(LimboError::InternalError(
+                "a JSON_ARRAYAGG row is not a one-element array".to_string(),
+            )),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(if items.is_empty() {
+        Value::Null
+    } else {
+        json_result(&Json::Array(items))
+    })
+}
+
+pub(super) fn object_aggregate(call: &Call) -> Result<Value> {
+    let rows = aggregated_rows(call)?;
+    if rows.is_empty() {
+        return Ok(Value::Null);
+    }
+    let mut object = Object::default();
+    for row in rows {
+        let Json::Object(members) = row else {
+            return Err(LimboError::InternalError(
+                "a JSON_OBJECTAGG row is not an object".to_string(),
+            ));
+        };
+        for (key, value) in members.into_members() {
+            object.insert(key, value);
+        }
+    }
+    Ok(json_result(&Json::Object(object)))
+}
+
+fn aggregated_rows(call: &Call) -> Result<Vec<Json>> {
+    match call.document(0)? {
+        Some(Json::Array(rows)) => Ok(rows),
+        _ => Err(LimboError::InternalError(
+            "json_group_array did not collect an array".to_string(),
+        )),
+    }
 }
 
 pub(super) fn object(call: &Call) -> Result<Value> {

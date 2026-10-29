@@ -75,7 +75,12 @@ fn translate_node(
         Expr::TypedString(typed) => translate_typed_string(typed, literal_context),
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
         Expr::Identifier(identifier) => translate_identifier_expr(identifier),
-        Expr::CompoundIdentifier(parts) => translate_compound_identifier(parts),
+        Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+            [scope, name] if is_system_variable_scope(scope) => {
+                crate::session::system_variable(&scope.value, name)
+            }
+            _ => translate_compound_identifier(parts),
+        },
         expr if is_bit_operation(expr) => translate_bit_operation(expr, context),
         Expr::UnaryOp { op, expr } => translate_unary(*op, expr, literal_context, context),
         Expr::BinaryOp { left, op, right } => {
@@ -776,8 +781,24 @@ fn translate_identifier_expr(identifier: &Ident) -> Result<ast::Expr, MysqlParse
         if let Some(literal) = current_time_literal(&upper_name) {
             return Ok(literal);
         }
+        if let Some(name) = identifier.value.strip_prefix("@@") {
+            return crate::session::system_variable("@@", &Ident::new(name.to_string()));
+        }
+        if let Some(name) = crate::session::user_variable_name(&identifier.value) {
+            return Ok(function_call(
+                "__mysql_user_variable",
+                vec![string_expr(&name)],
+            ));
+        }
     }
     Ok(ast::Expr::Id(column_name(identifier)?))
+}
+
+fn is_system_variable_scope(scope: &Ident) -> bool {
+    scope.quote_style.is_none()
+        && ["@@session", "@@local", "@@global"]
+            .iter()
+            .any(|prefix| scope.value.eq_ignore_ascii_case(prefix))
 }
 
 fn translate_compound_identifier(parts: &[Ident]) -> Result<ast::Expr, MysqlParserError> {
@@ -959,15 +980,33 @@ fn translate_binary(
             Ok(ast::Expr::binary(left, operator, right))
         }
         BinaryOperator::And | BinaryOperator::Or | BinaryOperator::StringConcat => {
-            let operator = match op {
-                BinaryOperator::And => ast::Operator::And,
-                _ => ast::Operator::Or,
+            let conjunction = matches!(op, BinaryOperator::And);
+            let same_operator = |op: &BinaryOperator| match op {
+                BinaryOperator::And => conjunction,
+                BinaryOperator::Or | BinaryOperator::StringConcat => !conjunction,
+                _ => false,
             };
-            Ok(ast::Expr::binary(
-                translate_condition(left, context)?,
-                operator,
-                translate_condition(right, context)?,
-            ))
+            let mut operands = vec![right];
+            let mut first = left;
+            while let Expr::BinaryOp { left, op, right } = first {
+                if !same_operator(op) {
+                    break;
+                }
+                operands.push(right);
+                first = left;
+            }
+            operands.push(first);
+            let operands = operands
+                .into_iter()
+                .rev()
+                .map(|operand| translate_condition(operand, context))
+                .collect::<Result<Vec<_>, _>>()?;
+            let operator = if conjunction {
+                ast::Operator::And
+            } else {
+                ast::Operator::Or
+            };
+            Ok(balanced(operands, operator))
         }
         BinaryOperator::Plus => arithmetic(ast::Operator::Add, context),
         BinaryOperator::Minus => arithmetic(ast::Operator::Subtract, context),
@@ -987,6 +1026,21 @@ fn translate_binary(
         BinaryOperator::LongArrow => translate_json_arrow(left, right, true, context),
         other => Err(unsupported_operator(other)),
     }
+}
+
+/// A chain of `AND` or `OR` operands as a balanced tree, which evaluates
+/// them in the same order and nests only logarithmically deep, so a long
+/// generated chain stays under the expression depth limit.
+fn balanced(mut operands: Vec<ast::Expr>, operator: ast::Operator) -> ast::Expr {
+    if operands.len() == 1 {
+        return operands.pop().expect("one operand");
+    }
+    let right = operands.split_off(operands.len() / 2);
+    ast::Expr::binary(
+        balanced(operands, operator),
+        operator,
+        balanced(right, operator),
+    )
 }
 
 fn translate_integer_division(
@@ -2868,7 +2922,7 @@ pub(crate) fn string_literal(expr: &Expr) -> Option<&str> {
     }
 }
 
-fn string_expr(text: &str) -> ast::Expr {
+pub(crate) fn string_expr(text: &str) -> ast::Expr {
     ast::Expr::Literal(ast::Literal::String(quote_string(text)))
 }
 
@@ -3795,6 +3849,11 @@ fn translate_function(
             return Err(binary_cast_outside_a_value_position(cast));
         }
     }
+    if identifier.quote_style.is_none()
+        && matches!(upper_name.as_str(), "JSON_ARRAYAGG" | "JSON_OBJECTAGG")
+    {
+        return translate_json_aggregate(function, &upper_name, context);
+    }
     if identifier.quote_style.is_none() && over.is_none() {
         if let Some(expr) = translate_greatest_of_dates(&upper_name, list)? {
             return Ok(expr);
@@ -4633,6 +4692,47 @@ fn added_seconds_digits(seconds: &Expr, date: &Expr) -> Option<u64> {
     Some(seconds_digits.max(date_digits))
 }
 
+/// `JSON_ARRAYAGG(x)` and `JSON_OBJECTAGG(k, v)`: each row becomes
+/// `JSON_ARRAY(x)` or `JSON_OBJECT(k, v)`, so its value converts as in those
+/// functions, `json_group_array` collects the rows, and the dialect function
+/// around it unwraps them (NULL for a group without rows, the last value of
+/// a repeated key).
+fn translate_json_aggregate(
+    function: &Function,
+    upper_name: &str,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let (row_function, finish, arity) = match upper_name {
+        "JSON_ARRAYAGG" => ("JSON_ARRAY", "__mysql_json_arrayagg", 1),
+        _ => ("JSON_OBJECT", "__mysql_json_objectagg", 2),
+    };
+    let FunctionArguments::List(list) = &function.args else {
+        return Err(unsupported_function(function));
+    };
+    if function.over.is_some() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} as a window function is not lowered yet"
+        )));
+    }
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Err(MysqlParserError::Rejected(format!(
+            "{upper_name} takes no DISTINCT, ORDER BY or other clause"
+        )));
+    }
+    if unnamed_arguments(list)?.len() != arity {
+        return Err(MysqlParserError::Rejected(format!(
+            "incorrect parameter count in the call to {upper_name}"
+        )));
+    }
+    let mut row = function.clone();
+    row.name = ObjectName(vec![ObjectNamePart::Identifier(Ident::new(row_function))]);
+    let row = translate_in(&Expr::Function(row), Context::Value, context)?;
+    Ok(function_call(
+        finish,
+        vec![function_call("json_group_array", vec![row])],
+    ))
+}
+
 fn translate_special_function(
     upper_name: &str,
     list: &FunctionArgumentList,
@@ -4725,9 +4825,15 @@ fn translate_special_function(
     }
 }
 
-fn collation_of(expr: &Expr) -> Option<&'static str> {
+pub(crate) fn collation_of(expr: &Expr) -> Option<&'static str> {
     match expr {
         Expr::Nested(inner) => collation_of(inner),
+        Expr::Identifier(identifier)
+            if identifier.quote_style.is_none()
+                && crate::session::user_variable_name(&identifier.value).is_some() =>
+        {
+            Some(DEFAULT_COLLATION)
+        }
         Expr::Value(value) => match value.value {
             Value::SingleQuotedString(_) | Value::DoubleQuotedString(_) => Some(DEFAULT_COLLATION),
             Value::NationalStringLiteral(_) => Some("utf8mb3_general_ci"),
