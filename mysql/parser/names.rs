@@ -32,6 +32,19 @@ pub(crate) fn translate_ddl_name(name: &ObjectName) -> Result<ast::Name, MysqlPa
     Ok(translated)
 }
 
+/// A column name for `CREATE TABLE` or `ALTER TABLE`. A column named `rowid`
+/// would hide the row id that multi-table and ordered `UPDATE` and `DELETE`
+/// find their rows by, so it is refused.
+pub(crate) fn translate_column_name(identifier: &Ident) -> Result<ast::Name, MysqlParserError> {
+    if identifier.value.eq_ignore_ascii_case("rowid") {
+        return Err(MysqlParserError::Unsupported(format!(
+            "a column named `{}`, which Turso keeps for the row id, is not lowered yet",
+            identifier.value
+        )));
+    }
+    translate_ddl_identifier(identifier)
+}
+
 pub(crate) fn translate_ddl_identifier(identifier: &Ident) -> Result<ast::Name, MysqlParserError> {
     let translated = translate_identifier(identifier)?;
     ensure_identifier_length(&translated)?;

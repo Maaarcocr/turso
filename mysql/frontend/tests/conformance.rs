@@ -418,6 +418,40 @@ fn user_variables_keep_their_values_for_the_session() -> turso_core::Result<()> 
 }
 
 #[test]
+fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE a (id INT PRIMARY KEY, v INT)")?;
+    connection.execute("CREATE TABLE b (id INT, w INT)")?;
+    connection.execute("INSERT INTO a VALUES (1, 0), (2, 0), (3, 0)")?;
+    connection.execute("INSERT INTO b VALUES (1, 10), (2, 20), (2, 30), (3, 40)")?;
+    let rows = |connection: &Arc<turso_core::Connection>| {
+        query(connection, "SELECT id, v FROM a ORDER BY id")
+    };
+    connection.execute("UPDATE a JOIN b ON b.id = a.id SET a.v = a.v + 1")?;
+    let once = vec![
+        vec![Value::from_i64(1), Value::from_i64(1)],
+        vec![Value::from_i64(2), Value::from_i64(1)],
+        vec![Value::from_i64(3), Value::from_i64(1)],
+    ];
+    assert_eq!(rows(&connection)?, once);
+    let error = connection
+        .execute("UPDATE a JOIN b ON b.id = a.id SET a.v = b.w")
+        .expect_err("row 2 takes the values of one of two joined rows");
+    assert!(error.to_string().contains("not supported yet"), "{error}");
+    assert_eq!(rows(&connection)?, once);
+    connection.execute("UPDATE a JOIN b ON b.id = a.id SET a.v = b.w WHERE b.w <> 30")?;
+    assert_eq!(
+        rows(&connection)?,
+        vec![
+            vec![Value::from_i64(1), Value::from_i64(10)],
+            vec![Value::from_i64(2), Value::from_i64(20)],
+            vec![Value::from_i64(3), Value::from_i64(40)],
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn json_aggregates_collect_the_rows_of_each_group() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE c (id BIGINT PRIMARY KEY, p INT, lbl VARCHAR(5))")?;

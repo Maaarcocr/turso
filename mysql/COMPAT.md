@@ -326,6 +326,40 @@ Known differences: the affected-row count is SQLite's (1 per inserted or
 updated row) rather than MySQL's 2 for an update and 0 for an unchanged
 row; and an update consumes no `AUTO_INCREMENT` value.
 
+## `UPDATE` and `DELETE`
+
+`mysql/parser/dml.rs` lowers single-table `UPDATE` and `DELETE` as they are.
+The other forms find their rows by Turso's row id:
+
+- `UPDATE t SET ... WHERE c ORDER BY o LIMIT n` and `DELETE FROM t WHERE c
+  ORDER BY o LIMIT n` change the rows of `rowid IN (SELECT rowid FROM t WHERE
+  c ORDER BY o LIMIT n)`.
+- `DELETE t FROM t JOIN ... WHERE c` and `DELETE FROM t USING t JOIN ...` are
+  `DELETE FROM t WHERE rowid IN (SELECT t.rowid FROM t JOIN ... WHERE c)`.
+  Turso reads the whole subquery before it deletes a row, as MySQL finds the
+  rows before deleting them.
+- `UPDATE t JOIN ... SET t.c = v WHERE c` is an `UPDATE ... FROM` over the
+  joined rows grouped by `t.rowid`. Turso computes the grouped rows before it
+  changes one, so a join of `t` with itself (or with a derived table that
+  reads `t`) reads the old rows, as MySQL does when it buffers such a join.
+  MySQL changes each target row once, with the values of the first joined row
+  that matches it. When a value may read another table, a target row that
+  several joined rows match is refused at run time, and the statement changes
+  no row.
+
+Refused: `LIMIT` without `ORDER BY` (MySQL changes the first rows it reads,
+in an order Turso does not share); an ordered `UPDATE` that assigns a column
+it orders by (`SET k = k + 1 ORDER BY k DESC` avoids duplicate keys only in
+MySQL's order); `ORDER BY` a position; a multi-table `UPDATE` that changes
+more than one table, assigns a column without its table name (MySQL finds the
+table by its columns), or whose values or condition may hold an aggregate or a
+window function; a multi-table `DELETE` from several tables; a target that
+is not exactly one table of the join; a subquery in the values or condition
+that reads the target table (MySQL's error 1093); and the `LOW_PRIORITY`,
+`QUICK` and `IGNORE` modifiers. Since the row id is how these statements find
+their rows, `CREATE TABLE` and `ALTER TABLE ... RENAME COLUMN` refuse a column
+named `rowid`, which MySQL allows.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or

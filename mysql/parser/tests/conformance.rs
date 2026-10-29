@@ -307,6 +307,10 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users LIKE source_users",
         },
         SqlCase {
+            name: "column named rowid",
+            sql: "CREATE TABLE users(RowId INT)",
+        },
+        SqlCase {
             name: "columns and a select",
             sql: "CREATE TABLE users (id INT) AS SELECT 1",
         },
@@ -1798,6 +1802,38 @@ fn lowers_single_table_update_and_delete() {
             "DELETE FROM users WHERE id IN (SELECT user_id FROM banned)",
         ),
         ("DELETE FROM quick", "DELETE FROM quick"),
+        (
+            "UPDATE users SET qty = ? WHERE id > ? ORDER BY name DESC, id LIMIT ?",
+            "UPDATE users SET qty = ?1 WHERE rowid IN (SELECT rowid FROM users WHERE id > ?2 ORDER BY name DESC, id LIMIT ?3)",
+        ),
+        (
+            "UPDATE users AS u SET qty = 1 ORDER BY u.id LIMIT 2",
+            "UPDATE users AS u SET qty = 1 WHERE rowid IN (SELECT rowid FROM users AS u ORDER BY u.id LIMIT 2)",
+        ),
+        (
+            "DELETE FROM users WHERE qty = 0 ORDER BY id LIMIT 1",
+            "DELETE FROM users WHERE rowid IN (SELECT rowid FROM users WHERE qty = 0 ORDER BY id LIMIT 1)",
+        ),
+        (
+            "DELETE users FROM users JOIN banned ON banned.user_id = users.id WHERE banned.until > ?",
+            "DELETE FROM users WHERE rowid IN (SELECT users.rowid FROM users JOIN banned ON banned.user_id = users.id WHERE banned.until > ?1)",
+        ),
+        (
+            "DELETE u FROM users AS u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id IS NULL",
+            "DELETE FROM users WHERE rowid IN (SELECT u.rowid FROM users AS u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id ISNULL)",
+        ),
+        (
+            "DELETE FROM users USING users JOIN banned ON banned.user_id = users.id",
+            "DELETE FROM users WHERE rowid IN (SELECT users.rowid FROM users JOIN banned ON banned.user_id = users.id)",
+        ),
+        (
+            "UPDATE users JOIN stock ON stock.id = users.id SET users.qty = stock.qty WHERE stock.qty > ?",
+            "UPDATE users AS __mysql_target SET qty = __mysql_rows.__mysql_value_0 FROM (SELECT users.rowid AS __mysql_rowid, stock.qty AS __mysql_value_0, count (1) AS __mysql_matches FROM users JOIN stock ON stock.id = users.id WHERE (stock.qty > ?1) AND users.rowid NOTNULL GROUP BY users.rowid) AS __mysql_rows WHERE __mysql_target.rowid = __mysql_rows.__mysql_rowid AND __mysql_one_joined_row (__mysql_rows.__mysql_matches)",
+        ),
+        (
+            "UPDATE users u JOIN stock s ON s.id = u.id SET u.qty = u.qty + 1, u.name = 'x'",
+            "UPDATE users AS __mysql_target SET qty = __mysql_rows.__mysql_value_0, name = __mysql_rows.__mysql_value_1 FROM (SELECT u.rowid AS __mysql_rowid, u.qty + 1 AS __mysql_value_0, 'x' AS __mysql_value_1, count (1) AS __mysql_matches FROM users u JOIN stock s ON s.id = u.id WHERE u.rowid NOTNULL GROUP BY u.rowid) AS __mysql_rows WHERE __mysql_target.rowid = __mysql_rows.__mysql_rowid",
+        ),
     ];
 
     for (sql, expected) in cases {
@@ -1847,8 +1883,12 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE users AS u SET users.qty = 1",
         },
         SqlCase {
-            name: "update order by",
-            sql: "UPDATE users SET qty = 1 ORDER BY id",
+            name: "update ordered by a column it assigns",
+            sql: "UPDATE users SET id = id + 1 ORDER BY id DESC",
+        },
+        SqlCase {
+            name: "update ordered by a position",
+            sql: "UPDATE users SET qty = 1 ORDER BY 1 LIMIT 1",
         },
         SqlCase {
             name: "update limit",
@@ -1863,8 +1903,24 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE IGNORE users SET qty = 1",
         },
         SqlCase {
-            name: "multi-table update",
-            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = other.qty",
+            name: "multi-table update of two tables",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = 1, other.qty = 2",
+        },
+        SqlCase {
+            name: "multi-table update of an unqualified column",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET qty = 1",
+        },
+        SqlCase {
+            name: "multi-table update of a derived table",
+            sql: "UPDATE users JOIN (SELECT 1 AS id) AS d ON users.id = d.id SET d.id = 2",
+        },
+        SqlCase {
+            name: "multi-table update with an aggregate",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = COUNT(*)",
+        },
+        SqlCase {
+            name: "multi-table update whose subquery reads the target",
+            sql: "UPDATE users JOIN other ON users.id = other.id SET users.qty = (SELECT MAX(qty) FROM users)",
         },
         SqlCase {
             name: "update returning",
@@ -1883,10 +1939,6 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "UPDATE users SET qty = 1 WHERE id IN (SELECT id FROM users)",
         },
         SqlCase {
-            name: "delete order by limit",
-            sql: "DELETE FROM users ORDER BY id LIMIT 1",
-        },
-        SqlCase {
             name: "delete limit",
             sql: "DELETE FROM users LIMIT 1",
         },
@@ -1903,12 +1955,16 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "DELETE IGNORE FROM users",
         },
         SqlCase {
-            name: "multi-table delete",
-            sql: "DELETE users FROM users JOIN other ON users.id = other.id",
+            name: "delete from two tables",
+            sql: "DELETE users, other FROM users JOIN other ON users.id = other.id",
         },
         SqlCase {
-            name: "delete using",
-            sql: "DELETE FROM users USING users JOIN other",
+            name: "delete through the table name of an aliased table",
+            sql: "DELETE users FROM users AS u JOIN other ON u.id = other.id",
+        },
+        SqlCase {
+            name: "delete using from two tables",
+            sql: "DELETE FROM users, other USING users JOIN other",
         },
         SqlCase {
             name: "delete returning",

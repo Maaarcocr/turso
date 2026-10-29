@@ -23,7 +23,7 @@ struct UserVariable {
 pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
     let name = name.to_ascii_uppercase();
     let accepted = match name.as_str() {
-        USER_VARIABLE | USER_VARIABLE_VALUE => arg_count == 1,
+        USER_VARIABLE | USER_VARIABLE_VALUE | ONE_JOINED_ROW => arg_count == 1,
         SET_USER_VARIABLES => arg_count >= 3 && arg_count % 3 == 0,
         KEEP_SESSION_SETTINGS => arg_count >= 2 && arg_count % 2 == 0,
         _ => false,
@@ -59,6 +59,7 @@ pub(crate) fn execute(
             session(connection).and_then(|session| session.set_user_variables(args, arg_types))
         }
         KEEP_SESSION_SETTINGS => keep_session_settings(args),
+        ONE_JOINED_ROW => one_joined_row(args),
         _ => return None,
     };
     Some(result)
@@ -89,6 +90,23 @@ fn keep_session_settings(args: &[Value]) -> Result<Value> {
     }
     Ok(Value::from_i64(0))
 }
+
+/// `__mysql_one_joined_row(matches)`: true when one joined row matches a row
+/// that a multi-table UPDATE changes. MySQL takes the new values from the
+/// first joined row it meets, which Turso does not know, so more are refused.
+fn one_joined_row(args: &[Value]) -> Result<Value> {
+    match args {
+        [Value::Numeric(Numeric::Integer(1))] => Ok(Value::from_i64(1)),
+        [Value::Numeric(Numeric::Integer(matches))] => Err(unsupported_value(format!(
+            "a multi-table UPDATE of a row that {matches} joined rows match, which MySQL changes with the values of the first it meets,"
+        ))),
+        _ => Err(LimboError::InternalError(
+            "the joined rows of an updated row are counted".to_string(),
+        )),
+    }
+}
+
+const ONE_JOINED_ROW: &str = "__MYSQL_ONE_JOINED_ROW";
 
 const KEEP_SESSION_SETTINGS: &str = "__MYSQL_KEEP_SESSION_SETTINGS";
 

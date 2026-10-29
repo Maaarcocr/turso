@@ -1,7 +1,7 @@
 use crate::ddl_column::Column;
 use crate::ddl_index::{drop_index_statement, translate_drop_index};
 use crate::expr::DEFAULT_COLLATION;
-use crate::names::{translate_ddl_identifier, translate_ddl_name};
+use crate::names::{translate_column_name, translate_ddl_identifier, translate_ddl_name};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     AlterTable, AlterTableOperation, ObjectType, RenameTable, RenameTableNameKind, Statement,
@@ -57,7 +57,7 @@ pub(crate) fn translate_alter_table(
             new_column_name,
         } => ast::AlterTableBody::RenameColumn {
             old: translate_ddl_identifier(old_column_name)?,
-            new: translate_ddl_identifier(new_column_name)?,
+            new: translate_column_name(new_column_name)?,
         },
         AlterTableOperation::RenameTable {
             table_name: RenameTableNameKind::To(new_name) | RenameTableNameKind::As(new_name),
