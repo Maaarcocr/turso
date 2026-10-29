@@ -942,8 +942,12 @@ fn translate_binary(
         | BinaryOperator::Modulo
             if json::is_json_value(left) || json::is_json_value(right) =>
         {
-            let left = json::translate_arithmetic_operand(left, context)?;
-            let right = json::translate_arithmetic_operand(right, context)?;
+            let mut operand = |expr: &Expr| match hex_or_bit_literal(expr) {
+                Some(literal) => binary_literal_as_double(literal),
+                None => json::translate_arithmetic_operand(expr, context),
+            };
+            let left = operand(left)?;
+            let right = operand(right)?;
             let operator = match op {
                 BinaryOperator::Plus => ast::Operator::Add,
                 BinaryOperator::Minus => ast::Operator::Subtract,
@@ -1058,8 +1062,17 @@ fn arithmetic(
         return Ok(unsigned);
     }
     if operator == ast::Operator::Modulus {
-        let dividend = unsigned_bigint_operand(left, Context::Arithmetic, context)?;
-        let divisor = unsigned_bigint_operand(right, Context::Arithmetic, context)?;
+        let mut operand = |expr: &Expr, other: &Expr| {
+            let reads_double = is_double_literal(other)
+                || is_text_literal(other)
+                || matches!(other, Expr::Prefixed { value, .. } if is_text_literal(value));
+            match hex_or_bit_literal(expr) {
+                Some(literal) if reads_double => binary_literal_as_double(literal),
+                _ => unsigned_bigint_operand(expr, Context::Arithmetic, context),
+            }
+        };
+        let dividend = operand(left, right)?;
+        let divisor = operand(right, left)?;
         return Ok(function_call("MOD", vec![dividend, divisor]));
     }
     let unsigned = |expr: &Expr| number_literal(expr).is_some_and(exceeds_signed_bigint);
