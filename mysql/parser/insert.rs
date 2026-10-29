@@ -1,10 +1,10 @@
-use crate::expr::translate_expr;
+use crate::expr::{translate_bytes, translate_expr};
 use crate::names::translate_identifier;
 use crate::query::{only_changes_the_plan, translate_subquery, TranslationContext};
 use crate::{ColumnFacts, Environment, MysqlParserError};
 use sqlparser::ast::{
     Assignment, AssignmentTarget, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Ident,
-    Insert, ObjectName, ObjectNamePart, OnInsert, Query, SetExpr, TableObject, Values,
+    Insert, ObjectName, ObjectNamePart, OnInsert, Query, SetExpr, TableObject, Value, Values,
 };
 use turso_parser::ast;
 
@@ -94,7 +94,10 @@ pub(crate) fn translate_insert(
                         }
                     }
                 }
-                _ => (columns, translate_source(source, &mut context)?),
+                _ => {
+                    let select = translate_source(source, &columns, &mut defaults, &mut context)?;
+                    (columns, select)
+                }
             }
         }
         (None, assignments) if !assignments.is_empty() && insert.columns.is_empty() => {
@@ -174,15 +177,21 @@ fn is_plain_insert(insert: &Insert) -> bool {
         && insert.multi_table_else_clause.is_none()
 }
 
+/// Lowers the rows or query an `INSERT` writes to `columns` (the table's
+/// columns, in order, when empty).
 fn translate_source(
     source: &Query,
+    columns: &[ast::Name],
+    defaults: &mut Defaults,
     context: &mut TranslationContext,
 ) -> Result<ast::Select, MysqlParserError> {
     let SetExpr::Values(values) = source.body.as_ref() else {
         return translate_subquery(source, context);
     };
     check_values_source(source)?;
-    Ok(values_select(translate_rows(values, context)?))
+    Ok(values_select(translate_rows(
+        values, columns, defaults, context,
+    )?))
 }
 
 fn check_values_source(source: &Query) -> Result<(), MysqlParserError> {
@@ -241,6 +250,33 @@ impl<'a> Defaults<'a> {
             self.columns = Some(columns);
         }
         Ok(self.columns.as_deref().unwrap_or_default())
+    }
+
+    /// Lowers `value` written to the column `name`: a binary literal written
+    /// to a binary column is its bytes, whether or not they are text.
+    pub(crate) fn column_value(
+        &mut self,
+        name: &str,
+        value: &Expr,
+        context: &mut TranslationContext,
+    ) -> Result<ast::Expr, MysqlParserError> {
+        if is_binary_literal(value) && self.column(name)?.binary {
+            translate_bytes(value, context)
+        } else {
+            translate_expr(value, context)
+        }
+    }
+
+    /// The name of the table's column at `index`.
+    fn column_name_at(&mut self, index: usize) -> Result<String, MysqlParserError> {
+        self.columns()?
+            .get(index)
+            .map(|column| column.name.clone())
+            .ok_or_else(|| {
+                MysqlParserError::Rejected(
+                    "Column count doesn't match value count at row 1".to_string(),
+                )
+            })
     }
 
     fn column(&mut self, name: &str) -> Result<&ColumnFacts, MysqlParserError> {
@@ -341,7 +377,7 @@ fn translate_default_rows(
                 (Some(DefaultValue::Value(default)), value) if is_default_keyword(value) => {
                     default.clone()
                 }
-                (_, value) => translate_expr(value, context)?,
+                (_, value) => defaults.column_value(target.as_str(), value, context)?,
             }));
         }
     }
@@ -405,7 +441,11 @@ fn translate_set_row(
                 assignment.value
             )));
         }
-        row.push(Box::new(translate_expr(&assignment.value, context)?));
+        row.push(Box::new(defaults.column_value(
+            &column.value,
+            &assignment.value,
+            context,
+        )?));
         columns.push(column);
     }
     if columns.is_empty() {
@@ -422,6 +462,8 @@ fn translate_set_row(
 
 fn translate_rows(
     values: &Values,
+    columns: &[ast::Name],
+    defaults: &mut Defaults,
     context: &mut TranslationContext,
 ) -> Result<ast::OneSelect, MysqlParserError> {
     let Some(first) = values.rows.first() else {
@@ -435,7 +477,26 @@ fn translate_rows(
         .iter()
         .map(|row| {
             row.iter()
-                .map(|value| translate_expr(value, context).map(Box::new))
+                .enumerate()
+                .map(|(index, value)| {
+                    if !is_binary_literal(value) {
+                        return translate_expr(value, context).map(Box::new);
+                    }
+                    let column = if columns.is_empty() {
+                        defaults.column_name_at(index)?
+                    } else {
+                        columns
+                            .get(index)
+                            .ok_or_else(|| {
+                                MysqlParserError::Rejected(
+                                    "Column count doesn't match value count at row 1".to_string(),
+                                )
+                            })?
+                            .as_str()
+                            .to_string()
+                    };
+                    defaults.column_value(&column, value, context).map(Box::new)
+                })
                 .collect::<Result<Vec<_>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -483,7 +544,7 @@ fn translate_assignments(
             continue;
         }
         context.inserted_row_is_readable = true;
-        let value = translate_expr(&assignment.value, context);
+        let value = defaults.column_value(&column.value, &assignment.value, context);
         context.inserted_row_is_readable = false;
         sets.push(ast::Set {
             col_names: vec![translate_identifier(column)?],
@@ -586,4 +647,16 @@ fn identifiers(name: &ObjectName) -> Result<Vec<&Ident>, MysqlParserError> {
 
 fn unsupported(what: String) -> MysqlParserError {
     MysqlParserError::Unsupported(format!("{what} is not lowered yet"))
+}
+
+/// A hexadecimal, bit or `_binary` literal.
+fn is_binary_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_)
+        ),
+        Expr::Prefixed { prefix, .. } => prefix.value.eq_ignore_ascii_case("_binary"),
+        _ => false,
+    }
 }

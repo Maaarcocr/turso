@@ -275,6 +275,16 @@ impl turso_mysql_parser::Environment for Session<'_> {
                         generated: column.is_generated(),
                         default: column.default.as_deref().cloned(),
                         not_null: column.notnull() || column.primary_key(),
+                        binary: [
+                            "BINARY",
+                            "VARBINARY",
+                            "TINYBLOB",
+                            "BLOB",
+                            "MEDIUMBLOB",
+                            "LONGBLOB",
+                        ]
+                        .iter()
+                        .any(|binary| column.ty_str.eq_ignore_ascii_case(binary)),
                     })
                     .collect()
             })

@@ -138,6 +138,9 @@ pub struct ColumnFacts {
     pub default: Option<ast::Expr>,
     /// The column is `NOT NULL` (or in the primary key).
     pub not_null: bool,
+    /// The column holds binary strings (`BINARY`, `VARBINARY` or a `BLOB`
+    /// type).
+    pub binary: bool,
 }
 
 /// A session outside any transaction on an empty database.
