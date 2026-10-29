@@ -599,6 +599,10 @@ fn reports_decimal_casts_that_mysql_rejects() {
             name: "time with more than six fractional digits",
             sql: "SELECT CONVERT(1, TIME(7))",
         },
+        SqlCase {
+            name: "binary string that is not UTF-8 next to a JSON value",
+            sql: "SELECT CONCAT(CAST(1 AS JSON), 0xFF)",
+        },
     ];
 
     for case in cases {
@@ -949,6 +953,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT (__mysql_json_compare (__mysql_cast_as_json ('18446744073709551615'), 1) = 0), CAST (7 / __mysql_json_decimal (__mysql_cast_as_json (1.5)) AS INTEGER), CONCAT_WS (__mysql_cast_as_json (0), 'a', x'62'), __mysql_cast_as_signed (__mysql_json_integer (__mysql_cast_as_json (NULL - 1)))",
         ),
         (
+            "SELECT CONCAT_WS(0xAACC, 'a', 'b'), 'a' < 0xFF, X'00' <=> _binary 'x', CAST(0xFF AS CHAR), CAST(0xFF AS DATE), FROM_UNIXTIME(0xFF)",
+            "SELECT CONCAT_WS (x'AACC', 'a', 'b'), x'61'< x'FF', x'00'IS x'78', NULL, __mysql_cast_as_date (x'FF'), FROM_UNIXTIME (x'FF')",
+        ),
+        (
+            "SELECT 0x0 <= CAST('{}' AS JSON), CAST(0 AS JSON) LIKE 0x0",
+            "SELECT (__mysql_json_compare (x'00', __mysql_cast_as_json ('{}')) <= 0), __mysql_like_bin (__mysql_cast_as_json (0), x'00', '\\')",
+        ),
+        (
             "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
             "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\'), CONCAT (__mysql_cast_as_json ('\"12:34:56.000000\"')), MD5 (__mysql_cast_as_json ('\"2000-01-01\"'))",
         ),
@@ -1203,14 +1215,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "uneven values rows",
             sql: "VALUES ROW(1), ROW(1, 2)",
-        },
-        SqlCase {
-            name: "bytes that are not utf-8 joined with json",
-            sql: "SELECT CONCAT(JSON_ARRAY(), 0xAACC)",
-        },
-        SqlCase {
-            name: "bytes that are not utf-8 compared with text",
-            sql: "SELECT 0xAACC = 'a'",
         },
         SqlCase {
             name: "a negated hex literal whose decimals show",

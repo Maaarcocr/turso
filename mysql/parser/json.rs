@@ -302,6 +302,9 @@ fn compared_operand(
             "comparison of `{expr}` with the JSON value `{other_side}` is not lowered yet"
         )));
     }
+    if is_binary_literal(expr) {
+        return translate_bytes(expr, context);
+    }
     match temporal_operand(expr) {
         Some(temporal) => Ok(temporal),
         None => translate_json_value(expr, context),
@@ -560,6 +563,9 @@ fn like_operand(
         return Err(MysqlParserError::Rejected(format!(
             "cannot convert the binary string `{expr}` of LIKE to utf8mb4"
         )));
+    }
+    if is_binary_literal(expr) {
+        return translate_bytes(expr, context);
     }
     if !is_json_value(expr) {
         return translate_in(expr, Context::Text, context);
