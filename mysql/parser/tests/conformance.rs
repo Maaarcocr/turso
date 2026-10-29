@@ -839,6 +839,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD ('1.5', - 100458), MOD (1.5e0, 20000101103458.5)",
         ),
         (
+            "SELECT 0xff REGEXP 1, TIME '10:04:58' REGEXP _binary 'a'",
+            "SELECT x'FF'REGEXP 1, x'31303A30343A3538'REGEXP x'61'",
+        ),
+        (
             "SELECT CAST(CAST(0.000 AS JSON) AS DATE)",
             "SELECT NULL",
         ),
@@ -1265,8 +1269,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 'a' REGEXP ''",
         },
         SqlCase {
-            name: "regular expression over bytes",
-            sql: "SELECT 'a' REGEXP _binary 'a'",
+            name: "regular expression over bytes and a column",
+            sql: "SELECT a REGEXP _binary 'a' FROM t",
         },
         SqlCase {
             name: "nested row value",

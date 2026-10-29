@@ -1858,14 +1858,17 @@ fn translate_regexp(
                 .to_string(),
         ));
     }
-    if is_binary_literal(expr) || is_binary_literal(pattern) {
-        return Err(MysqlParserError::Unsupported(
-            "a regular expression over a binary string, which MySQL rejects, is not lowered yet"
-                .to_string(),
-        ));
-    }
-    let lhs = translate_regexp_operand(expr, context)?;
-    let rhs = translate_regexp_operand(pattern, context)?;
+    let (lhs, rhs) = if is_binary_literal(expr) || is_binary_literal(pattern) {
+        (
+            binary_regexp_operand(expr, context)?,
+            binary_regexp_operand(pattern, context)?,
+        )
+    } else {
+        (
+            translate_regexp_operand(expr, context)?,
+            translate_regexp_operand(pattern, context)?,
+        )
+    };
     Ok(ast::Expr::like(
         lhs,
         negated,
@@ -1873,6 +1876,38 @@ fn translate_regexp(
         rhs,
         None,
     ))
+}
+
+/// An operand of a regular expression over a binary string, as the value
+/// MySQL matches: binary strings and temporal literals as bytes, numbers as
+/// numbers, which MySQL also matches byte by byte, strings as text, which
+/// MySQL rejects next to a binary string, and JSON values as their text.
+fn binary_regexp_operand(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(typed) = typed_string(expr) {
+        return translate_typed_string_as_bytes(typed);
+    }
+    if is_binary_literal(expr) {
+        return translate_bytes(expr, context);
+    }
+    if signed_number_literal(expr).is_some() || is_boolean(expr) || is_null_literal(expr) {
+        return translate_in(expr, Context::Number, context);
+    }
+    let is_string = match expr {
+        Expr::Prefixed { value, .. } => is_text_literal(value),
+        other => is_text_literal(other),
+    };
+    if is_string {
+        return translate_in(expr, Context::Text, context);
+    }
+    if is_json_cast(expr) {
+        return translate_in(expr, Context::Value, context);
+    }
+    Err(MysqlParserError::Unsupported(format!(
+        "`{expr}` in a regular expression over a binary string is not lowered yet"
+    )))
 }
 
 fn translate_regexp_operand(
