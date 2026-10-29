@@ -795,6 +795,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT '2020-01-01' = '2020-01-01'",
         ),
         (
+            "SELECT TIME '-10:04:58.5' | 1, TIME '00:59:59.5' & 1, TIMESTAMP '2000-01-01 10:34:58.4' ^ 0",
+            "SELECT __mysql_unsigned_shown (__mysql_bit_or (__mysql_bit_operand (- 100459), 1)), __mysql_unsigned_shown (__mysql_bit_and (__mysql_bit_operand (10000), 1)), __mysql_unsigned_shown (__mysql_bit_xor (__mysql_bit_operand (20000101103458), 0))",
+        ),
+        (
             "SELECT TIME '10:04:58' | 1, ~DATE '2000-01-01'",
             "SELECT __mysql_unsigned_shown (__mysql_bit_or (__mysql_bit_operand (100458), 1)), __mysql_unsigned_shown (__mysql_bit_not (__mysql_bit_operand (20000101)))",
         ),
@@ -1061,12 +1065,12 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 0x41 + a",
         },
         SqlCase {
-            name: "bit operation on a negative temporal literal",
-            sql: "SELECT TIME '-10:00:00' | 0",
+            name: "bit operation on a TIME literal rounded past its range",
+            sql: "SELECT TIME '838:59:59.5' | 0",
         },
         SqlCase {
-            name: "bit operation on a temporal literal with a fraction",
-            sql: "SELECT TIME '10:00:00.5' & 1",
+            name: "bit operation on a TIMESTAMP literal rounded into the next day",
+            sql: "SELECT TIMESTAMP '2000-01-01 23:59:59.5' & 1",
         },
         SqlCase {
             name: "LIKE under a case-sensitive collation",
