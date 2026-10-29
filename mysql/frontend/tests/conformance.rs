@@ -1080,6 +1080,58 @@ fn user_variables_keep_their_values_for_the_session() -> turso_core::Result<()> 
 }
 
 #[test]
+fn prepared_statements_run_with_user_variables() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (i INT, j VARCHAR(10))")?;
+    connection.execute("SET @a = 1, @b = 'x', @n = 1, @q = 'SELECT COUNT(*) FROM t'")?;
+    connection.execute("PREPARE ins FROM 'INSERT INTO t VALUES (?, ?)'")?;
+    connection.execute("EXECUTE ins USING @a, @b")?;
+    connection.execute("EXECUTE INS USING @n, @nope")?;
+    assert_eq!(
+        query(&connection, "SELECT i, j FROM t ORDER BY j")?,
+        vec![
+            vec![Value::from_i64(1), Value::Null],
+            vec![Value::from_i64(1), Value::build_text("x")],
+        ]
+    );
+    connection.execute("PREPARE s FROM @q")?;
+    let mut execute = connection.prepare("EXECUTE s")?;
+    assert_eq!(execute.run_collect_rows()?, vec![vec![Value::from_i64(2)]]);
+    connection.execute("PREPARE s FROM 'SELECT j FROM t ORDER BY j LIMIT ?'")?;
+    connection.execute("PREPARE s FROM 'SELECT j FROM t ORDER BY j DESC LIMIT 1'")?;
+    execute.reset()?;
+    assert_eq!(
+        execute.run_collect_rows()?,
+        vec![vec![Value::build_text("x")]]
+    );
+    connection.execute("DEALLOCATE PREPARE s")?;
+    for (failing, error) in [
+        ("EXECUTE s", "ERROR 1243"),
+        ("DROP PREPARE s", "ERROR 1243"),
+        ("EXECUTE ins USING @a", "ERROR 1210"),
+        ("PREPARE s FROM 'SELECT k FROM t'", "no such column"),
+        ("PREPARE s FROM 'SELECT * FROM nope'", "no such table"),
+        (
+            "PREPARE s FROM 'SELECT 1; SELECT 2'",
+            "expected one MySQL statement",
+        ),
+        ("PREPARE s FROM 'EXECUTE ins'", "ERROR 1295"),
+        ("PREPARE s FROM @nope", "ERROR 1064"),
+    ] {
+        let message = connection.execute(failing).expect_err(failing).to_string();
+        assert!(message.contains(error), "{failing}: {message}");
+    }
+    connection.execute("SET @n = '1'")?;
+    connection.execute("PREPARE s FROM 'SELECT j FROM t LIMIT ?'")?;
+    let message = connection
+        .execute("EXECUTE s USING @n")
+        .expect_err("a string LIMIT")
+        .to_string();
+    assert!(message.contains("not supported yet"), "{message}");
+    Ok(())
+}
+
+#[test]
 fn json_columns_store_mysql_documents() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (id INT PRIMARY KEY, j JSON, s TEXT)")?;

@@ -2124,20 +2124,20 @@ fn translate_limit(
             offset,
             limit_by,
         } if limit_by.is_empty() => {
-            let expr = Box::new(translate_expr(count, context)?);
+            let expr = Box::new(limit_value(count, context)?);
             let offset = match offset {
                 None => None,
                 Some(Offset {
                     value,
                     rows: OffsetRows::None,
-                }) => Some(Box::new(translate_expr(value, context)?)),
+                }) => Some(Box::new(limit_value(value, context)?)),
                 Some(other) => return Err(unsupported(format!("OFFSET `{other}`"))),
             };
             Ok(ast::Limit { expr, offset })
         }
         LimitClause::OffsetCommaLimit { offset, limit } => {
-            let offset = Box::new(translate_expr(offset, context)?);
-            let expr = Box::new(translate_expr(limit, context)?);
+            let offset = Box::new(limit_value(offset, context)?);
+            let expr = Box::new(limit_value(limit, context)?);
             Ok(ast::Limit {
                 expr,
                 offset: Some(offset),
@@ -2145,6 +2145,24 @@ fn translate_limit(
         }
         other => Err(unsupported(format!("LIMIT `{other}`"))),
     }
+}
+
+/// A `LIMIT` or `OFFSET` value. A user variable, the parameter of an
+/// `EXECUTE`, is checked at run time to be a count, which is all this lowers.
+fn limit_value(
+    value: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let lowered = translate_expr(value, context)?;
+    Ok(match value {
+        Expr::Identifier(word)
+            if word.quote_style.is_none()
+                && crate::session::user_variable_name(&word.value).is_some() =>
+        {
+            crate::expr::function_call("__mysql_limit_parameter", vec![lowered])
+        }
+        _ => lowered,
+    })
 }
 
 fn unsupported(what: String) -> MysqlParserError {

@@ -1,7 +1,7 @@
 use crate::types::unsupported_value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, Weak};
 use turso_core::dialect::ArgumentType;
 use turso_core::types::TextSubtype;
 use turso_core::{Connection, Func, LimboError, Numeric, Result, Value};
@@ -11,7 +11,9 @@ use turso_core::{Connection, Func, LimboError, Numeric, Result, Value};
 /// user-level locks it holds are released when it closes.
 pub(crate) struct Session {
     id: u64,
+    connection: OnceLock<Weak<Connection>>,
     user_variables: Mutex<HashMap<String, UserVariable>>,
+    prepared_statements: Mutex<HashMap<String, String>>,
     transaction_isolation: Mutex<&'static str>,
 }
 
@@ -20,7 +22,9 @@ impl Default for Session {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         Self {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            connection: OnceLock::new(),
             user_variables: Mutex::default(),
+            prepared_statements: Mutex::default(),
             transaction_isolation: Mutex::new("REPEATABLE-READ"),
         }
     }
@@ -66,6 +70,9 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         "RELEASE_LOCK" | "IS_FREE_LOCK" | "IS_USED_LOCK" => arg_count == 1,
         "RELEASE_ALL_LOCKS" | "CONNECTION_ID" | TRANSACTION_ISOLATION => arg_count == 0,
         SET_TRANSACTION_ISOLATION => arg_count == 1,
+        PREPARE => arg_count == 2,
+        LIMIT_PARAMETER => arg_count == 1,
+        DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
     accepted.then_some(Func::Dialect(name))
@@ -121,6 +128,16 @@ pub(crate) fn execute(
         }),
         SET_TRANSACTION_ISOLATION => {
             session(connection).and_then(|session| session.set_transaction_isolation(args))
+        }
+        PREPARE => session(connection).and_then(|session| session.prepare(connection, args)),
+        LIMIT_PARAMETER => match &args[0] {
+            Value::Numeric(Numeric::Integer(count)) if *count >= 0 => Ok(args[0].clone()),
+            other => Err(unsupported_value(format!(
+                "`{other}` as a LIMIT or OFFSET parameter, which is not a count,"
+            ))),
+        },
+        DEALLOCATE_PREPARE => {
+            session(connection).and_then(|session| session.deallocate_prepare(connection, args))
         }
         _ => return None,
     };
@@ -184,6 +201,20 @@ const USER_VARIABLE: &str = "__MYSQL_USER_VARIABLE";
 const USER_VARIABLE_VALUE: &str = "__MYSQL_USER_VARIABLE_VALUE";
 
 const SET_USER_VARIABLES: &str = "__MYSQL_SET_USER_VARIABLES";
+
+/// `__mysql_prepare(name, text)`, from `PREPARE name FROM text`: drops the
+/// session's statement `name`, checks `text` as MySQL prepares it and keeps
+/// it as `name`; `__mysql_deallocate_prepare(name)` drops it. Both make the
+/// connection prepare again the statements it prepared, whose `EXECUTE` may
+/// have read the dropped text.
+const PREPARE: &str = "__MYSQL_PREPARE";
+
+const DEALLOCATE_PREPARE: &str = "__MYSQL_DEALLOCATE_PREPARE";
+
+/// `__mysql_limit_parameter(value)`: a user variable as the `LIMIT` or
+/// `OFFSET` of an `EXECUTE`d statement, which must hold a count; other
+/// values are refused.
+const LIMIT_PARAMETER: &str = "__MYSQL_LIMIT_PARAMETER";
 
 /// The key of a user-level lock: MySQL compares lock names without case and
 /// rejects a `NULL`, empty or longer than 64 characters name (3057). A
@@ -289,6 +320,84 @@ impl Session {
             !own
         });
         Value::from_i64(i64::try_from(released).expect("lock counts fit a BIGINT"))
+    }
+
+    /// Keeps `connection`, whose context this session is, to compile the
+    /// statements it prepares.
+    pub(crate) fn attach(&self, connection: &Arc<Connection>) {
+        let attached = self.connection.set(Arc::downgrade(connection));
+        assert!(attached.is_ok(), "a session belongs to one connection");
+    }
+
+    pub(crate) fn prepared_statement(&self, name: &str) -> Option<String> {
+        self.prepared_statements
+            .lock()
+            .expect("the prepared statements are not poisoned")
+            .get(name)
+            .cloned()
+    }
+
+    fn prepare(&self, connection: &Connection, args: &[Value]) -> Result<Value> {
+        let [Value::Text(name), text] = args else {
+            return Err(LimboError::InternalError(
+                "a statement is prepared by its name".to_string(),
+            ));
+        };
+        let name = name.as_str().to_string();
+        self.prepared_statements
+            .lock()
+            .expect("the prepared statements are not poisoned")
+            .remove(&name);
+        connection.invalidate_prepared_statements();
+        let text = match text {
+            Value::Text(text) => text.as_str().to_string(),
+            Value::Null => {
+                return Err(LimboError::SqlError(
+                    "ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NULL' at line 1".to_string(),
+                ))
+            }
+            other => {
+                return Err(unsupported_value(format!(
+                    "PREPARE from `{other}`, which is not a string,"
+                )))
+            }
+        };
+        let lowered = turso_mysql_parser::lower_prepared(&text, &crate::Session(connection))
+            .map_err(|error| LimboError::ParseError(error.to_string()))?;
+        let connection = self
+            .connection
+            .get()
+            .and_then(Weak::upgrade)
+            .ok_or_else(|| {
+                LimboError::InternalError("a session prepares on its connection".to_string())
+            })?;
+        drop(connection.prepare_translated_stmt(lowered, &text)?);
+        self.prepared_statements
+            .lock()
+            .expect("the prepared statements are not poisoned")
+            .insert(name, text);
+        Ok(Value::from_i64(0))
+    }
+
+    fn deallocate_prepare(&self, connection: &Connection, args: &[Value]) -> Result<Value> {
+        let [Value::Text(name)] = args else {
+            return Err(LimboError::InternalError(
+                "a prepared statement is dropped by its name".to_string(),
+            ));
+        };
+        let dropped = self
+            .prepared_statements
+            .lock()
+            .expect("the prepared statements are not poisoned")
+            .remove(name.as_str());
+        connection.invalidate_prepared_statements();
+        match dropped {
+            Some(_) => Ok(Value::from_i64(0)),
+            None => Err(LimboError::SqlError(format!(
+                "ERROR 1243 (HY000): Unknown prepared statement handler ({}) given to DEALLOCATE PREPARE",
+                name.as_str()
+            ))),
+        }
     }
 
     fn set_transaction_isolation(&self, args: &[Value]) -> Result<Value> {

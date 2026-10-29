@@ -876,6 +876,13 @@ impl Connection {
             .fetch_add(1, Ordering::Release);
     }
 
+    /// Makes every statement prepared on this connection prepare again before
+    /// it next runs, for a dialect whose lowering reads session state that
+    /// just changed.
+    pub fn invalidate_prepared_statements(&self) {
+        self.bump_prepare_context_generation();
+    }
+
     #[inline]
     pub(crate) fn prepare_context_generation(&self) -> u64 {
         self.prepare_context_generation.load(Ordering::Acquire)
