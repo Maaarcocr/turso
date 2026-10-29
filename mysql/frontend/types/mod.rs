@@ -98,6 +98,11 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_DOUBLE", 4) => float::assign_double,
         ("__MYSQL_ASSIGN_BIT", 2) => bit::assign_bit,
         ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,
+        ("__MYSQL_ASSIGN_ENUM", 3) => labels::assign_enum,
+        ("__MYSQL_LABELS_NUMBER_UNSUPPORTED", 1 | 2) => labels::number_unsupported,
+        ("__MYSQL_LABELS_LESS", 2) => labels::less,
+        ("__MYSQL_LABELS_EQUAL", 2) => labels::equal,
+        ("__MYSQL_ASSIGN_SET", 3) => labels::assign_set,
         _ => return decimal::function(name, arg_count),
     };
     Some(conversion)

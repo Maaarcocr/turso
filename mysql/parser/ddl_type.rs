@@ -12,7 +12,7 @@ pub(crate) const MAX_DECIMAL_PRECISION: u64 = 65;
 pub(crate) const MAX_DECIMAL_SCALE: u64 = 30;
 const MAX_FLOAT_DIGITS: u64 = 255;
 const MAX_FRACTIONAL_SECONDS: u64 = 6;
-const MAX_SET_MEMBERS: usize = 6;
+const MAX_SET_MEMBERS: usize = 64;
 const MAX_KEY_BYTES: u64 = 3072;
 const BYTES_PER_CHARACTER: u64 = 4;
 const TINY_LENGTH: u64 = 255;
@@ -217,8 +217,7 @@ impl ColumnType {
         let id = || ast::Expr::Id(column.clone());
         match &self.family {
             Family::Json => Some(call("json_valid", vec![id()])),
-            Family::Enum(members) => Some(one_of(id(), members.iter().cloned())),
-            Family::Set(members) => Some(one_of(id(), set_values(members))),
+            Family::Enum(_) | Family::Set(_) => None,
             Family::Integer { .. }
             | Family::Bit { .. }
             | Family::Decimal { .. }
@@ -292,18 +291,6 @@ pub(crate) fn ensure_key_length(total_bytes: u64) -> Result<(), MysqlParserError
         return Err(key_too_long());
     }
     Ok(())
-}
-
-pub(crate) fn set_values(members: &[String]) -> impl Iterator<Item = String> + '_ {
-    (0_u32..1 << members.len()).map(move |mask| {
-        members
-            .iter()
-            .enumerate()
-            .filter(|(position, _)| mask & (1 << position) != 0)
-            .map(|(_, member)| member.as_str())
-            .collect::<Vec<_>>()
-            .join(",")
-    })
 }
 
 fn integer(name: &str, width: Option<u64>, min: i128, max: i128) -> ColumnType {
@@ -606,7 +593,7 @@ fn enumeration(members: &[EnumMember]) -> Result<ColumnType, MysqlParserError> {
         .collect::<Result<Vec<_>, _>>()?;
     ensure_distinct_members(&members)?;
     Ok(ColumnType {
-        declared: simple_type("ENUM"),
+        declared: labeled_type("ENUM", &members),
         family: Family::Enum(members),
     })
 }
@@ -619,9 +606,40 @@ fn set(members: &[String]) -> Result<ColumnType, MysqlParserError> {
     }
     ensure_distinct_members(members)?;
     Ok(ColumnType {
-        declared: simple_type("\"SET\""),
+        declared: labeled_type("\"SET\"", members),
         family: Family::Set(members.to_vec()),
     })
+}
+
+impl ColumnType {
+    /// Marks an `ENUM` or `SET` type to match names with their letter case,
+    /// as under a case-sensitive collation.
+    pub(crate) fn match_labels_exactly(&mut self) {
+        let Some(ast::TypeSize::MaxSize(labels)) = self.declared.size.take() else {
+            unreachable!("an ENUM or SET type has its labels as its one parameter");
+        };
+        self.declared.size = Some(ast::TypeSize::TypeSize(
+            labels,
+            Box::new(ast::Expr::Literal(ast::Literal::Numeric("1".to_string()))),
+        ));
+    }
+}
+
+/// An `ENUM` or `SET` type with its members, quoted and joined with commas,
+/// as its parameter.
+fn labeled_type(name: &str, members: &[String]) -> ast::Type {
+    let labels = members
+        .iter()
+        .map(|member| quote_string(member))
+        .collect::<Vec<_>>()
+        .join(",");
+    ast::Type {
+        name: name.to_string(),
+        size: Some(ast::TypeSize::MaxSize(Box::new(ast::Expr::Literal(
+            ast::Literal::String(quote_string(&labels)),
+        )))),
+        array_dimensions: 0,
+    }
 }
 
 fn ensure_distinct_members(members: &[String]) -> Result<(), MysqlParserError> {
@@ -641,20 +659,6 @@ fn ensure_distinct_members(members: &[String]) -> Result<(), MysqlParserError> {
         }
     }
     Ok(())
-}
-
-fn one_of(column: ast::Expr, values: impl Iterator<Item = String>) -> ast::Expr {
-    ast::Expr::InList {
-        lhs: Box::new(column),
-        not: false,
-        rhs: values
-            .map(|value| {
-                Box::new(ast::Expr::Literal(ast::Literal::String(quote_string(
-                    &value,
-                ))))
-            })
-            .collect(),
-    }
 }
 
 fn call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {

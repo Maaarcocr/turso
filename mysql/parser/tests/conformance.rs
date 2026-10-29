@@ -208,7 +208,11 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
-            "CREATE TABLE t (e ENUM NOT NULL DEFAULT 'x' CHECK (e IN ('x', 'y')), s \"SET\" DEFAULT 'r,w' CHECK (s IN ('', 'r', 'w', 'r,w')), j LONGTEXT CHECK (json_valid (j)), t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
+            "CREATE TABLE t (e ENUM ('''x'',''y''') NOT NULL DEFAULT 'x', s \"SET\" ('''r'',''w''') DEFAULT 'r,w', j LONGTEXT CHECK (json_valid (j)), t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
+        ),
+        (
+            "CREATE TABLE t (e ENUM('a,b','c''d') COLLATE utf8mb4_0900_bin, s SET('x') COLLATE utf8mb4_0900_as_ci)",
+            "CREATE TABLE t (e ENUM ('''a,b'',''c''''d''', 1), s \"SET\" ('''x''')) STRICT",
         ),
         (
             "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
@@ -343,8 +347,8 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(location POINT SRID 4326)",
         },
         SqlCase {
-            name: "set with too many members to enumerate",
-            sql: "CREATE TABLE users(flags SET('a','b','c','d','e','f','g'))",
+            name: "set with more than 64 members",
+            sql: "CREATE TABLE users(flags SET('m0','m1','m2','m3','m4','m5','m6','m7','m8','m9','m10','m11','m12','m13','m14','m15','m16','m17','m18','m19','m20','m21','m22','m23','m24','m25','m26','m27','m28','m29','m30','m31','m32','m33','m34','m35','m36','m37','m38','m39','m40','m41','m42','m43','m44','m45','m46','m47','m48','m49','m50','m51','m52','m53','m54','m55','m56','m57','m58','m59','m60','m61','m62','m63','m64'))",
         },
         SqlCase {
             name: "other character set",

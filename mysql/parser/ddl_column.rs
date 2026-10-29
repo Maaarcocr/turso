@@ -92,7 +92,7 @@ impl Column {
     ) -> Result<ast::ColumnDefinition, MysqlParserError> {
         let Column {
             name,
-            column_type,
+            mut column_type,
             not_null,
             explicit_null: _,
             auto_increment,
@@ -145,21 +145,28 @@ impl Column {
                 default,
             ))));
         }
-        if matches!(
-            column_type.family,
-            Family::Char { .. } | Family::Varchar { .. } | Family::Text
-        ) {
-            let collation = match (&collation, charset) {
-                (Some(collation), _) => collation.as_str(),
-                (None, true) => DEFAULT_COLLATION,
-                (None, false) => table_collation,
-            };
-            let sequence = collation_sequence(collation).ok_or_else(|| {
+        let collation = match (&collation, charset) {
+            (Some(collation), _) => collation.as_str(),
+            (None, true) => DEFAULT_COLLATION,
+            (None, false) => table_collation,
+        };
+        let sequence = || {
+            collation_sequence(collation).ok_or_else(|| {
                 MysqlParserError::Unsupported(format!("collation `{collation}` is not available"))
-            })?;
-            constraints.push(constraint(ast::ColumnConstraint::Collate {
-                collation_name: ast::Name::exact(sequence.to_string()),
-            }));
+            })
+        };
+        match column_type.family {
+            Family::Char { .. } | Family::Varchar { .. } | Family::Text => {
+                constraints.push(constraint(ast::ColumnConstraint::Collate {
+                    collation_name: ast::Name::exact(sequence()?.to_string()),
+                }));
+            }
+            Family::Enum(_) | Family::Set(_)
+                if !matches!(sequence()?, "und-u-ks-level1" | "und-u-ks-level2") =>
+            {
+                column_type.match_labels_exactly();
+            }
+            _ => {}
         }
         if let Some(value_check) = column_type.value_check(&name) {
             constraints.push(check(value_check));

@@ -318,6 +318,68 @@ fn storing_errors_map_to_mysql_error_codes() -> turso_core::Result<()> {
 }
 
 #[test]
+fn enum_and_set_columns_store_the_members_a_value_names_or_numbers() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id INT, e ENUM('b', 'a', 'c,d'), s SET('x', 'y', 'z'))")?;
+    connection.execute(
+        "INSERT INTO t VALUES (1, 'A ', 'z,X'), (2, 3, 6), (3, '2', '5'), (4, NULL, ''), (5, 'c,d', 'x,x')",
+    )?;
+    let text = |value: Option<&'static str>| value.map_or(Value::Null, Value::build_text);
+    assert_eq!(
+        query(&connection, "SELECT e, s FROM t ORDER BY id")?,
+        [
+            (Some("a"), Some("x,z")),
+            (Some("c,d"), Some("y,z")),
+            (Some("a"), Some("x,z")),
+            (None, Some("")),
+            (Some("c,d"), Some("x")),
+        ]
+        .into_iter()
+        .map(|(e, s)| vec![text(e), text(s)])
+        .collect::<Vec<_>>()
+    );
+    for rejected in [
+        "INSERT INTO t (e) VALUES ('q')",
+        "INSERT INTO t (e) VALUES (0)",
+        "INSERT INTO t (e) VALUES (4)",
+        "INSERT INTO t (s) VALUES ('x,q')",
+        "INSERT INTO t (s) VALUES (8)",
+        "UPDATE t SET e = 'zz'",
+    ] {
+        let error = connection.execute(rejected).expect_err(rejected);
+        assert_eq!(
+            turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
+            Some(1265),
+            "{rejected}"
+        );
+    }
+    connection.execute("CREATE TABLE b (s SET('x', 'y') COLLATE utf8mb4_0900_bin)")?;
+    connection.execute("INSERT INTO b VALUES ('y,x')")?;
+    connection
+        .execute("INSERT INTO b VALUES ('X')")
+        .expect_err("a case-sensitive collation matches names with their case");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT id FROM t WHERE e = 'a' OR e < 'b' ORDER BY id"
+        )?,
+        vec![vec![Value::from_i64(1)], vec![Value::from_i64(3)]]
+    );
+    for refused in [
+        "SELECT e + 0 FROM t",
+        "SELECT id FROM t WHERE e = 2",
+        "SELECT -s FROM t",
+    ] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(
+            error.to_string().contains("not supported yet"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn binary_strings_cannot_be_stored_in_number_columns_yet() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute(
