@@ -3752,6 +3752,12 @@ fn round_decimal_integer_arguments(upper_name: &str, args: &mut [ast::Expr]) {
         if digits.contains(['e', 'E']) {
             continue;
         }
+        if matches!(upper_name, "PERIOD_ADD" | "PERIOD_DIFF") {
+            if let Some(saturated) = saturated_decimal_integer(negative, &digits) {
+                *arg = saturated;
+                continue;
+            }
+        }
         let Some((whole, fraction)) = digits.split_once('.') else {
             continue;
         };
@@ -3766,6 +3772,38 @@ fn round_decimal_integer_arguments(upper_name: &str, args: &mut [ast::Expr]) {
             literal
         };
     }
+}
+
+/// The BIGINT a DECIMAL literal beyond the BIGINT range reads as, as MySQL's
+/// integer value of a DECIMAL saturates (`PERIOD_ADD(18446744073709551616, 1)`
+/// reads 9223372036854775807). Integer literals up to the BIGINT UNSIGNED
+/// limit are BIGINT UNSIGNED, not DECIMAL, and are left alone.
+fn saturated_decimal_integer(negative: bool, digits: &str) -> Option<ast::Expr> {
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    let whole = whole.trim_start_matches('0');
+    let rounds_up = fraction.starts_with(['5', '6', '7', '8', '9']);
+    let magnitude = if whole.is_empty() {
+        Some(0)
+    } else {
+        whole.parse::<u128>().ok()
+    }
+    .map(|whole| whole + u128::from(rounds_up));
+    let limit = if negative {
+        i64::MIN.unsigned_abs()
+    } else {
+        i64::MAX.unsigned_abs()
+    };
+    let decimal = !fraction.is_empty()
+        || exceeds_unsigned_bigint(whole)
+        || (negative && magnitude.is_none_or(|magnitude| magnitude > u128::from(limit)));
+    if !decimal || magnitude.is_some_and(|magnitude| magnitude <= u128::from(limit)) {
+        return None;
+    }
+    Some(if negative {
+        smallest_bigint()
+    } else {
+        ast::Expr::Literal(ast::Literal::Numeric(i64::MAX.to_string()))
+    })
 }
 
 /// `REPLACE`, `LPAD`, `RPAD` and string-comparing `FIELD` of a `_latin1` hex

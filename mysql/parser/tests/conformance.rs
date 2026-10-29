@@ -855,6 +855,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_like_bin ('abc', 'A%', '\\'), NOT __mysql_like_bin (1.5, '1._', '\\')",
         ),
         (
+            "SELECT PERIOD_ADD(18446744073709551616, 1), PERIOD_DIFF(1, -9223372036854775809), PERIOD_ADD(9223372036854775808, 1)",
+            "SELECT PERIOD_ADD (9223372036854775807, 1), PERIOD_DIFF (1, (-9223372036854775807 - 1)), PERIOD_ADD (9223372036854775808, 1)",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),

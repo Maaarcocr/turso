@@ -473,7 +473,11 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
   which is passed as its text. A DECIMAL literal where `MAKEDATE`,
   `MAKETIME` (hours, minutes), `PERIOD_ADD`, `PERIOD_DIFF` or `FROM_DAYS`
   read an integer is rounded half away from zero while lowering, as MySQL
-  rounds a DECIMAL. `TIME(DATE '..')` is `'00:00:00'`. Other decimal
+  rounds a DECIMAL; for `PERIOD_ADD` and `PERIOD_DIFF` one beyond the BIGINT
+  range (a number literal with decimals, above 18446744073709551615 or below
+  -9223372036854775808) is the BIGINT limit it saturates to
+  (`PERIOD_ADD(18446744073709551616, 1)` reads 9223372036854775807).
+  `TIME(DATE '..')` is `'00:00:00'`. Other decimal
   arguments still lose digits (`MICROSECOND(20000101103458.1234)` gives
   `125000`).
 - A `BLOB` argument is read as MySQL reads a hexadecimal literal: as a
