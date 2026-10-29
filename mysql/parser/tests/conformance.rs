@@ -219,6 +219,10 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
             "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP) STRICT",
         ),
         (
+            "CREATE TABLE t (a DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), b TIMESTAMP(3) DEFAULT NOW(3), c DATETIME DEFAULT CURRENT_TIMESTAMP(0))",
+            "CREATE TABLE t (a DATETIME (6) NOT NULL DEFAULT (NOW (6)), b TIMESTAMP (3) DEFAULT (NOW (3)), c DATETIME DEFAULT CURRENT_TIMESTAMP) STRICT",
+        ),
+        (
             "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
             "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE) STRICT",
         ),
@@ -371,10 +375,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(id INT INVISIBLE)",
         },
         SqlCase {
-            name: "current timestamp with fractional seconds",
-            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6))",
-        },
-        SqlCase {
             name: "datetime default that needs rounding",
             sql: "CREATE TABLE users(seen DATETIME DEFAULT '2020-01-01 00:00:00.5')",
         },
@@ -467,6 +467,14 @@ fn reports_ddl_that_mysql_rejects() {
         SqlCase {
             name: "current timestamp on an integer",
             sql: "CREATE TABLE users(created INT DEFAULT CURRENT_TIMESTAMP)",
+        },
+        SqlCase {
+            name: "current timestamp with other fractional digits than the column",
+            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(3))",
+        },
+        SqlCase {
+            name: "current timestamp beyond microseconds",
+            sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(7))",
         },
         SqlCase {
             name: "non-numeric integer default",

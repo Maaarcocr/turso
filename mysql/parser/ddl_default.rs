@@ -17,15 +17,36 @@ pub(crate) fn resolve_default(
         DefaultValue::Null if nullable => Ok(ast::Expr::Literal(ast::Literal::Null)),
         DefaultValue::Null => Err(rejected()),
         DefaultValue::Expression(expr) => Ok(expr),
-        DefaultValue::CurrentTimestamp => match column_type.family {
-            Family::Datetime { precision: 0 } | Family::Timestamp { precision: 0 } => {
-                Ok(ast::Expr::Literal(ast::Literal::CurrentTimestamp))
+        DefaultValue::CurrentTimestamp(asked) => match column_type.family {
+            Family::Datetime { precision } | Family::Timestamp { precision }
+                if precision == asked =>
+            {
+                Ok(current_timestamp(precision))
             }
             _ => Err(rejected()),
         },
         DefaultValue::Number(text) => number_default(&column_type.family, &text),
         DefaultValue::Text(text) => text_default(&column_type.family, &text),
     }
+}
+
+/// The current time with `precision` fractional digits, as MySQL stores it
+/// in a `DATETIME(precision)` or `TIMESTAMP(precision)` column.
+fn current_timestamp(precision: u64) -> ast::Expr {
+    if precision == 0 {
+        return ast::Expr::Literal(ast::Literal::CurrentTimestamp);
+    }
+    ast::Expr::Parenthesized(vec![Box::new(ast::Expr::FunctionCall {
+        name: ast::Name::exact("NOW".to_string()),
+        distinctness: None,
+        args: vec![Box::new(number(i128::from(precision)))],
+        order_by: Vec::new(),
+        within_group: Vec::new(),
+        filter_over: ast::FunctionTail {
+            filter_clause: None,
+            over_clause: None,
+        },
+    })])
 }
 
 fn number_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserError> {
