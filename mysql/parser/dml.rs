@@ -328,7 +328,7 @@ fn translate_multi_table_delete(
     let target = JoinedTable::find(joined, qualifier, "DELETE")?;
     let mut context = TranslationContext::default();
     let from = translate_from(joined, &mut context)?
-        .ok_or_else(|| unsupported(format!("DELETE from `{target}`", target = qualifier)))?;
+        .ok_or_else(|| unsupported(format!("DELETE from `{qualifier}`")))?;
     let read_by_join = context.tables_read_count();
     let condition = translate_selection(selection, &mut context)?;
     target.ensure_not_read_since(&context, read_by_join, "DELETE")?;
@@ -561,7 +561,7 @@ fn tables_named<'a>(table: &'a TableWithJoins, qualifier: &Ident, found: &mut Ve
                         _ => None,
                     },
                 };
-                if named.is_some_and(|named| same_column(named, qualifier)) {
+                if named.is_some_and(|named| named.value == qualifier.value) {
                     found.push(name);
                 }
             }
@@ -608,8 +608,9 @@ fn may_aggregate(expr: &Expr) -> bool {
         | Expr::Subquery(_)
         | Expr::Exists { .. } => false,
         Expr::InSubquery { expr, .. } => may_aggregate(expr),
-        other => child_expressions(other)
-            .map_or(true, |children| children.into_iter().any(may_aggregate)),
+        other => {
+            child_expressions(other).is_none_or(|children| children.into_iter().any(may_aggregate))
+        }
     }
 }
 

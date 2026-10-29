@@ -1959,6 +1959,10 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
             sql: "DELETE users, other FROM users JOIN other ON users.id = other.id",
         },
         SqlCase {
+            name: "delete target spelled in another case than its table",
+            sql: "DELETE USERS FROM users JOIN other ON users.id = other.id",
+        },
+        SqlCase {
             name: "delete through the table name of an aliased table",
             sql: "DELETE users FROM users AS u JOIN other ON u.id = other.id",
         },
