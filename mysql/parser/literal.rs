@@ -702,7 +702,7 @@ pub(crate) enum TemporalKind {
 pub(crate) struct TemporalLiteral {
     pub(crate) kind: TemporalKind,
     pub(crate) text: String,
-    pub(crate) within_a_day: bool,
+    pub(crate) json_text: Option<String>,
 }
 
 pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
@@ -716,16 +716,36 @@ pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
         DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
         _ => None,
     }?;
-    let (kind, within_a_day) = match &temporal {
-        Temporal::Date(_) => (TemporalKind::Date, true),
-        Temporal::Time(time) => (TemporalKind::Time, !time.negative && time.hours < 24),
-        Temporal::Timestamp(..) => (TemporalKind::DateTime, true),
+    let (kind, json_text) = match &temporal {
+        Temporal::Date(date) => (TemporalKind::Date, Some(date_text(date))),
+        Temporal::Time(time) => (TemporalKind::Time, json_time_text(time)),
+        Temporal::Timestamp(date, time) => (
+            TemporalKind::DateTime,
+            json_time_text(time).map(|time| format!("{} {time}", date_text(date))),
+        ),
     };
     Some(TemporalLiteral {
         kind,
         text: temporal.text(),
-        within_a_day,
+        json_text,
     })
+}
+
+fn json_time_text(time: &Time) -> Option<String> {
+    let hours = time.hours % 32;
+    let fraction = format!("{:0<6}", time.fraction);
+    let is_zero = hours == 0
+        && time.minutes == 0
+        && time.seconds == 0
+        && fraction.bytes().all(|digit| digit == b'0');
+    if time.negative && is_zero {
+        return None;
+    }
+    let sign = if time.negative { "-" } else { "" };
+    Some(format!(
+        "{sign}{hours:02}:{:02}:{:02}.{fraction}",
+        time.minutes, time.seconds
+    ))
 }
 
 #[cfg(test)]

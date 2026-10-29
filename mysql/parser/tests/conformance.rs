@@ -937,6 +937,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_like_bin (x'61', 'A', '\\'), NOT __mysql_like_bin ('a', x'FF', '\\'), __mysql_like_bin (5, x'35', '\\')",
         ),
         (
+            "SELECT CAST(TIME '5 12:34:58' AS JSON), CONCAT(CAST(TIME '-32:34:58.5' AS JSON)), CAST(CAST(TIMESTAMP '2000-01-01 10:00:00' AS JSON) AS CHAR)",
+            "SELECT __mysql_cast_as_json ('\"04:34:58.000000\"'), CONCAT (__mysql_cast_as_json ('\"-00:34:58.500000\"')), CAST (__mysql_cast_as_json ('\"2000-01-01 10:00:00.000000\"') AS CHAR)",
+        ),
+        (
+            "SELECT MAKEDATE(CAST(DATE '2000-01-01' AS JSON), 2), WEEK(CAST(TIMESTAMP '2000-01-01 10:00:00' AS JSON), CAST(TIME '10:00:00' AS JSON)), HOUR(CAST(TIME '32:00:00' AS JSON)), DATE(CAST(TIME '10:00:00' AS JSON)), TIME(CAST(DATE '2000-01-01' AS JSON))",
+            "SELECT MAKEDATE (0e0, 2), WEEK (__mysql_cast_as_datetime ('2000-01-01 10:00:00.000000', 6), 0e0), HOUR (__mysql_cast_as_time ('00:00:00.000000', 6)), DATE (NULL), TIME (NULL)",
+        ),
+        (
             "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
             "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\'), CONCAT (__mysql_cast_as_json ('\"12:34:56.000000\"')), MD5 (__mysql_cast_as_json ('\"2000-01-01\"'))",
         ),
@@ -1149,8 +1157,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT CAST('2000-01-01' AS DATE) = '2000-1-1'",
         },
         SqlCase {
-            name: "JSON cast of a temporal value",
-            sql: "SELECT CAST(DATE '2000-01-01' AS JSON)",
+            name: "JSON date in a function without a known read",
+            sql: "SELECT ABS(CAST(DATE '2000-01-01' AS JSON))",
         },
         SqlCase {
             name: "invalid JSON cast MySQL does not evaluate",
@@ -1253,12 +1261,16 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT CAST(18446744073709551615 AS JSON) = 1",
         },
         SqlCase {
-            name: "json time of more than a day read as text",
-            sql: "SELECT CONCAT(CAST(TIME '25:00:00' AS JSON))",
+            name: "json time read as a datetime where a failed read is not NULL",
+            sql: "SELECT UNIX_TIMESTAMP(CAST(TIME '12:00:00' AS JSON))",
         },
         SqlCase {
-            name: "json date read as a date",
-            sql: "SELECT DAYOFWEEK(CAST(DATE '2000-01-01' AS JSON))",
+            name: "json date as the hour of MAKETIME with DECIMAL seconds",
+            sql: "SELECT MAKETIME(CAST(DATE '2000-01-01' AS JSON), 0, 1.5)",
+        },
+        SqlCase {
+            name: "negative json time that prints as zero",
+            sql: "SELECT CAST(TIME '-32:00:00' AS JSON)",
         },
         SqlCase {
             name: "temporal compared with an invalid string",
