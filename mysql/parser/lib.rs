@@ -103,6 +103,16 @@ pub trait Environment {
 
     /// Whether `FOREIGN_KEY_CHECKS` is 1.
     fn foreign_key_checks(&self) -> bool;
+
+    /// The foreign keys of `table`.
+    fn foreign_keys_of(&self, table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError>;
+}
+
+/// A foreign key of the table asked about.
+pub struct ForeignKeyOf {
+    pub child_columns: Vec<String>,
+    pub parent_table: String,
+    pub parent_columns: Vec<String>,
 }
 
 /// A foreign key of `table` that references the table asked about.
@@ -162,6 +172,10 @@ impl Environment for Autocommit {
 
     fn foreign_key_checks(&self) -> bool {
         true
+    }
+
+    fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
+        Ok(Vec::new())
     }
 }
 
@@ -243,6 +257,7 @@ pub fn translate_in(
         _ => return translate_other(statement, environment),
     };
     trigger::check_fired_triggers(statement, &lowered, environment)?;
+    foreign_key::check_writes(&lowered, environment)?;
     Ok(lowered)
 }
 

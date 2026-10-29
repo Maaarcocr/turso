@@ -1,4 +1,4 @@
-use crate::stored_table::{Family, TableDefinition};
+use crate::stored_table::{ColumnDefinition, Family, TableDefinition};
 use crate::{Environment, MysqlParserError};
 use std::collections::HashSet;
 use turso_parser::ast;
@@ -17,9 +17,11 @@ use turso_parser::ast;
 /// - a `SET NULL` action needs nullable columns (1830);
 /// - constraint names are unique in the database (1826).
 ///
-/// Refused: other columns of different types, which MySQL accepts or
-/// rejects by rules not modeled here (it compares keys as stored, so
-/// `DECIMAL(4,1)` never matches `DECIMAL(4,2)`). With `FOREIGN_KEY_CHECKS` 0, every failed
+/// MySQL accepts keys between `DECIMAL` columns of different scales or
+/// sizes and between `DATETIME` and `TIMESTAMP` columns, which then match
+/// no value, and so does Turso, refusing writes to the table instead (see
+/// `check_writes`). Refused: other columns of different types, which MySQL
+/// accepts or rejects by rules not modeled here. With `FOREIGN_KEY_CHECKS` 0, every failed
 /// check refuses instead of failing.
 pub(crate) fn check_foreign_keys(
     table: &ast::Name,
@@ -197,6 +199,7 @@ pub(crate) fn check_foreign_keys(
                     }
                 }
                 _ if child.type_text == parent.type_text => {}
+                _ if stored_match(child, parent) != StoredMatch::Unknown => {}
                 (Family::Integer, Family::Integer)
                     if !child.type_text.contains("ZEROFILL")
                         && !parent.type_text.contains("ZEROFILL") =>
@@ -209,6 +212,130 @@ pub(crate) fn check_foreign_keys(
                         child.type_text, parent.type_text
                     )))
                 }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// How MySQL matches the values of a referencing column with those of the
+/// referenced one, comparing their stored bytes.
+#[derive(Debug, PartialEq, Eq)]
+enum StoredMatch {
+    /// Equal values are stored alike, so they match as Turso matches them.
+    Values,
+    /// The types store every value differently, so no value matches.
+    Never,
+    /// Not modeled.
+    Unknown,
+}
+
+fn stored_match(child: &ColumnDefinition, parent: &ColumnDefinition) -> StoredMatch {
+    if child.type_text == parent.type_text {
+        return StoredMatch::Values;
+    }
+    if let (Some(child), Some(parent)) = (decimal_storage(child), decimal_storage(parent)) {
+        return if child == parent {
+            StoredMatch::Values
+        } else {
+            StoredMatch::Never
+        };
+    }
+    match (temporal_storage(child), temporal_storage(parent)) {
+        (Some((child_base, child_bytes)), Some((parent_base, parent_bytes)))
+            if child_base != parent_base || child_bytes != parent_bytes =>
+        {
+            StoredMatch::Never
+        }
+        _ => StoredMatch::Unknown,
+    }
+}
+
+/// The scale and the bytes of the integer part of a `DECIMAL(p, s)`, which
+/// set how MySQL stores its values.
+fn decimal_storage(column: &ColumnDefinition) -> Option<(u32, u32)> {
+    let parameters = column.type_text.strip_prefix("DECIMAL")?;
+    let (precision, scale): (u32, u32) = match parameters {
+        "" => (10, 0),
+        _ => {
+            let parameters = parameters.strip_prefix('(')?.strip_suffix(')')?;
+            match parameters.split_once(',') {
+                Some((precision, scale)) => (precision.parse().ok()?, scale.parse().ok()?),
+                None => (parameters.parse().ok()?, 0),
+            }
+        }
+    };
+    const LEFTOVER_BYTES: [u32; 9] = [0, 1, 1, 2, 2, 3, 3, 4, 4];
+    let digits = precision.checked_sub(scale)?;
+    Some((
+        scale,
+        digits / 9 * 4 + LEFTOVER_BYTES[(digits % 9) as usize],
+    ))
+}
+
+/// The type and the bytes of the fractional seconds of a `DATETIME` or
+/// `TIMESTAMP` column.
+fn temporal_storage(column: &ColumnDefinition) -> Option<(&str, u32)> {
+    let base = column.base_type();
+    if base != "DATETIME" && base != "TIMESTAMP" {
+        return None;
+    }
+    let precision: u32 = match column.type_text.strip_prefix(base)? {
+        "" => 0,
+        parameters => parameters
+            .strip_prefix('(')?
+            .strip_suffix(')')?
+            .parse()
+            .ok()?,
+    };
+    Some((base, precision.div_ceil(2)))
+}
+
+/// Refuses a write to a table with a foreign key MySQL never matches, as it
+/// compares the stored bytes of columns of types that store every value
+/// differently (`DECIMAL(4,1)` and `DECIMAL(4,2)`, `DATETIME` and
+/// `TIMESTAMP`): MySQL fails every row with a non-NULL key, and Turso
+/// compares the values.
+pub(crate) fn check_writes(
+    lowered: &ast::Stmt,
+    environment: &dyn Environment,
+) -> Result<(), MysqlParserError> {
+    let table = match lowered {
+        ast::Stmt::Insert { tbl_name, .. } => tbl_name.name.as_str(),
+        ast::Stmt::Update(update) => update.tbl_name.name.as_str(),
+        _ => return Ok(()),
+    };
+    if !environment.foreign_key_checks() {
+        return Ok(());
+    }
+    let keys = environment.foreign_keys_of(table)?;
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let Some(child) = environment
+        .table_sql(table)?
+        .and_then(|sql| TableDefinition::parse(&sql).ok())
+    else {
+        return Ok(());
+    };
+    for key in keys {
+        let Some(parent) = environment
+            .table_sql(&key.parent_table)?
+            .and_then(|sql| TableDefinition::parse(&sql).ok())
+        else {
+            continue;
+        };
+        for (child_name, parent_name) in key.child_columns.iter().zip(&key.parent_columns) {
+            let (Some(child_column), Some(parent_column)) =
+                (child.column(child_name), parent.column(parent_name))
+            else {
+                continue;
+            };
+            if stored_match(child_column, parent_column) == StoredMatch::Never {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "a write to `{table}`, whose foreign key MySQL never matches (it compares {} and {} values as stored), is not lowered yet",
+                    child_column.type_text, parent_column.type_text
+                )));
             }
         }
     }

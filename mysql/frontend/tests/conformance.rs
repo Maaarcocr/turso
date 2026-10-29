@@ -372,6 +372,28 @@ fn foreign_keys_are_checked_when_created_as_mysql_checks_them() -> turso_core::R
         .execute("CREATE TABLE d (a DECIMAL(4,1), FOREIGN KEY (a) REFERENCES p (x))")
         .expect_err("MySQL compares keys of different types as stored");
     assert!(refused.to_string().contains("unsupported"), "{refused}");
+    connection.execute("CREATE TABLE dp (d DECIMAL(4,2) PRIMARY KEY, t DATETIME UNIQUE)")?;
+    connection.execute("INSERT INTO dp VALUES (1.23, '2001-02-03 12:34:56')")?;
+    connection.execute("CREATE TABLE same (d DECIMAL(3,2), FOREIGN KEY (d) REFERENCES dp (d))")?;
+    connection.execute("INSERT INTO same VALUES (1.23)")?;
+    for statement in [
+        "CREATE TABLE scale (d DECIMAL(4,1), FOREIGN KEY (d) REFERENCES dp (d))",
+        "CREATE TABLE stamp (t TIMESTAMP, FOREIGN KEY (t) REFERENCES dp (t))",
+    ] {
+        connection.execute(statement)?;
+    }
+    for statement in [
+        "INSERT INTO scale VALUES (1.2)",
+        "INSERT INTO stamp VALUES ('2001-02-03 12:34:56')",
+    ] {
+        let error = connection
+            .execute(statement)
+            .expect_err("MySQL never matches these keys");
+        assert!(
+            error.to_string().contains("unsupported"),
+            "{statement}: {error}"
+        );
+    }
     connection.execute("SET FOREIGN_KEY_CHECKS = 0")?;
     connection.execute("CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES later (id))")?;
     Ok(())

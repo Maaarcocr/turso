@@ -1,6 +1,6 @@
 use turso_mysql_parser::{
     parse, parse_and_translate, parse_and_translate_in, parse_one, translate, ColumnFacts,
-    Environment, ForeignKeyTo, MysqlParserError,
+    Environment, ForeignKeyOf, ForeignKeyTo, MysqlParserError,
 };
 use turso_parser::ast;
 
@@ -1697,6 +1697,10 @@ impl Environment for IndexOfT {
     fn foreign_key_checks(&self) -> bool {
         true
     }
+
+    fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
+        Ok(Vec::new())
+    }
 }
 
 /// A session outside a transaction on tables `a (id AUTO_INCREMENT, x, g
@@ -1774,6 +1778,10 @@ impl Environment for TriggerSchema {
 
     fn foreign_key_checks(&self) -> bool {
         true
+    }
+
+    fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
+        Ok(Vec::new())
     }
 }
 

@@ -328,6 +328,27 @@ impl turso_mysql_parser::Environment for Session<'_> {
     fn foreign_key_checks(&self) -> bool {
         self.0.foreign_keys_enabled()
     }
+
+    fn foreign_keys_of(
+        &self,
+        table: &str,
+    ) -> LoweringResult<Vec<turso_mysql_parser::ForeignKeyOf>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_btree_table(table)
+                .map_or_else(Vec::new, |table| {
+                    table
+                        .foreign_keys
+                        .iter()
+                        .map(|foreign_key| turso_mysql_parser::ForeignKeyOf {
+                            child_columns: foreign_key.child_columns.to_vec(),
+                            parent_table: foreign_key.parent_table.clone(),
+                            parent_columns: foreign_key.parent_columns.to_vec(),
+                        })
+                        .collect()
+                })
+        }))
+    }
 }
 
 type LoweringResult<T> = std::result::Result<T, turso_mysql_parser::MysqlParserError>;
