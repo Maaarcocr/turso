@@ -827,6 +827,26 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT COUNT (*) FROM t ORDER BY b",
         ),
         (
+            "SELECT MOD(18446744073709551615, 7), 1.5e0 % 1, ABS(9223372036854775808), 9223372036854775808 - 1",
+            "SELECT MOD (CAST ('18446744073709551615' AS DECIMAL (20, 0)), 7), MOD (1.5e0, 1), ABS (CAST ('9223372036854775808' AS DECIMAL (19, 0))), 9223372036854775807",
+        ),
+        (
+            "SELECT 18446744073709551615 * 1 - NULL",
+            "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
+        ),
+        (
+            "SELECT ROUND(18446744073709551615, -1.5), TRUNCATE(9223372036854775808, -0x1), ROUND(9223372036854775808, 'a')",
+            "SELECT CAST ('18446744073709551600' AS DECIMAL (20, 0)), 9223372036854775800, CAST ('9223372036854775808' AS DECIMAL (19, 0))",
+        ),
+        (
+            "SELECT '1.5' % TIME '-10:04:58', 1.5e0 % TIMESTAMP '2000-01-01 10:34:58.5'",
+            "SELECT MOD ('1.5', - 100458), MOD (1.5e0, 20000101103458.5)",
+        ),
+        (
+            "SELECT 0xff REGEXP 1, TIME '10:04:58' REGEXP _binary 'a'",
+            "SELECT x'FF'REGEXP 1, x'31303A30343A3538'REGEXP x'61'",
+        ),
+        (
             "SELECT CAST(CAST(0.000 AS JSON) AS DATE)",
             "SELECT NULL",
         ),
@@ -978,7 +998,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",
-            "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), - 9223372036854775808",
+            "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), (-9223372036854775807 - 1)",
         ),
         (
             "SELECT CAST('[1]' AS JSON) = 1, JSON_ARRAY(1) <=> CAST(TRUE AS JSON), CAST(1 AS JSON) < DATE '2000-01-01'",
@@ -1181,10 +1201,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
         },
         SqlCase {
-            name: "modulo of a temporal literal",
-            sql: "SELECT 1.5e0 % TIMESTAMP '2000-01-01 10:34:58'",
-        },
-        SqlCase {
             name: "negated temporal literal with a fraction",
             sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
         },
@@ -1257,8 +1273,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 'a' REGEXP ''",
         },
         SqlCase {
-            name: "regular expression over bytes",
-            sql: "SELECT 'a' REGEXP _binary 'a'",
+            name: "regular expression over bytes and a column",
+            sql: "SELECT a REGEXP _binary 'a' FROM t",
         },
         SqlCase {
             name: "nested row value",
@@ -1287,6 +1303,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "a binary string cast to JSON",
             sql: "SELECT CAST(BINARY 'a' AS JSON)",
+        },
+        SqlCase {
+            name: "BIGINT UNSIGNED arithmetic outside its range",
+            sql: "SELECT 18446744073709551615 + 1",
         },
         SqlCase {
             name: "ORDER BY a column outside GROUP BY",
@@ -1793,8 +1813,8 @@ fn lowers_numbers_with_the_same_text_as_the_sqlite_parser() {
     let cases = [
         "SELECT 1.5",
         "SELECT 1e3",
-        "SELECT 18446744073709551615 + 1",
-        "SELECT 9223372036854775808 * 2",
+        "SELECT 18446744073709551615 + c",
+        "SELECT 9223372036854775808 * c",
     ];
 
     for sql in cases {
