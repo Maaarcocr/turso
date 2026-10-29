@@ -334,8 +334,8 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(a INT AUTO_INCREMENT, b INT, PRIMARY KEY (a, b))",
         },
         SqlCase {
-            name: "auto increment on a decimal",
-            sql: "CREATE TABLE users(id DECIMAL(10,0) AUTO_INCREMENT PRIMARY KEY)",
+            name: "auto increment on a double",
+            sql: "CREATE TABLE users(id DOUBLE AUTO_INCREMENT PRIMARY KEY)",
         },
         SqlCase {
             name: "varchar missing length",
