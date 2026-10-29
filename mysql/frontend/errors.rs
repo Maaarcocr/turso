@@ -1,4 +1,4 @@
-use crate::types::{DATA_TRUNCATED, NOT_A_GEOMETRY};
+use crate::types::{DATA_TRUNCATED, NOT_A_GEOMETRY, SRID_MISMATCH};
 use turso_core::{ConversionErrorKind, LimboError, TypeConversionError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,6 +22,18 @@ pub fn mysql_error(error: &LimboError) -> Option<MysqlError> {
         }
         ConversionErrorKind::InvalidValue if conversion.message == NOT_A_GEOMETRY => {
             (1416, "22003", NOT_A_GEOMETRY.to_string())
+        }
+        ConversionErrorKind::InvalidValue if conversion.message.starts_with(SRID_MISMATCH) => {
+            let mut srids = conversion.message[SRID_MISMATCH.len()..].split_whitespace();
+            let (geometry, column) = (srids.next().unwrap_or("?"), srids.next().unwrap_or("?"));
+            (
+                3643,
+                "HY000",
+                format!(
+                    "The SRID of the geometry does not match the SRID of the column '{}'. The SRID of the geometry is {geometry}, but the SRID of the column is {column}. Consider changing the SRID of the geometry or the SRID property of the column.",
+                    conversion.column.as_deref().unwrap_or("?")
+                ),
+            )
         }
         ConversionErrorKind::InvalidValue => {
             (1366, "HY000", format!("{}{place}", conversion.message))

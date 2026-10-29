@@ -35,7 +35,7 @@ Typed tables are STRICT tables that core marks with `/* turso_dialect:mysql */` 
 | `CHAR(n)`/`VARCHAR(n)` | text | at most `n` characters; extra trailing spaces are cut, other extra characters fail (1406); `CHAR` drops trailing spaces; numbers become MySQL's text (`1e20`); bytes that are not UTF-8 fail (1366) |
 | `TINYTEXT`/`TEXT`/`MEDIUMTEXT`/`LONGTEXT` | text | as `VARCHAR`, with the type's limit in bytes |
 | `BINARY(n)`/`VARBINARY(n)`, `TINYBLOB`/`BLOB`/`MEDIUMBLOB`/`LONGBLOB` | blob | at most the type's length in bytes, else 1406; `BINARY(n)` pads with zero bytes; text and numbers are stored as their bytes. Binary columns compare with text literals byte by byte |
-| `GEOMETRY`, `POINT`, `LINESTRING`, `POLYGON`, `MULTI*`, `GEOMETRYCOLLECTION` | blob | only `NULL`: every other value fails (1416) |
+| `GEOMETRY`, `POINT`, `LINESTRING`, `POLYGON`, `MULTI*`, `GEOMETRYCOLLECTION` (or `GEOMCOLLECTION`), with an optional `SRID 0` or `SRID 4326` | blob: MySQL's storage format, the SRID as four little-endian bytes and then little-endian WKB | a geometry of the column's kind (any for `GEOMETRY`) in that format; other values fail (1416), and a geometry whose SRID is not the column's fails (3643). Another `SRID` is refused |
 | `DECIMAL(p,s)` [`UNSIGNED`] | integer when the value is a whole number in the signed 64-bit range, otherwise double (until exact decimals) | text is read as a number; other text fails with 1265 where MySQL reports 1366; negative `UNSIGNED` fails (1264) |
 | `DATE`, `DATETIME(p)`, `TIMESTAMP(p)`, `TIME(p)` | text in MySQL's form: `YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS[.fraction]`, `[-]HH:MM:SS[.fraction]`, with the column's `p` fractional digits | a string of numbers separated by `-`, `:`, a space or `T` is normalized (`2024-3-5 9:4:5` is `2024-03-05 09:04:05`, `10:00:00.5` in `DATETIME(6)` is `10:00:00.500000`, a `DATE` takes a datetime whose time is zero); fractional digits beyond `p` are rounded as MySQL rounds them, to microseconds by the seventh digit and then half up (`23:59:59.5` in a `DATETIME` is the next day); an invalid or zero date, a time out of range and a `TIMESTAMP` outside 1970-2038 fail like MySQL (1292); a rounding past year 9999 or `838:59:59`, a negative zero time, a time in a `DATE`, other string forms, numbers, binary strings and JSON values are refused |
 
@@ -81,7 +81,7 @@ Known gaps:
 - `FOREIGN KEY` constraints are enforced from the start of a connection, as MySQL starts with `FOREIGN_KEY_CHECKS = 1`. Turso checks them like SQLite: values are compared as stored, so a key between `ENUM` columns compares member positions and one between `SET` columns bitmasks, as MySQL does (`'cat'` matches `'rat'` when both are member 1).
 - `CREATE TABLE ... AS SELECT` gives a result column the type of the column it reads (also through `MAX`/`MIN`), `BIGINT` to integer literals, `COUNT(...)` and integer arithmetic, `DOUBLE` to double literals and double arithmetic, and `LONGTEXT` to everything else (string literals, `CONCAT(...)`, `SUM(...)`, `AVG(...)`, arithmetic on `DECIMAL`), where MySQL picks a `VARCHAR(n)`, `INT` or `DECIMAL(p,s)` from the expression.
 - `CREATE TABLE ... AS SELECT` copies only the column type. `NOT NULL` and `DEFAULT` of the columns it reads are not copied, and neither is the `CHECK` that holds the validity of `JSON` columns, so the new table accepts any text there. MySQL keeps all of these.
-- Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, spatial `SRID` and `SPATIAL` keys, `FULLTEXT` keys, functional key parts in `CREATE TABLE`, `ALTER TABLE ... ADD INDEX` (which needs the column types to reject a whole `TEXT` or `BLOB` column, as MySQL does), unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
+- Not lowered: `CREATE TABLE ... LIKE`, `CREATE TABLE` with both columns and a `SELECT`, qualified `db.table` names, `ZEROFILL`, `SPATIAL` keys, `FULLTEXT` keys, functional key parts in `CREATE TABLE`, `ALTER TABLE ... ADD INDEX` (which needs the column types to reject a whole `TEXT` or `BLOB` column, as MySQL does), unique keys on column prefixes, `ON UPDATE CURRENT_TIMESTAMP`, `INVISIBLE`, `AUTO_INCREMENT=n`, `AUTO_INCREMENT` on a column that is not the whole primary key, partitioning, `ALTER TABLE` with several operations or `FIRST`/`AFTER`, `MODIFY`/`CHANGE`/`ALTER COLUMN`, adding or dropping keys and constraints with `ALTER TABLE`, `TRUNCATE` (it also resets `AUTO_INCREMENT` in MySQL), and `CREATE INDEX` with prefix lengths.
 
 `REPLACE` in each of these forms lowers to `INSERT OR REPLACE`: like MySQL,
 it deletes every row that conflicts with the new row on the primary key or a
@@ -792,6 +792,28 @@ behavior translated where it differs: case-insensitive by default, the `c`,
 `\Q..\E`, `$n` replacements, and errors for empty patterns, invalid flags,
 out-of-range positions, and `{` or `}` outside a `{m}`, `{m,}` or `{m,n}`
 interval that follows something to repeat (ICU's errors 3688 and 3692).
+
+Spatial functions work on geometries in MySQL's storage format, in the
+Cartesian plane (SRID 0) or WGS 84 (SRID 4326), whose coordinates are read
+and written latitude first and stored longitude first, as MySQL does; a
+geometry in another spatial reference system is refused, since Turso does
+not have MySQL's table of them. Lowered: the constructors `POINT`,
+`LINESTRING`, `POLYGON`, `MULTIPOINT`, `MULTILINESTRING`, `MULTIPOLYGON` and
+`GEOMETRYCOLLECTION`/`GEOMCOLLECTION`; `ST_GeomFromText` and `ST_GeomFromWKB`
+with their per-kind forms (`ST_PointFromText`, `ST_MPolyFromWKB`, ...) and an
+optional SRID; `ST_AsText`/`ST_AsWKT` and `ST_AsBinary`/`ST_AsWKB`; `ST_SRID`
+(also setting it), `ST_X` and `ST_Y` of a Cartesian point (also setting
+them), `ST_Dimension`, `ST_GeometryType`, `ST_IsEmpty`, `ST_NumPoints`,
+`ST_PointN`, `ST_StartPoint`, `ST_EndPoint`, `ST_NumGeometries`,
+`ST_GeometryN`, `ST_ExteriorRing`, `ST_NumInteriorRings`, `ST_InteriorRingN`
+and `ST_Envelope` of a Cartesian geometry. Text MySQL cannot read, and a
+geometry argument that is not one, fail with MySQL's error 3037; a WGS 84
+coordinate out of range fails with 3616 or 3617. Refused: the options
+argument of these functions, constructors with geometries of different
+SRIDs, a `LINESTRING` of one point or a `POLYGON` ring that is not closed or
+has fewer than four points (where MySQL's checks are not modeled), and
+functions that compute over the shapes (`ST_Contains`, `ST_Distance`,
+`ST_Area`, `ST_Centroid`, ...), which are not implemented.
 
 Not supported yet: exact DECIMAL arguments and results (a decimal literal
 reaches the functions as a DOUBLE, so `TRUNCATE(1.0, 1)` prints `1` instead

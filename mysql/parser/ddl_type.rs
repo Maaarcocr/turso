@@ -480,6 +480,10 @@ fn custom(name: &ObjectName, modifiers: &[String]) -> Result<ColumnType, MysqlPa
             declared: simple_type(name),
             family: Family::Spatial,
         }),
+        ("GEOMCOLLECTION", []) => Ok(ColumnType {
+            declared: simple_type("GEOMETRYCOLLECTION"),
+            family: Family::Spatial,
+        }),
         ("FIXED", _) => {
             let number = |text: &String| {
                 text.parse::<u64>()

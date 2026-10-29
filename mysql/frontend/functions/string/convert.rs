@@ -7,8 +7,8 @@ pub(crate) use crate::format::format_double;
 pub(super) const MAX_ALLOWED_PACKET: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Integer {
-    pub(super) value: i64,
+pub(crate) struct Integer {
+    pub(crate) value: i64,
 }
 
 impl Integer {
@@ -119,7 +119,7 @@ impl Str<'_> {
     }
 }
 
-pub(super) fn integer(value: &Value) -> Option<Integer> {
+pub(crate) fn integer(value: &Value) -> Option<Integer> {
     let value = match value {
         Value::Null => return None,
         Value::Numeric(Numeric::Integer(integer)) => *integer,
@@ -130,7 +130,7 @@ pub(super) fn integer(value: &Value) -> Option<Integer> {
     Some(Integer { value })
 }
 
-pub(super) fn double(value: &Value) -> Option<f64> {
+pub(crate) fn double(value: &Value) -> Option<f64> {
     Some(match value {
         Value::Null => return None,
         Value::Numeric(Numeric::Integer(integer)) => *integer as f64,
