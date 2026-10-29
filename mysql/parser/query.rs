@@ -739,7 +739,8 @@ fn translate_selected(
         Some(text) => Ok(failing_json_cast(text)),
         None => match crate::json::temporal_json_text(expr).filter(|_| shown) {
             Some(text) => Ok(text),
-            None if shown => translate_bytes(expr, context),
+            None if shown => crate::expr::shown_negated_binary_sum(expr)
+                .unwrap_or_else(|| translate_bytes(expr, context)),
             None => translate_expr(expr, context),
         },
     };

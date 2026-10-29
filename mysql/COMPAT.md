@@ -195,8 +195,14 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   operations, `%` and `DIV`, which MySQL computes on their bytes
   or as a DOUBLE that Turso's modulus and integer division would truncate.
 - A negated hex or bit literal where MySQL can show the decimals of its
-  DOUBLE (`-0x1 + 1.5`, `IF(c, -0x1, 1.5)`, `MOD(-0x1, 1.5)`), or of
-  10^15 or more, which MySQL shows with fixed digits rather than an exponent.
+  DOUBLE (`IF(c, -0x1, 1.5)`, `MOD(-0x1, 1.5)`), or of 10^15 or more, which
+  MySQL shows with fixed digits rather than an exponent. A shown select item
+  `a + b` or `a - b` of such a literal and another one or an exact number
+  literal is lowered to the text MySQL shows, the DOUBLE with the most
+  decimals of the operands from its shortest round-trip digits
+  (`-0.0 + -0xffff` is `'-65535.0'`, `-0 + -0xffffffffffffffff` is
+  `'-18446744073709552000'`), and in a `CASE`, `IF`, `IFNULL` or `COALESCE`
+  with a DOUBLE or string literal result MySQL shows no fixed decimals.
 - `STRCMP` of a binary string and a `DATE` or `TIMESTAMP` literal: MySQL
   reads the string as a date and fails on it.
 - `ROUND`/`TRUNCATE` of an integer literal above `BIGINT`, unless the places
