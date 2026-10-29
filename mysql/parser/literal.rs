@@ -339,11 +339,21 @@ pub(crate) fn translate_typed_string(
 ) -> Result<ast::Expr, MysqlParserError> {
     let (temporal, text) = typed_temporal(typed)?;
     match context {
-        Context::Bitwise if temporal.is_whole_and_unsigned() => Ok(temporal.number()),
-        Context::Bitwise => Err(unsupported(format!(
-            "bit operation on {} literal '{text}', which MySQL computes as BIGINT UNSIGNED,",
-            typed.data_type
-        ))),
+        Context::Bitwise => {
+            let integer = temporal.rounded_integer().ok_or_else(|| {
+                unsupported(format!(
+                    "bit operation on {} literal '{text}', whose rounding MySQL carries past its range,",
+                    typed.data_type
+                ))
+            })?;
+            let literal =
+                ast::Expr::Literal(ast::Literal::Numeric(integer.unsigned_abs().to_string()));
+            Ok(if integer < 0 {
+                ast::Expr::unary(ast::UnaryOperator::Negative, literal)
+            } else {
+                literal
+            })
+        }
         Context::Number | Context::Arithmetic => Ok(temporal.number()),
         Context::Value | Context::Bytes | Context::DateTimeArgument | Context::Text => Ok(
             ast::Expr::Literal(ast::Literal::String(quote_string(&temporal.text()))),
@@ -453,11 +463,24 @@ impl Temporal {
         (time.hours < 24).then_some(Temporal::Timestamp(date, time))
     }
 
-    fn is_whole_and_unsigned(&self) -> bool {
+    fn rounded_integer(&self) -> Option<i64> {
         match self {
-            Temporal::Date(_) => true,
-            Temporal::Time(time) | Temporal::Timestamp(_, time) => {
-                !time.negative && time.fraction.is_empty()
+            Temporal::Date(date) => date_number(date).parse().ok(),
+            Temporal::Time(time) => {
+                let (hours, minutes, seconds) = rounded_clock(time)?;
+                if hours > 838 {
+                    return None;
+                }
+                let magnitude = i64::from(hours * 10_000 + minutes * 100 + seconds);
+                Some(if time.negative { -magnitude } else { magnitude })
+            }
+            Temporal::Timestamp(date, time) => {
+                let (hours, minutes, seconds) = rounded_clock(time)?;
+                if hours > 23 {
+                    return None;
+                }
+                let date: i64 = date_number(date).parse().ok()?;
+                Some(date * 1_000_000 + i64::from(hours * 10_000 + minutes * 100 + seconds))
             }
         }
     }
@@ -486,6 +509,17 @@ impl Temporal {
             _ => number,
         }
     }
+}
+
+fn rounded_clock(time: &Time) -> Option<(u32, u32, u32)> {
+    if !time.fraction.starts_with(['5', '6', '7', '8', '9']) {
+        return Some((time.hours, time.minutes, time.seconds));
+    }
+    Some(match (time.minutes, time.seconds) {
+        (59, 59) => (time.hours.checked_add(1)?, 0, 0),
+        (minutes, 59) => (time.hours, minutes + 1, 0),
+        (minutes, seconds) => (time.hours, minutes, seconds + 1),
+    })
 }
 
 fn date_text(date: &Date) -> String {
@@ -668,7 +702,7 @@ pub(crate) enum TemporalKind {
 pub(crate) struct TemporalLiteral {
     pub(crate) kind: TemporalKind,
     pub(crate) text: String,
-    pub(crate) within_a_day: bool,
+    pub(crate) json_text: Option<String>,
 }
 
 pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
@@ -682,16 +716,36 @@ pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
         DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
         _ => None,
     }?;
-    let (kind, within_a_day) = match &temporal {
-        Temporal::Date(_) => (TemporalKind::Date, true),
-        Temporal::Time(time) => (TemporalKind::Time, !time.negative && time.hours < 24),
-        Temporal::Timestamp(..) => (TemporalKind::DateTime, true),
+    let (kind, json_text) = match &temporal {
+        Temporal::Date(date) => (TemporalKind::Date, Some(date_text(date))),
+        Temporal::Time(time) => (TemporalKind::Time, json_time_text(time)),
+        Temporal::Timestamp(date, time) => (
+            TemporalKind::DateTime,
+            json_time_text(time).map(|time| format!("{} {time}", date_text(date))),
+        ),
     };
     Some(TemporalLiteral {
         kind,
         text: temporal.text(),
-        within_a_day,
+        json_text,
     })
+}
+
+fn json_time_text(time: &Time) -> Option<String> {
+    let hours = time.hours % 32;
+    let fraction = format!("{:0<6}", time.fraction);
+    let is_zero = hours == 0
+        && time.minutes == 0
+        && time.seconds == 0
+        && fraction.bytes().all(|digit| digit == b'0');
+    if time.negative && is_zero {
+        return None;
+    }
+    let sign = if time.negative { "-" } else { "" };
+    Some(format!(
+        "{sign}{hours:02}:{:02}:{:02}.{fraction}",
+        time.minutes, time.seconds
+    ))
 }
 
 #[cfg(test)]

@@ -1948,6 +1948,28 @@ fn translate_cast(
         }
         return translate_json_numeric_cast(expr, data_type, context);
     }
+    let shows_text = match data_type {
+        DataType::Char(_) | DataType::Character(_) => true,
+        DataType::Custom(name, _) => is_nchar(name),
+        _ => false,
+    };
+    if let Some(text) = json::temporal_json_text(expr).filter(|_| shows_text) {
+        return Ok(match data_type {
+            DataType::Char(Some(length)) | DataType::Character(Some(length)) => function_call(
+                "__mysql_cast_as_char",
+                vec![text, number(character_length(length)?)],
+            ),
+            DataType::Custom(_, modifiers) => match modifiers.as_slice() {
+                [] => ast::Expr::cast(text, Some(type_name("NCHAR"))),
+                [length] => function_call(
+                    "__mysql_cast_as_nchar",
+                    vec![text, number(nchar_length(length)?)],
+                ),
+                _ => return Err(unsupported_cast(data_type)),
+            },
+            _ => ast::Expr::cast(text, Some(type_name("CHAR"))),
+        });
+    }
     let (target, operand_context) = match data_type {
         DataType::Signed | DataType::SignedInteger => {
             return translate_integer_cast(expr, "__mysql_cast_as_signed", context)
@@ -2977,6 +2999,9 @@ fn function_arguments(
                     return Ok(text);
                 }
             }
+            if let Some(read) = json::temporal_json_argument(upper_name, position, &args) {
+                return Ok(read);
+            }
             if is_json_cast(arg)
                 && !upper_name.starts_with("JSON_")
                 && (!json::is_json_value_that_succeeds(arg)
@@ -3293,7 +3318,7 @@ fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Contex
     }
 }
 
-fn reads_temporal_as_number(upper_name: &str, position: usize) -> bool {
+pub(crate) fn reads_temporal_as_number(upper_name: &str, position: usize) -> bool {
     match upper_name {
         "MAKEDATE" | "MAKETIME" | "PERIOD_ADD" | "PERIOD_DIFF" => true,
         "FROM_UNIXTIME" | "SEC_TO_TIME" | "FROM_DAYS" => position == 0,

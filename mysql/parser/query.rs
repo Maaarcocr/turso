@@ -737,8 +737,11 @@ fn translate_selected(
     context.unsigned_as_text = runs_once && shown && is_bit_operation(expr);
     let translated = match failing_text {
         Some(text) => Ok(failing_json_cast(text)),
-        None if shown => translate_bytes(expr, context),
-        None => translate_expr(expr, context),
+        None => match crate::json::temporal_json_text(expr).filter(|_| shown) {
+            Some(text) => Ok(text),
+            None if shown => translate_bytes(expr, context),
+            None => translate_expr(expr, context),
+        },
     };
     context.latin1_as_text = false;
     context.unsigned_as_text = false;

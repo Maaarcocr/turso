@@ -1,7 +1,8 @@
 use crate::expr::{
     function_call, has_a_temporal_type, is_binary_literal, is_boolean,
-    json_outside_a_value_position, number_literal, parenthesized, string_literal, times_minus_one,
-    translate_bytes, translate_expr, translate_in, translate_json_value,
+    json_outside_a_value_position, number_literal, parenthesized, reads_temporal_as_number,
+    string_literal, times_minus_one, translate_bytes, translate_expr, translate_in,
+    translate_json_value,
 };
 use crate::invalid_json::mysql_rejects_json_text;
 use crate::literal::{is_utf8_binary_literal, temporal_literal, Context, TemporalKind};
@@ -293,27 +294,84 @@ pub(crate) fn temporal_json_text(expr: &Expr) -> Option<ast::Expr> {
     let Expr::TypedString(typed) = unnested(json_cast_operand(expr)?) else {
         return None;
     };
-    let literal = temporal_literal(typed).filter(|literal| literal.within_a_day)?;
-    let printed = match literal.kind {
-        TemporalKind::Date => literal.text,
-        TemporalKind::Time | TemporalKind::DateTime => {
-            let (whole, fraction) = literal
-                .text
-                .split_once('.')
-                .unwrap_or((literal.text.as_str(), ""));
-            if fraction.len() > 6 {
-                return None;
-            }
-            format!("{whole}.{fraction:0<6}")
-        }
-    };
-    let json = format!("\"{printed}\"");
+    let json = format!("\"{}\"", temporal_literal(typed)?.json_text?);
     Some(function_call(
         "__mysql_cast_as_json",
         vec![ast::Expr::Literal(ast::Literal::String(
             crate::names::quote_string(&json),
         ))],
     ))
+}
+
+pub(crate) fn temporal_json_argument(
+    upper_name: &str,
+    position: usize,
+    args: &[&Expr],
+) -> Option<ast::Expr> {
+    enum Read {
+        Number,
+        DateTime { fails_as_null: bool },
+        Time,
+    }
+    fn is_decimal_literal(expr: &Expr) -> bool {
+        match expr {
+            Expr::Value(value) => matches!(
+                &value.value,
+                Value::Number(digits, _) if digits.contains('.') && !digits.contains(['e', 'E'])
+            ),
+            Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => is_decimal_literal(inner),
+            _ => false,
+        }
+    }
+    let Expr::TypedString(typed) = unnested(json_cast_operand(args[position])?) else {
+        return None;
+    };
+    if upper_name == "MAKETIME"
+        && position < 2
+        && args
+            .get(2)
+            .is_some_and(|seconds| is_decimal_literal(seconds))
+    {
+        return None;
+    }
+    let literal = temporal_literal(typed)?;
+    let json_text = literal.json_text?;
+    let read = match (upper_name, position) {
+        _ if reads_temporal_as_number(upper_name, position) => Read::Number,
+        ("WEEK" | "YEARWEEK", 1) => Read::Number,
+        (
+            "CONVERT_TZ" | "DATE" | "DATE_FORMAT" | "DAY" | "DAYOFMONTH" | "DAYOFWEEK"
+            | "DAYOFYEAR" | "LAST_DAY" | "MONTH" | "MONTHNAME" | "QUARTER" | "TO_DAYS"
+            | "TO_SECONDS" | "WEEK" | "WEEKDAY" | "WEEKOFYEAR" | "YEAR" | "YEARWEEK",
+            0,
+        ) => Read::DateTime {
+            fails_as_null: true,
+        },
+        ("UNIX_TIMESTAMP", 0) => Read::DateTime {
+            fails_as_null: false,
+        },
+        ("HOUR" | "MINUTE" | "SECOND" | "MICROSECOND" | "TIME" | "TIME_TO_SEC", 0) => Read::Time,
+        _ => return None,
+    };
+    let typed_value = |name: &str| {
+        function_call(
+            name,
+            vec![
+                ast::Expr::Literal(ast::Literal::String(crate::names::quote_string(&json_text))),
+                ast::Expr::Literal(ast::Literal::Numeric("6".to_string())),
+            ],
+        )
+    };
+    let null = ast::Expr::Literal(ast::Literal::Null);
+    match (read, literal.kind) {
+        (Read::Number, _) => Some(ast::Expr::Literal(ast::Literal::Numeric("0e0".to_string()))),
+        (Read::DateTime { .. }, TemporalKind::Date | TemporalKind::DateTime) => {
+            Some(typed_value("__mysql_cast_as_datetime"))
+        }
+        (Read::DateTime { fails_as_null }, TemporalKind::Time) => fails_as_null.then_some(null),
+        (Read::Time, TemporalKind::Time) => Some(typed_value("__mysql_cast_as_time")),
+        (Read::Time, TemporalKind::Date | TemporalKind::DateTime) => Some(null),
+    }
 }
 
 fn temporal_operand(expr: &Expr) -> Option<ast::Expr> {
