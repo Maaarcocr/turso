@@ -4,9 +4,10 @@ use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
 use crate::literal::{
     binary_literal_as_double, binary_literal_value, bit_bytes, blob_literal, hex_bytes,
-    is_latin1_char, is_utf8_binary_literal, latin1_text, negated_binary_literal,
+    is_latin1_char, is_utf8_binary_literal, latin1_text, negated_binary_literal, temporal_literal,
     translate_as_bytes, translate_introduced_string, translate_temporal_text,
     translate_typed_string, translate_typed_string_as_bytes, translate_value, Context,
+    TemporalKind,
 };
 use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
@@ -2608,6 +2609,9 @@ fn translate_function(
         FunctionArguments::Subquery(_) => return Err(unsupported_function(function)),
     };
     if identifier.quote_style.is_none() && over.is_none() {
+        if let Some(expr) = translate_greatest_of_dates(&upper_name, list)? {
+            return Ok(expr);
+        }
         if let Some(expr) =
             translate_collated_function(&upper_name, list, literal_context, context)?
         {
@@ -2738,13 +2742,46 @@ fn translate_collated_function(
             MysqlParserError::Rejected(message)
         });
     }
+    let refused = |temporal: &Expr| {
+        MysqlParserError::Unsupported(format!(
+            "{upper_name} of `{temporal}` and a string with a collation, which MySQL compares as temporal values, is not lowered yet"
+        ))
+    };
     if let Some(temporal) = args
         .iter()
-        .find(|arg| temporal_type(arg).is_some() || has_a_temporal_type(arg))
+        .find(|arg| temporal_type(arg).is_none() && has_a_temporal_type(arg))
     {
-        return Err(MysqlParserError::Unsupported(format!(
-            "{upper_name} of `{temporal}` and a string with a collation, which MySQL compares as temporal values, is not lowered yet"
-        )));
+        return Err(refused(temporal));
+    }
+    if let Some(temporal) = args.iter().find(|arg| is_dated_literal(arg)) {
+        match upper_name {
+            "GREATEST" => {
+                return greatest_of_dates(&args)?
+                    .map(Some)
+                    .ok_or_else(|| refused(temporal))
+            }
+            "LEAST"
+                if args
+                    .iter()
+                    .any(|arg| matches!(date_read(arg), Some(DateRead::NotADate(_)))) => {}
+            "STRCMP" => {
+                let not_a_date = args.iter().find(|arg| {
+                    !is_dated_literal(arg) && matches!(date_read(arg), Some(DateRead::NotADate(_)))
+                });
+                return Err(match not_a_date {
+                    Some(text) => MysqlParserError::Rejected(format!(
+                        "STRCMP reads `{text}` as a date next to `{temporal}`, and it is not one"
+                    )),
+                    None => refused(temporal),
+                });
+            }
+            _ => return Err(refused(temporal)),
+        }
+    } else if let Some(temporal) = args
+        .iter()
+        .find(|arg| upper_name == "FIELD" && temporal_type(arg).is_some())
+    {
+        return Err(refused(temporal));
     }
     let mut translated = vec![string_expr(&collation)];
     translated.extend(function_arguments(
@@ -2757,6 +2794,213 @@ fn translate_collated_function(
         &format!("__mysql_collated_{}", upper_name.to_ascii_lowercase()),
         translated,
     )))
+}
+
+fn translate_greatest_of_dates(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    if upper_name != "GREATEST" || list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Ok(None);
+    }
+    let Ok(args) = unnamed_arguments(list) else {
+        return Ok(None);
+    };
+    if !args.iter().any(|arg| is_dated_literal(arg)) || single_explicit_collation(&args)?.is_some()
+    {
+        return Ok(None);
+    }
+    greatest_of_dates(&args)
+}
+
+fn is_dated_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::TypedString(typed) => {
+            temporal_literal(typed).is_some_and(|literal| literal.kind != TemporalKind::Time)
+        }
+        Expr::Nested(inner) => is_dated_literal(inner),
+        _ => false,
+    }
+}
+
+enum DateRead {
+    Null,
+    Temporal(TemporalKind, String),
+    NotADate(Option<usize>),
+}
+
+fn date_read(expr: &Expr) -> Option<DateRead> {
+    const STRING_DECIMALS: Option<usize> = Some(6);
+    match expr {
+        Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => date_read(inner),
+        Expr::TypedString(typed) => {
+            let literal = temporal_literal(typed)?;
+            (literal.kind != TemporalKind::Time)
+                .then_some(DateRead::Temporal(literal.kind, literal.text))
+        }
+        Expr::Value(value) => match &value.value {
+            Value::Null => Some(DateRead::Null),
+            Value::Number(digits, _) => number_is_not_a_date(digits).map(DateRead::NotADate),
+            Value::SingleQuotedString(text)
+            | Value::DoubleQuotedString(text)
+            | Value::NationalStringLiteral(text) => {
+                is_not_a_date(text.as_bytes()).then_some(DateRead::NotADate(STRING_DECIMALS))
+            }
+            Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_) => {
+                let bytes = binary_literal_bytes(expr)?;
+                (std::str::from_utf8(&bytes).is_ok() && is_not_a_date(&bytes))
+                    .then_some(DateRead::NotADate(None))
+            }
+            _ => None,
+        },
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => match inner.as_ref() {
+            Expr::Value(value) => match &value.value {
+                Value::Number(digits, _) => number_is_not_a_date(digits).map(DateRead::NotADate),
+                _ => None,
+            },
+            _ => None,
+        },
+        Expr::Prefixed { prefix, value } if prefix.quote_style.is_none() => {
+            let introducer = prefix.value.to_ascii_lowercase();
+            if !matches!(
+                introducer.as_str(),
+                "_binary" | "_utf8mb4" | "_utf8mb3" | "_utf8"
+            ) {
+                return None;
+            }
+            let text = string_literal(value)?;
+            is_not_a_date(text.as_bytes()).then_some(DateRead::NotADate(STRING_DECIMALS))
+        }
+        Expr::Cast {
+            kind: CastKind::Cast,
+            expr: inner,
+            data_type:
+                DataType::Signed
+                | DataType::SignedInteger
+                | DataType::Unsigned
+                | DataType::UnsignedInteger,
+            array: false,
+            format: None,
+        } => match inner.as_ref() {
+            Expr::Value(value) => match &value.value {
+                Value::Number(digits, _) if digits.bytes().all(|byte| byte.is_ascii_digit()) => {
+                    is_not_a_date(digits.as_bytes()).then_some(DateRead::NotADate(Some(0)))
+                }
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn number_is_not_a_date(digits: &str) -> Option<Option<usize>> {
+    if digits.contains(['e', 'E']) {
+        let value: f64 = digits.parse().ok()?;
+        return (value < 10_000.0).then_some(Some(6));
+    }
+    let scale = digits
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    is_not_a_date(digits.as_bytes()).then_some(Some(scale))
+}
+
+fn is_not_a_date(text: &[u8]) -> bool {
+    let start = text
+        .iter()
+        .position(|byte| !matches!(byte, b' ' | b'\t' | b'\n' | 0x0B | 0x0C | b'\r'))
+        .unwrap_or(text.len());
+    let text = &text[start..];
+    if !text.first().is_some_and(u8::is_ascii_digit) {
+        return true;
+    }
+    let digits = text.iter().take_while(|byte| byte.is_ascii_digit()).count();
+    if !matches!(text.get(digits), None | Some(b'.')) {
+        return false;
+    }
+    if digits <= 4 {
+        return true;
+    }
+    if digits == 8 || digits >= 14 {
+        let field = |range: std::ops::Range<usize>| {
+            std::str::from_utf8(&text[range])
+                .expect("the digits are ASCII")
+                .parse::<u32>()
+                .expect("the field is digits")
+        };
+        return field(4..6) > 12 || field(6..8) > 31;
+    }
+    false
+}
+
+fn greatest_of_dates(args: &[&Expr]) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let mut best: Option<(String, String)> = None;
+    let mut datetime = false;
+    let mut decimals = 0;
+    let mut unknown_decimals = false;
+    let mut read_a_value_that_is_not_a_date = false;
+    let mut null = false;
+    for arg in args {
+        let Some(read) = date_read(arg) else {
+            return Err(MysqlParserError::Unsupported(format!(
+                "GREATEST of a date and `{arg}`, which MySQL may read as a datetime, is not lowered yet"
+            )));
+        };
+        match read {
+            DateRead::Null => null = true,
+            DateRead::NotADate(arg_decimals) => {
+                read_a_value_that_is_not_a_date = true;
+                match arg_decimals {
+                    Some(arg_decimals) => decimals = decimals.max(arg_decimals),
+                    None => unknown_decimals = true,
+                }
+            }
+            DateRead::Temporal(kind, text) => {
+                let (date, clock) = match kind {
+                    TemporalKind::Date => (text.clone(), "00:00:00".to_string()),
+                    TemporalKind::DateTime => {
+                        datetime = true;
+                        let (date, clock) = text.split_once(' ').expect("a datetime has a clock");
+                        (date.to_string(), clock.to_string())
+                    }
+                    TemporalKind::Time => unreachable!("date_read refuses TIME literals"),
+                };
+                let fraction = clock.split_once('.').map_or("", |(_, fraction)| fraction);
+                decimals = decimals.max(fraction.len());
+                let key = format!("{date} {clock:.8}.{fraction:0<6}");
+                if best.as_ref().is_none_or(|(best_key, _)| key > *best_key) {
+                    best = Some((key, date));
+                }
+            }
+        }
+    }
+    if !read_a_value_that_is_not_a_date {
+        return Ok(None);
+    }
+    if null {
+        return Ok(Some(ast::Expr::Literal(ast::Literal::Null)));
+    }
+    let (key, date) = best.expect("a dated literal is among the arguments");
+    if !datetime {
+        return Ok(Some(string_expr(&date)));
+    }
+    let decimals = decimals.min(6);
+    if unknown_decimals && decimals < 6 {
+        return Err(MysqlParserError::Unsupported(
+            "GREATEST of a datetime and a hex or bit literal, whose fractional digits in the result are not known, is not lowered yet".to_string(),
+        ));
+    }
+    let clock = &key[date.len() + 1..date.len() + 9];
+    let fraction = &key[date.len() + 10..date.len() + 10 + decimals];
+    let text = if decimals == 0 {
+        format!("{date} {clock}")
+    } else {
+        format!("{date} {clock}.{fraction}")
+    };
+    Ok(Some(string_expr(&text)))
 }
 
 fn translate_special_function(
