@@ -3322,6 +3322,9 @@ fn translate_function(
         FunctionArguments::List(list) => list,
         FunctionArguments::Subquery(_) => return Err(unsupported_function(function)),
     };
+    if let Some(error) = latin1_subject_collation_error(&upper_name, list) {
+        return Err(error);
+    }
     if matches!(
         upper_name.as_str(),
         "GREATEST" | "LEAST" | "FIELD" | "NULLIF" | "INTERVAL"
@@ -3578,6 +3581,91 @@ fn round_decimal_integer_arguments(upper_name: &str, args: &mut [ast::Expr]) {
             literal
         };
     }
+}
+
+/// `REPLACE`, `LPAD`, `RPAD` and string-comparing `FIELD` of a `_latin1` hex
+/// subject and literals: MySQL converts the other strings to the subject's
+/// `latin1` when it prepares the call and rejects a string with a character
+/// `latin1` lacks, whatever the other arguments (`LPAD(_latin1 0xFF, -1,
+/// '中')` fails). A `NULL` argument can spare the call, so it is left alone.
+fn latin1_subject_collation_error(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Option<MysqlParserError> {
+    enum Literal<'a> {
+        Text(&'a str),
+        Number,
+        Binary,
+    }
+    fn quoted(value: &Value) -> Option<&str> {
+        match value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => Some(text),
+            _ => None,
+        }
+    }
+    fn literal(expr: &Expr) -> Option<Literal<'_>> {
+        match expr {
+            Expr::Value(value) => quoted(&value.value).map(Literal::Text).or_else(|| {
+                hex_or_bit_literal(expr)
+                    .map(|_| Literal::Binary)
+                    .or_else(|| signed_number_literal(expr).map(|_| Literal::Number))
+            }),
+            Expr::Prefixed { prefix, value } => {
+                let Expr::Value(value) = value.as_ref() else {
+                    return None;
+                };
+                match prefix.value.to_ascii_lowercase().as_str() {
+                    "_utf8mb4" | "_utf8mb3" | "_utf8" => quoted(&value.value).map(Literal::Text),
+                    "_latin1" if matches!(value.value, Value::HexStringLiteral(_)) => {
+                        Some(Literal::Binary)
+                    }
+                    _ => None,
+                }
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                ..
+            } => signed_number_literal(expr).map(|_| Literal::Number),
+            Expr::Nested(inner) => literal(inner),
+            _ => None,
+        }
+    }
+    let args = unnamed_arguments(list).ok()?;
+    let (subject, rest) = args.split_first()?;
+    let latin1_hex = matches!(
+        subject,
+        Expr::Prefixed { prefix, value }
+            if prefix.quote_style.is_none()
+                && prefix.value.eq_ignore_ascii_case("_latin1")
+                && matches!(value.as_ref(), Expr::Value(value) if matches!(value.value, Value::HexStringLiteral(_)))
+    );
+    if !latin1_hex {
+        return None;
+    }
+    let literals = rest
+        .iter()
+        .map(|arg| literal(arg))
+        .collect::<Option<Vec<_>>>()?;
+    let converted: Vec<&Literal> = match (upper_name, literals.as_slice()) {
+        ("REPLACE", [_, _]) => literals.iter().collect(),
+        ("LPAD" | "RPAD", [_, pad]) => vec![pad],
+        ("FIELD", [_, ..])
+            if !literals
+                .iter()
+                .any(|literal| matches!(literal, Literal::Number)) =>
+        {
+            literals.iter().collect()
+        }
+        _ => return None,
+    };
+    let lacking = converted.into_iter().find_map(|literal| match literal {
+        Literal::Text(text) if !text.chars().all(is_latin1_char) => Some(*text),
+        _ => None,
+    })?;
+    Some(MysqlParserError::Rejected(format!(
+        "Illegal mix of collations for operation '{}': '{lacking}' has a character latin1 lacks",
+        upper_name.to_ascii_lowercase()
+    )))
 }
 
 fn translate_function_without_parentheses(

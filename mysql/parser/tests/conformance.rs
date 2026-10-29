@@ -607,6 +607,14 @@ fn reports_decimal_casts_that_mysql_rejects() {
             name: "binary string that is not UTF-8 next to a JSON value",
             sql: "SELECT CONCAT(CAST(1 AS JSON), 0xFF)",
         },
+        SqlCase {
+            name: "a string latin1 lacks converted to a latin1 subject",
+            sql: "SELECT LPAD(_latin1 0xFF, -1, '中')",
+        },
+        SqlCase {
+            name: "a string latin1 lacks compared with a latin1 FIELD subject",
+            sql: "SELECT FIELD(_latin1 0xFF, 'a', '中')",
+        },
     ];
 
     for case in cases {
@@ -1117,8 +1125,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT LENGTH(_latin1 0xFF)",
         },
         SqlCase {
-            name: "latin1 padded with text latin1 lacks",
-            sql: "SELECT RPAD(_latin1 0xFF, 3, '\u{4e2d}')",
+            name: "latin1 padded with text latin1 lacks to a column's length",
+            sql: "SELECT RPAD(_latin1 0xFF, a, '\u{4e2d}') FROM t",
         },
         SqlCase {
             name: "latin1 padded to a length where its byte size decides the packet limit",
