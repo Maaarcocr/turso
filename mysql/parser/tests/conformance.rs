@@ -867,6 +867,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT - 0e0, - 0e0, - 1e0, 0e0 * - 100458, 2.55e2 * 2, 1e0 / 3, 0e0 + 0e0",
         ),
         (
+            "SELECT ROUND(X'ff', 255), TRUNCATE(0b1, -1), ROUND(0x40)",
+            "SELECT ROUND (255e0, 255), TRUNCATE (1e0, - 1), ROUND (64e0)",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),

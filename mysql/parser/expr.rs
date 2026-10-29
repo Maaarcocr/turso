@@ -3586,6 +3586,14 @@ fn translate_function(
     }
     let mut args = function_arguments(&upper_name, list, literal_context, context)?;
     round_decimal_integer_arguments(&upper_name, &mut args);
+    if matches!(upper_name.as_str(), "ROUND" | "TRUNCATE") {
+        if let Some(literal) = unnamed_arguments(list)?
+            .first()
+            .and_then(|value| hex_or_bit_literal(value))
+        {
+            args[0] = binary_literal_as_double(literal)?;
+        }
+    }
     if let Some(LiteralResult::TextArgument(position, text)) = &digits {
         args[*position] = string_expr(text);
     }
