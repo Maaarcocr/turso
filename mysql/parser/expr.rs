@@ -75,7 +75,12 @@ fn translate_node(
         Expr::TypedString(typed) => translate_typed_string(typed, literal_context),
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
         Expr::Identifier(identifier) => translate_identifier_expr(identifier),
-        Expr::CompoundIdentifier(parts) => translate_compound_identifier(parts),
+        Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+            [scope, name] if is_system_variable_scope(scope) => {
+                crate::session::system_variable(&scope.value, name)
+            }
+            _ => translate_compound_identifier(parts),
+        },
         expr if is_bit_operation(expr) => translate_bit_operation(expr, context),
         Expr::UnaryOp { op, expr } => translate_unary(*op, expr, literal_context, context),
         Expr::BinaryOp { left, op, right } => {
@@ -776,8 +781,24 @@ fn translate_identifier_expr(identifier: &Ident) -> Result<ast::Expr, MysqlParse
         if let Some(literal) = current_time_literal(&upper_name) {
             return Ok(literal);
         }
+        if let Some(name) = identifier.value.strip_prefix("@@") {
+            return crate::session::system_variable("@@", &Ident::new(name.to_string()));
+        }
+        if let Some(name) = crate::session::user_variable_name(&identifier.value) {
+            return Ok(function_call(
+                "__mysql_user_variable",
+                vec![string_expr(&name)],
+            ));
+        }
     }
     Ok(ast::Expr::Id(column_name(identifier)?))
+}
+
+fn is_system_variable_scope(scope: &Ident) -> bool {
+    scope.quote_style.is_none()
+        && ["@@session", "@@local", "@@global"]
+            .iter()
+            .any(|prefix| scope.value.eq_ignore_ascii_case(prefix))
 }
 
 fn translate_compound_identifier(parts: &[Ident]) -> Result<ast::Expr, MysqlParserError> {
@@ -2901,7 +2922,7 @@ pub(crate) fn string_literal(expr: &Expr) -> Option<&str> {
     }
 }
 
-fn string_expr(text: &str) -> ast::Expr {
+pub(crate) fn string_expr(text: &str) -> ast::Expr {
     ast::Expr::Literal(ast::Literal::String(quote_string(text)))
 }
 
@@ -4804,9 +4825,15 @@ fn translate_special_function(
     }
 }
 
-fn collation_of(expr: &Expr) -> Option<&'static str> {
+pub(crate) fn collation_of(expr: &Expr) -> Option<&'static str> {
     match expr {
         Expr::Nested(inner) => collation_of(inner),
+        Expr::Identifier(identifier)
+            if identifier.quote_style.is_none()
+                && crate::session::user_variable_name(&identifier.value).is_some() =>
+        {
+            Some(DEFAULT_COLLATION)
+        }
         Expr::Value(value) => match value.value {
             Value::SingleQuotedString(_) | Value::DoubleQuotedString(_) => Some(DEFAULT_COLLATION),
             Value::NationalStringLiteral(_) => Some("utf8mb3_general_ci"),

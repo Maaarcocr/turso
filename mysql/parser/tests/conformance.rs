@@ -733,7 +733,7 @@ fn rejects_non_anonymous_parameters() {
     let error = translate(&numbered).expect_err("numbered placeholders must not lower");
     assert!(matches!(error, MysqlParserError::Unsupported(_)));
 
-    for sql in ["SELECT :named", "SELECT @named"] {
+    for sql in ["SELECT :named"] {
         match parse_one(sql) {
             Ok(statement) => {
                 let error = translate(&statement).expect_err("named placeholders must not lower");
@@ -800,6 +800,10 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT *", "SELECT *"),
         ("SELECT users.* FROM users", "SELECT users.* FROM users"),
         ("SELECT 1 FROM dual", "SELECT 1"),
+        (
+            "SELECT @a, @@version, @@SESSION.autocommit",
+            "SELECT __mysql_user_variable ('a'), '8.4.10', 1",
+        ),
         (
             "SELECT JSON_ARRAYAGG(a), JSON_OBJECTAGG(b, a) FROM t",
             "SELECT __mysql_json_arrayagg (json_group_array (JSON_ARRAY (a))), __mysql_json_objectagg (json_group_array (JSON_OBJECT (b, a))) FROM t",
@@ -1206,12 +1210,12 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t FOR UPDATE",
         },
         SqlCase {
-            name: "user variable",
-            sql: "SELECT @a",
+            name: "global system variable",
+            sql: "SELECT @@global.sql_mode",
         },
         SqlCase {
-            name: "system variable",
-            sql: "SELECT @@version",
+            name: "system variable outside the target profile",
+            sql: "SELECT @@innodb_buffer_pool_size",
         },
         SqlCase {
             name: "json aggregate as a window function",
@@ -1608,7 +1612,8 @@ fn lowering_rejects_unsupported_statement_families() {
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
         "USE app",
-        "SET @answer = 42",
+        "SET @a = 1, @b = @a + 1",
+        "SET @a = 1, FOREIGN_KEY_CHECKS = 0",
         "SET NAMES latin1",
         "SET GLOBAL time_zone = 'UTC'",
         "SET time_zone = '+01:00'",
@@ -1935,6 +1940,14 @@ fn lowers_session_settings_of_the_target_profile() {
         ),
         ("SET FOREIGN_KEY_CHECKS = 0", "PRAGMA foreign_keys = 0"),
         ("SET time_zone = '+00:00', foreign_key_checks = ON", "PRAGMA foreign_keys = 1"),
+        (
+            "SET @Answer = 42, @s = 'x', @t = CONCAT('a', 'b'), time_zone = 'UTC'",
+            "SELECT 0 WHERE __mysql_set_user_variables ('answer', 0, 42, 's', 1, 'x', 't', 0, CONCAT ('a', 'b'))",
+        ),
+        (
+            "SET character_set_client = @saved, @a = 1",
+            "SELECT 0 WHERE __mysql_keep_session_settings ('character_set_client', __mysql_user_variable_value ('saved')) OR __mysql_set_user_variables ('a', 0, 1)",
+        ),
     ];
 
     for (sql, expected) in cases {

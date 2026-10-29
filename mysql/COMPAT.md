@@ -268,7 +268,7 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`, `VALUES` without
   `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`, `INTERSECT
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
-- User and system variables (`@a`, `@@x`), `:name` and `?N` parameters,
+- User and system variables outside the cases under Session settings, `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
   collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set,
   `CONVERT(... USING ...)` with any other character set, and `^` over
@@ -337,11 +337,43 @@ assignments in one statement are allowed):
 | `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON`, `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
 | `FOREIGN_KEY_CHECKS` set to 0, 1, `ON`, `OFF`, `TRUE` or `FALSE` | `PRAGMA foreign_keys = 0/1`, which Turso applies at once, also inside a transaction, as MySQL does. Turso then checks foreign keys like SQLite: an `UPDATE` that writes the same key value is checked too, where InnoDB skips it |
 
-Everything else is refused: user variables
-(`SET @a = 1`, Turso has no session variables yet), other values of these
-variables (`sql_mode`, `time_zone`, `autocommit = 0` and character sets
-change the semantics of later statements), `GLOBAL` scope, and other
-variables.
+| `time_zone`, `sql_mode`, the character sets or `collation_connection` set to an expression (`SET character_set_client = @saved_cs_client` in mysqldump output) | `__mysql_keep_session_settings(name, value, ...)`, which accepts the values above when it runs and refuses any other |
+| `SET @a = x, @b = y` (user variables) | `SELECT 0 WHERE __mysql_set_user_variables('a', default_collation, x, ...)`, which stores the values in the connection's session (`turso_mysql::open_*` connections only) |
+
+Everything else is refused: other values of these variables (`sql_mode`,
+`time_zone`, `autocommit = 0` and character sets change the semantics of
+later statements), `GLOBAL` scope, other variables, and an assignment that
+reads a user variable assigned earlier in the same `SET` (the values are all
+read before any is stored).
+
+### User and system variables
+
+A user variable `@name` (case-insensitive) reads
+`__mysql_user_variable('name')`: NULL until it is set, then the value last
+assigned in the session. MySQL gives a variable the type and collation of the
+value assigned, so the frontend keeps what a plain value carries and refuses
+the rest:
+
+- integers, doubles, binary strings and NULL are kept;
+- a string is read back with `utf8mb4_0900_ai_ci`, so it is kept only when
+  its collation is known to be that: a string literal or another user
+  variable. A string from a column, a function such as `CONCAT` or a JSON
+  value, whose collation MySQL derives from that source, is refused when
+  read (it can still be passed to a `SET` of a setting);
+- `DECIMAL`, temporal, `ENUM`, `SET` and other typed values are refused when
+  assigned;
+- `@a := x` and `SELECT ... INTO @a` are not lowered.
+
+A system variable `@@name` or `@@session.name` whose value the target profile
+fixes reads as that constant: `sql_mode`, `time_zone` (`+00:00`),
+`transaction_isolation` (`REPEATABLE-READ`), the `character_set_*` and
+`collation_*` variables of the connection, server and database, `version`
+(`8.4.10`), `autocommit`, `auto_increment_increment`,
+`auto_increment_offset`, `unique_checks`, `explicit_defaults_for_timestamp`,
+`lower_case_table_names`, `sql_auto_is_null`, `transaction_read_only`,
+`max_execution_time`, `sql_safe_updates`, `default_week_format`,
+`div_precision_increment`, `group_concat_max_len`, `max_allowed_packet` and
+`default_storage_engine`. `@@global.` and other variables are refused.
 
 ## JSON functions
 
