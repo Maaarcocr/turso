@@ -1270,7 +1270,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "a DECIMAL a double cannot hold in a date function",
-            sql: "SELECT SEC_TO_TIME(1234567890123.12345)",
+            sql: "SELECT SEC_TO_TIME(12345678901.123456789)",
         },
         SqlCase {
             name: "a DATE_ADD of a TIME literal",
