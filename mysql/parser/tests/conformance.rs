@@ -607,6 +607,18 @@ fn reports_decimal_casts_that_mysql_rejects() {
             name: "binary string that is not UTF-8 next to a JSON value",
             sql: "SELECT CONCAT(CAST(1 AS JSON), 0xFF)",
         },
+        SqlCase {
+            name: "a binary string that is not UTF-8 under an explicit collation in LIKE",
+            sql: "SELECT 0xFF LIKE 'a' COLLATE utf8mb4_0900_as_cs",
+        },
+        SqlCase {
+            name: "a string latin1 lacks converted to a latin1 subject",
+            sql: "SELECT LPAD(_latin1 0xFF, -1, '中')",
+        },
+        SqlCase {
+            name: "a string latin1 lacks compared with a latin1 FIELD subject",
+            sql: "SELECT FIELD(_latin1 0xFF, 'a', '中')",
+        },
     ];
 
     for case in cases {
@@ -831,6 +843,22 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD (CAST ('18446744073709551615' AS DECIMAL (20, 0)), 7), MOD (1.5e0, 1), ABS (CAST ('9223372036854775808' AS DECIMAL (19, 0))), 9223372036854775807",
         ),
         (
+            "SELECT IF(a, 1.5, -0x1), CASE WHEN a THEN 7 ELSE -0x1 END, MOD(-0x1, 1.0), -255 % -0x1, MOD(3.141592653589793, -0x1), '64' % -0x1 FROM t",
+            "SELECT \"IF\" (a, '1.5', '-1.0'), CASE WHEN a THEN '7' ELSE '-1' END, '-0.0', '-0', '0.141592653589793', MOD ('64', -1e0) FROM t",
+        ),
+        (
+            "SELECT TIME '10:04:58' * 0b1001, NULL * 1 + x'09', 18446744073709551615 + 0x0, -9223372036854775808 % 0x9, TIME '5 10:34:58.9' / 0xFF666F6F626172FF, TRUE AND 0xFF666F6F626172FF, _utf8 'foobar' + x'09'",
+            "SELECT 904122, NULL * 1 + 9, CAST ('18446744073709551615' AS DECIMAL (20, 0)), -8, 1303458.9 / CAST ('18403519451478717183' AS DECIMAL (20, 0)), TRUE AND 1, 'foobar' + 9e0",
+        ),
+        (
+            "SELECT 'abc' COLLATE utf8mb4_0900_as_cs LIKE 'A%', 1.5 NOT LIKE _utf8mb4 '1._' COLLATE utf8mb4_bin",
+            "SELECT __mysql_like_bin ('abc', 'A%', '\\'), NOT __mysql_like_bin (1.5, '1._', '\\')",
+        ),
+        (
+            "SELECT PERIOD_ADD(18446744073709551616, 1), PERIOD_DIFF(1, -9223372036854775809), PERIOD_ADD(9223372036854775808, 1)",
+            "SELECT PERIOD_ADD (9223372036854775807, 1), PERIOD_DIFF (1, (-9223372036854775807 - 1)), PERIOD_ADD (9223372036854775808, 1)",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),
@@ -994,7 +1022,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT 0xAACC, HEX(0xAACC), -0x2, 0xff + b'1001', 0x1 / 7, X'40' + -1.5e0, ABS(_binary X'40'), _binary '1' + 1",
-            "SELECT x'AACC', HEX (x'AACC'), -2e0, 255 + 9, 1 / 7, 64e0 + -1.5e0, ABS ('@'), 1e0 + 1",
+            "SELECT x'AACC', HEX (x'AACC'), -2e0, 264, 1 / 7, 64e0 + -1.5e0, ABS ('@'), 1e0 + 1",
         ),
         (
             "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",
@@ -1113,8 +1141,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT LENGTH(_latin1 0xFF)",
         },
         SqlCase {
-            name: "latin1 padded with text latin1 lacks",
-            sql: "SELECT RPAD(_latin1 0xFF, 3, '\u{4e2d}')",
+            name: "latin1 padded with text latin1 lacks to a column's length",
+            sql: "SELECT RPAD(_latin1 0xFF, a, '\u{4e2d}') FROM t",
         },
         SqlCase {
             name: "latin1 padded to a length where its byte size decides the packet limit",
@@ -1173,8 +1201,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT TIMESTAMP '2000-01-01 23:59:59.5' & 1",
         },
         SqlCase {
-            name: "LIKE under a case-sensitive collation",
-            sql: "SELECT 'a' COLLATE utf8mb4_0900_as_cs LIKE 'A'",
+            name: "LIKE under a case-sensitive collation beyond printable ASCII",
+            sql: "SELECT 'a\u{e9}' COLLATE utf8mb4_0900_as_cs LIKE 'A%'",
         },
         SqlCase {
             name: "LOCATE under a case-sensitive collation",

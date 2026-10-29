@@ -42,6 +42,12 @@ pub(crate) fn translate_condition(
     if json::is_json_value(expr) {
         return json::translate_truth(expr, context);
     }
+    let above_bigint = hex_or_bit_literal(expr)
+        .and_then(|literal| binary_literal_value(literal).ok())
+        .is_some_and(|value| i64::try_from(value).is_err());
+    if above_bigint {
+        return Ok(ast::Expr::Literal(ast::Literal::Numeric("1".to_string())));
+    }
     translate_in(expr, Context::Number, context)
 }
 
@@ -1058,8 +1064,9 @@ fn arithmetic(
                 || matches!(expr, Expr::Prefixed { value, .. } if is_text_literal(value))
         };
         let double = reads_double(left) || reads_double(right);
-        let mut operand = |expr: &Expr| match hex_or_bit_literal(expr) {
-            Some(literal) if double => binary_literal_as_double(literal),
+        let mut operand = |expr: &Expr| match (hex_or_bit_literal(expr), negated_binary(expr)) {
+            (Some(literal), _) if double => binary_literal_as_double(literal),
+            (_, Some(literal)) if double => negated_binary_literal(literal),
             _ => unsigned_bigint_operand(expr, Context::Arithmetic, context),
         };
         let dividend = operand(left)?;
@@ -1218,24 +1225,38 @@ fn unsigned_arithmetic(
                 "`{left} {operator} {right}` inside arithmetic, where its BIGINT UNSIGNED type changes the result, is not lowered yet"
             )));
         }
-        let result = match operator {
-            ast::Operator::Add => lhs.checked_add(rhs),
-            ast::Operator::Subtract => lhs.checked_sub(rhs),
-            ast::Operator::Multiply => lhs.checked_mul(rhs),
-            ast::Operator::Modulus => Some(if rhs == 0 { 0 } else { lhs % rhs }),
+        let (result, range) = match operator {
+            ast::Operator::Add => (lhs.checked_add(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Subtract => (lhs.checked_sub(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Multiply => (lhs.checked_mul(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Modulus if rhs == 0 => {
+                return Ok(Some(ast::Expr::Literal(ast::Literal::Null)));
+            }
+            ast::Operator::Modulus if lhs > i128::from(i64::MAX) && rhs < 0 => {
+                return Ok(None);
+            }
+            ast::Operator::Modulus => {
+                (Some(lhs % rhs), i128::from(i64::MIN)..=i128::from(u64::MAX))
+            }
             _ => return Ok(None),
         };
-        if !result.is_some_and(|result| (0..=i128::from(i64::MAX)).contains(&result)) {
+        let Some(result) = result.filter(|result| range.contains(result)) else {
             return Err(MysqlParserError::Unsupported(format!(
-                "`{left} {operator} {right}`, which MySQL computes as BIGINT UNSIGNED outside the BIGINT range, is not lowered yet"
+                "`{left} {operator} {right}`, which MySQL computes as BIGINT UNSIGNED and rejects outside its range, is not lowered yet"
             )));
-        }
+        };
+        return Ok(Some(match i64::try_from(result) {
+            Ok(result) => ast::Expr::Literal(ast::Literal::Numeric(result.to_string())),
+            Err(_) => exact_decimal(&result.to_string(), false),
+        }));
     }
     let lhs = unsigned_operand(left, left_binary, context)?;
     let rhs = unsigned_operand(right, right_binary, context)?;
     Ok(Some(ast::Expr::binary(lhs, operator, rhs)))
 }
 
+/// An operand of arithmetic MySQL computes as DECIMAL beside a hex or bit
+/// literal, which is its exact value.
 fn unsigned_operand(
     expr: &Expr,
     binary: Option<&Value>,
@@ -1244,12 +1265,11 @@ fn unsigned_operand(
     let Some(literal) = binary else {
         return translate_in(expr, Context::Arithmetic, context);
     };
-    let value = i64::try_from(binary_literal_value(literal)?).map_err(|_| {
-        MysqlParserError::Unsupported(format!(
-            "`{expr}` above the BIGINT range in arithmetic is not lowered yet"
-        ))
-    })?;
-    Ok(ast::Expr::Literal(ast::Literal::Numeric(value.to_string())))
+    let value = binary_literal_value(literal)?;
+    Ok(match i64::try_from(value) {
+        Ok(value) => ast::Expr::Literal(ast::Literal::Numeric(value.to_string())),
+        Err(_) => exact_decimal(&value.to_string(), false),
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -1260,14 +1280,49 @@ enum OperandKind {
 }
 
 impl OperandKind {
+    /// The kind of a literal operand beside a hex or bit literal: integers
+    /// up to the BIGINT UNSIGNED limit, `TRUE` and `FALSE`, and DATE, TIME
+    /// and TIMESTAMP literals as their numbers; DECIMAL for exact numbers
+    /// with decimals or beyond, and for temporal literals with a fraction;
+    /// `NULL` for `NULL` and arithmetic of `NULL` and a number literal.
     fn of(expr: &Expr) -> Result<Option<OperandKind>, MysqlParserError> {
         if let Some(literal) = hex_or_bit_literal(expr) {
             return Ok(Some(OperandKind::Integer(i128::from(
                 binary_literal_value(literal)?,
             ))));
         }
-        if is_null_literal(expr) {
+        if is_null_valued(expr) {
             return Ok(Some(OperandKind::Null));
+        }
+        match unnested(expr) {
+            Expr::Value(value) => {
+                if let Value::Boolean(value) = value.value {
+                    return Ok(Some(OperandKind::Integer(i128::from(value))));
+                }
+            }
+            Expr::TypedString(typed) => {
+                if temporal_has_fraction(expr) {
+                    return Ok(Some(OperandKind::Decimal));
+                }
+                let Some(temporal) = temporal_literal(typed) else {
+                    return Ok(None);
+                };
+                let digits: String = temporal
+                    .text
+                    .chars()
+                    .filter(|character| character.is_ascii_digit())
+                    .collect();
+                let Ok(magnitude) = digits.parse::<i128>() else {
+                    return Ok(None);
+                };
+                let negative = temporal.text.starts_with('-');
+                return Ok(Some(OperandKind::Integer(if negative {
+                    -magnitude
+                } else {
+                    magnitude
+                })));
+            }
+            _ => {}
         }
         let Some(digits) = signed_number_literal(expr) else {
             return Ok(None);
@@ -1275,15 +1330,41 @@ impl OperandKind {
         if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
             return Ok(Some(OperandKind::Decimal));
         }
-        let Ok(magnitude) = digits.parse::<i64>() else {
+        let Ok(magnitude) = digits.parse::<u64>() else {
             return Ok(None);
         };
-        let value = i128::from(magnitude);
-        Ok(Some(OperandKind::Integer(if is_negated(expr) {
-            -value
+        let magnitude = i128::from(magnitude);
+        if !is_negated(expr) {
+            return Ok(Some(OperandKind::Integer(magnitude)));
+        }
+        Ok(Some(if magnitude > -i128::from(i64::MIN) {
+            OperandKind::Decimal
         } else {
-            value
-        })))
+            OperandKind::Integer(-magnitude)
+        }))
+    }
+}
+
+/// `NULL`, or `+ - * / % DIV` of a `NULL`-valued operand and a number
+/// literal, which cannot fail before the result is `NULL`.
+fn is_null_valued(expr: &Expr) -> bool {
+    match unnested(expr) {
+        Expr::BinaryOp {
+            left,
+            op:
+                BinaryOperator::Plus
+                | BinaryOperator::Minus
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Modulo
+                | BinaryOperator::MyIntegerDivide,
+            right,
+        } => {
+            let number = |expr: &Expr| signed_number_literal(expr).is_some();
+            (is_null_valued(left) && (number(right) || is_null_valued(right)))
+                || (number(left) && is_null_valued(right))
+        }
+        other => is_null_literal(other),
     }
 }
 
@@ -1318,7 +1399,10 @@ fn arithmetic_operand(
         ))));
     }
     if introduced_text {
-        return translate_in(expr, Context::Arithmetic, context);
+        return match hex_or_bit_literal(expr) {
+            Some(literal) => binary_literal_as_double(literal),
+            None => translate_in(expr, Context::Arithmetic, context),
+        };
     }
     if let Some(literal) = negated_binary(expr) {
         return negated_binary_literal(literal);
@@ -1340,29 +1424,134 @@ fn negated_binary(expr: &Expr) -> Option<&Value> {
     }
 }
 
-/// The text MySQL shows for `a + b` or `a - b` of a negated hex or bit literal
-/// and another such literal or an exact number literal. MySQL computes the sum
-/// as a DOUBLE with the most decimals of the operands and shows it with exactly
-/// that many, from its shortest round-trip digits (`-0.0 + -0xffff` is
-/// `-65535.0`, `-0 + -0xffffffffffffffff` is `-18446744073709552000`).
-pub(crate) fn shown_negated_binary_sum(expr: &Expr) -> Option<Result<ast::Expr, MysqlParserError>> {
-    let Expr::BinaryOp { left, op, right } = expr else {
-        return match expr {
-            Expr::Nested(inner) => shown_negated_binary_sum(inner),
-            _ => None,
-        };
-    };
+/// The text MySQL shows for a selected `a + b`, `a - b`, `a % b` or `MOD(a, b)`
+/// of a negated hex or bit literal and another such literal or an exact number
+/// literal, and for a selected IF, IFNULL, COALESCE or CASE among such
+/// results. MySQL computes them as a DOUBLE with the most decimals of the
+/// operands and shows it with exactly that many, rounded from its shortest
+/// round-trip digits (`-0.0 + -0xffff` is `-65535.0`, `-0 + -0xffffffffffffffff`
+/// is `-18446744073709552000`).
+pub(crate) fn shown_negated_binary(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Option<Result<ast::Expr, MysqlParserError>> {
+    match expr {
+        Expr::Nested(inner) => shown_negated_binary(inner, context),
+        Expr::BinaryOp { left, op, right } => shown_negated_binary_operation(left, op, right),
+        Expr::Function(function) => match function_shape(function)? {
+            (name, args) if name == "MOD" && args.len() == 2 => {
+                shown_negated_binary_operation(args[0], &BinaryOperator::Modulo, args[1])
+            }
+            _ => shown_fixed_double_results(expr, context),
+        },
+        Expr::Case { .. } => shown_fixed_double_results(expr, context),
+        _ => None,
+    }
+}
+
+fn shown_negated_binary_operation(
+    left: &Expr,
+    op: &BinaryOperator,
+    right: &Expr,
+) -> Option<Result<ast::Expr, MysqlParserError>> {
     if negated_binary(left).is_none() && negated_binary(right).is_none() {
         return None;
     }
-    let (lhs, lhs_decimals) = fixed_double_operand(left)?;
-    let (rhs, rhs_decimals) = fixed_double_operand(right)?;
+    let operand = |expr: &Expr| {
+        fixed_double_operand(expr).or_else(|| match op {
+            BinaryOperator::Modulo => {
+                let value = binary_literal_value(hex_or_bit_literal(expr)?).ok()?;
+                Some((value as f64, 0))
+            }
+            _ => None,
+        })
+    };
+    let (lhs, lhs_decimals) = operand(left)?;
+    let (rhs, rhs_decimals) = operand(right)?;
     let value = match op {
         BinaryOperator::Plus => lhs + rhs,
         BinaryOperator::Minus => lhs - rhs,
+        BinaryOperator::Modulo if rhs == 0.0 => {
+            return Some(Ok(ast::Expr::Literal(ast::Literal::Null)));
+        }
+        BinaryOperator::Modulo => lhs % rhs,
         _ => return None,
     };
     Some(fixed_double_text(value, lhs_decimals.max(rhs_decimals)).map(|text| string_expr(&text)))
+}
+
+/// A selected IF, IFNULL, COALESCE or CASE whose results are NULL, exact
+/// number literals and a negated hex or bit literal, a DOUBLE without
+/// decimals. MySQL computes every result as a DOUBLE with the most decimals
+/// of any and shows it with exactly that many (`IF(c, 1.5, -0x1)` shows
+/// `-1.0` or `1.5`), so each result becomes that text.
+fn shown_fixed_double_results(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Option<Result<ast::Expr, MysqlParserError>> {
+    let mut shown = expr.clone();
+    let results: Vec<&mut Expr> = match &mut shown {
+        Expr::Case {
+            conditions,
+            else_result,
+            ..
+        } => conditions
+            .iter_mut()
+            .map(|case| &mut case.result)
+            .chain(else_result.as_deref_mut())
+            .collect(),
+        Expr::Function(function) => {
+            let (name, args) = function_shape(function)?;
+            let positions = result_positions(&name, args.len());
+            if positions.is_empty() {
+                return None;
+            }
+            let FunctionArguments::List(list) = &mut function.args else {
+                unreachable!("function_shape accepts only argument lists");
+            };
+            list.args
+                .iter_mut()
+                .enumerate()
+                .filter(|(position, _)| positions.contains(position))
+                .map(|(_, arg)| match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) => arg,
+                    _ => unreachable!("function_shape accepts only unnamed arguments"),
+                })
+                .collect()
+        }
+        _ => return None,
+    };
+    if !results
+        .iter()
+        .any(|result| negated_binary(result).is_some())
+    {
+        return None;
+    }
+    let is_null = |expr: &Expr| matches!(expr, Expr::Value(value) if value.value == Value::Null);
+    let operands = results
+        .iter()
+        .map(|result| match is_null(result) {
+            true => Some(None),
+            false => fixed_double_operand(result).map(Some),
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let decimals = operands
+        .iter()
+        .flatten()
+        .map(|(_, decimals)| *decimals)
+        .max()
+        .expect("a negated binary literal is among the results");
+    for (result, operand) in results.into_iter().zip(operands) {
+        if let Some((value, _)) = operand {
+            match fixed_double_text(value, decimals) {
+                Ok(text) => {
+                    *result = Expr::Value(Value::SingleQuotedString(text).with_empty_span())
+                }
+                Err(error) => return Some(Err(error)),
+            }
+        }
+    }
+    Some(translate_bytes(&shown, context))
 }
 
 fn fixed_double_operand(expr: &Expr) -> Option<(f64, usize)> {
@@ -1410,11 +1599,30 @@ fn fixed_double_text(value: f64, decimals: usize) -> Result<String, MysqlParserE
         (integer.to_string(), fraction.to_string())
     };
     let fraction = fraction.trim_end_matches('0');
-    if fraction.len() > decimals {
-        return Err(MysqlParserError::Unsupported(format!(
-            "a DOUBLE sum of {value:e} shown with {decimals} decimals, which MySQL rounds, is not lowered yet"
-        )));
-    }
+    let (integer, fraction) = if fraction.len() > decimals {
+        let (kept, dropped) = fraction.split_at(decimals);
+        if dropped == "5" {
+            return Err(MysqlParserError::Unsupported(format!(
+                "a DOUBLE of {value:e} halfway between two values of {decimals} decimals, which MySQL rounds by its exact binary value, is not lowered yet"
+            )));
+        }
+        let mut digits = format!("{integer}{kept}").into_bytes();
+        if dropped.as_bytes()[0] >= b'5' {
+            let carried = digits.iter_mut().rev().all(|digit| {
+                let nine = *digit == b'9';
+                *digit = if nine { b'0' } else { *digit + 1 };
+                nine
+            });
+            if carried {
+                digits.insert(0, b'1');
+            }
+        }
+        let digits = String::from_utf8(digits).expect("decimal digits are ASCII");
+        let (integer, kept) = digits.split_at(digits.len() - decimals);
+        (integer.to_string(), kept.to_string())
+    } else {
+        (integer, fraction.to_string())
+    };
     Ok(if decimals == 0 {
         format!("{sign}{integer}")
     } else {
@@ -2324,6 +2532,13 @@ fn translate_like(
     escape: Option<&sqlparser::ast::ValueWithSpan>,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(matched) = case_sensitive_ascii_like(expr, pattern, escape, context)? {
+        return Ok(if negated {
+            ast::Expr::unary(ast::UnaryOperator::Not, matched)
+        } else {
+            matched
+        });
+    }
     ensure_default_collation(&[expr, pattern], "LIKE")?;
     let escape = match escape {
         Some(escape) => match &escape.value {
@@ -2401,6 +2616,101 @@ pub(crate) fn string_literal(expr: &Expr) -> Option<&str> {
 
 fn string_expr(text: &str) -> ast::Expr {
     ast::Expr::Literal(ast::Literal::String(quote_string(text)))
+}
+
+/// `LIKE` under an explicit `utf8mb4_0900_as_cs`, `utf8mb4_0900_bin` or
+/// `utf8mb4_bin` of literals whose text is printable ASCII, where those
+/// collations order characters as their bytes: `__mysql_like_bin`. MySQL
+/// converts every operand to the explicit collation's `utf8mb4`, so a hex,
+/// bit or `_binary` literal that is not UTF-8 is rejected.
+fn case_sensitive_ascii_like(
+    expr: &Expr,
+    pattern: &Expr,
+    escape: Option<&sqlparser::ast::ValueWithSpan>,
+    context: &mut TranslationContext,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    fn printable(text: &str) -> bool {
+        text.bytes().all(|byte| (0x20..0x7f).contains(&byte))
+    }
+    fn collated(expr: &Expr) -> &Expr {
+        match expr {
+            Expr::Collate { expr, .. } | Expr::Nested(expr) => collated(expr),
+            other => other,
+        }
+    }
+    fn operand(expr: &Expr) -> Result<Option<&Expr>, MysqlParserError> {
+        let expr = collated(expr);
+        if is_binary_literal(expr) {
+            let Some(bytes) = binary_literal_bytes(expr) else {
+                return Ok(None);
+            };
+            return match String::from_utf8(bytes) {
+                Ok(text) => Ok(printable(&text).then_some(expr)),
+                Err(_) => Err(MysqlParserError::Rejected(format!(
+                    "cannot convert the binary string `{expr}` of LIKE to utf8mb4"
+                ))),
+            };
+        }
+        if json::is_json_value(expr) {
+            let literal_cast = matches!(
+                expr,
+                Expr::Cast { expr: inner, data_type: DataType::JSON, .. } if is_literal(inner)
+            );
+            let text = expr.to_string();
+            return Ok((literal_cast && printable(&text) && !text.contains('\\')).then_some(expr));
+        }
+        let text = match expr {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => Some(text),
+                Value::Number(..) | Value::Boolean(_) | Value::Null => None,
+                _ => return Ok(None),
+            },
+            Expr::Prefixed { prefix, value } => {
+                match (prefix.value.to_ascii_lowercase().as_str(), value.as_ref()) {
+                    ("_utf8mb4" | "_utf8mb3" | "_utf8", Expr::Value(value)) => match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                            Some(text)
+                        }
+                        _ => return Ok(None),
+                    },
+                    _ => return Ok(None),
+                }
+            }
+            Expr::TypedString(_) => None,
+            _ if signed_number_literal(expr).is_some() || is_null_valued(expr) => None,
+            _ => return Ok(None),
+        };
+        Ok(text.is_none_or(|text| printable(text)).then_some(expr))
+    }
+    let Some(name) = single_explicit_collation(&[expr, pattern])? else {
+        return Ok(None);
+    };
+    if !matches!(
+        name.to_ascii_lowercase().as_str(),
+        "utf8mb4_0900_as_cs" | "utf8mb4_0900_bin" | "utf8mb4_bin"
+    ) {
+        return Ok(None);
+    }
+    let escape = match escape.map(|escape| &escape.value) {
+        None => '\\',
+        Some(Value::SingleQuotedString(text) | Value::DoubleQuotedString(text))
+            if text.len() == 1 && printable(text) =>
+        {
+            text.chars().next().expect("the escape has one character")
+        }
+        Some(_) => return Ok(None),
+    };
+    let (Some(subject), Some(matched)) = (operand(expr)?, operand(pattern)?) else {
+        return Ok(None);
+    };
+    Ok(Some(function_call(
+        "__mysql_like_bin",
+        vec![
+            json::like_operand(subject, context)?,
+            json::like_operand(matched, context)?,
+            string_expr(&escape.to_string()),
+        ],
+    )))
 }
 
 fn with_dangling_escape_doubled(pattern: &str, escape: char) -> String {
@@ -3197,6 +3507,9 @@ fn translate_function(
         FunctionArguments::List(list) => list,
         FunctionArguments::Subquery(_) => return Err(unsupported_function(function)),
     };
+    if let Some(error) = latin1_subject_collation_error(&upper_name, list) {
+        return Err(error);
+    }
     if matches!(
         upper_name.as_str(),
         "GREATEST" | "LEAST" | "FIELD" | "NULLIF" | "INTERVAL"
@@ -3439,6 +3752,12 @@ fn round_decimal_integer_arguments(upper_name: &str, args: &mut [ast::Expr]) {
         if digits.contains(['e', 'E']) {
             continue;
         }
+        if matches!(upper_name, "PERIOD_ADD" | "PERIOD_DIFF") {
+            if let Some(saturated) = saturated_decimal_integer(negative, &digits) {
+                *arg = saturated;
+                continue;
+            }
+        }
         let Some((whole, fraction)) = digits.split_once('.') else {
             continue;
         };
@@ -3453,6 +3772,123 @@ fn round_decimal_integer_arguments(upper_name: &str, args: &mut [ast::Expr]) {
             literal
         };
     }
+}
+
+/// The BIGINT a DECIMAL literal beyond the BIGINT range reads as, as MySQL's
+/// integer value of a DECIMAL saturates (`PERIOD_ADD(18446744073709551616, 1)`
+/// reads 9223372036854775807). Integer literals up to the BIGINT UNSIGNED
+/// limit are BIGINT UNSIGNED, not DECIMAL, and are left alone.
+fn saturated_decimal_integer(negative: bool, digits: &str) -> Option<ast::Expr> {
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    let whole = whole.trim_start_matches('0');
+    let rounds_up = fraction.starts_with(['5', '6', '7', '8', '9']);
+    let magnitude = if whole.is_empty() {
+        Some(0)
+    } else {
+        whole.parse::<u128>().ok()
+    }
+    .map(|whole| whole + u128::from(rounds_up));
+    let limit = if negative {
+        i64::MIN.unsigned_abs()
+    } else {
+        i64::MAX.unsigned_abs()
+    };
+    let decimal = !fraction.is_empty()
+        || exceeds_unsigned_bigint(whole)
+        || (negative && magnitude.is_none_or(|magnitude| magnitude > u128::from(limit)));
+    if !decimal || magnitude.is_some_and(|magnitude| magnitude <= u128::from(limit)) {
+        return None;
+    }
+    Some(if negative {
+        smallest_bigint()
+    } else {
+        ast::Expr::Literal(ast::Literal::Numeric(i64::MAX.to_string()))
+    })
+}
+
+/// `REPLACE`, `LPAD`, `RPAD` and string-comparing `FIELD` of a `_latin1` hex
+/// subject and literals: MySQL converts the other strings to the subject's
+/// `latin1` when it prepares the call and rejects a string with a character
+/// `latin1` lacks, whatever the other arguments (`LPAD(_latin1 0xFF, -1,
+/// '中')` fails). A `NULL` argument can spare the call, so it is left alone.
+fn latin1_subject_collation_error(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Option<MysqlParserError> {
+    enum Literal<'a> {
+        Text(&'a str),
+        Number,
+        Binary,
+    }
+    fn quoted(value: &Value) -> Option<&str> {
+        match value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => Some(text),
+            _ => None,
+        }
+    }
+    fn literal(expr: &Expr) -> Option<Literal<'_>> {
+        match expr {
+            Expr::Value(value) => quoted(&value.value).map(Literal::Text).or_else(|| {
+                hex_or_bit_literal(expr)
+                    .map(|_| Literal::Binary)
+                    .or_else(|| signed_number_literal(expr).map(|_| Literal::Number))
+            }),
+            Expr::Prefixed { prefix, value } => {
+                let Expr::Value(value) = value.as_ref() else {
+                    return None;
+                };
+                match prefix.value.to_ascii_lowercase().as_str() {
+                    "_utf8mb4" | "_utf8mb3" | "_utf8" => quoted(&value.value).map(Literal::Text),
+                    "_latin1" if matches!(value.value, Value::HexStringLiteral(_)) => {
+                        Some(Literal::Binary)
+                    }
+                    _ => None,
+                }
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                ..
+            } => signed_number_literal(expr).map(|_| Literal::Number),
+            Expr::Nested(inner) => literal(inner),
+            _ => None,
+        }
+    }
+    let args = unnamed_arguments(list).ok()?;
+    let (subject, rest) = args.split_first()?;
+    let latin1_hex = matches!(
+        subject,
+        Expr::Prefixed { prefix, value }
+            if prefix.quote_style.is_none()
+                && prefix.value.eq_ignore_ascii_case("_latin1")
+                && matches!(value.as_ref(), Expr::Value(value) if matches!(value.value, Value::HexStringLiteral(_)))
+    );
+    if !latin1_hex {
+        return None;
+    }
+    let literals = rest
+        .iter()
+        .map(|arg| literal(arg))
+        .collect::<Option<Vec<_>>>()?;
+    let converted: Vec<&Literal> = match (upper_name, literals.as_slice()) {
+        ("REPLACE", [_, _]) => literals.iter().collect(),
+        ("LPAD" | "RPAD", [_, pad]) => vec![pad],
+        ("FIELD", [_, ..])
+            if !literals
+                .iter()
+                .any(|literal| matches!(literal, Literal::Number)) =>
+        {
+            literals.iter().collect()
+        }
+        _ => return None,
+    };
+    let lacking = converted.into_iter().find_map(|literal| match literal {
+        Literal::Text(text) if !text.chars().all(is_latin1_char) => Some(*text),
+        _ => None,
+    })?;
+    Some(MysqlParserError::Rejected(format!(
+        "Illegal mix of collations for operation '{}': '{lacking}' has a character latin1 lacks",
+        upper_name.to_ascii_lowercase()
+    )))
 }
 
 fn translate_function_without_parentheses(
