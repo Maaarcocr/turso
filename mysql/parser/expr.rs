@@ -855,8 +855,8 @@ fn translate_unary(
             if json::is_json_value(expr) {
                 return json::translate_negation(expr, context);
             }
-            if let Some(value) = arithmetic_text_double(expr)
-                .filter(|_| !context.compared_beside_non_literal)
+            if let Some(value) =
+                arithmetic_text_double(expr).filter(|_| !context.compared_beside_non_literal)
             {
                 return Ok(double_literal(-value));
             }
@@ -2163,12 +2163,6 @@ fn converted_number_text(
     let Some(text) = args.first().and_then(|arg| beyond_bigint_digits(arg)) else {
         return Ok(None);
     };
-    if args[1..].iter().any(|base| is_negated(base)) {
-        return Err(MysqlParserError::Unsupported(format!(
-            "CONV of `{}` to or from a negative base is not lowered yet",
-            args[0]
-        )));
-    }
     Ok(Some(text))
 }
 
@@ -2200,9 +2194,7 @@ fn folded_unsigned_bits(
 
 /// `FIELD` of number literals only, whose position MySQL finds comparing
 /// them as `NumberComparison` says.
-fn folded_number_field(
-    list: &FunctionArgumentList,
-) -> Result<Option<ast::Expr>, MysqlParserError> {
+fn folded_number_field(list: &FunctionArgumentList) -> Result<Option<ast::Expr>, MysqlParserError> {
     let args = unnamed_arguments(list)?;
     let Some((first, rest)) = args.split_first() else {
         return Ok(None);
@@ -2217,16 +2209,22 @@ fn folded_number_field(
     Ok(Some(number(position as u64)))
 }
 
-/// `IN` of number literals only, other than a BIGINT comparison where the
-/// sign of a literal above the BIGINT range matters, as the truth MySQL
-/// finds comparing them as `NumberComparison` says.
+/// `IN` of number literals only, as the truth MySQL finds comparing the left
+/// operand with each item as `NumberComparison` says for that pair
+/// (`9223372036854775808 IN (9223372036854775807, 9e0)` compares the first
+/// pair as BIGINT), other than a pair of BIGINTs with the same 64 bits, one
+/// negative and the other above the BIGINT range.
 fn folded_number_in(expr: &Expr, list: &[Expr], negated: bool) -> Option<ast::Expr> {
-    let operands = std::iter::once(expr).chain(list).collect::<Vec<_>>();
-    let kind = NumberComparison::of(&operands)?;
-    if kind.sign_matters(&operands) {
-        return None;
+    let mut found = false;
+    for item in list {
+        let pair = [expr, item];
+        let kind = NumberComparison::of(&pair)?;
+        let equal = kind.equal(expr, item);
+        if equal && kind.sign_matters(&pair) {
+            return None;
+        }
+        found |= equal;
     }
-    let found = list.iter().any(|item| kind.equal(expr, item));
     Some(number(u64::from(found != negated)))
 }
 
@@ -4601,7 +4599,11 @@ fn added_seconds_digits(seconds: &Expr, date: &Expr) -> Option<u64> {
         if digits.contains(['e', 'E']) {
             return None;
         }
-        Some(digits.split_once('.').map_or(0, |(_, fraction)| fraction.len() as u64))
+        Some(
+            digits
+                .split_once('.')
+                .map_or(0, |(_, fraction)| fraction.len() as u64),
+        )
     }
     let seconds_digits = match unnested(seconds) {
         Expr::BinaryOp {
@@ -4626,7 +4628,6 @@ fn added_seconds_digits(seconds: &Expr, date: &Expr) -> Option<u64> {
             dated_literal_kind(date)?;
             fraction_length(date) as u64
         }
-        _ if is_text_literal(date) => 6,
         _ => return None,
     };
     Some(seconds_digits.max(date_digits))
@@ -4654,9 +4655,7 @@ fn translate_special_function(
             if unit.quote_style.is_none() =>
         {
             let digits = match (upper_name, rest) {
-                ("TIMESTAMPADD", [seconds, date])
-                    if unit.value.eq_ignore_ascii_case("SECOND") =>
-                {
+                ("TIMESTAMPADD", [seconds, date]) if unit.value.eq_ignore_ascii_case("SECOND") => {
                     added_seconds_digits(seconds, date)
                 }
                 _ => None,
