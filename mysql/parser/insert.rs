@@ -9,8 +9,10 @@ use sqlparser::ast::{
 use turso_parser::ast;
 
 pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParserError> {
-    if insert.ignore {
-        return Err(unsupported("INSERT IGNORE".to_string()));
+    if insert.ignore && (insert.replace_into || insert.on.is_some()) {
+        return Err(unsupported(format!(
+            "IGNORE with REPLACE or ON DUPLICATE KEY UPDATE in `{insert}`"
+        )));
     }
     if insert.replace_into && insert.on.is_some() {
         return Err(unsupported(format!(
@@ -36,7 +38,11 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
                 .collect::<Result<Vec<_>, _>>()?;
             if let SetExpr::Values(values) = source.body.as_ref() {
                 if values.rows.iter().all(|row| row.is_empty()) {
-                    if !columns.is_empty() || values.rows.len() != 1 || insert.on.is_some() {
+                    if !columns.is_empty()
+                        || values.rows.len() != 1
+                        || insert.on.is_some()
+                        || insert.ignore
+                    {
                         return Err(unsupported(format!("INSERT of empty rows `{insert}`")));
                     }
                     return Ok(insert_statement(
@@ -55,6 +61,11 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
         _ => return Err(unsupported(format!("INSERT form `{insert}`"))),
     };
     let upsert = match &insert.on {
+        None if insert.ignore => Some(Box::new(ast::Upsert {
+            index: None,
+            do_clause: ast::UpsertDo::Nothing,
+            next: None,
+        })),
         None => None,
         Some(OnInsert::DuplicateKeyUpdate(assignments)) => {
             if !matches!(

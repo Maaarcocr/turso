@@ -1617,7 +1617,7 @@ fn lowering_rejects_unsupported_statement_families() {
         "DROP TABLE a, b",
         "DROP TEMPORARY TABLE users",
         "CREATE INDEX name_key ON users (name(10))",
-        "INSERT IGNORE INTO users VALUES (1)",
+        "INSERT IGNORE INTO users () VALUES ()",
         "INSERT INTO users VALUES (DEFAULT)",
         "INSERT INTO users SET id = 1, name = id",
         "INSERT INTO users SET id = 1, id = 2",
@@ -1628,6 +1628,7 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1, a = 2",
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
+        "REPLACE IGNORE INTO t VALUES (1, 2)",
         "SHOW TABLES",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
@@ -1725,6 +1726,30 @@ fn lowers_on_duplicate_key_update_to_an_upsert() {
         (
             "INSERT INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = a + 1, b = VALUES(a)",
             "INSERT INTO t VALUES (1, 2) ON CONFLICT DO UPDATE SET a = a + 1, b = excluded.a",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
+fn lowers_insert_ignore_to_an_upsert_that_does_nothing() {
+    let cases = [
+        (
+            "INSERT IGNORE INTO t VALUES (1, 2), (3, 4)",
+            "INSERT INTO t VALUES (1, 2), (3, 4) ON CONFLICT DO NOTHING",
+        ),
+        (
+            "INSERT IGNORE t (a) SELECT b FROM u",
+            "INSERT INTO t (a) SELECT b FROM u ON CONFLICT DO NOTHING",
+        ),
+        (
+            "INSERT IGNORE INTO t SET a = 1",
+            "INSERT INTO t (a) VALUES (1) ON CONFLICT DO NOTHING",
         ),
     ];
 

@@ -314,7 +314,15 @@ statement). `VALUES(c)` is `excluded.c`, the value the row would have
 inserted, and `t.c` targets and references of the inserted table drop the
 qualifier.
 
-Refused: `INSERT IGNORE`, `DEFAULT` as a value, a schema-qualified
+`INSERT IGNORE` lowers to `INSERT ... ON CONFLICT DO NOTHING`, which like
+MySQL skips a row whose primary or unique key duplicates a stored row or one
+inserted earlier by the same statement. MySQL's `IGNORE` also turns other
+errors into warnings: it stores the implicit default for `NULL` in a `NOT
+NULL` column, skips rows that fail a `CHECK` or foreign key, and adjusts
+values that do not fit the column. Those rows still fail here, with the
+error the statement has without `IGNORE`.
+
+Refused: `INSERT IGNORE` with `ON DUPLICATE KEY UPDATE` or `() VALUES ()`, `DEFAULT` as a value, a schema-qualified
 table, `ON DUPLICATE KEY UPDATE` after a `SELECT` (MySQL lets the update read
 the selected columns), the `AS alias` row alias, an `INSERT ... SET` or
 update that assigns a column twice, an `INSERT ... SET` value that reads a
