@@ -224,9 +224,14 @@ impl Column {
                 }
             }
             ColumnOption::DialectSpecific(tokens) if is_auto_increment(tokens) => {
-                if !self.column_type.is_integer() {
+                if self.column_type.is_float() {
                     return Err(MysqlParserError::Unsupported(format!(
-                        "AUTO_INCREMENT requires an integer column, found `{data_type}`"
+                        "AUTO_INCREMENT on the floating-point column type `{data_type}`"
+                    )));
+                }
+                if !self.column_type.is_integer() {
+                    return Err(MysqlParserError::Rejected(format!(
+                        "Incorrect column specifier for a column of type `{data_type}`: AUTO_INCREMENT needs an integer or floating-point column"
                     )));
                 }
                 self.auto_increment = true;

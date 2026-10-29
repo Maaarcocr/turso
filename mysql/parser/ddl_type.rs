@@ -194,6 +194,10 @@ impl ColumnType {
         matches!(self.family, Family::Integer { .. })
     }
 
+    pub(crate) fn is_float(&self) -> bool {
+        matches!(self.family, Family::Float { .. })
+    }
+
     pub(crate) fn is_binary(&self) -> bool {
         matches!(
             self.family,
