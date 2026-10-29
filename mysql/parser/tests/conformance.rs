@@ -247,6 +247,10 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
             "CREATE UNIQUE INDEX idx ON t (a DESC, b)",
         ),
         (
+            "CREATE UNIQUE INDEX idx ON t ((C1*10), c2, ((c1+c2)*-2) DESC)",
+            "CREATE UNIQUE INDEX idx ON t (C1 * 10, c2, (c1 + c2) * - 2 DESC)",
+        ),
+        (
             "DROP INDEX idx ON t",
             "DROP INDEX idx",
         ),
@@ -1511,6 +1515,9 @@ fn lowering_rejects_unsupported_statement_families() {
         "CREATE OR REPLACE VIEW v AS SELECT 1",
         "DROP VIEW a, b",
         "ALTER TABLE users ADD INDEX name_key (name)",
+        "CREATE INDEX k ON users ((name))",
+        "CREATE INDEX k ON users ((LOWER(name)))",
+        "CREATE INDEX k ON users ((a / 2))",
         "ALTER TABLE users MODIFY COLUMN name VARCHAR(20)",
         "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
         "ALTER TABLE users ADD COLUMN a INT FIRST",
