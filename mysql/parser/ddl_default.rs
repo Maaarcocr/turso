@@ -1,5 +1,5 @@
 use crate::ddl_expr::DefaultValue;
-use crate::ddl_type::{number, set_values, ColumnType, Family};
+use crate::ddl_type::{number, ColumnType, Family};
 use crate::names::quote_string;
 use crate::MysqlParserError;
 use turso_parser::ast;
@@ -175,13 +175,15 @@ fn set_default(members: &[String], text: &str) -> Option<String> {
             })
             .collect::<Option<Vec<_>>>()?
     };
-    set_values(members)
-        .zip(0_u32..)
-        .find(|(_, mask)| {
-            (0..members.len())
-                .all(|position| (mask & (1 << position) != 0) == chosen.contains(&position))
-        })
-        .map(|(value, _)| value)
+    Some(
+        members
+            .iter()
+            .enumerate()
+            .filter(|(position, _)| chosen.contains(position))
+            .map(|(_, member)| member.as_str())
+            .collect::<Vec<_>>()
+            .join(","),
+    )
 }
 
 fn fit_characters(text: &str, length: u64, family: &Family) -> Option<String> {
