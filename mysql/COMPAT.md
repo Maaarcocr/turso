@@ -454,9 +454,20 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
   DATETIME)`, `NOW()`) uses MySQL's string form: 6 fractional digits when
   there is a fraction, none otherwise.
 - Decimal literals reach the functions as doubles, so their precision and
-  fractional digits are lost: `MAKETIME(10, 34, 58.1234)` gives
-  `10:34:58.123400` (MySQL: `10:34:58.1234`) and `MICROSECOND(
-  20000101103458.1234)` gives `125000`.
+  fractional digits would be lost. Where the result's fractional digits come
+  from a literal argument (`SEC_TO_TIME`, `TIME`, `FROM_UNIXTIME` with one
+  argument, the seconds of `MAKETIME`, the first argument of `CONVERT_TZ`),
+  a DECIMAL, `TIME` or `TIMESTAMP` literal there sets them: the call is
+  wrapped in `__mysql_cast_as_time(.., digits)` or
+  `__mysql_cast_as_datetime(.., digits)`, so `MAKETIME(10, 34, 58.1234)` is
+  `10:34:58.1234`. Such a DECIMAL with more than 15 significant digits is
+  refused, except a `CONVERT_TZ` datetime number with 14 integer digits,
+  which is passed as its text. A DECIMAL literal where `MAKEDATE`,
+  `MAKETIME` (hours, minutes), `PERIOD_ADD`, `PERIOD_DIFF` or `FROM_DAYS`
+  read an integer is rounded half away from zero while lowering, as MySQL
+  rounds a DECIMAL. `TIME(DATE '..')` is `'00:00:00'`. Other decimal
+  arguments still lose digits (`MICROSECOND(20000101103458.1234)` gives
+  `125000`).
 - A `BLOB` argument is read as MySQL reads a hexadecimal literal: as a
   string in date and time positions and as a `BIGINT UNSIGNED` made of its
   bytes in numeric positions (`MAKEDATE(X'31', 1)` is `2049-01-01`). A

@@ -811,6 +811,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_datetime (DATE_SUB ('2025-01-01 00:00:00', '1.0x', 'HOUR_MICROSECOND'), 6), DATE_ADD (20250101, CONCAT (6 / 4), 'DAY_HOUR'), __mysql_cast_as_datetime (DATE_ADD ('2025-01-01 00:00:00.1', 1.5000, 'SECOND'), 4), DATE_ADD ('2020-01-01', 1, 'DAY'), __mysql_cast_as_datetime (DATE_SUB ('2020-01-01', 1, 'HOUR'), 0)",
         ),
         (
+            "SELECT SEC_TO_TIME(1.1), MAKETIME(1.5, 2.4, TIME '00:00:59.01011'), FROM_UNIXTIME(0.0), CONVERT_TZ(20000101103458.1234, '-01:00', '-00:00'), TIME(DATE '2000-01-01'), MAKEDATE(2000, -2.5), SEC_TO_TIME(s) FROM t",
+            "SELECT __mysql_cast_as_time (SEC_TO_TIME (1.1), 1), __mysql_cast_as_time (MAKETIME (2, 2, 000059.01011), 5), __mysql_cast_as_datetime (FROM_UNIXTIME (0.0), 1), __mysql_cast_as_datetime (CONVERT_TZ ('20000101103458.1234', '-01:00', '-00:00'), 4), '00:00:00', MAKEDATE (2000, - 3), SEC_TO_TIME (s) FROM t",
+        ),
+        (
             "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
             "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
         ),
@@ -1251,6 +1255,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "uneven values rows",
             sql: "VALUES ROW(1), ROW(1, 2)",
+        },
+        SqlCase {
+            name: "a DECIMAL a double cannot hold in a date function",
+            sql: "SELECT SEC_TO_TIME(1234567890123.12345)",
         },
         SqlCase {
             name: "a DATE_ADD of a TIME literal",
