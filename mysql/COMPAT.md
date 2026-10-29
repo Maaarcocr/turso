@@ -157,6 +157,14 @@ The check reads the session's tables, so a grouped `SELECT` over a view, a
 derived table, an outer join or columns it cannot resolve is refused when it
 may use a column outside `GROUP BY`.
 
+A name in `HAVING` resolves as in MySQL: inside an aggregate it names a column
+of the `FROM` before a select alias, and outside one a grouped column before
+an alias of the same name, and otherwise the alias (`SELECT a AS b FROM t
+GROUP BY a HAVING AVG(b) > 2` averages the column `b`). A `HAVING` naming a
+select alias that may also name a column is refused over a view, a derived
+table, a common table expression or columns of several tables, and when it
+holds a subquery.
+
 Statements MySQL rejects when it resolves names fail with MySQL's error: two
 tables of one `FROM` with the same name or alias (1066; a derived table's
 alias is apart from the names of tables, and a table named with its database

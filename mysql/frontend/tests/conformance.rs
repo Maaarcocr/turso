@@ -475,12 +475,44 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn having_resolves_names_as_mysql_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (a INT, b INT)")?;
+    connection.execute("INSERT INTO t VALUES (1, 2), (2, 3)")?;
+    for (sql, rows) in [
+        (
+            "SELECT -b AS a FROM t GROUP BY a, b HAVING b > -a ORDER BY 1",
+            vec![-3, -2],
+        ),
+        ("SELECT a AS b FROM t GROUP BY a HAVING AVG(b) > 2", vec![2]),
+        ("SELECT a AS b FROM t GROUP BY a HAVING b > 1", vec![2]),
+        ("SELECT 1 AS a GROUP BY a HAVING a = 1", vec![1]),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            rows.into_iter()
+                .map(|row| vec![Value::from_i64(row)])
+                .collect::<Vec<_>>(),
+            "{sql}"
+        );
+    }
+    connection.execute("CREATE VIEW v AS SELECT 1 AS k")?;
+    let refused = "SELECT 5 AS k FROM v GROUP BY k HAVING k = 1";
+    let error = query(&connection, refused).expect_err(refused);
+    assert!(
+        error.to_string().contains("not lowered"),
+        "{refused}: {error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn format_rounds_and_groups_digits_as_mysql_does() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
         query(
             &connection,
-            "SELECT FORMAT(1234567.891, 2), FORMAT(1, 3), FORMAT('12345.5', 0), FORMAT(12.5, 0),              FORMAT(12.5e0, 0), FORMAT(-1234.5, 1, 'de_DE'), FORMAT(NULL, 2)",
+            "SELECT FORMAT(1234567.891, 2), FORMAT(1, 3), FORMAT('12345.5', 0), FORMAT(12.5, 0), FORMAT(12.5e0, 0), FORMAT(-1234.5, 1, 'de_DE'), FORMAT(NULL, 2)",
         )?,
         vec![vec![
             Value::build_text("1,234,567.89"),

@@ -74,7 +74,18 @@ fn translate_node(
         }
         Expr::TypedString(typed) => translate_typed_string(typed, literal_context),
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
-        Expr::Identifier(identifier) => translate_identifier_expr(identifier),
+        Expr::Identifier(identifier) => {
+            match context.having_column(&identifier.value).map(str::to_string) {
+                Some(qualifier) => {
+                    let qualified = Expr::CompoundIdentifier(vec![
+                        sqlparser::ast::Ident::with_quote('`', qualifier),
+                        identifier.clone(),
+                    ]);
+                    translate_node(&qualified, literal_context, context)
+                }
+                None => translate_identifier_expr(identifier),
+            }
+        }
         Expr::CompoundIdentifier(parts) => match parts.as_slice() {
             [scope, name] if is_system_variable_scope(scope) => {
                 crate::session::system_variable(&scope.value, name)

@@ -36,6 +36,9 @@ pub(crate) struct TranslationContext<'a> {
     /// Turso's number conversion there instead of becoming MySQL's DOUBLE.
     pub(crate) compared_beside_non_literal: bool,
     pub(crate) inserted_row_is_readable: bool,
+    /// Names of `HAVING` that MySQL resolves to a column where Turso would
+    /// take a select alias, with the table that qualifies them.
+    having_columns: Vec<(String, String)>,
     tables_read: Vec<ast::Name>,
 }
 
@@ -76,6 +79,15 @@ impl<'a> TranslationContext<'a> {
 
     pub(crate) fn leave_expression(&mut self) {
         self.expression_depth -= 1;
+    }
+
+    /// The table that qualifies `name` in `HAVING`, when MySQL resolves it
+    /// to that table's column rather than to a select alias.
+    pub(crate) fn having_column(&self, name: &str) -> Option<&str> {
+        self.having_columns
+            .iter()
+            .find(|(column, _)| column.eq_ignore_ascii_case(name))
+            .map(|(_, qualifier)| qualifier.as_str())
     }
 
     pub(crate) fn next_parameter(&mut self) -> Result<ast::Variable, MysqlParserError> {
@@ -443,7 +455,10 @@ fn translate_select(
         .as_ref()
         .map(|condition| translate_condition(condition, context).map(Box::new))
         .transpose()?;
-    let group_by = translate_group_by(group_by, having.as_ref(), context)?;
+    context.having_columns = having_columns(select, context.environment)?;
+    let group_by = translate_group_by(group_by, having.as_ref(), context);
+    context.having_columns.clear();
+    let group_by = group_by?;
     let window_clause = named_window
         .iter()
         .map(|window| translate_named_window(window, context))
@@ -456,6 +471,129 @@ fn translate_select(
         group_by,
         window_clause,
     })
+}
+
+/// The names of `HAVING` that are select aliases and that MySQL resolves to
+/// a column of the `FROM` instead: it searches the `FROM` first for a name
+/// inside an aggregate, and takes a grouped column over an alias of the
+/// same name, but otherwise the alias. Turso takes the alias, so these
+/// names are qualified with their table. A name lowering cannot resolve
+/// against the session's tables, or that names columns of several tables,
+/// is refused.
+fn having_columns(
+    select: &Select,
+    environment: Option<&dyn Environment>,
+) -> Result<Vec<(String, String)>, MysqlParserError> {
+    let Some(having) = &select.having else {
+        return Ok(Vec::new());
+    };
+    let aliases: Vec<&str> = select
+        .projection
+        .iter()
+        .filter_map(|item| match item {
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.as_str()),
+            _ => None,
+        })
+        .collect();
+    let mut named = Vec::new();
+    let mut has_subquery = false;
+    aliases_used(having, false, &aliases, &mut named, &mut has_subquery);
+    if named.is_empty() || select.from.is_empty() {
+        return Ok(Vec::new());
+    }
+    let refused = || {
+        unsupported(format!(
+            "a HAVING clause naming a select alias that may also be a column, which MySQL resolves to the column, `{having}`,"
+        ))
+    };
+    if has_subquery {
+        return Err(refused());
+    }
+    let Some(environment) = environment else {
+        return Err(refused());
+    };
+    let Some(sources) = Sources::of(select, environment)? else {
+        return Err(refused());
+    };
+    let GroupByExpr::Expressions(groups, _) = &select.group_by else {
+        return Err(refused());
+    };
+    let mut qualified: Vec<(String, String)> = Vec::new();
+    for (name, inside_aggregate) in named {
+        let mut tables = sources.tables.iter().enumerate().filter(|(_, source)| {
+            source
+                .columns
+                .iter()
+                .any(|facts| facts.name.eq_ignore_ascii_case(name))
+        });
+        let column = match (tables.next(), tables.next()) {
+            (None, _) => continue,
+            (Some((index, _)), None) => (index, name.to_ascii_lowercase()),
+            (Some(_), Some(_)) => return Err(refused()),
+        };
+        let grouped = groups.iter().any(|group| {
+            matches!(sources.resolve(without_parentheses(group)), Resolved::Column(grouped) if grouped == column)
+        });
+        if !grouped && !inside_aggregate {
+            continue;
+        }
+        if !qualified
+            .iter()
+            .any(|(known, _)| known.eq_ignore_ascii_case(name))
+        {
+            qualified.push((name.to_string(), sources.tables[column.0].qualifier.clone()));
+        }
+    }
+    Ok(qualified)
+}
+
+/// The identifiers of `expr` that name one of `aliases`, and whether each is
+/// inside an aggregate.
+fn aliases_used<'e>(
+    expr: &'e Expr,
+    inside_aggregate: bool,
+    aliases: &[&str],
+    named: &mut Vec<(&'e str, bool)>,
+    has_subquery: &mut bool,
+) {
+    match expr {
+        Expr::Identifier(identifier) => {
+            if aliases
+                .iter()
+                .any(|alias| alias.eq_ignore_ascii_case(&identifier.value))
+            {
+                named.push((identifier.value.as_str(), inside_aggregate));
+            }
+        }
+        Expr::CompoundIdentifier(_) => {}
+        Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => *has_subquery = true,
+        Expr::Function(function) => {
+            let inside = inside_aggregate || is_aggregate(function);
+            let FunctionArguments::List(list) = &function.args else {
+                *has_subquery |= !matches!(function.args, FunctionArguments::None);
+                return;
+            };
+            for arg in &list.args {
+                match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) => {
+                        aliases_used(arg, inside, aliases, named, has_subquery)
+                    }
+                    FunctionArg::Unnamed(
+                        FunctionArgExpr::Wildcard | FunctionArgExpr::QualifiedWildcard(_),
+                    ) => {}
+                    _ => *has_subquery = true,
+                }
+            }
+        }
+        other => match child_expressions(other) {
+            Some(children) => {
+                for child in children {
+                    aliases_used(child, inside_aggregate, aliases, named, has_subquery);
+                }
+            }
+            None => *has_subquery = true,
+        },
+    }
 }
 
 /// Checks a grouped `SELECT` as MySQL's `ONLY_FULL_GROUP_BY` does: an
