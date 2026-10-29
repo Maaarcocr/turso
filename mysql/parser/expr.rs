@@ -3168,6 +3168,9 @@ fn translate_function(
         Some(DuplicateTreatment::All) => Some(ast::Distinctness::All),
         Some(DuplicateTreatment::Distinct) => Some(ast::Distinctness::Distinct),
     };
+    if let Some(rounded) = unsigned_bigint_rounding(&upper_name, list)? {
+        return Ok(rounded);
+    }
     let digits = literal_result_digits(&upper_name, list)?;
     if let Some(LiteralResult::Text(text)) = &digits {
         return Ok(string_expr(text));
@@ -3978,6 +3981,121 @@ fn unit_literal(field: &DateTimeField) -> Result<ast::Expr, MysqlParserError> {
     Ok(ast::Expr::Literal(ast::Literal::String(quote_string(
         &unit,
     ))))
+}
+
+/// `ROUND(n, d)` or `TRUNCATE(n, d)` of an integer literal between the
+/// BIGINT and BIGINT UNSIGNED limits and a literal `d`, which MySQL computes
+/// as BIGINT UNSIGNED: `n` when `d` is not negative, 0 when it is -20 or
+/// less, and otherwise `n` truncated or rounded half up to a power of ten,
+/// which MySQL rejects above the BIGINT UNSIGNED range.
+fn unsigned_bigint_rounding(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    if !matches!(upper_name, "ROUND" | "TRUNCATE")
+        || list.duplicate_treatment.is_some()
+        || !list.clauses.is_empty()
+    {
+        return Ok(None);
+    }
+    let Ok(args) = unnamed_arguments(list) else {
+        return Ok(None);
+    };
+    let [value, places] = args.as_slice() else {
+        return Ok(None);
+    };
+    let Some(value) = number_literal(value)
+        .and_then(|digits| digits.parse::<u64>().ok())
+        .filter(|value| *value > i64::MAX as u64)
+    else {
+        return Ok(None);
+    };
+    let Some(places) = integer_places(places) else {
+        return Ok(None);
+    };
+    let unsigned = |value: u64| match i64::try_from(value) {
+        Ok(value) => ast::Expr::Literal(ast::Literal::Numeric(value.to_string())),
+        Err(_) => exact_decimal(&value.to_string(), false),
+    };
+    if places >= 0 {
+        return Ok(Some(unsigned(value)));
+    }
+    let Some(power) = u32::try_from(-places)
+        .ok()
+        .and_then(|places| 10u64.checked_pow(places))
+    else {
+        return Ok(Some(unsigned(0)));
+    };
+    let floor = value / power * power;
+    let result = if upper_name == "TRUNCATE" || value - floor < power / 2 {
+        Some(floor)
+    } else {
+        floor.checked_add(power)
+    };
+    match result {
+        Some(result) => Ok(Some(unsigned(result))),
+        None => Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} of {value} to {places} places, which MySQL rejects above the BIGINT UNSIGNED range, is not lowered yet"
+        ))),
+    }
+}
+
+/// The places MySQL reads from a literal as an integer: a DECIMAL rounded
+/// half away from zero and a DOUBLE rounded half to even, both saturating
+/// at the BIGINT range, and 0 or more for a string that does not start
+/// with a minus sign.
+fn integer_places(expr: &Expr) -> Option<i128> {
+    const SMALLEST: i128 = i64::MIN as i128;
+    const LARGEST: i128 = i64::MAX as i128;
+    if let Some(literal) = hex_or_bit_literal(expr) {
+        return binary_literal_value(literal).ok().map(i128::from);
+    }
+    if let Some(literal) = negated_binary(expr) {
+        return binary_literal_value(literal)
+            .ok()
+            .map(|value| -i128::from(value));
+    }
+    if let Some(digits) = signed_number_literal(expr) {
+        let sign = if is_negated(expr) { -1 } else { 1 };
+        if digits.contains(['e', 'E']) {
+            let magnitude = digits.parse::<f64>().ok()?;
+            let rounded = if sign < 0 { -magnitude } else { magnitude }.round_ties_even();
+            return Some(if rounded <= SMALLEST as f64 {
+                SMALLEST
+            } else if rounded >= LARGEST as f64 {
+                LARGEST
+            } else {
+                rounded as i128
+            });
+        }
+        let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+        let whole = whole.trim_start_matches('0');
+        let magnitude = if whole.len() > 20 {
+            LARGEST + 1
+        } else {
+            whole.parse::<i128>().unwrap_or(0)
+                + i128::from(
+                    fraction
+                        .as_bytes()
+                        .first()
+                        .is_some_and(|digit| *digit >= b'5'),
+                )
+        };
+        return Some((sign * magnitude).clamp(SMALLEST, LARGEST));
+    }
+    let text = match expr {
+        Expr::Prefixed { value, .. } => value.as_ref(),
+        other => other,
+    };
+    match text {
+        Expr::Value(value) => match &value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                (!text.trim_start().starts_with('-')).then_some(0)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn current_time_literal(upper_name: &str) -> Option<ast::Expr> {
