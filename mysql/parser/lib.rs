@@ -25,6 +25,7 @@ mod literal;
 mod names;
 mod query;
 mod session;
+mod show;
 mod split;
 
 pub use ddl_default::{temporal_text, TemporalColumn};
@@ -84,6 +85,14 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
         Statement::Insert(insert) => insert::translate_insert(insert),
         Statement::Update(update) => dml::translate_update(update),
         Statement::Delete(delete) => dml::translate_delete(delete),
+        Statement::ShowTables {
+            terse: false,
+            history: false,
+            extended: false,
+            full,
+            external: false,
+            show_options,
+        } => show::translate_show_tables(*full, show_options),
         _ => {
             let text = statement.to_string();
             let keyword = text.split_whitespace().next().unwrap_or_default();

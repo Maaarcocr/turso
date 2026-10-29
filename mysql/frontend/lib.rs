@@ -6,6 +6,7 @@ use turso_core::{
 };
 use turso_parser::ast;
 
+mod catalog;
 mod errors;
 mod format;
 mod functions;
@@ -63,6 +64,9 @@ impl Dialect for MySqlDialect {
         if let Some(function) = session::resolve(name, arg_count) {
             return Ok(Some(function));
         }
+        if let Some(function) = catalog::resolve(name, arg_count) {
+            return Ok(Some(function));
+        }
         if let Some(conversion) = types::resolve(name, arg_count) {
             return Ok(Some(conversion));
         }
@@ -76,7 +80,8 @@ impl Dialect for MySqlDialect {
         if let Some(result) = session::execute(conn, name, args, None) {
             return result;
         }
-        types::execute(name, args)
+        catalog::execute(name, args)
+            .or_else(|| types::execute(name, args))
             .or_else(|| functions::execute(name, args))
             .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
     }
@@ -91,7 +96,8 @@ impl Dialect for MySqlDialect {
         if let Some(result) = session::execute(conn, name, args, Some(arg_types)) {
             return result;
         }
-        types::execute(name, args)
+        catalog::execute(name, args)
+            .or_else(|| types::execute(name, args))
             .or_else(|| functions::execute_typed(name, args, arg_types))
             .unwrap_or_else(|| Err(LimboError::ParseError(format!("no such function: {name}"))))
     }

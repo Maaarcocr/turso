@@ -368,6 +368,17 @@ that reads the target table (MySQL's error 1093); and the `LOW_PRIORITY`,
 their rows, `CREATE TABLE` and `ALTER TABLE ... RENAME COLUMN` refuse a column
 named `rowid`, which MySQL allows.
 
+## `SHOW TABLES`
+
+`SHOW [FULL] TABLES [LIKE 'pattern']` lists the tables and views of the
+database from `sqlite_schema`, with the case each was created with (read from
+its stored SQL, since Turso keeps `sqlite_schema.name` in lower case), in byte
+order and with a pattern that matches with case, as MySQL does with its
+default `lower_case_table_names = 0`. `FULL` adds `Table_type` (`BASE TABLE`
+or `VIEW`). The column is named `Tables_in_main`, after Turso's name for the
+database. A pattern with a `\` escape, `WHERE`, `FROM`/`IN` and the other
+`SHOW` statements are refused.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or

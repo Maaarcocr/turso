@@ -1625,7 +1625,10 @@ fn lowering_rejects_unsupported_statement_families() {
         "INSERT INTO t VALUES (1, 2) AS new ON DUPLICATE KEY UPDATE a = new.a",
         "INSERT IGNORE INTO t VALUES (1, 2) ON DUPLICATE KEY UPDATE a = 1",
         "REPLACE IGNORE INTO t VALUES (1, 2)",
-        "SHOW TABLES",
+        "SHOW TABLES FROM app",
+        "SHOW TABLES WHERE Tables_in_main = 'a'",
+        r"SHOW TABLES LIKE 'a\_b'",
+        "SHOW COLUMNS FROM users",
         "DESCRIBE users",
         "EXPLAIN SELECT 1",
         "USE app",
@@ -1753,6 +1756,37 @@ fn lowers_insert_ignore_to_an_upsert_that_does_nothing() {
         let statement =
             parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
         assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+}
+
+#[test]
+fn lowers_show_tables_to_a_query_of_the_schema() {
+    let names = "SELECT __mysql_schema_name(sql) AS name, type FROM sqlite_schema \
+                 WHERE type IN ('table', 'view') AND lower(substr(name, 1, 7)) <> 'sqlite_' \
+                 AND substr(name, 1, 16) <> '__turso_internal'";
+    let cases = [
+        (
+            "SHOW TABLES".to_string(),
+            format!("SELECT name AS Tables_in_main FROM ({names}) ORDER BY name"),
+        ),
+        (
+            "SHOW FULL TABLES LIKE 'a%_[*?'".to_string(),
+            format!(
+                "SELECT name AS Tables_in_main, CASE type WHEN 'view' THEN 'VIEW' ELSE 'BASE TABLE' END AS Table_type \
+                 FROM ({names}) WHERE name GLOB 'a*?[[][*][?]' ORDER BY name"
+            ),
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(&sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        let Ok(Some(ast::Cmd::Stmt(expected))) =
+            turso_parser::parser::Parser::new(expected.as_bytes()).next_cmd()
+        else {
+            panic!("the expected SQL of {sql} must parse as a statement");
+        };
+        assert_eq!(statement.to_string(), expected.to_string(), "SQL: {sql}");
     }
 }
 
