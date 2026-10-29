@@ -184,9 +184,9 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   `+`, operands that are not literals, results outside the BIGINT range,
   operations nested in arithmetic, literals above the BIGINT range with
   integers or decimals): MySQL computes them as
-  BIGINT UNSIGNED, which fails on negative results. Temporal literals under
-  `%`, in bit operations when negative or fractional, and negated when
-  fractional: MySQL computes those as BIGINT UNSIGNED or DOUBLE. `DIV` with a
+  BIGINT UNSIGNED, which fails on negative results. Temporal literals in bit
+  operations when negative or fractional, and negated when fractional: MySQL
+  computes those as BIGINT UNSIGNED or DOUBLE. `DIV` with a
   literal outside the BIGINT range.
 - Bit operations on a DOUBLE literal below the BIGINT range, which MySQL
   rejects, on a string literal whose number has an exponent or lies outside

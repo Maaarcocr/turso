@@ -835,6 +835,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT CAST ('18446744073709551600' AS DECIMAL (20, 0)), 9223372036854775800, CAST ('9223372036854775808' AS DECIMAL (19, 0))",
         ),
         (
+            "SELECT '1.5' % TIME '-10:04:58', 1.5e0 % TIMESTAMP '2000-01-01 10:34:58.5'",
+            "SELECT MOD ('1.5', - 100458), MOD (1.5e0, 20000101103458.5)",
+        ),
+        (
             "SELECT CAST(CAST(0.000 AS JSON) AS DATE)",
             "SELECT NULL",
         ),
@@ -1187,10 +1191,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "timestamps with different fractions compared",
             sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
-        },
-        SqlCase {
-            name: "modulo of a temporal literal",
-            sql: "SELECT 1.5e0 % TIMESTAMP '2000-01-01 10:34:58'",
         },
         SqlCase {
             name: "negated temporal literal with a fraction",

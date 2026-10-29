@@ -925,16 +925,6 @@ fn translate_binary(
         {
             translate_interval_arithmetic(left, op, right, context)
         }
-        BinaryOperator::Modulo
-            if temporal_type(left).is_some() || temporal_type(right).is_some() =>
-        {
-            let operand = if temporal_type(left).is_some() {
-                left
-            } else {
-                right
-            };
-            Err(temporal_operand(operand, &format!("`{op}`")))
-        }
         BinaryOperator::Plus
         | BinaryOperator::Minus
         | BinaryOperator::Multiply
