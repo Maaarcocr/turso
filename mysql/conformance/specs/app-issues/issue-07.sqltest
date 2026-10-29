@@ -1,0 +1,47 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/7: User variables (SET @v = ..., SELECT @v) are refused, so mysqldump output does not load
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    SET @a = 1;
+}
+
+setup p3 {
+    /*!40101 SET @saved_cs_client     = @@character_set_client */;
+}
+
+setup p4 {
+    /*!40101 SET character_set_client = @saved_cs_client */;
+}
+
+test s1 {
+    SET @a = 1;
+}
+expect {
+}
+
+@setup p1
+test s2 {
+    SELECT @a + 1 AS b;
+}
+expect {
+    2
+}
+
+@setup p1
+test s3 {
+    /*!40101 SET @saved_cs_client     = @@character_set_client */;
+}
+expect {
+}
+
+@setup p1
+@setup p3
+test s4 {
+    /*!40101 SET character_set_client = @saved_cs_client */;
+}
+expect {
+}

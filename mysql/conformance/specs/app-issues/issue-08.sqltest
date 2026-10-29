@@ -1,0 +1,59 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/8: INVISIBLE columns are refused
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY, a INT, b INT /*!80023 INVISIBLE */);
+}
+
+setup p2 {
+    CREATE TABLE t2 (id BIGINT PRIMARY KEY, a INT, b INT INVISIBLE);
+}
+
+setup p3 {
+    INSERT INTO t2 (id, a, b) VALUES (1, 10, 20);
+}
+
+test s1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY, a INT, b INT /*!80023 INVISIBLE */);
+}
+expect {
+}
+
+@setup p1
+test s2 {
+    CREATE TABLE t2 (id BIGINT PRIMARY KEY, a INT, b INT INVISIBLE);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+test s3 {
+    INSERT INTO t2 (id, a, b) VALUES (1, 10, 20);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    SELECT * FROM t2;
+}
+expect {
+    1|10
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s5 {
+    SELECT id, a, b FROM t2;
+}
+expect {
+    1|10|20
+}

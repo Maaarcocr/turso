@@ -1,0 +1,64 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/24: DATETIME/DATE values are stored as written: no normalization, no fraction padding, invalid dates accepted
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t5 (id BIGINT PRIMARY KEY, a DATETIME(6), b DATETIME, c DATE);
+}
+
+setup p2 {
+    INSERT INTO t5 VALUES (1, '2024-03-05 10:00:00.5', '2024-03-05 10:00:00', '2024-03-05');
+}
+
+setup p3 {
+    INSERT INTO t5 VALUES (2, '2024-3-5 9:4:5', '2024-3-5 9:4:5', '2024-3-5');
+}
+
+@setup p1
+test s2 {
+    INSERT INTO t5 VALUES (1, '2024-03-05 10:00:00.5', '2024-03-05 10:00:00', '2024-03-05');
+}
+expect {
+}
+
+@setup p1
+@setup p2
+test s3 {
+    INSERT INTO t5 VALUES (2, '2024-3-5 9:4:5', '2024-3-5 9:4:5', '2024-3-5');
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    SELECT id, a, b, c FROM t5 ORDER BY id;
+}
+expect {
+    1|2024-03-05 10:00:00.500000|2024-03-05 10:00:00|2024-03-05
+    2|2024-03-05 09:04:05.000000|2024-03-05 09:04:05|2024-03-05
+}
+
+# mysql-error: 1292: Incorrect datetime value: '2024-02-30 00:00:00' for column 'a' at row 1
+@setup p1
+@setup p2
+@setup p3
+test s5 {
+    INSERT INTO t5 VALUES (3, '2024-02-30 00:00:00', NULL, NULL);
+}
+expect error {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s6 {
+    SELECT id FROM t5 WHERE b < '2024-03-05 09:30:00' ORDER BY id;
+}
+expect {
+    2
+}

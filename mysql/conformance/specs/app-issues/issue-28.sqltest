@@ -1,0 +1,36 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/28: ORDER BY an ENUM column sorts by text; MySQL sorts by member position
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE e1 (id BIGINT PRIMARY KEY, sz ENUM('small', 'medium', 'large'));
+}
+
+setup p2 {
+    INSERT INTO e1 VALUES (1, 'large'), (2, 'small'), (3, 'medium');
+}
+
+@setup p1
+@setup p2
+test s3 {
+    SELECT id, sz FROM e1 ORDER BY sz;
+}
+expect {
+    2|small
+    3|medium
+    1|large
+}
+
+@setup p1
+@setup p2
+test s4 {
+    SELECT id, sz FROM e1 ORDER BY sz DESC;
+}
+expect {
+    1|large
+    3|medium
+    2|small
+}

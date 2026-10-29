@@ -1,0 +1,75 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/25: SET time_zone to anything but UTC is refused, and TIMESTAMP is not converted
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t6 (id BIGINT PRIMARY KEY, t TIMESTAMP NULL);
+}
+
+setup p2 {
+    SET time_zone = '+00:00';
+}
+
+setup p3 {
+    INSERT INTO t6 VALUES (1, '2024-03-05 10:00:00');
+}
+
+setup p4 {
+    SET time_zone = '+02:00';
+}
+
+setup p6 {
+    SET time_zone = '+00:00';
+}
+
+@setup p1
+test s2 {
+    SET time_zone = '+00:00';
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    SET time_zone = '+02:00';
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s5 {
+    SELECT t FROM t6;
+}
+expect {
+    2024-03-05 10:00:00
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s6 {
+    SET time_zone = '+00:00';
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+test s7 {
+    SELECT t FROM t6;
+}
+expect {
+    2024-03-05 10:00:00
+}

@@ -1,0 +1,254 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/14: Transaction and locking statements are refused (BEGIN, START TRANSACTION, COMMIT, SAVEPOINT, isolation level, FOR UPDATE, LOCK TABLES)
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY);
+}
+
+setup p2 {
+    BEGIN;
+}
+
+setup p3 {
+    INSERT INTO t1 VALUES (1);
+}
+
+setup p4 {
+    ROLLBACK;
+}
+
+setup p6 {
+    START TRANSACTION;
+}
+
+setup p7 {
+    INSERT INTO t1 VALUES (2);
+}
+
+setup p8 {
+    SAVEPOINT s1;
+}
+
+setup p9 {
+    INSERT INTO t1 VALUES (3);
+}
+
+setup p10 {
+    ROLLBACK TO SAVEPOINT s1;
+}
+
+setup p11 {
+    COMMIT;
+}
+
+setup p13 {
+    SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+}
+
+setup p15 {
+    LOCK TABLES t1 READ;
+}
+
+setup p16 {
+    UNLOCK TABLES;
+}
+
+@setup p1
+test s2 {
+    BEGIN;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+test s3 {
+    INSERT INTO t1 VALUES (1);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    ROLLBACK;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s5 {
+    SELECT COUNT(*) FROM t1;
+}
+expect {
+    0
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s6 {
+    START TRANSACTION;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+test s7 {
+    INSERT INTO t1 VALUES (2);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+test s8 {
+    SAVEPOINT s1;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+test s9 {
+    INSERT INTO t1 VALUES (3);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+test s10 {
+    ROLLBACK TO SAVEPOINT s1;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+@setup p10
+test s11 {
+    COMMIT;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+@setup p10
+@setup p11
+test s12 {
+    SELECT id FROM t1 ORDER BY id;
+}
+expect {
+    2
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+@setup p10
+@setup p11
+test s13 {
+    SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+@setup p10
+@setup p11
+@setup p13
+test s14 {
+    SELECT id FROM t1 WHERE id = 2 FOR UPDATE;
+}
+expect {
+    2
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+@setup p10
+@setup p11
+@setup p13
+test s15 {
+    LOCK TABLES t1 READ;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p6
+@setup p7
+@setup p8
+@setup p9
+@setup p10
+@setup p11
+@setup p13
+@setup p15
+test s16 {
+    UNLOCK TABLES;
+}
+expect {
+}

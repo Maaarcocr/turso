@@ -1,0 +1,42 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/15: information_schema is missing (TABLES, COLUMNS, STATISTICS)
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, nm VARCHAR(20) NOT NULL, KEY k_nm (nm));
+}
+
+setup p2 {
+    INSERT INTO t1 (nm) VALUES ('a'), ('b');
+}
+
+@setup p1
+@setup p2
+test s3 {
+    SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_SET_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1' ORDER BY ORDINAL_POSITION;
+}
+expect {
+    id|bigint|NULL
+    nm|varchar|utf8mb4
+}
+
+@setup p1
+@setup p2
+test s4 {
+    SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+}
+expect {
+    3
+}
+
+@setup p1
+@setup p2
+test s5 {
+    SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+}
+expect {
+    2
+}

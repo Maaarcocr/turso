@@ -1,0 +1,36 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/12: Key length check rejects keys MySQL accepts: every integer or temporal key part counts as 8 bytes
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY, a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e TINYINT, f TINYINT, KEY k1 (a, b, c, e, f)) DEFAULT CHARSET=utf8mb4;
+}
+
+setup p2 {
+    CREATE TABLE t2 (id BIGINT PRIMARY KEY, a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e INT, f INT, KEY k2 (a, b, c, e, f)) DEFAULT CHARSET=utf8mb4;
+}
+
+test s1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY, a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e TINYINT, f TINYINT, KEY k1 (a, b, c, e, f)) DEFAULT CHARSET=utf8mb4;
+}
+expect {
+}
+
+@setup p1
+test s2 {
+    CREATE TABLE t2 (id BIGINT PRIMARY KEY, a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e INT, f INT, KEY k2 (a, b, c, e, f)) DEFAULT CHARSET=utf8mb4;
+}
+expect {
+}
+
+# mysql-error: 1071: Specified key was too long; max key length is 3072 bytes
+@setup p1
+@setup p2
+test s3 {
+    CREATE TABLE t3 (id BIGINT PRIMARY KEY, a VARCHAR(255), b VARCHAR(255), c VARCHAR(255), e BIGINT, f BIGINT, KEY k3 (a, b, c, e, f)) DEFAULT CHARSET=utf8mb4;
+}
+expect error {
+}

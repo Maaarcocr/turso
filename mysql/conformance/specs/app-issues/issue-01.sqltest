@@ -1,0 +1,43 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/1: Optimizer hints MAX_EXECUTION_TIME and SET_VAR make the whole SELECT fail
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY, nm VARCHAR(50));
+}
+
+setup p2 {
+    INSERT INTO t1 VALUES (1, 'apple'), (2, 'pear');
+}
+
+@setup p1
+@setup p2
+test s3 {
+    SELECT /*+ MAX_EXECUTION_TIME(2000) */ id, nm FROM t1 ORDER BY id;
+}
+expect {
+    1|apple
+    2|pear
+}
+
+@setup p1
+@setup p2
+test s4 {
+    SELECT /*+ MAX_EXECUTION_TIME(2000) SET_VAR(sort_buffer_size=262144) */ id FROM t1 ORDER BY id;
+}
+expect {
+    1
+    2
+}
+
+@setup p1
+@setup p2
+test s5 {
+    SELECT /*+ MAX_EXECUTION_TIME(500) */ COUNT(*) FROM t1;
+}
+expect {
+    2
+}

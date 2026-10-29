@@ -1,0 +1,59 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/21: Binary literals with bytes that are not UTF-8 cannot be stored in a BLOB (X'..' and _binary '..')
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE b2 (id BIGINT PRIMARY KEY, bin1 MEDIUMBLOB);
+}
+
+setup p2 {
+    INSERT INTO b2 VALUES (1, X'00FF8A6A');
+}
+
+setup p3 {
+    INSERT INTO b2 VALUES (2, 0x1F8B0800);
+}
+
+setup p4 {
+    INSERT INTO b2 VALUES (3, UNHEX('00FF8A6A'));
+}
+
+@setup p1
+test s2 {
+    INSERT INTO b2 VALUES (1, X'00FF8A6A');
+}
+expect {
+}
+
+@setup p1
+@setup p2
+test s3 {
+    INSERT INTO b2 VALUES (2, 0x1F8B0800);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    INSERT INTO b2 VALUES (3, UNHEX('00FF8A6A'));
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s5 {
+    SELECT id, HEX(bin1), LENGTH(bin1) FROM b2 ORDER BY id;
+}
+expect {
+    1|00FF8A6A|4
+    2|1F8B0800|4
+    3|00FF8A6A|4
+}

@@ -1,0 +1,43 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/3: SHOW statements are refused (SHOW SESSION VARIABLES, SHOW TABLES, SHOW CREATE TABLE, DESCRIBE)
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT PRIMARY KEY, nm VARCHAR(50) NOT NULL);
+}
+
+@setup p1
+test s2 {
+    SHOW SESSION VARIABLES LIKE 'sql_mode';
+}
+expect {
+    sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+}
+
+@setup p1
+test s3 {
+    SHOW VARIABLES WHERE Variable_name = 'character_set_connection';
+}
+expect {
+    character_set_connection|utf8mb4
+}
+
+@setup p1
+test s4 {
+    SHOW TABLES;
+}
+expect {
+    t1
+}
+
+@setup p1
+test s6 {
+    DESCRIBE t1;
+}
+expect {
+    id|bigint|NO|PRI|NULL|
+    nm|varchar(50)|NO||NULL|
+}

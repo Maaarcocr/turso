@@ -1,0 +1,63 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/9: Setting the AUTO_INCREMENT counter is refused (table option AUTO_INCREMENT=N and ALTER TABLE ... AUTO_INCREMENT = N)
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT NOT NULL AUTO_INCREMENT, v INT, PRIMARY KEY (id)) ENGINE=InnoDB AUTO_INCREMENT=1000;
+}
+
+setup p2 {
+    CREATE TABLE t2 (id BIGINT NOT NULL AUTO_INCREMENT, v INT, PRIMARY KEY (id));
+}
+
+setup p3 {
+    ALTER TABLE t2 AUTO_INCREMENT = 500;
+}
+
+setup p4 {
+    INSERT INTO t2 (v) VALUES (1);
+}
+
+test s1 {
+    CREATE TABLE t1 (id BIGINT NOT NULL AUTO_INCREMENT, v INT, PRIMARY KEY (id)) ENGINE=InnoDB AUTO_INCREMENT=1000;
+}
+expect {
+}
+
+@setup p1
+test s2 {
+    CREATE TABLE t2 (id BIGINT NOT NULL AUTO_INCREMENT, v INT, PRIMARY KEY (id));
+}
+expect {
+}
+
+@setup p1
+@setup p2
+test s3 {
+    ALTER TABLE t2 AUTO_INCREMENT = 500;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    INSERT INTO t2 (v) VALUES (1);
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s5 {
+    SELECT id FROM t2;
+}
+expect {
+    500
+}

@@ -1,0 +1,50 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/10: AUTO_INCREMENT on a column that is not the whole primary key is refused
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE t1 (id BIGINT NOT NULL AUTO_INCREMENT, g BIGINT NOT NULL, PRIMARY KEY (g, id), UNIQUE KEY uk_id (id));
+}
+
+setup p2 {
+    CREATE TABLE t2 (id BIGINT NOT NULL AUTO_INCREMENT, g BIGINT NOT NULL, k VARCHAR(20) NOT NULL, PRIMARY KEY (g, k), UNIQUE KEY uk_id (id));
+}
+
+setup p3 {
+    INSERT INTO t2 (g, k) VALUES (1, 'a'), (1, 'b');
+}
+
+test s1 {
+    CREATE TABLE t1 (id BIGINT NOT NULL AUTO_INCREMENT, g BIGINT NOT NULL, PRIMARY KEY (g, id), UNIQUE KEY uk_id (id));
+}
+expect {
+}
+
+@setup p1
+test s2 {
+    CREATE TABLE t2 (id BIGINT NOT NULL AUTO_INCREMENT, g BIGINT NOT NULL, k VARCHAR(20) NOT NULL, PRIMARY KEY (g, k), UNIQUE KEY uk_id (id));
+}
+expect {
+}
+
+@setup p1
+@setup p2
+test s3 {
+    INSERT INTO t2 (g, k) VALUES (1, 'a'), (1, 'b');
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+test s4 {
+    SELECT id, g, k FROM t2 ORDER BY id;
+}
+expect {
+    1|1|a
+    2|1|b
+}

@@ -438,6 +438,18 @@ name is classified `nondeterministic`.
 
 ## Importers
 
+### Application issues (`tools/import_app_issues.py`)
+
+`specs/app-issues/` holds one shard per GitHub issue filed on
+Maaarcocr/turso after running an application's test suite against
+turso_mysql. Each statement of an issue's reproduction that MySQL answered in
+the issue becomes a test; the statements before it that MySQL ran without
+error are its setups. Unlike every other source, the expected values are
+copied from the issue (MySQL 8.4.8, default 8.4 profile, `time_zone =
+'+00:00'`), not recorded by `tools/record_mysql.py`; `REPORT.md` lists the
+issues and the statements left out. They are scored and ratcheted like the
+other sources.
+
 ### sqllogictest (`tools/import_sqllogictest.py`)
 
 Reads the scripts exactly like `sqllogictest.c` for the `mysql` engine

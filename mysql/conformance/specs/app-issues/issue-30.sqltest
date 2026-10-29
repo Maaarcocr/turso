@@ -1,0 +1,95 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/30: TRUNCATE, multi-table DELETE and UPDATE ... ORDER BY ... LIMIT are refused
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE a1 (id BIGINT PRIMARY KEY, v INT);
+}
+
+setup p2 {
+    CREATE TABLE b1 (id BIGINT PRIMARY KEY);
+}
+
+setup p3 {
+    INSERT INTO a1 VALUES (1, 0), (2, 0), (3, 0);
+}
+
+setup p4 {
+    INSERT INTO b1 VALUES (2);
+}
+
+setup p5 {
+    DELETE a1 FROM a1 JOIN b1 ON b1.id = a1.id;
+}
+
+setup p6 {
+    UPDATE a1 SET v = 9 ORDER BY id DESC LIMIT 1;
+}
+
+setup p8 {
+    TRUNCATE TABLE b1;
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s5 {
+    DELETE a1 FROM a1 JOIN b1 ON b1.id = a1.id;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p5
+test s6 {
+    UPDATE a1 SET v = 9 ORDER BY id DESC LIMIT 1;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p5
+@setup p6
+test s7 {
+    SELECT id, v FROM a1 ORDER BY id;
+}
+expect {
+    1|0
+    3|9
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p5
+@setup p6
+test s8 {
+    TRUNCATE TABLE b1;
+}
+expect {
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+@setup p5
+@setup p6
+@setup p8
+test s9 {
+    SELECT COUNT(*) FROM b1;
+}
+expect {
+    0
+}

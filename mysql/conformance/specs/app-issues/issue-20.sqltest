@@ -1,0 +1,57 @@
+# Specs from https://github.com/Maaarcocr/turso/issues/20: GROUP BY of a primary key refuses other columns of the same table (MySQL accepts them by functional dependence)
+# Expected values are MySQL 8.4.8's (Percona Server 8.4.8-8, default 8.4
+# profile, time_zone '+00:00') as reported in the issue; they were not
+# recorded by tools/record_mysql.py. One test per statement MySQL answered;
+# every earlier statement that MySQL ran without error is a setup.
+@database :memory:
+
+setup p1 {
+    CREATE TABLE p2 (id BIGINT PRIMARY KEY, nm VARCHAR(20), r INT);
+}
+
+setup p2 {
+    CREATE TABLE c2 (id BIGINT PRIMARY KEY, p_id BIGINT);
+}
+
+setup p3 {
+    INSERT INTO p2 VALUES (1, 'a', 5), (2, 'b', 6);
+}
+
+setup p4 {
+    INSERT INTO c2 VALUES (10, 1), (11, 1), (12, 2);
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s5 {
+    SELECT p.id, p.nm, p.r, COUNT(c.id) AS n FROM p2 p JOIN c2 c ON c.p_id = p.id GROUP BY p.id ORDER BY p.id;
+}
+expect {
+    1|a|5|2
+    2|b|6|1
+}
+
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s6 {
+    SELECT c.p_id, p.nm FROM c2 c JOIN p2 p ON p.id = c.p_id GROUP BY c.p_id, p.id ORDER BY c.p_id;
+}
+expect {
+    1|a
+    2|b
+}
+
+# mysql-error: 1055: Expression #1 of SELECT list is not in GROUP BY clause and contains nonaggregated column 'issue_20.p2.nm' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+@setup p1
+@setup p2
+@setup p3
+@setup p4
+test s7 {
+    SELECT nm, COUNT(*) FROM p2 GROUP BY r;
+}
+expect error {
+}
