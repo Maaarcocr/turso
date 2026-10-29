@@ -29,7 +29,11 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse_for(&self, connection: &Connection, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        parse_statement(sql, &Session(connection))
+        let (cmd, end) = parse_statement(sql, &Session(connection))?;
+        if let Some(ast::Cmd::Stmt(stmt)) = &cmd {
+            check_default_functions(stmt, connection)?;
+        }
+        Ok((cmd, end))
     }
 
     fn parse_reads_transaction_state(&self) -> bool {
@@ -133,6 +137,60 @@ fn parse_statement(
     Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
 }
 
+/// Refuses a column `DEFAULT` that calls a function Turso does not have, as
+/// Turso would fail only the first `INSERT` that uses it where MySQL fails
+/// the statement when the function does not exist (and accepts it when it
+/// is a MySQL function Turso does not have).
+fn check_default_functions(stmt: &ast::Stmt, connection: &Connection) -> Result<()> {
+    let columns: Vec<&ast::ColumnDefinition> = match stmt {
+        ast::Stmt::CreateTable {
+            body: ast::CreateTableBody::ColumnsAndConstraints { columns, .. },
+            ..
+        } => columns.iter().collect(),
+        ast::Stmt::AlterTable(alter) => match &alter.body {
+            ast::AlterTableBody::AddColumn(column) => vec![column],
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    };
+    let external = connection.get_syms_functions();
+    let exists = |name: &str, arg_count: usize| -> Result<bool> {
+        Ok(MySqlDialect.resolve_function(name, arg_count)?.is_some()
+            || external.iter().any(|(external, _, external_count, _)| {
+                external.eq_ignore_ascii_case(name)
+                    && (*external_count < 0 || *external_count as usize == arg_count)
+            }))
+    };
+    for column in columns {
+        for constraint in &column.constraints {
+            let ast::ColumnConstraint::Default(expr) = &constraint.constraint else {
+                continue;
+            };
+            turso_core::walk_expr(expr, &mut |expr: &ast::Expr| {
+                let call = match expr {
+                    ast::Expr::FunctionCall { name, args, .. } => Some((name, args.len())),
+                    ast::Expr::FunctionCallStar { name, .. } => Some((name, 0)),
+                    _ => None,
+                };
+                if let Some((name, arg_count)) = call {
+                    if !exists(name.as_str(), arg_count)? {
+                        return Err(LimboError::ParseError(
+                            turso_mysql_parser::MysqlParserError::Unsupported(format!(
+                                "function `{}` in the default of column `{}`, which Turso does not have",
+                                name.as_str(),
+                                column.col_name.as_str()
+                            ))
+                            .to_string(),
+                        ));
+                    }
+                }
+                Ok(turso_core::WalkControl::Continue)
+            })?;
+        }
+    }
+    Ok(())
+}
+
 /// The session of a connection, as the lowering of its statements sees it.
 struct Session<'a>(&'a Connection);
 
@@ -208,9 +266,89 @@ impl turso_mysql_parser::Environment for Session<'_> {
                         name: column.name.clone().unwrap_or_default(),
                         auto_increment: table.has_autoincrement && column.is_rowid_alias(),
                         generated: column.is_generated(),
+                        default: column.default.as_deref().cloned(),
+                        not_null: column.notnull() || column.primary_key(),
                     })
                     .collect()
             })
+        }))
+    }
+
+    fn table_sql(&self, table: &str) -> LoweringResult<Option<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema.get_btree_table(table).map(|table| table.to_sql())
+        }))
+    }
+
+    fn unique_keys_of(&self, table: &str) -> LoweringResult<Vec<Vec<String>>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            let primary_key = schema.get_btree_table(table).and_then(|table| {
+                (!table.primary_key_columns.is_empty()).then(|| {
+                    table
+                        .primary_key_columns
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect::<Vec<_>>()
+                })
+            });
+            let unique_indexes = schema
+                .get_indices(table)
+                .filter(|index| {
+                    index.unique
+                        && index.where_clause.is_none()
+                        && index.columns.iter().all(|column| column.expr.is_none())
+                })
+                .map(|index| {
+                    index
+                        .columns
+                        .iter()
+                        .map(|column| column.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            primary_key.into_iter().chain(unique_indexes).collect()
+        }))
+    }
+
+    fn foreign_key_names(&self) -> LoweringResult<Vec<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .tables
+                .values()
+                .filter_map(|table| table.btree())
+                .flat_map(|table| {
+                    table
+                        .foreign_keys
+                        .iter()
+                        .filter_map(|foreign_key| foreign_key.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        }))
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        self.0.foreign_keys_enabled()
+    }
+
+    fn foreign_keys_of(
+        &self,
+        table: &str,
+    ) -> LoweringResult<Vec<turso_mysql_parser::ForeignKeyOf>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_btree_table(table)
+                .map_or_else(Vec::new, |table| {
+                    table
+                        .foreign_keys
+                        .iter()
+                        .map(|foreign_key| turso_mysql_parser::ForeignKeyOf {
+                            child_columns: foreign_key.child_columns.to_vec(),
+                            parent_table: foreign_key.parent_table.clone(),
+                            parent_columns: foreign_key.parent_columns.to_vec(),
+                        })
+                        .collect()
+                })
         }))
     }
 }

@@ -1445,6 +1445,10 @@ pub fn translate_alter_table(
                                 None => false,
                             },
                             decl_order,
+                            name: constraint
+                                .name
+                                .as_ref()
+                                .map(|name| normalize_ident(name.as_str())),
                         };
                         btree.foreign_keys.push(Arc::new(fk));
                     }

@@ -54,7 +54,7 @@ A single integer primary key column is the table's rowid, so rows are read in pr
 
 `CREATE TABLE` keys are validated like InnoDB does: a `BLOB`/`TEXT` key part needs a prefix length, `JSON` columns cannot be key parts, a prefix must fit the column and be on a string, a key is at most 3072 bytes, key names are distinct, and key columns must exist.
 
-DDL that MySQL itself rejects fails with MySQL's error rather than an unsupported-syntax error: invalid defaults, invalid keys, a second primary key, an `AUTO_INCREMENT` column outside every key, `NULL` primary key columns, out-of-range type parameters (`VARCHAR(16384)`, `CHAR(256)`, `DECIMAL(5,6)`, `DATETIME(7)`, `BIT(65)`), duplicate `ENUM` members, a collation on a binary string, an index named `PRIMARY`, identifiers longer than 64 characters, an unknown storage engine (1286), and SQLite syntax MySQL does not have (`STRICT`, `WITHOUT ROWID`, column type names such as `ANY`). Every table gets its column types from the MySQL lowering. Other DDL MySQL rejects is not detected yet when its SQLite reading is valid, for example foreign keys whose parent table or column types do not match.
+DDL that MySQL itself rejects fails with MySQL's error rather than an unsupported-syntax error: invalid defaults, invalid keys, a second primary key, an `AUTO_INCREMENT` column outside every key or of a type other than an integer or floating-point one (1063; refused on `FLOAT` and `DOUBLE`), `NULL` primary key columns, out-of-range type parameters (`VARCHAR(16384)`, `CHAR(256)`, `DECIMAL(5,6)`, `DATETIME(7)`, `BIT(65)`), duplicate `ENUM` members, a collation on a binary string, an index named `PRIMARY`, identifiers longer than 64 characters, an unknown storage engine (1286), and SQLite syntax MySQL does not have (`STRICT`, `WITHOUT ROWID`, column type names such as `ANY`). Every table gets its column types from the MySQL lowering. A function call in a column default, generated column or `CHECK` constraint is lowered as in a `SELECT` (`CONCAT` with a `NULL` argument is `NULL`, `LENGTH` counts bytes), and a default that calls a function Turso does not have is refused, where Turso would fail only the first `INSERT` that uses it. `CREATE INDEX` on a `JSON` column, or on a `TEXT` or `BLOB` column without a key length, fails as in MySQL (3152, 1170). Other DDL MySQL rejects is not detected yet when its SQLite reading is valid.
 
 Compatibility no-ops (accepted, with no effect in Turso):
 
@@ -76,7 +76,8 @@ Known gaps:
 - `<`, `<=`, `>` and `>=` between a `BIGINT UNSIGNED` column and text that is not a whole number (`u < '9.5'`) fail; `=` compares them as doubles, as MySQL does.
 - Temporal values are stored as given, without MySQL's validation, normalization, or `TIMESTAMP` time-zone conversion (only defaults are normalized).
 - `ENUM` sorts and compares with strings by text, not by member position, and `SET` by text, not by bitmask. Arithmetic on an `ENUM` or `SET` value and comparing one with a number, where MySQL uses the member position or bitmask, are refused, as is comparing an `ENUM` with a `SET`. A DOUBLE or DECIMAL assigned to an `ENUM` or `SET` column reads as its text (`1.5` names no member and fails), and a name other than an ASCII one that differs from every member is rejected instead of converted.
-- Unlike InnoDB, a failed insert does not use up an `AUTO_INCREMENT` value.
+- Unlike InnoDB, a failed insert does not use up an `AUTO_INCREMENT` value, and a multi-row `INSERT ... VALUES` that gives the `AUTO_INCREMENT` key in some rows and generates it (`NULL`, `0`, `DEFAULT`) in others does not lose the values InnoDB reserves for it: InnoDB reserves one value per row when the statement first generates a key, so after `INSERT INTO t (pk) VALUES (10), (DEFAULT)` it generates 13 next where Turso generates 12. Modeling it needs a statement that also moves the table's counter, which the lowering cannot run yet.
+- `CREATE TABLE` checks its `FOREIGN KEY`s as MySQL 8.4 does when it creates them: the referenced table must exist (unless `FOREIGN_KEY_CHECKS` is 0) and have the referenced columns as its primary key or a unique key, in the key's order; `TEXT`, `BLOB` and `JSON` columns cannot be keys; string columns must have the same collation and integer columns the same size and sign; a `SET NULL` action needs nullable columns; and constraint names are unique in the database. MySQL compares keys as stored: keys between `DECIMAL` columns that store values alike (`DECIMAL(3,2)` and `DECIMAL(4,2)`) match as in Turso, and keys between `DECIMAL` columns that do not (`DECIMAL(4,1)` and `DECIMAL(4,2)`) or between `DATETIME`, `TIMESTAMP` and `TIME` columns or fractional precisions stored in different sizes are created but match no value: while `FOREIGN_KEY_CHECKS` is 1, an `INSERT ... VALUES` of literal rows fails as in MySQL (1452) when a row's key is not NULL, and other writes of the key are refused. Keys between `ENUM` (or `SET`) columns of different members are created, as MySQL matches them by member position: a write of a member both columns declare at the same position, or of NULL, runs, and other writes of the key are refused. Keys between `BINARY` and `VARBINARY` columns match as in Turso, which pads `BINARY` alike; keys between `CHAR` and `VARCHAR` columns too, except for values that end in a space, whose writes are refused. Refused: keys between columns of other different types, that name a column twice, or named like MySQL's generated names (`t_ibfk_1`); and, with `FOREIGN_KEY_CHECKS` 0, keys to an existing table that fail a check, which MySQL accepts in some cases. Inline `REFERENCES` column options are ignored, as in MySQL.
 - `FOREIGN KEY` constraints are enforced from the start of a connection, as MySQL starts with `FOREIGN_KEY_CHECKS = 1`. Turso checks them like SQLite: values are compared as stored, so a key between `ENUM` columns compares member names where MySQL compares member indexes (`'cat'` matches `'rat'` when both are member 1).
 - `CREATE TABLE ... AS SELECT` gives a result column the type of the column it reads (also through `MAX`/`MIN`), `BIGINT` to integer literals, `COUNT(...)` and integer arithmetic, `DOUBLE` to double literals and double arithmetic, and `LONGTEXT` to everything else (string literals, `CONCAT(...)`, `SUM(...)`, `AVG(...)`, arithmetic on `DECIMAL`), where MySQL picks a `VARCHAR(n)`, `INT` or `DECIMAL(p,s)` from the expression.
 - `CREATE TABLE ... AS SELECT` copies only the column type. `NOT NULL` and `DEFAULT` of the columns it reads are not copied, and neither is the `CHECK` that holds the validity of `JSON` columns, so the new table accepts any text there. MySQL keeps all of these.
@@ -146,6 +147,26 @@ structure), `expr.rs` (expressions) and `literal.rs` (literals) into the shared
 Turso AST. Anything listed under "Refused" fails with an unsupported-syntax
 error.
 
+A grouped `SELECT` is checked as MySQL's `ONLY_FULL_GROUP_BY` checks it: an
+expression of the select list or `HAVING` may use a column outside `GROUP BY`
+when the grouped columns hold its table's primary key or a unique key of
+`NOT NULL` columns, or the `WHERE` clause equates the column with a constant
+or (with an inner join's `ON`) with a column that is grouped or dependent;
+another column fails with MySQL's error (1055, or 1140 without `GROUP BY`).
+The check reads the session's tables, so a grouped `SELECT` over a view, a
+derived table, an outer join or columns it cannot resolve is refused when it
+may use a column outside `GROUP BY`.
+
+Statements MySQL rejects when it resolves names fail with MySQL's error: two
+tables of one `FROM` with the same name or alias (1066; a derived table's
+alias is apart from the names of tables, and a table named with its database
+next to one named without it is refused), a join of more than
+61 tables (1116; refused when the tables of derived tables, which MySQL may
+merge, take it past 61), `LIMIT` in an `IN`, `ANY` or `ALL` subquery (1235),
+and an `ORDER BY` name that is the alias of two different selected
+expressions (1052; refused when it is also a selected column, or both
+expressions may be the same column). A view's tables are not counted.
+
 Parsing uses sqlparser's MySQL dialect wrapped in `mysql/parser/dialect.rs`,
 which applies MySQL 8.4 operator precedence (`!` and unary `-`/`~` above `^`,
 then `* / DIV % MOD`, `+ -`, `<< >>`, `&`, `|`, `IN`/`LIKE`/`BETWEEN`,
@@ -160,7 +181,7 @@ Lowered:
 | Syntax | Lowering |
 |---|---|
 | `SELECT [ALL \| DISTINCT \| DISTINCTROW]`, `*`, `t.*`, aliases (also `'string'` and `"string"` aliases) | Same clauses |
-| `FROM` tables (`db.t` as a schema), aliases, comma joins, `[INNER] JOIN`, `CROSS JOIN`, `LEFT/RIGHT [OUTER] JOIN`, `NATURAL`, `ON`, `USING`, derived tables, `LATERAL`, parenthesized joins, `FROM DUAL` | Same clauses (`FROM DUAL` is no `FROM`) |
+| `FROM` tables (`db.t` as a schema), aliases, comma joins, `[INNER] JOIN`, `CROSS JOIN`, `LEFT/RIGHT [OUTER] JOIN`, `NATURAL`, `ON`, `USING`, derived tables (with a column list, `AS t (a, b)`, except `LATERAL` ones), `LATERAL`, parenthesized joins, `FROM DUAL` | Same clauses (`FROM DUAL` is no `FROM`; a derived column list names the columns of a `WITH` inside the derived table) |
 | `WHERE`, `GROUP BY` (expressions, aliases, ordinals), `HAVING`, `WINDOW`, `ORDER BY [ASC \| DESC]`, `LIMIT n`, `LIMIT n OFFSET m`, `LIMIT m, n` | Same clauses |
 | `UNION [ALL \| DISTINCT]`, `INTERSECT`, `EXCEPT`, parenthesized members with their own `ORDER BY`/`LIMIT`, `WITH` with column lists, `VALUES ROW(...)` | Same; a member that has its own `ORDER BY`/`LIMIT`, or a right operand that is itself a set operation (`INTERSECT` binds tighter), becomes `SELECT * FROM (...)` |
 | Window functions with `PARTITION BY`, `ORDER BY`, `ROWS`/`RANGE` frames and named windows | Same |
@@ -338,6 +359,16 @@ cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
 `.125000`).
 
 ## `INSERT`
+
+A column list that names a column twice fails with MySQL's error 1110.
+
+`DEFAULT` as a value of `VALUES`, `INSERT ... SET`, `ON DUPLICATE KEY UPDATE`
+or `UPDATE ... SET` writes the stored default of the column: NULL for the
+`AUTO_INCREMENT` key (the next value) and for a nullable column without a
+default. A generated column is left out of the insert when every row writes
+`DEFAULT` to it, and fails with MySQL's error 3105 otherwise. A `NOT NULL`
+column without a default fails a plain `INSERT` with error 1364 (as in strict
+mode) and is refused elsewhere.
 
 `mysql/parser/insert.rs` lowers `INSERT [INTO] t [(columns)]` with a
 `VALUES` list (several rows allowed), a `SELECT` (also a `UNION` or `WITH`

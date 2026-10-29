@@ -154,7 +154,7 @@ pub(crate) fn translate_create_trigger(
     }
     let commands = body
         .iter()
-        .map(trigger_command)
+        .map(|statement| trigger_command(statement, environment))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::Stmt::CreateTrigger {
         temporary: false,
@@ -534,10 +534,13 @@ fn row_reference(name: &ObjectName) -> Option<Row> {
 }
 
 /// A statement of a trigger body, lowered as outside a trigger.
-fn trigger_command(statement: &Statement) -> Result<ast::TriggerCmd, MysqlParserError> {
+fn trigger_command(
+    statement: &Statement,
+    environment: &dyn Environment,
+) -> Result<ast::TriggerCmd, MysqlParserError> {
     let lowered = match statement {
-        Statement::Insert(insert) => crate::insert::translate_insert(insert)?,
-        Statement::Update(update) => crate::dml::translate_update(update)?,
+        Statement::Insert(insert) => crate::insert::translate_insert(insert, environment)?,
+        Statement::Update(update) => crate::dml::translate_update(update, environment)?,
         Statement::Delete(delete) => crate::dml::translate_delete(delete)?,
         Statement::Query(_) => {
             return Err(MysqlParserError::Rejected(

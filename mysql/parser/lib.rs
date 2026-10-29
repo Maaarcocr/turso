@@ -17,6 +17,7 @@ mod ddl_view;
 mod dialect;
 mod dml;
 mod expr;
+mod foreign_key;
 mod function_names;
 mod insert;
 mod invalid_json;
@@ -27,6 +28,7 @@ mod query;
 mod session;
 mod show;
 mod split;
+mod stored_table;
 mod transaction;
 mod trigger;
 
@@ -88,6 +90,29 @@ pub trait Environment {
 
     /// The columns of `table`, or `None` when there is no such table.
     fn columns_of(&self, table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError>;
+
+    /// The stored `CREATE TABLE` of `table`, or `None` when there is no such
+    /// table.
+    fn table_sql(&self, table: &str) -> Result<Option<String>, MysqlParserError>;
+
+    /// The columns of the primary key and of each unique index of `table`.
+    fn unique_keys_of(&self, table: &str) -> Result<Vec<Vec<String>>, MysqlParserError>;
+
+    /// The names of the foreign keys of every table.
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError>;
+
+    /// Whether `FOREIGN_KEY_CHECKS` is 1.
+    fn foreign_key_checks(&self) -> bool;
+
+    /// The foreign keys of `table`.
+    fn foreign_keys_of(&self, table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError>;
+}
+
+/// A foreign key of the table asked about.
+pub struct ForeignKeyOf {
+    pub child_columns: Vec<String>,
+    pub parent_table: String,
+    pub parent_columns: Vec<String>,
 }
 
 /// A foreign key of `table` that references the table asked about.
@@ -103,6 +128,10 @@ pub struct ColumnFacts {
     /// The column is the `AUTO_INCREMENT` key.
     pub auto_increment: bool,
     pub generated: bool,
+    /// The stored default of the column.
+    pub default: Option<ast::Expr>,
+    /// The column is `NOT NULL` (or in the primary key).
+    pub not_null: bool,
 }
 
 /// A session outside any transaction on an empty database.
@@ -131,6 +160,26 @@ impl Environment for Autocommit {
 
     fn columns_of(&self, _table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError> {
         Ok(None)
+    }
+
+    fn table_sql(&self, _table: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn unique_keys_of(&self, _table: &str) -> Result<Vec<Vec<String>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        true
+    }
+
+    fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
+        Ok(Vec::new())
     }
 }
 
@@ -206,12 +255,13 @@ pub fn translate_in(
         ));
     }
     let lowered = match statement {
-        Statement::Insert(insert) => insert::translate_insert(insert)?,
-        Statement::Update(update) => dml::translate_update(update)?,
+        Statement::Insert(insert) => insert::translate_insert(insert, environment)?,
+        Statement::Update(update) => dml::translate_update(update, environment)?,
         Statement::Delete(delete) => dml::translate_delete(delete)?,
         _ => return translate_other(statement, environment),
     };
     trigger::check_fired_triggers(statement, &lowered, environment)?;
+    foreign_key::check_writes(&lowered, environment)?;
     Ok(lowered)
 }
 
@@ -231,11 +281,15 @@ fn translate_other(
             transaction::translate_transaction(statement, in_transaction)
         }
         Statement::Query(query) => {
-            let mut context = query::TranslationContext::default();
+            let mut context = query::TranslationContext::for_session(environment);
             query::translate_query(query, &mut context)
         }
-        Statement::CreateTable(create_table) => ddl::translate_create_table(create_table),
-        Statement::CreateIndex(create_index) => ddl_index::translate_create_index(create_index),
+        Statement::CreateTable(create_table) => {
+            ddl::translate_create_table(create_table, environment)
+        }
+        Statement::CreateIndex(create_index) => {
+            ddl_index::translate_create_index(create_index, environment)
+        }
         Statement::AlterTable(alter_table) => {
             ddl_alter::translate_alter_table(alter_table, environment)
         }

@@ -342,6 +342,195 @@ fn drop_index_names_the_table_of_the_index() -> turso_core::Result<()> {
 }
 
 #[test]
+fn foreign_keys_are_checked_when_created_as_mysql_checks_them() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for statement in [
+        "CREATE TABLE p (id INT(11) UNSIGNED PRIMARY KEY, x INT, s VARCHAR(10) COLLATE utf8mb4_bin, t TEXT, UNIQUE KEY (x))",
+        "CREATE TABLE c (pid INT UNSIGNED, px INT, CONSTRAINT f FOREIGN KEY (pid) REFERENCES p (id) ON DELETE SET NULL, FOREIGN KEY (px) REFERENCES p (x))",
+        "CREATE TABLE tree (id INT PRIMARY KEY, parent INT, FOREIGN KEY (parent) REFERENCES tree (id))",
+    ] {
+        connection.execute(statement)?;
+    }
+    let rejected = [
+        "CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES nope (id))",
+        "CREATE TABLE d (a INT UNSIGNED, FOREIGN KEY (a) REFERENCES p (nope))",
+        "CREATE TABLE d (a VARCHAR(10), FOREIGN KEY (a) REFERENCES p (s))",
+        "CREATE TABLE d (a TEXT, FOREIGN KEY (a) REFERENCES p (t))",
+        "CREATE TABLE d (a BIGINT, FOREIGN KEY (a) REFERENCES p (x))",
+        "CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES p (id))",
+        "CREATE TABLE d (a INT UNSIGNED NOT NULL, FOREIGN KEY (a) REFERENCES p (id) ON UPDATE SET NULL)",
+        "CREATE TABLE d (a INT UNSIGNED, CONSTRAINT F FOREIGN KEY (a) REFERENCES p (id))",
+    ];
+    for statement in rejected {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("MySQL rejects"),
+            "{statement}: {error}"
+        );
+    }
+    let refused = connection
+        .execute("CREATE TABLE d (a DECIMAL(4,1), FOREIGN KEY (a) REFERENCES p (x))")
+        .expect_err("MySQL compares keys of different types as stored");
+    assert!(refused.to_string().contains("unsupported"), "{refused}");
+    connection.execute("CREATE TABLE dp (d DECIMAL(4,2) PRIMARY KEY, t DATETIME UNIQUE)")?;
+    connection.execute("INSERT INTO dp VALUES (1.23, '2001-02-03 12:34:56')")?;
+    connection.execute("CREATE TABLE same (d DECIMAL(3,2), FOREIGN KEY (d) REFERENCES dp (d))")?;
+    connection.execute("INSERT INTO same VALUES (1.23)")?;
+    for statement in [
+        "CREATE TABLE scale (d DECIMAL(4,1), FOREIGN KEY (d) REFERENCES dp (d))",
+        "CREATE TABLE stamp (t TIMESTAMP, FOREIGN KEY (t) REFERENCES dp (t))",
+    ] {
+        connection.execute(statement)?;
+    }
+    connection.execute("INSERT INTO scale VALUES (NULL)")?;
+    connection.execute("CREATE TABLE cp (c CHAR(3) PRIMARY KEY)")?;
+    connection.execute("INSERT INTO cp VALUES ('abc')")?;
+    connection.execute("CREATE TABLE vc (v VARCHAR(10), FOREIGN KEY (v) REFERENCES cp (c))")?;
+    connection.execute("INSERT INTO vc VALUES ('abc')")?;
+    for (statement, expected) in [
+        ("INSERT INTO scale VALUES (1.2)", "MySQL rejects"),
+        (
+            "INSERT INTO stamp VALUES ('2001-02-03 12:34:56')",
+            "MySQL rejects",
+        ),
+        ("UPDATE scale SET d = 1.2", "unsupported"),
+        ("INSERT INTO scale SELECT 1.2", "unsupported"),
+        ("INSERT INTO vc VALUES ('abc ')", "unsupported"),
+    ] {
+        let error = connection
+            .execute(statement)
+            .expect_err("MySQL matches these keys as stored");
+        assert!(error.to_string().contains(expected), "{statement}: {error}");
+    }
+    connection.execute("SET FOREIGN_KEY_CHECKS = 0")?;
+    connection.execute("CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES later (id))")?;
+    Ok(())
+}
+
+#[test]
+fn column_expressions_call_mysql_s_functions() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (pk INT PRIMARY KEY, a VARCHAR(5), c VARCHAR(10) AS (CONCAT(a, 'x')), w VARCHAR(10) DEFAULT (CONCAT('a', 'b')))",
+    )?;
+    connection.execute("INSERT INTO t (pk) VALUES (1)")?;
+    assert_eq!(
+        query(&connection, "SELECT c, w FROM t")?,
+        vec![vec![Value::Null, Value::from_text("ab")]]
+    );
+    let error = connection
+        .execute("CREATE TABLE u (pk INT PRIMARY KEY, v INT DEFAULT (CUSTOMFUNC(1)))")
+        .expect_err("Turso has no CUSTOMFUNC");
+    assert!(error.to_string().contains("unsupported"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (pk INT PRIMARY KEY AUTO_INCREMENT, i INT DEFAULT 7, \
+         s VARCHAR(5) DEFAULT 'x', n INT, g INT AS (i + 1))",
+    )?;
+    connection.execute("INSERT INTO t (pk) VALUES (DEFAULT), (10), (DEFAULT)")?;
+    connection.execute("INSERT INTO t VALUES (DEFAULT, 1, DEFAULT, DEFAULT, DEFAULT)")?;
+    connection.execute("INSERT INTO t SET i = DEFAULT, n = 5")?;
+    connection.execute("UPDATE t SET i = 2 WHERE pk IN (1, 10)")?;
+    connection.execute("UPDATE t SET s = DEFAULT, n = DEFAULT WHERE pk = 12")?;
+    connection
+        .execute("INSERT INTO t (pk, i) VALUES (1, 0) ON DUPLICATE KEY UPDATE i = DEFAULT")?;
+    let row = |pk: i64, i: i64, n: Option<i64>| {
+        vec![
+            Value::from_i64(pk),
+            Value::from_i64(i),
+            Value::build_text("x"),
+            n.map_or(Value::Null, Value::from_i64),
+            Value::from_i64(i + 1),
+        ]
+    };
+    assert_eq!(
+        query(&connection, "SELECT pk, i, s, n, g FROM t ORDER BY pk")?,
+        vec![
+            row(1, 7, None),
+            row(10, 2, None),
+            row(11, 7, None),
+            row(12, 1, None),
+            row(13, 7, Some(5)),
+        ]
+    );
+    connection.execute("CREATE TABLE r (a INT NOT NULL, b INT)")?;
+    for (statement, expected) in [
+        ("INSERT INTO r VALUES (DEFAULT, 1)", "MySQL rejects"),
+        (
+            "INSERT INTO t (i, g) VALUES (1, 2), (2, DEFAULT)",
+            "MySQL rejects",
+        ),
+        ("INSERT IGNORE INTO r VALUES (DEFAULT, 1)", "unsupported"),
+        ("UPDATE r SET a = DEFAULT", "unsupported"),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(expected), "{statement}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn grouped_selects_use_columns_as_only_full_group_by_allows() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE p (id INT PRIMARY KEY, nm VARCHAR(10), r INT)")?;
+    connection.execute("CREATE TABLE c (id INT PRIMARY KEY, p_id INT)")?;
+    connection.execute("INSERT INTO p VALUES (1, 'a', 5), (2, 'b', 6)")?;
+    connection.execute("INSERT INTO c VALUES (1, 1), (2, 1), (3, 2)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT p.nm, COUNT(c.id) FROM p JOIN c ON c.p_id = p.id GROUP BY p.id ORDER BY p.id",
+        )?,
+        vec![
+            vec![Value::build_text("a"), Value::from_i64(2)],
+            vec![Value::build_text("b"), Value::from_i64(1)],
+        ]
+    );
+    assert_eq!(
+        query(&connection, "SELECT nm, COUNT(*) FROM p WHERE id = 2")?,
+        vec![vec![Value::build_text("b"), Value::from_i64(1)]]
+    );
+    for statement in [
+        "SELECT nm, COUNT(*) FROM p GROUP BY r",
+        "SELECT * FROM c GROUP BY p_id",
+        "SELECT nm, SUM(r) FROM p",
+    ] {
+        let error = query(&connection, statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("MySQL rejects"),
+            "{statement}: {error}"
+        );
+    }
+    let error = query(
+        &connection,
+        "SELECT nm FROM p, (SELECT 1 AS x) AS d GROUP BY x",
+    )
+    .expect_err("a derived table's columns are not resolved");
+    assert!(error.to_string().contains("unsupported"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn create_index_checks_the_types_of_the_columns() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (i INT, s TEXT, j JSON, v VARCHAR(10))")?;
+    for statement in ["CREATE INDEX x ON t (j)", "CREATE INDEX x ON t (i, s)"] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("MySQL rejects"),
+            "{statement}: {error}"
+        );
+    }
+    connection.execute("CREATE INDEX x ON t (i, v)")?;
+    Ok(())
+}
+
+#[test]
 fn triggers_fire_as_mysql_s_or_are_refused() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for statement in [

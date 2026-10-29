@@ -6,6 +6,7 @@ use crate::expr::{
 use crate::invalid_json::invalid_json_text_evaluated;
 use crate::names::translate_identifier;
 use crate::MysqlParserError;
+use crate::{ColumnFacts, Environment};
 use sqlparser::ast::{
     BinaryOperator, Cte, Distinct, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
     GroupByExpr, Join, JoinConstraint, JoinOperator, LimitClause, NamedWindowDefinition,
@@ -19,7 +20,10 @@ use std::num::NonZeroU32;
 use turso_parser::{ast, MAX_EXPR_DEPTH};
 
 #[derive(Default)]
-pub(crate) struct TranslationContext {
+pub(crate) struct TranslationContext<'a> {
+    /// The session, when the statement is lowered for one; lowering that
+    /// needs the schema refuses without it.
+    pub(crate) environment: Option<&'a dyn Environment>,
     parameter_count: u32,
     expression_depth: usize,
     select_list_runs_once: bool,
@@ -35,7 +39,14 @@ pub(crate) struct TranslationContext {
     tables_read: Vec<ast::Name>,
 }
 
-impl TranslationContext {
+impl<'a> TranslationContext<'a> {
+    pub(crate) fn for_session(environment: &'a dyn Environment) -> Self {
+        Self {
+            environment: Some(environment),
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn reads_table(&self, table: &ast::Name) -> bool {
         self.reads_table_since(0, table)
     }
@@ -137,6 +148,7 @@ pub(crate) fn translate_subquery(
         .map(|with| translate_with(with, context))
         .transpose()?;
     if let (SetExpr::Select(select), Some(order_by)) = (body.as_ref(), order_by) {
+        check_order_by_names(select, order_by)?;
         if let Some(term) = order_by_outside_the_rows(select, order_by) {
             return Err(unsupported(format!(
                 "ORDER BY `{term}` of a grouped or DISTINCT SELECT, which may use a column outside the selected rows that MySQL rejects and Turso allows, in `{query}`"
@@ -410,11 +422,7 @@ fn translate_select(
     {
         return Err(unsupported(format!("SELECT clause in `{select}`")));
     }
-    if may_break_only_full_group_by(select) {
-        return Err(unsupported(format!(
-            "a grouped SELECT that may use a column outside GROUP BY, which ONLY_FULL_GROUP_BY rejects in MySQL and Turso allows, `{select}`"
-        )));
-    }
+    check_only_full_group_by(select, context.environment)?;
     let distinctness = match distinct {
         None => None,
         Some(Distinct::All) => Some(ast::Distinctness::All),
@@ -450,9 +458,26 @@ fn translate_select(
     })
 }
 
-fn may_break_only_full_group_by(select: &Select) -> bool {
+/// Checks a grouped `SELECT` as MySQL's `ONLY_FULL_GROUP_BY` does: an
+/// expression of the select list or `HAVING` may use a column outside
+/// `GROUP BY` only when the column is functionally dependent on the grouped
+/// ones: a grouped key (the primary key or a unique key of `NOT NULL`
+/// columns) of its table, or the `WHERE` clause equating it with a
+/// constant. MySQL rejects other columns (1055, or 1140 without `GROUP BY`),
+/// and so does Turso; a statement whose columns lowering cannot resolve
+/// against the session's schema is refused, as Turso takes any value of the
+/// group.
+fn check_only_full_group_by(
+    select: &Select,
+    environment: Option<&dyn Environment>,
+) -> Result<(), MysqlParserError> {
+    let refused = || {
+        Err(unsupported(format!(
+            "a grouped SELECT that may use a column outside GROUP BY, which ONLY_FULL_GROUP_BY rejects in MySQL and Turso allows, `{select}`"
+        )))
+    };
     let GroupByExpr::Expressions(group_by, _) = &select.group_by else {
-        return true;
+        return refused();
     };
     let projections = select
         .projection
@@ -466,7 +491,7 @@ fn may_break_only_full_group_by(select: &Select) -> bool {
             .any(|expr| contains_aggregate(expr))
         || select.having.as_ref().is_some_and(contains_aggregate);
     if !grouped {
-        return false;
+        return Ok(());
     }
     let aliases = select
         .projection
@@ -489,13 +514,461 @@ fn may_break_only_full_group_by(select: &Select) -> bool {
         aliases: &aliases,
         ..groups.clone()
     };
-    projections.iter().any(|expr| match expr {
+    let projection_breaks = projections.iter().any(|expr| match expr {
         Some(expr) => uses_ungrouped_column(expr, &groups),
         None => true,
-    }) || select
+    });
+    let having_breaks = select
         .having
         .as_ref()
-        .is_some_and(|having| uses_ungrouped_column(having, &having_groups))
+        .is_some_and(|having| uses_ungrouped_column(having, &having_groups));
+    if !projection_breaks && !having_breaks {
+        return Ok(());
+    }
+    let Some(environment) = environment else {
+        return refused();
+    };
+    let Some(sources) = Sources::of(select, environment)? else {
+        return refused();
+    };
+    let mut fixed: Vec<SourceColumn> = Vec::new();
+    for expr in &groups.exprs {
+        if let Resolved::Column(column) = sources.resolve(without_parentheses(expr)) {
+            fixed.push(column);
+        }
+    }
+    if let Some(selection) = &select.selection {
+        let mut constant = Vec::new();
+        fixed_by_the_where_clause(selection, &mut constant);
+        for expr in constant {
+            if let Resolved::Column(column) = sources.resolve(expr) {
+                fixed.push(column);
+            }
+        }
+    }
+    let mut equalities = Vec::new();
+    let mut outer_join = false;
+    if let Some(selection) = &select.selection {
+        column_equalities(selection, &sources, &mut equalities);
+    }
+    for table in &select.from {
+        for join in &table.joins {
+            match &join.join_operator {
+                JoinOperator::Join(constraint)
+                | JoinOperator::Inner(constraint)
+                | JoinOperator::CrossJoin(constraint)
+                | JoinOperator::StraightJoin(constraint) => match constraint {
+                    JoinConstraint::On(condition) => {
+                        column_equalities(condition, &sources, &mut equalities);
+                    }
+                    JoinConstraint::None => {}
+                    JoinConstraint::Using(_) | JoinConstraint::Natural => outer_join = true,
+                },
+                _ => outer_join = true,
+            }
+        }
+    }
+    let determined = loop {
+        let determined = sources.determined(&fixed, environment)?;
+        let before = fixed.len();
+        for &index in &determined {
+            for facts in &sources.tables[index].columns {
+                let column = (index, facts.name.to_ascii_lowercase());
+                if !fixed.contains(&column) {
+                    fixed.push(column);
+                }
+            }
+        }
+        for (left, right) in &equalities {
+            for (known, other) in [(left, right), (right, left)] {
+                if fixed.contains(known) && !fixed.contains(other) {
+                    fixed.push(other.clone());
+                }
+            }
+        }
+        if fixed.len() == before {
+            break determined;
+        }
+    };
+    let dependence = Dependence {
+        groups: &groups,
+        sources: &sources,
+        fixed: &fixed,
+        determined: &determined,
+    };
+    let mut verdict = Verdict::Grouped;
+    for item in &select.projection {
+        let item_verdict = match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                dependence.of(expr)
+            }
+            SelectItem::Wildcard(_) => dependence.of_tables(None),
+            SelectItem::QualifiedWildcard(SelectItemQualifiedWildcardKind::ObjectName(name), _) => {
+                match name.0.as_slice() {
+                    [ObjectNamePart::Identifier(qualifier)] => {
+                        dependence.of_tables(Some(&qualifier.value))
+                    }
+                    _ => Verdict::Unknown,
+                }
+            }
+            SelectItem::QualifiedWildcard(..) | SelectItem::ExprWithAliases { .. } => {
+                Verdict::Unknown
+            }
+        };
+        verdict = verdict.and(item_verdict);
+    }
+    if let Some(having) = &select.having {
+        let having_dependence = Dependence {
+            groups: &having_groups,
+            ..dependence
+        };
+        verdict = verdict.and(having_dependence.of(having));
+    }
+    match verdict {
+        Verdict::Grouped => Ok(()),
+        Verdict::Ungrouped if outer_join => refused(),
+        Verdict::Ungrouped if group_by.is_empty() => Err(MysqlParserError::Rejected(
+            "In aggregated query without GROUP BY, the SELECT list or HAVING contains a nonaggregated column; this is incompatible with sql_mode=only_full_group_by".to_string(),
+        )),
+        Verdict::Ungrouped => Err(MysqlParserError::Rejected(
+            "The SELECT list or HAVING is not in GROUP BY clause and contains a nonaggregated column which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by".to_string(),
+        )),
+        Verdict::Unknown => refused(),
+    }
+}
+
+/// The equalities between two columns that `condition` requires of every
+/// row (the operands of `AND`).
+fn column_equalities(
+    condition: &Expr,
+    sources: &Sources,
+    equalities: &mut Vec<(SourceColumn, SourceColumn)>,
+) {
+    match without_parentheses(condition) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => {
+            column_equalities(left, sources, equalities);
+            column_equalities(right, sources, equalities);
+        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } => {
+            if let (Resolved::Column(left), Resolved::Column(right)) = (
+                sources.resolve(without_parentheses(left)),
+                sources.resolve(without_parentheses(right)),
+            ) {
+                equalities.push((left, right));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Whether an expression of a grouped `SELECT` uses only grouped columns.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    Grouped,
+    /// It uses a column MySQL finds outside `GROUP BY`.
+    Ungrouped,
+    Unknown,
+}
+
+impl Verdict {
+    fn and(self, other: Verdict) -> Verdict {
+        match (self, other) {
+            (Verdict::Ungrouped, _) | (_, Verdict::Ungrouped) => Verdict::Ungrouped,
+            (Verdict::Unknown, _) | (_, Verdict::Unknown) => Verdict::Unknown,
+            (Verdict::Grouped, Verdict::Grouped) => Verdict::Grouped,
+        }
+    }
+}
+
+/// The base tables of a `FROM`, with their columns.
+struct Sources {
+    tables: Vec<Source>,
+}
+
+struct Source {
+    table: String,
+    /// The alias, or the name of the table.
+    qualifier: String,
+    columns: Vec<ColumnFacts>,
+}
+
+/// A column of a source: its index in `Sources::tables` and its name in
+/// lower case.
+type SourceColumn = (usize, String);
+
+enum Resolved {
+    Column(SourceColumn),
+    NotAColumn,
+    Unknown,
+}
+
+impl Sources {
+    /// `None` when a table of the `FROM` is not a base table of the session.
+    fn of(
+        select: &Select,
+        environment: &dyn Environment,
+    ) -> Result<Option<Sources>, MysqlParserError> {
+        let mut tables = Vec::new();
+        for table in &select.from {
+            for relation in std::iter::once(&table.relation)
+                .chain(table.joins.iter().map(|join| &join.relation))
+            {
+                let TableFactor::Table {
+                    name,
+                    alias,
+                    args: None,
+                    ..
+                } = relation
+                else {
+                    return Ok(None);
+                };
+                let [ObjectNamePart::Identifier(table_name)] = name.0.as_slice() else {
+                    return Ok(None);
+                };
+                if alias
+                    .as_ref()
+                    .is_some_and(|alias| !alias.columns.is_empty())
+                {
+                    return Ok(None);
+                }
+                let Some(columns) = environment.columns_of(&table_name.value)? else {
+                    return Ok(None);
+                };
+                tables.push(Source {
+                    table: table_name.value.clone(),
+                    qualifier: alias.as_ref().map_or_else(
+                        || table_name.value.clone(),
+                        |alias| alias.name.value.clone(),
+                    ),
+                    columns,
+                });
+            }
+        }
+        if tables.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Sources { tables }))
+    }
+
+    fn resolve(&self, expr: &Expr) -> Resolved {
+        let has = |source: &Source, column: &str| {
+            source
+                .columns
+                .iter()
+                .any(|facts| facts.name.eq_ignore_ascii_case(column))
+        };
+        match expr {
+            Expr::Identifier(column) => {
+                let mut found = self
+                    .tables
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, source)| has(source, &column.value));
+                match (found.next(), found.next()) {
+                    (Some((index, _)), None) => {
+                        Resolved::Column((index, column.value.to_ascii_lowercase()))
+                    }
+                    _ => Resolved::Unknown,
+                }
+            }
+            Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+                [qualifier, column] => {
+                    let mut found = self
+                        .tables
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, source)| source.qualifier == qualifier.value);
+                    match (found.next(), found.next()) {
+                        (Some((index, source)), None) if has(source, &column.value) => {
+                            Resolved::Column((index, column.value.to_ascii_lowercase()))
+                        }
+                        _ => Resolved::Unknown,
+                    }
+                }
+                _ => Resolved::Unknown,
+            },
+            _ => Resolved::NotAColumn,
+        }
+    }
+
+    /// The sources whose rows `fixed` columns determine: a key of `NOT NULL`
+    /// columns of theirs is fixed.
+    fn determined(
+        &self,
+        fixed: &[SourceColumn],
+        environment: &dyn Environment,
+    ) -> Result<Vec<usize>, MysqlParserError> {
+        let mut determined = Vec::new();
+        for (index, source) in self.tables.iter().enumerate() {
+            let not_null = |column: &str| {
+                source
+                    .columns
+                    .iter()
+                    .any(|facts| facts.name.eq_ignore_ascii_case(column) && facts.not_null)
+            };
+            let keys = environment.unique_keys_of(&source.table)?;
+            if keys.iter().any(|key| {
+                !key.is_empty()
+                    && key.iter().all(|column| {
+                        not_null(column) && fixed.contains(&(index, column.to_ascii_lowercase()))
+                    })
+            }) {
+                determined.push(index);
+            }
+        }
+        Ok(determined)
+    }
+}
+
+/// What a grouped `SELECT` makes functionally dependent on its groups.
+#[derive(Clone, Copy)]
+struct Dependence<'a> {
+    groups: &'a Grouping<'a>,
+    sources: &'a Sources,
+    fixed: &'a [SourceColumn],
+    determined: &'a [usize],
+}
+
+impl Dependence<'_> {
+    fn column(&self, column: &SourceColumn) -> Verdict {
+        if self.determined.contains(&column.0) || self.fixed.contains(column) {
+            Verdict::Grouped
+        } else {
+            Verdict::Ungrouped
+        }
+    }
+
+    fn of(&self, expr: &Expr) -> Verdict {
+        if self.groups.contains(expr) {
+            return Verdict::Grouped;
+        }
+        match expr {
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => match self.sources.resolve(expr) {
+                Resolved::Column(column) => self.column(&column),
+                Resolved::NotAColumn | Resolved::Unknown => Verdict::Unknown,
+            },
+            Expr::Value(_) | Expr::TypedString(_) | Expr::Prefixed { .. } | Expr::Interval(_) => {
+                Verdict::Grouped
+            }
+            Expr::Subquery(_) | Expr::Exists { .. } => Verdict::Grouped,
+            Expr::Function(function) if is_aggregate(function) => Verdict::Grouped,
+            Expr::Function(function) => match function_arguments(function) {
+                Some(args) => args
+                    .iter()
+                    .fold(Verdict::Grouped, |verdict, arg| verdict.and(self.of(arg))),
+                None => Verdict::Unknown,
+            },
+            Expr::InSubquery { expr, .. } => self.of(expr),
+            other => match child_expressions(other) {
+                Some(children) => children.iter().fold(Verdict::Grouped, |verdict, child| {
+                    verdict.and(self.of(child))
+                }),
+                None => Verdict::Unknown,
+            },
+        }
+    }
+
+    /// The columns of every source, or of the one named `qualifier`.
+    fn of_tables(&self, qualifier: Option<&str>) -> Verdict {
+        let mut verdict = Verdict::Grouped;
+        let mut matched = false;
+        for (index, source) in self.sources.tables.iter().enumerate() {
+            if qualifier.is_some_and(|qualifier| qualifier != source.qualifier) {
+                continue;
+            }
+            matched = true;
+            for facts in &source.columns {
+                if facts.generated {
+                    return Verdict::Unknown;
+                }
+                verdict = verdict.and(self.column(&(index, facts.name.to_ascii_lowercase())));
+            }
+        }
+        if matched {
+            verdict
+        } else {
+            Verdict::Unknown
+        }
+    }
+}
+
+/// Fails as MySQL does when an `ORDER BY` name is the alias of two different
+/// selected expressions (1052). Refused: a name that is also a selected
+/// column, or whose expressions may be the same column.
+fn check_order_by_names(select: &Select, order_by: &OrderBy) -> Result<(), MysqlParserError> {
+    let OrderByKind::Expressions(terms) = &order_by.kind else {
+        return Ok(());
+    };
+    for term in terms {
+        let Expr::Identifier(name) = &term.expr else {
+            continue;
+        };
+        let mut aliased = Vec::new();
+        let mut columns = 0;
+        for item in &select.projection {
+            match item {
+                SelectItem::ExprWithAlias { expr, alias }
+                    if alias.value.eq_ignore_ascii_case(&name.value) =>
+                {
+                    aliased.push(expr);
+                }
+                SelectItem::UnnamedExpr(Expr::Identifier(column))
+                    if column.value.eq_ignore_ascii_case(&name.value) =>
+                {
+                    columns += 1;
+                }
+                SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))
+                    if parts
+                        .last()
+                        .is_some_and(|column| column.value.eq_ignore_ascii_case(&name.value)) =>
+                {
+                    columns += 1;
+                }
+                _ => {}
+            }
+        }
+        let column_name = |expr: &Expr| match expr {
+            Expr::Identifier(column) => Some(column.value.to_lowercase()),
+            Expr::CompoundIdentifier(parts) => {
+                parts.last().map(|column| column.value.to_lowercase())
+            }
+            _ => None,
+        };
+        let texts = aliased
+            .iter()
+            .map(|expr| expr.to_string())
+            .collect::<std::collections::HashSet<_>>();
+        if aliased.len() + columns < 2 || (columns == 0 && texts.len() < 2) {
+            continue;
+        }
+        let column_names = aliased
+            .iter()
+            .filter_map(|expr| column_name(expr))
+            .collect::<Vec<_>>();
+        let same_column = column_names
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            < column_names.len();
+        if columns > 0 || same_column {
+            return Err(unsupported(format!(
+                "ORDER BY `{name}`, which names more than one selected expression that MySQL may find ambiguous"
+            )));
+        }
+        return Err(MysqlParserError::Rejected(format!(
+            "Column '{}' in order clause is ambiguous",
+            name.value
+        )));
+    }
+    Ok(())
 }
 
 fn order_by_outside_the_rows<'a>(select: &Select, order_by: &'a OrderBy) -> Option<&'a Expr> {
@@ -642,6 +1115,9 @@ fn selected_by_group_term<'a>(term: &Expr, select: &'a Select) -> Option<&'a Exp
             }
             _ => None,
         }),
+        Expr::Nested(inner) if matches!(without_parentheses(inner), Expr::Identifier(_)) => {
+            selected_by_group_term(without_parentheses(inner), select)
+        }
         _ => None,
     }
 }
@@ -1019,6 +1495,7 @@ pub(crate) fn translate_from(
     if rest.is_empty() && first.joins.is_empty() && is_dual(&first.relation) {
         return Ok(None);
     }
+    check_table_references(from)?;
     let select = translate_table_factor(&first.relation, context)?;
     let mut joins = translate_joins(&first.joins, context)?;
     for table in rest {
@@ -1033,6 +1510,134 @@ pub(crate) fn translate_from(
         select: Box::new(select),
         joins,
     }))
+}
+
+/// Fails as MySQL does when two tables of one `FROM` have the same name or
+/// alias (1066) or when it joins more than 61 tables (1116). Refused: more
+/// than 61 tables counting those of derived tables, which MySQL may merge
+/// into the join.
+fn check_table_references(from: &[TableWithJoins]) -> Result<(), MysqlParserError> {
+    const MAX_TABLES: usize = 61;
+    /// Where MySQL places a table of a `FROM`: two tables with one name (or
+    /// alias) conflict only when they are in the same place.
+    #[derive(Clone, PartialEq, Eq)]
+    enum Place {
+        /// A table of the current database, named without a database.
+        Current,
+        Database(String),
+        /// A derived table or a table function, which is in no database.
+        Derived,
+    }
+    #[derive(Default)]
+    struct Count {
+        names: Vec<(Place, String)>,
+        tables: usize,
+        merged: usize,
+    }
+    fn visit(factor: &TableFactor, count: &mut Count) -> Result<(), MysqlParserError> {
+        let name = match factor {
+            TableFactor::NestedJoin {
+                table_with_joins,
+                alias: None,
+            } => {
+                visit(&table_with_joins.relation, count)?;
+                for join in &table_with_joins.joins {
+                    visit(&join.relation, count)?;
+                }
+                return Ok(());
+            }
+            TableFactor::Table { name, alias, .. } => {
+                count.merged += 1;
+                let parts: Vec<String> = name
+                    .0
+                    .iter()
+                    .map(|part| match part {
+                        ObjectNamePart::Identifier(identifier) => identifier.value.clone(),
+                        other => other.to_string(),
+                    })
+                    .collect();
+                let place = match parts.as_slice() {
+                    [_] => Place::Current,
+                    [database, _] => Place::Database(database.clone()),
+                    _ => return Err(unsupported(format!("table name `{name}`"))),
+                };
+                let table = parts.last().cloned().unwrap_or_default();
+                Some((
+                    place,
+                    alias
+                        .as_ref()
+                        .map_or(table, |alias| alias.name.value.clone()),
+                ))
+            }
+            TableFactor::Derived {
+                subquery, alias, ..
+            } => {
+                count.merged += query_tables(subquery).max(1);
+                alias
+                    .as_ref()
+                    .map(|alias| (Place::Derived, alias.name.value.clone()))
+            }
+            _ => {
+                count.merged += 1;
+                None
+            }
+        };
+        count.tables += 1;
+        if let Some((place, name)) = name {
+            for (other_place, other) in &count.names {
+                if *other != name {
+                    continue;
+                }
+                match (&place, other_place) {
+                    _ if place == *other_place => {
+                        return Err(MysqlParserError::Rejected(format!(
+                            "Not unique table/alias: '{name}'"
+                        )));
+                    }
+                    (Place::Current, Place::Database(_)) | (Place::Database(_), Place::Current) => {
+                        return Err(unsupported(format!(
+                            "two tables named `{name}`, one of them in a named database,"
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+            count.names.push((place, name));
+        }
+        Ok(())
+    }
+    fn query_tables(query: &Query) -> usize {
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return 1;
+        };
+        let mut count = Count::default();
+        for table in &select.from {
+            let _ = visit(&table.relation, &mut count);
+            for join in &table.joins {
+                let _ = visit(&join.relation, &mut count);
+            }
+        }
+        count.merged
+    }
+    let mut count = Count::default();
+    for table in from {
+        visit(&table.relation, &mut count)?;
+        for join in &table.joins {
+            visit(&join.relation, &mut count)?;
+        }
+    }
+    if count.tables > MAX_TABLES {
+        return Err(MysqlParserError::Rejected(format!(
+            "Too many tables; MySQL can only use {MAX_TABLES} tables in a join"
+        )));
+    }
+    if count.merged > MAX_TABLES {
+        return Err(unsupported(format!(
+            "a join of {} tables counting those of its derived tables, which MySQL may merge past its limit of {MAX_TABLES}",
+            count.merged
+        )));
+    }
+    Ok(())
 }
 
 fn is_dual(relation: &TableFactor) -> bool {
@@ -1163,7 +1768,27 @@ fn translate_table_factor(
             sample: None,
         } => {
             let select = translate_subquery(subquery, context)?;
-            let alias = alias.as_ref().map(translate_table_alias).transpose()?;
+            let (select, alias) = match alias {
+                Some(alias) if !alias.columns.is_empty() => {
+                    if *lateral {
+                        return Err(unsupported(format!(
+                            "LATERAL derived table with a column list `{alias}`"
+                        )));
+                    }
+                    let unnamed = TableAlias {
+                        columns: Vec::new(),
+                        ..alias.clone()
+                    };
+                    (
+                        with_column_names(select, &alias.columns)?,
+                        Some(translate_table_alias(&unnamed)?),
+                    )
+                }
+                other => (
+                    select,
+                    other.as_ref().map(translate_table_alias).transpose()?,
+                ),
+            };
             Ok(ast::SelectTable::Select {
                 select,
                 alias,
@@ -1198,6 +1823,60 @@ pub(crate) fn translate_table_name(
         }
         _ => Err(unsupported(format!("table name `{name}`"))),
     }
+}
+
+/// Names the columns of a derived table, `(select) AS t (a, b)`, as
+/// `(WITH d (a, b) AS (select) SELECT * FROM d) AS t`; a different number
+/// of columns fails, as in MySQL.
+fn with_column_names(
+    select: ast::Select,
+    columns: &[sqlparser::ast::TableAliasColumnDef],
+) -> Result<ast::Select, MysqlParserError> {
+    let columns = columns
+        .iter()
+        .map(|column| {
+            if column.data_type.is_some() {
+                return Err(unsupported(format!("typed column alias `{}`", column.name)));
+            }
+            Ok(ast::IndexedColumn {
+                col_name: translate_identifier(&column.name)?,
+                collation_name: None,
+                order: None,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let name = ast::Name::exact("__mysql_derived_columns".to_string());
+    Ok(ast::Select {
+        with: Some(ast::With {
+            recursive: false,
+            ctes: vec![ast::CommonTableExpr {
+                tbl_name: name.clone(),
+                columns,
+                materialized: ast::Materialized::Any,
+                select,
+            }],
+        }),
+        body: ast::SelectBody {
+            select: ast::OneSelect::Select {
+                distinctness: None,
+                columns: vec![ast::ResultColumn::Star],
+                from: Some(ast::FromClause {
+                    select: Box::new(ast::SelectTable::Table(
+                        ast::QualifiedName::single(name),
+                        None,
+                        None,
+                    )),
+                    joins: Vec::new(),
+                }),
+                where_clause: None,
+                group_by: None,
+                window_clause: Vec::new(),
+            },
+            compounds: Vec::new(),
+        },
+        order_by: Vec::new(),
+        limit: None,
+    })
 }
 
 fn translate_table_alias(alias: &TableAlias) -> Result<ast::As, MysqlParserError> {

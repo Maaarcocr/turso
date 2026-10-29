@@ -5568,6 +5568,7 @@ pub(crate) fn create_table_with_rowid_decision(
                             .unwrap_or(RefAct::NoAction),
                         deferred,
                         decl_order: table_fk_order,
+                        name: c.name.as_ref().map(|name| normalize_ident(name.as_str())),
                     };
                     foreign_keys.try_push(Arc::new(fk))?;
                     table_fk_order += 1;
@@ -5769,6 +5770,10 @@ pub(crate) fn create_table_with_rowid_decision(
                                     None => false,
                                 },
                                 decl_order: column_fk_order,
+                                name: c_def
+                                    .name
+                                    .as_ref()
+                                    .map(|name| normalize_ident(name.as_str())),
                             };
                             foreign_keys.try_push(Arc::new(fk))?;
                             column_fk_order += 1;
@@ -6072,6 +6077,8 @@ pub struct ForeignKey {
     ///
     /// SQLite reports PRAGMA foreign_key_list rows in reverse declaration order.
     pub decl_order: usize,
+    /// The name of its `CONSTRAINT name FOREIGN KEY ...`, normalized.
+    pub name: Option<String>,
 }
 #[inline]
 fn fk_mismatch_err(child: &str, parent: &str) -> crate::LimboError {

@@ -2337,12 +2337,23 @@ fn translate_in_subquery(
     negated: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    reject_limit_in_quantified_subquery(subquery)?;
     let lhs = translate_expr(expr, context)?;
     Ok(ast::Expr::in_select(
         lhs,
         negated,
         translate_subquery(subquery, context)?,
     ))
+}
+
+fn reject_limit_in_quantified_subquery(subquery: &Query) -> Result<(), MysqlParserError> {
+    if subquery.limit_clause.is_some() {
+        return Err(MysqlParserError::Rejected(
+            "This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn translate_between(
@@ -3039,6 +3050,7 @@ fn translate_quantified_subquery(
     let Expr::Subquery(subquery) = right else {
         return Err(unsupported(right));
     };
+    reject_limit_in_quantified_subquery(subquery)?;
     let lhs = translate_expr(left, context)?;
     Ok(ast::Expr::in_select(
         lhs,

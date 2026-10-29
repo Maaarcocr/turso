@@ -1,6 +1,6 @@
 use turso_mysql_parser::{
     parse, parse_and_translate, parse_and_translate_in, parse_one, translate, ColumnFacts,
-    Environment, ForeignKeyTo, MysqlParserError,
+    Environment, ForeignKeyOf, ForeignKeyTo, MysqlParserError,
 };
 use turso_parser::ast;
 
@@ -226,8 +226,8 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
             "CREATE TABLE t (a DATETIME (6) NOT NULL DEFAULT (NOW (6)), b TIMESTAMP (3) DEFAULT (NOW (3)), c DATETIME DEFAULT CURRENT_TIMESTAMP) STRICT",
         ),
         (
-            "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE)",
-            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (id) REFERENCES p (id) ON DELETE CASCADE) STRICT",
+            "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE)",
+            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE) STRICT",
         ),
         (
             "CREATE TABLE t (a INT, b INT AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2))",
@@ -334,8 +334,8 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
             sql: "CREATE TABLE users(a INT AUTO_INCREMENT, b INT, PRIMARY KEY (a, b))",
         },
         SqlCase {
-            name: "auto increment on a decimal",
-            sql: "CREATE TABLE users(id DECIMAL(10,0) AUTO_INCREMENT PRIMARY KEY)",
+            name: "auto increment on a double",
+            sql: "CREATE TABLE users(id DOUBLE AUTO_INCREMENT PRIMARY KEY)",
         },
         SqlCase {
             name: "varchar missing length",
@@ -1369,8 +1369,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "VALUES (1)",
         },
         SqlCase {
-            name: "derived column list",
-            sql: "SELECT * FROM (SELECT 1) AS x(a)",
+            name: "lateral derived column list",
+            sql: "SELECT * FROM t, LATERAL (SELECT t.a) AS x(a)",
         },
         SqlCase {
             name: "full join",
@@ -1609,7 +1609,6 @@ fn lowering_rejects_unsupported_statement_families() {
         "DROP TEMPORARY TABLE users",
         "CREATE INDEX name_key ON users (name(10))",
         "INSERT IGNORE INTO users () VALUES ()",
-        "INSERT INTO users VALUES (DEFAULT)",
         "INSERT INTO users SET id = 1, name = id",
         "INSERT INTO users SET id = 1, id = 2",
         "INSERT INTO app.users VALUES (1)",
@@ -1681,6 +1680,26 @@ impl Environment for IndexOfT {
     fn columns_of(&self, _table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError> {
         Ok(None)
     }
+
+    fn table_sql(&self, _table: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn unique_keys_of(&self, _table: &str) -> Result<Vec<Vec<String>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        true
+    }
+
+    fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
+        Ok(Vec::new())
+    }
 }
 
 /// A session outside a transaction on tables `a (id AUTO_INCREMENT, x, g
@@ -1732,6 +1751,8 @@ impl Environment for TriggerSchema {
             name: name.to_string(),
             auto_increment,
             generated,
+            default: None,
+            not_null: false,
         };
         Ok(match table {
             "a" => Some(vec![
@@ -1742,6 +1763,26 @@ impl Environment for TriggerSchema {
             "b" | "c" | "log" => Some(vec![column("y", false, false)]),
             _ => None,
         })
+    }
+
+    fn table_sql(&self, _table: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn unique_keys_of(&self, _table: &str) -> Result<Vec<Vec<String>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        true
+    }
+
+    fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
+        Ok(Vec::new())
     }
 }
 
@@ -1811,6 +1852,42 @@ fn lowers_triggers_that_fire_as_mysql_s() {
             matches!(error, MysqlParserError::Rejected(_)),
             "SQL: {sql}\nerror: {error}"
         );
+    }
+}
+
+#[test]
+fn rejects_what_mysql_rejects_when_it_resolves_names() {
+    for sql in [
+        "INSERT INTO t (a, b, A) VALUES (1, 2, 3)",
+        "REPLACE INTO t (a, a) SELECT 1, 2",
+        "SELECT a FROM t WHERE a IN (SELECT a FROM u LIMIT 2)",
+        "SELECT a FROM t WHERE a NOT IN (SELECT a FROM u ORDER BY a LIMIT 1)",
+        "SELECT a FROM t WHERE a = ANY (SELECT a FROM u LIMIT 1)",
+        "SELECT * FROM t AS x, u AS x",
+        "SELECT * FROM t, t",
+        "SELECT * FROM (SELECT 1 AS a) AS d, (SELECT 2 AS a) AS d",
+
+        "SELECT * FROM t AS x, x",
+        "SELECT * FROM t UNION SELECT * FROM u AS x JOIN v AS x ON 1",
+        "SELECT a AS c, b AS c FROM t ORDER BY c",
+        "SELECT * FROM t t0, t t1, t t2, t t3, t t4, t t5, t t6, t t7, t t8, t t9, t t10, t t11, t t12, t t13, t t14, t t15, t t16, t t17, t t18, t t19, t t20, t t21, t t22, t t23, t t24, t t25, t t26, t t27, t t28, t t29, t t30, t t31, t t32, t t33, t t34, t t35, t t36, t t37, t t38, t t39, t t40, t t41, t t42, t t43, t t44, t t45, t t46, t t47, t t48, t t49, t t50, t t51, t t52, t t53, t t54, t t55, t t56, t t57, t t58, t t59, t t60, t t61",
+    ] {
+        let error = parse_and_translate(sql).expect_err("MySQL rejects it");
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+    for sql in [
+        "SELECT a FROM t WHERE a IN (SELECT a FROM (SELECT a FROM u LIMIT 2) AS d)",
+        "SELECT a FROM t WHERE EXISTS (SELECT a FROM u LIMIT 1)",
+        "SELECT * FROM t AS x JOIN t AS y ON x.a = y.a",
+        "SELECT * FROM t JOIN (SELECT 1 AS a) AS t",
+        "SELECT * FROM (SELECT 1 AS a) AS t JOIN t",
+        "SELECT a AS c, a AS c FROM t ORDER BY c",
+        "SELECT a AS c, b AS d FROM t ORDER BY c",
+    ] {
+        parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
     }
 }
 
@@ -2146,10 +2223,6 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
         SqlCase {
             name: "same column twice",
             sql: "UPDATE users SET qty = 1, QTY = 2",
-        },
-        SqlCase {
-            name: "default value",
-            sql: "UPDATE users SET qty = DEFAULT",
         },
         SqlCase {
             name: "tuple assignment",
