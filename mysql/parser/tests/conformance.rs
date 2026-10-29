@@ -843,6 +843,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT \"IF\" (a, '1.5', '-1.0'), CASE WHEN a THEN '7' ELSE '-1' END, '-0.0', '-0', '0.141592653589793', MOD ('64', -1e0) FROM t",
         ),
         (
+            "SELECT TIME '10:04:58' * 0b1001, NULL * 1 + x'09', 18446744073709551615 + 0x0, -9223372036854775808 % 0x9, TIME '5 10:34:58.9' / 0xFF666F6F626172FF, TRUE AND 0xFF666F6F626172FF, _utf8 'foobar' + x'09'",
+            "SELECT 904122, NULL * 1 + 9, CAST ('18446744073709551615' AS DECIMAL (20, 0)), -8, 1303458.9 / CAST ('18403519451478717183' AS DECIMAL (20, 0)), TRUE AND 1, 'foobar' + 9e0",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),
@@ -1006,7 +1010,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT 0xAACC, HEX(0xAACC), -0x2, 0xff + b'1001', 0x1 / 7, X'40' + -1.5e0, ABS(_binary X'40'), _binary '1' + 1",
-            "SELECT x'AACC', HEX (x'AACC'), -2e0, 255 + 9, 1 / 7, 64e0 + -1.5e0, ABS ('@'), 1e0 + 1",
+            "SELECT x'AACC', HEX (x'AACC'), -2e0, 264, 1 / 7, 64e0 + -1.5e0, ABS ('@'), 1e0 + 1",
         ),
         (
             "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",

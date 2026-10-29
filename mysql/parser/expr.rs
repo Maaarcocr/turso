@@ -42,6 +42,12 @@ pub(crate) fn translate_condition(
     if json::is_json_value(expr) {
         return json::translate_truth(expr, context);
     }
+    let above_bigint = hex_or_bit_literal(expr)
+        .and_then(|literal| binary_literal_value(literal).ok())
+        .is_some_and(|value| i64::try_from(value).is_err());
+    if above_bigint {
+        return Ok(ast::Expr::Literal(ast::Literal::Numeric("1".to_string())));
+    }
     translate_in(expr, Context::Number, context)
 }
 
@@ -1219,24 +1225,38 @@ fn unsigned_arithmetic(
                 "`{left} {operator} {right}` inside arithmetic, where its BIGINT UNSIGNED type changes the result, is not lowered yet"
             )));
         }
-        let result = match operator {
-            ast::Operator::Add => lhs.checked_add(rhs),
-            ast::Operator::Subtract => lhs.checked_sub(rhs),
-            ast::Operator::Multiply => lhs.checked_mul(rhs),
-            ast::Operator::Modulus => Some(if rhs == 0 { 0 } else { lhs % rhs }),
+        let (result, range) = match operator {
+            ast::Operator::Add => (lhs.checked_add(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Subtract => (lhs.checked_sub(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Multiply => (lhs.checked_mul(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Modulus if rhs == 0 => {
+                return Ok(Some(ast::Expr::Literal(ast::Literal::Null)));
+            }
+            ast::Operator::Modulus if lhs > i128::from(i64::MAX) && rhs < 0 => {
+                return Ok(None);
+            }
+            ast::Operator::Modulus => {
+                (Some(lhs % rhs), i128::from(i64::MIN)..=i128::from(u64::MAX))
+            }
             _ => return Ok(None),
         };
-        if !result.is_some_and(|result| (0..=i128::from(i64::MAX)).contains(&result)) {
+        let Some(result) = result.filter(|result| range.contains(result)) else {
             return Err(MysqlParserError::Unsupported(format!(
-                "`{left} {operator} {right}`, which MySQL computes as BIGINT UNSIGNED outside the BIGINT range, is not lowered yet"
+                "`{left} {operator} {right}`, which MySQL computes as BIGINT UNSIGNED and rejects outside its range, is not lowered yet"
             )));
-        }
+        };
+        return Ok(Some(match i64::try_from(result) {
+            Ok(result) => ast::Expr::Literal(ast::Literal::Numeric(result.to_string())),
+            Err(_) => exact_decimal(&result.to_string(), false),
+        }));
     }
     let lhs = unsigned_operand(left, left_binary, context)?;
     let rhs = unsigned_operand(right, right_binary, context)?;
     Ok(Some(ast::Expr::binary(lhs, operator, rhs)))
 }
 
+/// An operand of arithmetic MySQL computes as DECIMAL beside a hex or bit
+/// literal, which is its exact value.
 fn unsigned_operand(
     expr: &Expr,
     binary: Option<&Value>,
@@ -1245,12 +1265,11 @@ fn unsigned_operand(
     let Some(literal) = binary else {
         return translate_in(expr, Context::Arithmetic, context);
     };
-    let value = i64::try_from(binary_literal_value(literal)?).map_err(|_| {
-        MysqlParserError::Unsupported(format!(
-            "`{expr}` above the BIGINT range in arithmetic is not lowered yet"
-        ))
-    })?;
-    Ok(ast::Expr::Literal(ast::Literal::Numeric(value.to_string())))
+    let value = binary_literal_value(literal)?;
+    Ok(match i64::try_from(value) {
+        Ok(value) => ast::Expr::Literal(ast::Literal::Numeric(value.to_string())),
+        Err(_) => exact_decimal(&value.to_string(), false),
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -1261,14 +1280,49 @@ enum OperandKind {
 }
 
 impl OperandKind {
+    /// The kind of a literal operand beside a hex or bit literal: integers
+    /// up to the BIGINT UNSIGNED limit, `TRUE` and `FALSE`, and DATE, TIME
+    /// and TIMESTAMP literals as their numbers; DECIMAL for exact numbers
+    /// with decimals or beyond, and for temporal literals with a fraction;
+    /// `NULL` for `NULL` and arithmetic of `NULL` and a number literal.
     fn of(expr: &Expr) -> Result<Option<OperandKind>, MysqlParserError> {
         if let Some(literal) = hex_or_bit_literal(expr) {
             return Ok(Some(OperandKind::Integer(i128::from(
                 binary_literal_value(literal)?,
             ))));
         }
-        if is_null_literal(expr) {
+        if is_null_valued(expr) {
             return Ok(Some(OperandKind::Null));
+        }
+        match unnested(expr) {
+            Expr::Value(value) => {
+                if let Value::Boolean(value) = value.value {
+                    return Ok(Some(OperandKind::Integer(i128::from(value))));
+                }
+            }
+            Expr::TypedString(typed) => {
+                if temporal_has_fraction(expr) {
+                    return Ok(Some(OperandKind::Decimal));
+                }
+                let Some(temporal) = temporal_literal(typed) else {
+                    return Ok(None);
+                };
+                let digits: String = temporal
+                    .text
+                    .chars()
+                    .filter(|character| character.is_ascii_digit())
+                    .collect();
+                let Ok(magnitude) = digits.parse::<i128>() else {
+                    return Ok(None);
+                };
+                let negative = temporal.text.starts_with('-');
+                return Ok(Some(OperandKind::Integer(if negative {
+                    -magnitude
+                } else {
+                    magnitude
+                })));
+            }
+            _ => {}
         }
         let Some(digits) = signed_number_literal(expr) else {
             return Ok(None);
@@ -1276,15 +1330,41 @@ impl OperandKind {
         if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
             return Ok(Some(OperandKind::Decimal));
         }
-        let Ok(magnitude) = digits.parse::<i64>() else {
+        let Ok(magnitude) = digits.parse::<u64>() else {
             return Ok(None);
         };
-        let value = i128::from(magnitude);
-        Ok(Some(OperandKind::Integer(if is_negated(expr) {
-            -value
+        let magnitude = i128::from(magnitude);
+        if !is_negated(expr) {
+            return Ok(Some(OperandKind::Integer(magnitude)));
+        }
+        Ok(Some(if magnitude > -i128::from(i64::MIN) {
+            OperandKind::Decimal
         } else {
-            value
-        })))
+            OperandKind::Integer(-magnitude)
+        }))
+    }
+}
+
+/// `NULL`, or `+ - * / % DIV` of a `NULL`-valued operand and a number
+/// literal, which cannot fail before the result is `NULL`.
+fn is_null_valued(expr: &Expr) -> bool {
+    match unnested(expr) {
+        Expr::BinaryOp { left, op, right }
+            if matches!(
+                op,
+                BinaryOperator::Plus
+                    | BinaryOperator::Minus
+                    | BinaryOperator::Multiply
+                    | BinaryOperator::Divide
+                    | BinaryOperator::Modulo
+                    | BinaryOperator::MyIntegerDivide
+            ) =>
+        {
+            let number = |expr: &Expr| signed_number_literal(expr).is_some();
+            (is_null_valued(left) && (number(right) || is_null_valued(right)))
+                || (number(left) && is_null_valued(right))
+        }
+        other => is_null_literal(other),
     }
 }
 
@@ -1319,7 +1399,10 @@ fn arithmetic_operand(
         ))));
     }
     if introduced_text {
-        return translate_in(expr, Context::Arithmetic, context);
+        return match hex_or_bit_literal(expr) {
+            Some(literal) => binary_literal_as_double(literal),
+            None => translate_in(expr, Context::Arithmetic, context),
+        };
     }
     if let Some(literal) = negated_binary(expr) {
         return negated_binary_literal(literal);
