@@ -1,5 +1,7 @@
 use super::number_text::{self, Reading};
-use super::{binary_string_in_number_column, data_truncated, invalid_value, out_of_range};
+use super::{
+    binary_string_in_number_column, data_truncated, invalid_value, out_of_range, unsupported_value,
+};
 use turso_core::dialect::{DialectType, StorageType};
 use turso_core::{LimboError, Numeric, Result, Value};
 
@@ -198,9 +200,8 @@ pub(super) fn cast_as_unsigned(args: &[Value]) -> Result<Value> {
 }
 
 pub(super) fn cast_as_integer_unsupported(_args: &[Value]) -> Result<Value> {
-    Err(LimboError::InvalidArgument(
-        "CAST of a DATE, DATETIME, TIMESTAMP, TIME, ENUM or SET value to SIGNED or UNSIGNED \
-        is not supported yet"
+    Err(unsupported_value(
+        "CAST of a DATE, DATETIME, TIMESTAMP, TIME, ENUM or SET value to SIGNED or UNSIGNED"
             .to_string(),
     ))
 }
@@ -213,9 +214,8 @@ pub(super) fn unsigned_result(bits: Option<u64>) -> Result<Value> {
     match bits {
         None => Ok(Value::Null),
         Some(bits) => i64::try_from(bits).map(Value::from_i64).map_err(|_| {
-            LimboError::InvalidArgument(format!(
-                "CAST to UNSIGNED of {bits}, which is above 9223372036854775807, \
-                is not supported yet"
+            unsupported_value(format!(
+                "CAST to UNSIGNED of {bits}, which is above 9223372036854775807,"
             ))
         }),
     }

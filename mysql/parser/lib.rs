@@ -4,6 +4,7 @@ use sqlparser::tokenizer::TokenizerError;
 use thiserror::Error;
 use turso_parser::ast;
 
+mod bitwise;
 mod ddl;
 mod ddl_alter;
 mod ddl_column;
