@@ -12,7 +12,7 @@ macro_rules! blob {
             behaviour: concat!(
                 "ASSIGN __mysql_assign_varbinary(value, ",
                 stringify!($max_bytes),
-                ") CAST __mysql_sqlite_cast(value, 'BLOB') OPERATOR '<' OPERATOR '='"
+                ") CAST __mysql_cast_binary(value) OPERATOR '<' OPERATOR '='"
             ),
         }
     };
@@ -24,14 +24,14 @@ pub(super) const TYPES: [DialectType; 6] = [
         storage: StorageType::Blob,
         parameters: "length integer",
         behaviour: "ASSIGN __mysql_assign_binary(value, length) \
-            CAST __mysql_sqlite_cast(value, 'BLOB') OPERATOR '<' OPERATOR '='",
+            CAST __mysql_cast_binary(value) OPERATOR '<' OPERATOR '='",
     },
     DialectType {
         name: "varbinary",
         storage: StorageType::Blob,
         parameters: "length integer",
         behaviour: "ASSIGN __mysql_assign_varbinary(value, length) \
-            CAST __mysql_sqlite_cast(value, 'BLOB') OPERATOR '<' OPERATOR '='",
+            CAST __mysql_cast_binary(value) OPERATOR '<' OPERATOR '='",
     },
     blob!("tinyblob", 255),
     blob!("blob", 65535),

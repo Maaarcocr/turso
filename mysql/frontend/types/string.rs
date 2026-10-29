@@ -12,7 +12,7 @@ macro_rules! text {
             behaviour: concat!(
                 "ASSIGN __mysql_assign_text(value, ",
                 stringify!($max_bytes),
-                ") CAST __mysql_sqlite_cast(value, 'TEXT')"
+                ") CAST __mysql_cast_text(value)"
             ),
         }
     };
@@ -24,14 +24,14 @@ pub(super) const TYPES: [DialectType; 6] = [
         storage: StorageType::Text,
         parameters: "length integer",
         behaviour: "ASSIGN __mysql_assign_char(value, length) \
-            CAST __mysql_sqlite_cast(value, 'TEXT')",
+            CAST __mysql_cast_text(value)",
     },
     DialectType {
         name: "varchar",
         storage: StorageType::Text,
         parameters: "length integer",
         behaviour: "ASSIGN __mysql_assign_varchar(value, length) \
-            CAST __mysql_sqlite_cast(value, 'TEXT')",
+            CAST __mysql_cast_text(value)",
     },
     text!("tinytext", 255),
     text!("text", 65535),

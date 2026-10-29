@@ -803,6 +803,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT 6.4e1 = 6.4e1, 1e0 IS 1.5e1, - 1e0 < - 5e-1, 1.7976931348623157e308 > 0e0",
         ),
         (
+            "SELECT BINARY s, CAST(X'FF' AS BINARY(2)), CONVERT(-1.5, BINARY(1)), CAST(CAST('[1]' AS JSON) AS BINARY), CAST(1e0 AS CHAR), STRCMP(BINARY 'a', s) FROM t ORDER BY BINARY s",
+            "SELECT CAST (s AS BLOB), __mysql_cast_as_binary (x'FF', 2), __mysql_cast_as_binary (CAST (CAST ('-1.5' AS DECIMAL (2, 1)) AS BLOB), 1), CAST (CAST (__mysql_cast_as_json ('[1]') AS TEXT) AS BLOB), CAST (1e0 AS TEXT), STRCMP (CAST ('a' AS BLOB), s) FROM t ORDER BY CAST (s AS BLOB)",
+        ),
+        (
             "SELECT 'FOO' IN ('foo', 1), 64 NOT IN ('64', 'bar'), CASE 'abc' WHEN 'xyz' THEN 1 WHEN 0 THEN 2 END, GREATEST(-1, 0x1, TIMESTAMP '2020-12-31 23:59:59')",
             "SELECT ('FOO' COLLATE \"und-u-ks-level1\" = 'foo' OR 0e0 = 1e0), NOT (6.4e1 = 6.4e1 OR 6.4e1 = 0e0), CASE 0e0 WHEN 0e0 THEN 1 WHEN 0e0 THEN 2 END, '2020-12-31 23:59:59'",
         ),
@@ -1221,10 +1225,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t ORDER BY a NULLS FIRST",
         },
         SqlCase {
-            name: "binary cast",
-            sql: "SELECT BINARY s FROM t",
-        },
-        SqlCase {
             name: "recursive cte",
             sql: "WITH RECURSIVE c(n) AS (SELECT 1) SELECT n FROM c",
         },
@@ -1243,6 +1243,18 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "uneven values rows",
             sql: "VALUES ROW(1), ROW(1, 2)",
+        },
+        SqlCase {
+            name: "a binary string cast in a comparison",
+            sql: "SELECT BINARY 1 = 1",
+        },
+        SqlCase {
+            name: "a binary string cast compared with a column",
+            sql: "SELECT 1 FROM t WHERE b = CAST('d' AS BINARY(3))",
+        },
+        SqlCase {
+            name: "a binary string cast in a comparing function",
+            sql: "SELECT GREATEST(BINARY s, s) FROM t",
         },
         SqlCase {
             name: "a negated hex literal whose decimals show",

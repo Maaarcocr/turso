@@ -1490,6 +1490,9 @@ fn translate_compared(
     if is_temporal_cast(expr) {
         return Err(temporal_outside_a_value_position(expr));
     }
+    if is_binary_cast(expr) {
+        return Err(binary_cast_outside_a_value_position(expr));
+    }
     translate_compared_value(expr, other_side, context)
 }
 
@@ -2276,7 +2279,7 @@ fn translate_cast(
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
         DataType::Decimal(precision) => (decimal_type(precision), Context::Number),
-        DataType::Char(None) | DataType::Character(None) => (type_name("CHAR"), Context::Value),
+        DataType::Char(None) | DataType::Character(None) => (type_name("TEXT"), Context::Value),
         DataType::JSON => return translate_cast_as_json(expr, literal_context, context),
         DataType::Date => {
             return translate_temporal_cast(expr, TemporalCast::Date, literal_context, context)
@@ -2292,6 +2295,9 @@ fn translate_cast(
         DataType::Char(Some(length)) | DataType::Character(Some(length)) => {
             let length = character_length(length)?;
             return translate_text_cast(expr, "__mysql_cast_as_char", length, context);
+        }
+        DataType::Binary(length) => {
+            return translate_binary_cast(expr, *length, literal_context, context)
         }
         DataType::Custom(name, modifiers) if is_nchar(name) => match modifiers.as_slice() {
             [] => (type_name("NCHAR"), Context::Value),
@@ -2587,8 +2593,62 @@ fn translate_text_cast(
     length: u64,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let value = translate_expr(expr, context)?;
+    let value = ast::Expr::cast(translate_expr(expr, context)?, Some(type_name("TEXT")));
     Ok(function_call(name, vec![value, number(length)]))
+}
+
+fn translate_binary_cast(
+    expr: &Expr,
+    length: Option<u64>,
+    literal_context: Context,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if !literal_context.is_value() {
+        return Err(binary_cast_outside_a_value_position(expr));
+    }
+    let value = if is_binary_literal(expr) {
+        translate_bytes(expr, context)?
+    } else if json::is_json_value(expr) {
+        let text = translate_cast(expr, &DataType::Char(None), literal_context, context)?;
+        ast::Expr::cast(text, Some(type_name("BLOB")))
+    } else {
+        ast::Expr::cast(
+            translate_in(expr, Context::Value, context)?,
+            Some(type_name("BLOB")),
+        )
+    };
+    Ok(match length {
+        None => value,
+        Some(length) if length <= MAX_CHAR_CAST_LENGTH => {
+            function_call("__mysql_cast_as_binary", vec![value, number(length)])
+        }
+        Some(length) => {
+            return Err(MysqlParserError::Unsupported(format!(
+                "CAST to BINARY({length}) is not lowered yet"
+            )))
+        }
+    })
+}
+
+fn is_binary_cast(expr: &Expr) -> bool {
+    match expr {
+        Expr::Cast {
+            data_type: DataType::Binary(_),
+            ..
+        }
+        | Expr::Convert {
+            data_type: Some(DataType::Binary(_)),
+            ..
+        } => true,
+        Expr::Nested(inner) => is_binary_cast(inner),
+        _ => false,
+    }
+}
+
+fn binary_cast_outside_a_value_position(expr: &Expr) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "a binary string cast of `{expr}` in a comparison or a computation, which MySQL may compare as numbers, is not lowered yet"
+    ))
 }
 
 fn decimal_type(precision: &ExactNumberInfo) -> ast::Type {
@@ -2873,6 +2933,17 @@ fn translate_function(
         FunctionArguments::List(list) => list,
         FunctionArguments::Subquery(_) => return Err(unsupported_function(function)),
     };
+    if matches!(
+        upper_name.as_str(),
+        "GREATEST" | "LEAST" | "FIELD" | "NULLIF" | "INTERVAL"
+    ) {
+        if let Some(cast) = list.args.iter().find_map(|arg| match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) if is_binary_cast(expr) => Some(expr),
+            _ => None,
+        }) {
+            return Err(binary_cast_outside_a_value_position(cast));
+        }
+    }
     if identifier.quote_style.is_none() && over.is_none() {
         if let Some(expr) = translate_greatest_of_dates(&upper_name, list)? {
             return Ok(expr);
