@@ -3,10 +3,10 @@ use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
 use crate::literal::{
-    binary_literal_as_double, binary_literal_value, is_latin1_char, is_utf8_binary_literal,
-    negated_binary_literal, translate_as_bytes, translate_introduced_string,
-    translate_temporal_text, translate_typed_string, translate_typed_string_as_bytes,
-    translate_value, Context,
+    binary_literal_as_double, binary_literal_value, bit_bytes, blob_literal, hex_bytes,
+    is_latin1_char, is_utf8_binary_literal, latin1_text, negated_binary_literal,
+    translate_as_bytes, translate_introduced_string, translate_temporal_text,
+    translate_typed_string, translate_typed_string_as_bytes, translate_value, Context,
 };
 use crate::names::{quote_string, translate_identifier};
 use crate::query::{translate_order_by_expr, translate_subquery, TranslationContext};
@@ -216,6 +216,19 @@ pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
     }
     fn count(expr: &Expr) -> Option<f64> {
         match expr {
+            Expr::Value(value)
+                if matches!(
+                    value.value,
+                    Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_)
+                ) =>
+            {
+                binary_literal_value(&value.value)
+                    .ok()
+                    .map(|value| value as f64)
+            }
+            Expr::Prefixed { .. } => {
+                binary_literal_bytes(expr).map(|bytes| number(&String::from_utf8_lossy(&bytes)))
+            }
             Expr::Value(value) => match &value.value {
                 Value::Number(text, false)
                 | Value::SingleQuotedString(text)
@@ -242,7 +255,16 @@ pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
                 }
                 _ => true,
             },
-            Expr::Prefixed { .. } => true,
+            Expr::TypedString(_) => true,
+            Expr::Prefixed { prefix, value } => match value.as_ref() {
+                Expr::Value(value) if is_utf8_introducer(&prefix.value) => matches!(
+                    &value.value,
+                    Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)
+                        if text.chars().all(is_latin1_char)
+                ),
+                _ => true,
+            },
+            Expr::BinaryOp { op, .. } => is_arithmetic(op),
             Expr::UnaryOp { expr, .. } | Expr::Nested(expr) => latin1_strings(expr),
             Expr::Substring {
                 expr,
@@ -266,6 +288,173 @@ pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
             _ => false,
         }
     }
+    fn is_arithmetic(op: &BinaryOperator) -> bool {
+        matches!(
+            op,
+            BinaryOperator::Plus
+                | BinaryOperator::Minus
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Modulo
+                | BinaryOperator::MyIntegerDivide
+        )
+    }
+    fn is_utf8_introducer(introducer: &str) -> bool {
+        matches!(
+            introducer.to_ascii_lowercase().as_str(),
+            "_utf8mb4" | "_utf8mb3" | "_utf8"
+        )
+    }
+    fn negated_binary_bytes(expr: &Expr) -> Option<Vec<u8>> {
+        match expr {
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => negated_binary_bytes(expr),
+            Expr::Nested(inner) => negated_binary_bytes(inner),
+            _ => binary_literal_bytes(expr),
+        }
+    }
+    fn latin1_hex(expr: &Expr) -> Option<Vec<u8>> {
+        match expr {
+            Expr::Prefixed { prefix, value }
+                if prefix.quote_style.is_none() && prefix.value.eq_ignore_ascii_case("_latin1") =>
+            {
+                match value.as_ref() {
+                    Expr::Value(value) => match &value.value {
+                        Value::HexStringLiteral(digits) => hex_bytes(digits).ok(),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+            Expr::Nested(inner) => latin1_hex(inner),
+            _ => None,
+        }
+    }
+    fn compared_text(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Value(value) => match &value.value {
+                Value::Number(text, false) => Some(format!("{text}e")),
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                    Some(text.clone())
+                }
+                Value::Null => Some(String::new()),
+                _ => None,
+            },
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => compared_text(expr).map(|text| format!("-{text}")),
+            Expr::TypedString(_) => Some("0123456789-:. ".to_string()),
+            Expr::Nested(inner) => compared_text(inner),
+            Expr::Prefixed { prefix, value } if is_utf8_introducer(&prefix.value) => {
+                match value.as_ref() {
+                    Expr::Value(value) => match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                            Some(text.clone())
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+            _ => latin1_hex(expr).map(|bytes| latin1_text(&bytes)),
+        }
+    }
+    fn base_letter(character: char) -> Option<char> {
+        if character.is_ascii() {
+            return character
+                .is_ascii_alphabetic()
+                .then(|| character.to_ascii_lowercase());
+        }
+        if !('\u{c0}'..='\u{ff}').contains(&character) {
+            return None;
+        }
+        Some(match character.to_lowercase().next()? {
+            '\u{e0}'..='\u{e3}' => 'a',
+            '\u{e7}' => 'c',
+            '\u{e8}'..='\u{eb}' => 'e',
+            '\u{ec}'..='\u{ef}' => 'i',
+            '\u{f1}' => 'n',
+            '\u{f2}'..='\u{f5}' => 'o',
+            '\u{f9}'..='\u{fb}' => 'u',
+            '\u{fd}' | '\u{ff}' => 'y',
+            _ => return None,
+        })
+    }
+    fn compares_exactly(operands: &[&Expr], needle: &Expr, positioned: bool) -> bool {
+        let Some(texts) = operands
+            .iter()
+            .map(|operand| compared_text(operand))
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        let characters = texts
+            .iter()
+            .flat_map(|text| text.chars())
+            .collect::<Vec<_>>();
+        let mut non_ascii = false;
+        for &character in &characters {
+            if character.is_ascii() {
+                continue;
+            }
+            non_ascii = true;
+            let Some(base) = base_letter(character) else {
+                return false;
+            };
+            if characters
+                .iter()
+                .any(|&other| other != character && base_letter(other) == Some(base))
+            {
+                return false;
+            }
+        }
+        let empty_needle = !matches!(unnested(needle), Expr::Value(value) if value.value == Value::Null)
+            && compared_text(needle).is_some_and(|text| text.is_empty());
+        !(positioned && non_ascii && empty_needle)
+    }
+    fn field_compares_exactly(args: &[&Expr]) -> bool {
+        reads_number("FIELD", 0, args)
+            || (compares_exactly(args, args[0], false)
+                && args
+                    .iter()
+                    .all(|arg| compared_text(arg).is_some_and(|text| !text.ends_with(' '))))
+    }
+    fn inserts_exactly(subject: &Expr, position: &Expr, replacement: &Expr) -> bool {
+        fn integer_prefix(text: &str) -> f64 {
+            let text = text.trim_start();
+            let end = text
+                .char_indices()
+                .take_while(|&(index, character)| {
+                    character.is_ascii_digit() || (index == 0 && matches!(character, '-' | '+'))
+                })
+                .count();
+            text[..end].parse::<f64>().unwrap_or(0.0)
+        }
+        let Some(bytes) = latin1_hex(subject) else {
+            return false;
+        };
+        let Some(start) = count(position) else {
+            return false;
+        };
+        let truncated = match unnested(position) {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                    integer_prefix(text)
+                }
+                _ => start.trunc(),
+            },
+            _ => start.trunc(),
+        };
+        let characters = bytes.len() as f64;
+        let utf8_bytes = latin1_text(&bytes).len() as f64;
+        [start.floor(), start.ceil(), truncated]
+            .into_iter()
+            .all(|start| start <= characters || start > utf8_bytes)
+            && latin1_strings(replacement)
+    }
     fn converts_to_subject(subject: &Expr, rest: &[&Expr]) -> bool {
         !mentions_latin1(subject) || rest.iter().all(|arg| latin1_strings(arg))
     }
@@ -278,18 +467,19 @@ pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
     }
     fn characters(expr: &Expr, found: &mut bool) -> Option<u64> {
         let characters = match expr {
-            Expr::Prefixed { prefix, value } => {
-                *found = true;
-                match value.as_ref() {
-                    Expr::Value(value) if prefix.value.eq_ignore_ascii_case("_latin1") => {
-                        match &value.value {
-                            Value::HexStringLiteral(digits) => digits.len() as u64 / 2 + 1,
-                            _ => return None,
-                        }
+            Expr::Prefixed { prefix, value } => match value.as_ref() {
+                Expr::Value(_) if latin1_hex(expr).is_some() => {
+                    *found = true;
+                    latin1_hex(expr)?.len() as u64 + 1
+                }
+                Expr::Value(value) if is_utf8_introducer(&prefix.value) => match &value.value {
+                    Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                        text.chars().count() as u64
                     }
                     _ => return None,
-                }
-            }
+                },
+                _ => return None,
+            },
             Expr::Value(value) => match &value.value {
                 Value::Number(text, false) => text.len() as u64 + 32,
                 Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
@@ -328,6 +518,28 @@ pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
                 }
                 characters(expr, found)?
             }
+            Expr::TypedString(_) => 32,
+            Expr::BinaryOp { left, op, right } if is_arithmetic(op) => {
+                characters(left, found)? + characters(right, found)? + 32
+            }
+            Expr::Cast {
+                kind: CastKind::Cast,
+                expr,
+                data_type: DataType::JSON,
+                array: false,
+                format: None,
+            } => characters(expr, found)? * 4 + 64,
+            Expr::Position {
+                expr: needle,
+                r#in: haystack,
+            } => {
+                characters(needle, found)?;
+                characters(haystack, found)?;
+                if !compares_exactly(&[needle, haystack], needle, false) {
+                    return None;
+                }
+                21
+            }
             Expr::Function(function) => {
                 let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
                     return None;
@@ -344,27 +556,53 @@ pub(crate) fn shows_latin1_as_text(expr: &Expr) -> bool {
                     return None;
                 }
                 let mut args = Vec::with_capacity(list.args.len());
-                let mut lengths = Vec::with_capacity(list.args.len());
                 for arg in &list.args {
                     let FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) = arg else {
                         return None;
                     };
-                    lengths.push(characters(arg, found)?);
                     args.push(arg);
                 }
+                let upper_name = name.value.to_ascii_uppercase();
+                let mut lengths = Vec::with_capacity(args.len());
+                for (position, arg) in args.iter().enumerate() {
+                    let binary = if reads_number(&upper_name, position, &args) {
+                        negated_binary_bytes(arg)
+                    } else if binary_converts_to_latin1_subject(&upper_name, position, &args) {
+                        binary_literal_bytes(arg)
+                    } else {
+                        None
+                    };
+                    lengths.push(match binary {
+                        Some(bytes) => bytes.len() as u64 + 20,
+                        None => characters(arg, found)?,
+                    });
+                }
                 let total = lengths.iter().sum::<u64>();
-                match (
-                    name.value.to_ascii_uppercase().as_str(),
-                    args.as_slice(),
-                    lengths.as_slice(),
-                ) {
+                match (upper_name.as_str(), args.as_slice(), lengths.as_slice()) {
                     ("CONCAT", _, _) => total,
                     ("CONCAT_WS", _, [separator, ..]) => total + separator * lengths.len() as u64,
                     ("ELT", _, _) => lengths.iter().copied().max().unwrap_or(0),
+                    ("LOCATE", [needle, haystack, rest @ ..], _)
+                        if rest.len() <= 1
+                            && compares_exactly(&[needle, haystack], needle, !rest.is_empty()) =>
+                    {
+                        21
+                    }
+                    ("INSTR", [haystack, needle], _)
+                        if compares_exactly(&[haystack, needle], needle, false) =>
+                    {
+                        21
+                    }
+                    ("FIELD", [_, _, ..], _) if field_compares_exactly(&args) => 21,
                     ("INSERT", [subject, ..], [text, _, _, replacement])
                         if !mentions_latin1(subject) =>
                     {
                         text + replacement
+                    }
+                    ("INSERT", [subject, position, _, replacement], [text, _, _, inserted])
+                        if inserts_exactly(subject, position, replacement) =>
+                    {
+                        text + inserted
                     }
                     (
                         "LEFT" | "RIGHT" | "SUBSTR" | "SUBSTRING" | "MID" | "LTRIM" | "RTRIM"
@@ -2761,6 +2999,18 @@ fn function_arguments(
             if let Some(typed) = temporal_matched_with_binary(upper_name, position, &args) {
                 return translate_typed_string_as_bytes(typed);
             }
+            if let Some(bytes) = latin1_matched_with_binary(upper_name, position, &args)? {
+                return Ok(blob_literal(&bytes));
+            }
+            if context.latin1_as_text
+                && binary_converts_to_latin1_subject(upper_name, position, &args)
+            {
+                let bytes = binary_literal_bytes(arg)
+                    .expect("a binary literal converted to a latin1 subject has bytes");
+                return Ok(ast::Expr::Literal(ast::Literal::String(quote_string(
+                    &latin1_text(&bytes),
+                ))));
+            }
             if upper_name == "CHAR" && is_negated_double_beyond_bigint(arg) {
                 return Err(MysqlParserError::Unsupported(format!(
                     "`{arg}` as a CHAR code, a negated DOUBLE MySQL rejects outside BIGINT, is not lowered yet"
@@ -2797,6 +3047,102 @@ fn temporal_matched_with_binary<'a>(
         return None;
     }
     typed_string(args[position])
+}
+
+fn latin1_matched_with_binary(
+    upper_name: &str,
+    position: usize,
+    args: &[&Expr],
+) -> Result<Option<Vec<u8>>, MysqlParserError> {
+    fn is_string_position(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
+        match upper_name {
+            "CONCAT" | "CONCAT_WS" => true,
+            "FIELD" => !reads_number(upper_name, position, args),
+            "ELT" => position > 0,
+            "INSERT" => matches!(position, 0 | 3),
+            "LPAD" | "RPAD" => matches!(position, 0 | 2),
+            "REPLACE" => position < 3,
+            "FIND_IN_SET" | "INSTR" | "LOCATE" | "SUBSTRING_INDEX" => position < 2,
+            _ => false,
+        }
+    }
+    let Some(bytes) = latin1_literal_bytes(args[position])? else {
+        return Ok(None);
+    };
+    let converts_to_subject = matches!(upper_name, "INSERT" | "LPAD" | "REPLACE" | "RPAD");
+    let matched = is_string_position(upper_name, position, args)
+        && if converts_to_subject {
+            position != 0 && is_binary_literal(args[0])
+        } else {
+            args.iter().enumerate().any(|(other, arg)| {
+                other != position
+                    && is_string_position(upper_name, other, args)
+                    && is_binary_literal(arg)
+            })
+        };
+    Ok(matched.then_some(bytes))
+}
+
+fn binary_converts_to_latin1_subject(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
+    matches!(
+        (upper_name, position),
+        ("INSERT", 3) | ("LPAD" | "RPAD", 2) | ("REPLACE", 1 | 2)
+    ) && matches!(latin1_literal_bytes(args[0]), Ok(Some(_)))
+        && binary_literal_bytes(args[position]).is_some_and(|bytes| !bytes.contains(&0))
+}
+
+fn binary_literal_bytes(expr: &Expr) -> Option<Vec<u8>> {
+    match expr {
+        Expr::Value(value) => match &value.value {
+            Value::HexStringLiteral(digits) => hex_bytes(digits).ok(),
+            Value::SingleQuotedByteStringLiteral(bits) => bit_bytes(bits).ok(),
+            _ => None,
+        },
+        Expr::Prefixed { prefix, value }
+            if prefix.quote_style.is_none() && prefix.value.eq_ignore_ascii_case("_binary") =>
+        {
+            match value.as_ref() {
+                Expr::Value(value) => match &value.value {
+                    Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                        Some(text.as_bytes().to_vec())
+                    }
+                    Value::HexStringLiteral(digits) => hex_bytes(digits).ok(),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+        Expr::Nested(inner) => binary_literal_bytes(inner),
+        _ => None,
+    }
+}
+
+fn latin1_literal_bytes(expr: &Expr) -> Result<Option<Vec<u8>>, MysqlParserError> {
+    match expr {
+        Expr::Prefixed { prefix, value }
+            if prefix.quote_style.is_none() && prefix.value.eq_ignore_ascii_case("_latin1") =>
+        {
+            match value.as_ref() {
+                Expr::Value(value) => match &value.value {
+                    Value::HexStringLiteral(digits) => Ok(Some(hex_bytes(digits)?)),
+                    Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                        Ok(Some(text.as_bytes().to_vec()))
+                    }
+                    _ => Ok(None),
+                },
+                _ => Ok(None),
+            }
+        }
+        Expr::Nested(inner) => latin1_literal_bytes(inner),
+        _ => Ok(None),
+    }
+}
+
+pub(crate) fn unnested(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Nested(inner) => unnested(inner),
+        other => other,
+    }
 }
 
 fn typed_string(expr: &Expr) -> Option<&TypedString> {

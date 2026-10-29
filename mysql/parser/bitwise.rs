@@ -1,4 +1,4 @@
-use crate::expr::{function_call, hex_or_bit_literal, translate_in};
+use crate::expr::{function_call, hex_or_bit_literal, translate_in, unnested};
 use crate::json;
 use crate::literal::{binary_literal_value, Context};
 use crate::query::TranslationContext;
@@ -118,13 +118,6 @@ fn reads_as_text(charset: &str, text: &str) -> bool {
         "_utf8mb4" | "_utf8mb3" | "_utf8" => true,
         "_ascii" | "_latin1" => text.is_ascii(),
         _ => false,
-    }
-}
-
-fn unnested(expr: &Expr) -> &Expr {
-    match expr {
-        Expr::Nested(inner) => unnested(inner),
-        other => other,
     }
 }
 

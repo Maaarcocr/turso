@@ -873,6 +873,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
         ),
         (
+            "SELECT REPLACE(0xC3BF, _latin1 0xFF, 'z'), LPAD(_binary 'ab', 3, _latin1 0xFF), LOCATE(_latin1 0xFF, 0xAAFF, 1) FROM t",
+            "SELECT \"REPLACE\" (x'C3BF', x'FF', 'z'), LPAD (x'6162', 3, x'FF'), LOCATE (x'FF', x'AAFF', 1) FROM t",
+        ),
+        (
+            "SELECT LPAD(_latin1 0xFF, 3, 0xAACC), INSERT(_latin1 0xFF, X'00', 1, _binary 'a'), LOCATE(_latin1 0xFF, 1, 1.5e0), FIELD(_latin1 0xFF, 'a', ''), CONCAT_WS(_latin1 0xFF, TIME '10:00:00', NULL * 1, _utf8mb4 'a')",
+            "SELECT LPAD ('\u{ff}', 3, '\u{aa}\u{cc}'), \"INSERT\" ('\u{ff}', 0, 1, 'a'), LOCATE ('\u{ff}', 1, 1.5e0), FIELD ('\u{ff}', 'a', ''), CONCAT_WS ('\u{ff}', '10:00:00', NULL * 1, 'a')",
+        ),
+        (
             "SELECT LPAD(_latin1 0xFF, 3, 1), CONCAT('\u{4e2d}', _latin1 0x80), RPAD('\u{4e2d}', 2, _latin1 0xFF)",
             "SELECT LPAD ('\u{ff}', 3, 1), CONCAT ('\u{4e2d}', '\u{20ac}'), RPAD ('\u{4e2d}', 2, '\u{ff}')",
         ),
@@ -1013,8 +1021,24 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT CONCAT(_latin1 0xFF) FROM t",
         },
         SqlCase {
-            name: "latin1 text next to a binary string",
-            sql: "SELECT REPLACE(0xC3BF, _latin1 0xFF, 'z')",
+            name: "latin1 text in a call next to a binary string",
+            sql: "SELECT CONCAT(0xAA, UPPER(_latin1 0xFF))",
+        },
+        SqlCase {
+            name: "latin1 located after a position with an empty needle",
+            sql: "SELECT LOCATE('', _latin1 0xFF, 3)",
+        },
+        SqlCase {
+            name: "latin1 located among letters with the same base letter",
+            sql: "SELECT LOCATE('y', _latin1 0xFF)",
+        },
+        SqlCase {
+            name: "latin1 inserted at a position past its characters but within its UTF-8 bytes",
+            sql: "SELECT INSERT(_latin1 0xFF, 2, 1, 'a')",
+        },
+        SqlCase {
+            name: "latin1 field compared with trailing spaces",
+            sql: "SELECT FIELD(_latin1 0xFF, 'a ')",
         },
         SqlCase {
             name: "odd hex digits",
