@@ -141,17 +141,19 @@ Lowered:
 | The same JSON dates and times as an argument MySQL reads as a number (`MAKEDATE`, `MAKETIME`, `PERIOD_ADD`, `PERIOD_DIFF`, the first argument of `FROM_UNIXTIME`, `SEC_TO_TIME` and `FROM_DAYS`, the mode of `WEEK` and `YEARWEEK`), as a datetime (the first argument of `CONVERT_TZ`, `DATE`, `DATE_FORMAT`, `DAY`, `DAYOFMONTH`, `DAYOFWEEK`, `DAYOFYEAR`, `LAST_DAY`, `MONTH`, `MONTHNAME`, `QUARTER`, `TO_DAYS`, `TO_SECONDS`, `UNIX_TIMESTAMP`, `WEEK`, `WEEKDAY`, `WEEKOFYEAR`, `YEAR` and `YEARWEEK`) or as a time (the argument of `HOUR`, `MINUTE`, `SECOND`, `MICROSECOND`, `TIME` and `TIME_TO_SEC`) | As a number, the DOUBLE `0e0`: MySQL reads a JSON date or time as 0 there, with six fractional digits where the result shows them. As a datetime, a JSON date or datetime is `__mysql_cast_as_datetime(text, 6)` and a JSON time is `NULL`, since MySQL fails that read and these functions return NULL for it. As a time, a JSON time is `__mysql_cast_as_time(text, 6)` with its hours modulo 32, and a JSON date or datetime is `NULL`. A JSON time in `UNIX_TIMESTAMP`, where MySQL returns 0 for the failed read, and a JSON date or time as the hour or minute of `MAKETIME` with DECIMAL seconds, whose decimals are not kept, are refused |
 | `GET_FORMAT(DATE \| TIME \| DATETIME \| TIMESTAMP, f)` | `GET_FORMAT('DATE', f)` |
 | `GROUP_CONCAT(a, b, ... [ORDER BY ...] [SEPARATOR s])` | `group_concat(a \|\| b \|\| ..., s)` (Turso does not support `ORDER BY` inside aggregates yet and reports an error) |
-| `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms) |
+| `DATE_ADD/ADDDATE(d, INTERVAL v unit)`, `d + INTERVAL v unit`, `INTERVAL v unit + d`; `DATE_SUB/SUBDATE(...)`, `d - INTERVAL v unit`; `EXTRACT(unit FROM d)`; `TIMESTAMPADD/TIMESTAMPDIFF(unit, ...)` | `DATE_ADD(d, v, 'UNIT')`, `DATE_SUB(d, v, 'UNIT')`, `EXTRACT('UNIT', d)`, `TIMESTAMPADD('UNIT', ...)`, `TIMESTAMPDIFF('UNIT', ...)` with the unit as upper-case text (the datetime functions implement these forms). A compound unit (`DAY_HOUR`, `HOUR_SECOND`, ...) reads the value's MySQL text, `CONCAT(v)`, so a DECIMAL keeps its scale (`INTERVAL 6/4 DAY_HOUR` is 1 day 5000 hours, as in MySQL). When `d` is a `TIMESTAMP '..'` or `DATE '..'` literal, MySQL's result is a DATETIME with the most fractional digits of `d` and the interval (6 for units with `MICROSECOND`, the decimals of a `SECOND` value: a DECIMAL literal's scale, 6 for strings and doubles), so the call is wrapped in `__mysql_cast_as_datetime(.., digits)`; a `DATE` literal with a date unit stays a `DATE`. A `TIME` literal, and a `SECOND` value whose decimals are not known while lowering, are refused |
 | `x->'path'`, `x->>'path'` | `JSON_EXTRACT(x, path)`, `JSON_UNQUOTE(JSON_EXTRACT(x, path))` |
 | `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`, `UTC_DATE`, `UTC_TIME`, `UTC_TIMESTAMP`, `LOCALTIME`, `LOCALTIMESTAMP` (with or without `()`) | SQLite's current-time literals, which are UTC like the target time zone |
 | `POSITION(a IN b)`, `SUBSTRING(s FROM a FOR b)` | `LOCATE(a, b)`, `SUBSTRING(s, a, b)` |
 | `TRIM([[LEADING \| TRAILING \| BOTH] [r] FROM] s)`, `LTRIM(s)`, `RTRIM(s)` | `__mysql_trim(s, r)`, `__mysql_ltrim(s, r)`, `__mysql_rtrim(s, r)` with `r` a space when it is left out (see string functions); `TRIM(LEADING r)` without `FROM` is a syntax error, as in MySQL |
 | `CAST`/`CONVERT(x, type)` to `SIGNED [INTEGER]` and `UNSIGNED [INTEGER]` | `__mysql_cast_as_signed(x)`, `__mysql_cast_as_unsigned(x)`: a DECIMAL rounds half away from zero, a double rounds to the nearest even integer and saturates at the BIGINT range (also for `UNSIGNED`, as in MySQL), text and binary strings give the integer they start with (`'-1.5'` is -1), and `UNSIGNED` keeps the 64 bits of a negative result. An integer literal above 9223372036854775807 is passed as text so it stays exact. An `UNSIGNED` result above 9223372036854775807 fails (Turso has no unsigned 64-bit value type yet), as does a cast of a `DATE`, `DATETIME`, `TIMESTAMP`, `TIME`, `ENUM` or `SET` column (stored as text as given, and MySQL casts an `ENUM` by its index) |
-| `CAST`/`CONVERT(x, type)` to `CHAR`, `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The SQLite type name of the same affinity. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement is refused or the cast is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
-| `CAST`/`CONVERT(x, type)` to `NCHAR` | `CAST(x AS NCHAR)`, which SQLite reads as text like `CHAR` |
-| `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(x, n)`, `__mysql_cast_as_nchar(x, n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
+| `CAST`/`CONVERT(x, type)` to `CHAR` | `CAST(CONCAT(x) AS TEXT)`: MySQL's text of `x`, which `CONCAT` prints with the type's decimals (`CAST(6/4 AS CHAR)` is `1.5000`). A DOUBLE prints as MySQL prints it (`CAST(1e0 AS CHAR)` is `1`, `1e300` stays `1e300`), a DECIMAL column keeps its scale, and bytes that are not UTF-8 are `NULL` |
+| `CAST`/`CONVERT(x, type)` to `DOUBLE`, `REAL`, `FLOAT`, `DECIMAL[(m[,d])]` | The SQLite type name of the same affinity. A `DECIMAL(m,d)` or `DEC(m,d)` target MySQL rejects (`m < d`, `m > 65`, `d > 30`) fails the whole statement when it is parsed, as in MySQL, also when the rest of the statement is refused or the cast is never evaluated; `DECIMAL(0)` and `DECIMAL(0,0)` are accepted, as MySQL reads them as `DECIMAL(10,0)` |
+| `CAST`/`CONVERT(x, type)` to `NCHAR` | `__mysql_cast_as_nchar(CONCAT(x), 16777216)`, as `NCHAR(n)` below |
+| `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(CONCAT(x), n)`, `__mysql_cast_as_nchar(CONCAT(x), n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
-| `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(x AS TEXT)`, `CAST(x AS BLOB)` |
+| `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(CONCAT(x) AS TEXT)`, `CAST(CONCAT(x) AS BLOB)`: MySQL's text of `x` |
+| `BINARY x`, `CAST`/`CONVERT(x, type)` to `BINARY` and `BINARY(n)` (`n` up to 16,777,216) used as a value (a selected column, a function argument other than of `GREATEST`, `LEAST`, `FIELD`, `NULLIF` and `INTERVAL`, `ORDER BY`, `GROUP BY`) | `CAST(CONCAT(x) AS BLOB)`, with `x` as `CAST(x AS CHAR)` would print it when it is a JSON value and its bytes when it is a binary literal; `BINARY(n)` is `__mysql_cast_as_binary(.., n)`, cut to `n` bytes and padded with zero bytes to `n`. `BINARY x` binds as tightly as unary minus (`BINARY 'a' = 'A'` compares `BINARY 'a'`) |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
 | `COLLATE utf8mb4_0900_ai_ci`, `_as_ci`, `_as_cs`, `utf8mb4_ja_0900_as_cs`, `utf8mb4_ja_0900_as_cs_ks` on a `utf8mb4` operand; `COLLATE utf8mb4_bin` | `COLLATE "und-u-ks-level1"`, `"und-u-ks-level2"`, `"und-u-ks-level3"`, `"ja-u-ks-level3"`, `"ja-u-ks-level4"`; `COLLATE RTRIM`. `FIELD`, `GREATEST`, `LEAST` and `STRCMP` with an explicit collation compare under it (a `TIME` literal compares as its text, a `DATE` or `TIMESTAMP` literal is handled as in the next row, other temporal arguments are refused, and a binary string that is not UTF-8 fails with MySQL's conversion error); two different explicit collations, each the whole operand, fail with MySQL's illegal mix error (1267), other mixes, and `LIKE`, `REGEXP`, `LOCATE`, `INSTR`, `POSITION`, `FIND_IN_SET` and `NULLIF` under a collation other than `utf8mb4_0900_ai_ci`, are refused |
 | `GREATEST`, `LEAST` and `STRCMP` of a `DATE` or `TIMESTAMP` literal and literals that cannot be read as a date (strings that do not start with a digit, numbers of at most four integer digits, digit strings whose month or day is out of range, `CAST(n AS UNSIGNED)`, `NULL`) | `GREATEST` is the latest date, computed while lowering, as MySQL compares there as datetimes and reads the other values as zero: a `DATE` when every temporal argument is a `DATE`, else a `DATETIME` with the most fractional digits of any argument (six for strings and DOUBLE literals, the scale for DECIMAL literals, none for integers and hex or bit literals, so `GREATEST('foobar', TIMESTAMP '2020-12-31 23:59:59')` is `'2020-12-31 23:59:59.000000'`), and `NULL` with a NULL argument. `LEAST` compares the arguments as strings, as MySQL does once the least value is not a date. Collated `STRCMP` fails, as MySQL fails to read the string as a date (1525). A `TIME` literal next to a date, a string that may be a date, or any other argument is refused, and so are temporal arguments alone |
@@ -170,8 +172,10 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
 
 - `WITH RECURSIVE`: MySQL stops after `cte_max_recursion_depth` (1000)
   iterations; Turso does not.
-- `BINARY x` and `CAST(x AS BINARY)`: sqlparser cannot tell them apart, and
-  Turso does not enforce `ONLY_FULL_GROUP_BY` for them.
+- `BINARY x` and `CAST(x AS BINARY)` in a comparison, `IN`, `BETWEEN`, a
+  `CASE` operand, arithmetic, a condition, or an argument of `GREATEST`,
+  `LEAST`, `FIELD`, `NULLIF` or `INTERVAL`: MySQL compares a binary string with
+  a number as numbers, and Turso orders every blob after every number.
 - `ROUND`/`TRUNCATE` with a negative literal precision: Turso's `round` does
   not round to tens.
 - `REGEXP` with an empty pattern or over binary strings, row values inside row
@@ -239,7 +243,13 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   whose select list or `HAVING` may use a column that is neither grouped nor
   inside an aggregate, including `*`: MySQL's default `ONLY_FULL_GROUP_BY`
   rejects it (error 1055 or 1140) unless the column depends on a key, and
-  Turso does not check it.
+  Turso does not check it. The same for an `ORDER BY` of a grouped `SELECT`
+  that may use such a column, and of a `SELECT DISTINCT` that may use a column
+  outside the select list (error 3065).
+- `CAST(x AS JSON)` of a DECIMAL literal a DOUBLE cannot show exactly (more
+  than 15 significant digits, or trailing zeros such as `1.50`): MySQL keeps
+  the decimal in the JSON value, Turso a DOUBLE. And of a `BINARY` cast:
+  MySQL's opaque JSON value reaches other functions as a JSON string.
 - `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN` modifiers, `STRAIGHT_JOIN`
   joins, index hints, `PARTITION (...)` selection, `INTO`, locking reads
   (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`, `VALUES` without
@@ -440,13 +450,24 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
 - Temporal results are strings. In a numeric context MySQL turns them into
   numbers (`SEC_TO_TIME(2378) + 0` is `3938`); Turso does not. A
   `DATE '...'`, `TIME '...'` or `TIMESTAMP '...'` literal is a string, so
-  `DATE_ADD(TIME '10:00:00', INTERVAL 1 HOUR)` is `NULL` as for a string.
-  Interval results use MySQL's string form: 6 fractional digits when there
-  is a fraction, none otherwise.
+  interval arithmetic on other temporal values (columns, `CAST(.. AS
+  DATETIME)`, `NOW()`) uses MySQL's string form: 6 fractional digits when
+  there is a fraction, none otherwise.
 - Decimal literals reach the functions as doubles, so their precision and
-  fractional digits are lost: `MAKETIME(10, 34, 58.1234)` gives
-  `10:34:58.123400` (MySQL: `10:34:58.1234`) and `MICROSECOND(
-  20000101103458.1234)` gives `125000`.
+  fractional digits would be lost. Where the result's fractional digits come
+  from a literal argument (`SEC_TO_TIME`, `TIME`, `FROM_UNIXTIME` with one
+  argument, the seconds of `MAKETIME`, the first argument of `CONVERT_TZ`),
+  a DECIMAL, `TIME` or `TIMESTAMP` literal there sets them: the call is
+  wrapped in `__mysql_cast_as_time(.., digits)` or
+  `__mysql_cast_as_datetime(.., digits)`, so `MAKETIME(10, 34, 58.1234)` is
+  `10:34:58.1234`. Such a DECIMAL with more than 15 significant digits is
+  refused, except a `CONVERT_TZ` datetime number with 14 integer digits,
+  which is passed as its text. A DECIMAL literal where `MAKEDATE`,
+  `MAKETIME` (hours, minutes), `PERIOD_ADD`, `PERIOD_DIFF` or `FROM_DAYS`
+  read an integer is rounded half away from zero while lowering, as MySQL
+  rounds a DECIMAL. `TIME(DATE '..')` is `'00:00:00'`. Other decimal
+  arguments still lose digits (`MICROSECOND(20000101103458.1234)` gives
+  `125000`).
 - A `BLOB` argument is read as MySQL reads a hexadecimal literal: as a
   string in date and time positions and as a `BIGINT UNSIGNED` made of its
   bytes in numeric positions (`MAKEDATE(X'31', 1)` is `2049-01-01`). A

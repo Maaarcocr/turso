@@ -1,6 +1,8 @@
 use std::sync::LazyLock;
 use turso_core::dialect::{DialectType, TypeRules};
-use turso_core::{ConversionErrorKind, Func, LimboError, Result, TypeConversionError, Value};
+use turso_core::{
+    ConversionErrorKind, Func, LimboError, Numeric, Result, TypeConversionError, Value,
+};
 
 mod binary;
 mod bit;
@@ -76,6 +78,8 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
     }
     let conversion: Conversion = match (name, arg_count) {
         ("__MYSQL_SQLITE_CAST", 2) => sqlite_cast,
+        ("__MYSQL_CAST_TEXT", 1) => cast_text,
+        ("__MYSQL_CAST_BINARY", 1) => cast_binary,
         ("__MYSQL_ASSIGN_INTEGER", 1) => integer::assign_integer,
         ("__MYSQL_ASSIGN_UNSIGNED_INTEGER", 1) => integer::assign_unsigned_integer,
         ("__MYSQL_ASSIGN_UNSIGNED_BIGINT", 1) => integer::assign_unsigned_bigint,
@@ -106,6 +110,28 @@ fn sqlite_cast(args: &[Value]) -> Result<Value> {
         ));
     };
     Ok(value.exec_cast(type_name.as_str())?)
+}
+
+fn cast_text(args: &[Value]) -> Result<Value> {
+    match &args[0] {
+        Value::Numeric(Numeric::Float(double)) => Ok(Value::build_text(
+            crate::functions::format_double(f64::from(*double)),
+        )),
+        Value::Blob(bytes) => Ok(match std::str::from_utf8(bytes) {
+            Ok(text) => Value::build_text(text.to_string()),
+            Err(_) => Value::Null,
+        }),
+        value => Ok(value.exec_cast("TEXT")?),
+    }
+}
+
+fn cast_binary(args: &[Value]) -> Result<Value> {
+    match &args[0] {
+        Value::Numeric(Numeric::Float(double)) => Ok(Value::from_slice(
+            crate::functions::format_double(f64::from(*double)).as_bytes(),
+        )?),
+        value => Ok(value.exec_cast("BLOB")?),
+    }
 }
 
 pub(crate) fn unsupported_value(message: String) -> LimboError {

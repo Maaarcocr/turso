@@ -384,6 +384,26 @@ pub(super) fn cast_as_nchar(args: &[Value]) -> Result<Value> {
     cast_to_text(args, true)
 }
 
+pub(super) fn cast_as_binary(args: &[Value]) -> Result<Value> {
+    let Some(value) = string(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    let length = cast_length(&args[1])?;
+    let bytes = value.as_bytes();
+    let mut converted = bytes[..bytes.len().min(length)].to_vec();
+    converted.resize(length, 0);
+    Ok(Value::from_slice(&converted)?)
+}
+
+fn cast_length(length: &Value) -> Result<usize> {
+    match integer(length) {
+        Some(length) if !length.is_negative() => Ok(length.as_unsigned() as usize),
+        _ => Err(LimboError::InvalidArgument(
+            "the length of a CHAR or BINARY cast must be a non-negative integer".to_string(),
+        )),
+    }
+}
+
 fn cast_to_text(args: &[Value], national: bool) -> Result<Value> {
     let Some(value) = string(&args[0]) else {
         return Ok(Value::Null);
@@ -391,14 +411,7 @@ fn cast_to_text(args: &[Value], national: bool) -> Result<Value> {
     let Ok(text) = std::str::from_utf8(value.as_bytes()) else {
         return Ok(Value::Null);
     };
-    let length = match integer(&args[1]) {
-        Some(length) if !length.is_negative() => length.as_unsigned() as usize,
-        _ => {
-            return Err(LimboError::InvalidArgument(
-                "the length of a CHAR cast must be a non-negative integer".to_string(),
-            ))
-        }
-    };
+    let length = cast_length(&args[1])?;
     let converted: String = text
         .chars()
         .take(length)

@@ -287,6 +287,16 @@ impl Dialect for MySql {
                 };
                 return Some(cast.inspect(|cast| self.check_cast_target(cast)));
             }
+            Token::Word(word) if word.quote_style.is_none() && word.keyword == Keyword::BINARY => {
+                parser.advance_token();
+                return Some(parser.parse_subexpr(UNARY).map(|expr| Expr::Cast {
+                    kind: CastKind::Cast,
+                    expr: Box::new(expr),
+                    data_type: DataType::Binary(None),
+                    array: false,
+                    format: None,
+                }));
+            }
             _ => return None,
         };
         parser.advance_token();

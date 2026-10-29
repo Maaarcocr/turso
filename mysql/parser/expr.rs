@@ -1490,6 +1490,9 @@ fn translate_compared(
     if is_temporal_cast(expr) {
         return Err(temporal_outside_a_value_position(expr));
     }
+    if is_binary_cast(expr) {
+        return Err(binary_cast_outside_a_value_position(expr));
+    }
     translate_compared_value(expr, other_side, context)
 }
 
@@ -2238,6 +2241,13 @@ fn translate_cast(
         }
         return translate_json_numeric_cast(expr, data_type, context);
     }
+    if matches!(
+        data_type,
+        DataType::Date | DataType::Datetime(_) | DataType::Time(_, TimezoneInfo::None)
+    ) && is_json_number_literal(expr)
+    {
+        return Ok(ast::Expr::Literal(ast::Literal::Null));
+    }
     let shows_text = match data_type {
         DataType::Char(_) | DataType::Character(_) => true,
         DataType::Custom(name, _) => is_nchar(name),
@@ -2276,7 +2286,10 @@ fn translate_cast(
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
         DataType::Decimal(precision) => (decimal_type(precision), Context::Number),
-        DataType::Char(None) | DataType::Character(None) => (type_name("CHAR"), Context::Value),
+        DataType::Char(None) | DataType::Character(None) => {
+            let text = mysql_text(translate_in(expr, Context::Value, context)?);
+            return Ok(ast::Expr::cast(text, Some(type_name("TEXT"))));
+        }
         DataType::JSON => return translate_cast_as_json(expr, literal_context, context),
         DataType::Date => {
             return translate_temporal_cast(expr, TemporalCast::Date, literal_context, context)
@@ -2293,8 +2306,18 @@ fn translate_cast(
             let length = character_length(length)?;
             return translate_text_cast(expr, "__mysql_cast_as_char", length, context);
         }
+        DataType::Binary(length) => {
+            return translate_binary_cast(expr, *length, literal_context, context)
+        }
         DataType::Custom(name, modifiers) if is_nchar(name) => match modifiers.as_slice() {
-            [] => (type_name("NCHAR"), Context::Value),
+            [] => {
+                return translate_text_cast(
+                    expr,
+                    "__mysql_cast_as_nchar",
+                    MAX_CHAR_CAST_LENGTH,
+                    context,
+                )
+            }
             [length] => {
                 let length = nchar_length(length)?;
                 return translate_text_cast(expr, "__mysql_cast_as_nchar", length, context);
@@ -2376,6 +2399,16 @@ fn translate_cast_as_json(
     if has_a_temporal_type(expr) {
         return Err(temporal_outside_a_value_position(expr));
     }
+    if is_binary_cast(expr) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "CAST of the binary string `{expr}` AS JSON, whose opaque JSON value Turso passes on as a JSON string, is not lowered yet"
+        )));
+    }
+    if let Some(digits) = signed_number_literal(expr).filter(|digits| !shows_as_a_double(digits)) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "CAST of the DECIMAL `{digits}` AS JSON, which MySQL keeps exactly and Turso keeps as a DOUBLE, is not lowered yet"
+        )));
+    }
     let value = if let Some(digits) = number_literal(expr).filter(|digits| {
         digits
             .parse::<u64>()
@@ -2393,6 +2426,32 @@ fn translate_cast_as_json(
         "__mysql_cast_as_json"
     };
     Ok(function_call(name, vec![value]))
+}
+
+fn is_json_number_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_json_number_literal(inner),
+        Expr::Cast {
+            kind: CastKind::Cast,
+            expr,
+            data_type: DataType::JSON,
+            array: false,
+            format: None,
+        } => signed_number_literal(expr).is_some(),
+        _ => false,
+    }
+}
+
+fn shows_as_a_double(digits: &str) -> bool {
+    let Some((whole, fraction)) = digits.split_once('.') else {
+        return true;
+    };
+    if digits.contains(['e', 'E']) {
+        return true;
+    }
+    let significant = format!("{whole}{fraction}");
+    let significant = significant.trim_start_matches('0');
+    !fraction.is_empty() && !fraction.ends_with('0') && significant.len() <= 15
 }
 
 pub(crate) fn failing_json_cast(text: &str) -> ast::Expr {
@@ -2587,8 +2646,62 @@ fn translate_text_cast(
     length: u64,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let value = translate_expr(expr, context)?;
+    let value = mysql_text(translate_expr(expr, context)?);
     Ok(function_call(name, vec![value, number(length)]))
+}
+
+fn translate_binary_cast(
+    expr: &Expr,
+    length: Option<u64>,
+    literal_context: Context,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if !literal_context.is_value() {
+        return Err(binary_cast_outside_a_value_position(expr));
+    }
+    let value = if is_binary_literal(expr) {
+        translate_bytes(expr, context)?
+    } else if json::is_json_value(expr) {
+        let text = translate_cast(expr, &DataType::Char(None), literal_context, context)?;
+        ast::Expr::cast(text, Some(type_name("BLOB")))
+    } else {
+        ast::Expr::cast(
+            mysql_text(translate_in(expr, Context::Value, context)?),
+            Some(type_name("BLOB")),
+        )
+    };
+    Ok(match length {
+        None => value,
+        Some(length) if length <= MAX_CHAR_CAST_LENGTH => {
+            function_call("__mysql_cast_as_binary", vec![value, number(length)])
+        }
+        Some(length) => {
+            return Err(MysqlParserError::Unsupported(format!(
+                "CAST to BINARY({length}) is not lowered yet"
+            )))
+        }
+    })
+}
+
+fn is_binary_cast(expr: &Expr) -> bool {
+    match expr {
+        Expr::Cast {
+            data_type: DataType::Binary(_),
+            ..
+        }
+        | Expr::Convert {
+            data_type: Some(DataType::Binary(_)),
+            ..
+        } => true,
+        Expr::Nested(inner) => is_binary_cast(inner),
+        _ => false,
+    }
+}
+
+fn binary_cast_outside_a_value_position(expr: &Expr) -> MysqlParserError {
+    MysqlParserError::Unsupported(format!(
+        "a binary string cast of `{expr}` in a comparison or a computation, which MySQL may compare as numbers, is not lowered yet"
+    ))
 }
 
 fn decimal_type(precision: &ExactNumberInfo) -> ast::Type {
@@ -2637,9 +2750,13 @@ fn translate_convert_using(
         }
     };
     Ok(ast::Expr::cast(
-        translate_expr(expr, context)?,
+        mysql_text(translate_expr(expr, context)?),
         Some(type_name(target)),
     ))
+}
+
+fn mysql_text(value: ast::Expr) -> ast::Expr {
+    function_call("CONCAT", vec![value])
 }
 
 fn type_name(name: &str) -> ast::Type {
@@ -2819,19 +2936,15 @@ fn translate_interval_arithmetic(
 ) -> Result<ast::Expr, MysqlParserError> {
     match (left, op, right) {
         (_, BinaryOperator::Plus | BinaryOperator::Minus, Expr::Interval(interval)) => {
-            let date = translate_expr(left, context)?;
-            let (amount, unit) = translate_interval(interval, context)?;
             let name = if *op == BinaryOperator::Plus {
                 "DATE_ADD"
             } else {
                 "DATE_SUB"
             };
-            Ok(function_call(name, vec![date, amount, unit]))
+            translate_date_arithmetic(name, left, interval, context)
         }
         (Expr::Interval(interval), BinaryOperator::Plus, _) => {
-            let (amount, unit) = translate_interval(interval, context)?;
-            let date = translate_expr(right, context)?;
-            Ok(function_call("DATE_ADD", vec![date, amount, unit]))
+            translate_date_arithmetic("DATE_ADD", right, interval, context)
         }
         _ => Err(unsupported_operator(op)),
     }
@@ -2873,6 +2986,17 @@ fn translate_function(
         FunctionArguments::List(list) => list,
         FunctionArguments::Subquery(_) => return Err(unsupported_function(function)),
     };
+    if matches!(
+        upper_name.as_str(),
+        "GREATEST" | "LEAST" | "FIELD" | "NULLIF" | "INTERVAL"
+    ) {
+        if let Some(cast) = list.args.iter().find_map(|arg| match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) if is_binary_cast(expr) => Some(expr),
+            _ => None,
+        }) {
+            return Err(binary_cast_outside_a_value_position(cast));
+        }
+    }
     if identifier.quote_style.is_none() && over.is_none() {
         if let Some(expr) = translate_greatest_of_dates(&upper_name, list)? {
             return Ok(expr);
@@ -2909,7 +3033,15 @@ fn translate_function(
         Some(DuplicateTreatment::All) => Some(ast::Distinctness::All),
         Some(DuplicateTreatment::Distinct) => Some(ast::Distinctness::Distinct),
     };
+    let digits = literal_result_digits(&upper_name, list)?;
+    if let Some(LiteralResult::Text(text)) = &digits {
+        return Ok(string_expr(text));
+    }
     let mut args = function_arguments(&upper_name, list, literal_context, context)?;
+    round_decimal_integer_arguments(&upper_name, &mut args);
+    if let Some(LiteralResult::TextArgument(position, text)) = &digits {
+        args[*position] = string_expr(text);
+    }
     let mut order_by = Vec::new();
     let mut separator = None;
     for clause in &list.clauses {
@@ -2943,11 +3075,161 @@ fn translate_function(
     };
     let json_timestamp = upper_name == "UNIX_TIMESTAMP"
         && matches!(unnamed_arguments(list)?.as_slice(), [arg] if json::is_json_value(arg));
-    Ok(if json_timestamp {
-        ast::Expr::cast(call, Some(sized_decimal_type(65, 6)))
-    } else {
-        call
+    Ok(match digits {
+        _ if json_timestamp => ast::Expr::cast(call, Some(sized_decimal_type(65, 6))),
+        Some(LiteralResult::Time(digits)) => {
+            function_call("__mysql_cast_as_time", vec![call, number(digits as u64)])
+        }
+        Some(LiteralResult::DateTime(digits)) => function_call(
+            "__mysql_cast_as_datetime",
+            vec![call, number(digits as u64)],
+        ),
+        Some(LiteralResult::TextArgument(_, text)) => function_call(
+            "__mysql_cast_as_datetime",
+            vec![call, number(text_fraction_digits(&text) as u64)],
+        ),
+        Some(LiteralResult::Text(_)) => unreachable!("a text result returns early"),
+        None => call,
     })
+}
+
+enum LiteralResult {
+    Time(usize),
+    DateTime(usize),
+    TextArgument(usize, String),
+    Text(String),
+}
+
+fn literal_result_digits(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<LiteralResult>, MysqlParserError> {
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Ok(None);
+    }
+    let Ok(args) = unnamed_arguments(list) else {
+        return Ok(None);
+    };
+    let (position, time) = match (upper_name, args.len()) {
+        ("SEC_TO_TIME" | "TIME", 1) => (0, true),
+        ("MAKETIME", 3) => (2, true),
+        ("FROM_UNIXTIME", 1) | ("CONVERT_TZ", 3) => (0, false),
+        _ => return Ok(None),
+    };
+    let arg = args[position];
+    if upper_name == "TIME" && dated_literal_kind(arg) == Some(TemporalKind::Date) {
+        return Ok(Some(LiteralResult::Text("00:00:00".to_string())));
+    }
+    let Some(digits) = literal_decimals(arg) else {
+        return Ok(None);
+    };
+    if let Some(number) = signed_number_literal(arg).filter(|number| !is_exact_as_a_double(number))
+    {
+        let whole = number.split_once('.').map_or(number, |(whole, _)| whole);
+        if upper_name == "CONVERT_TZ" && !is_negated(arg) && whole.len() == 14 {
+            return Ok(Some(LiteralResult::TextArgument(
+                position,
+                number.to_string(),
+            )));
+        }
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} of the DECIMAL `{number}`, which MySQL reads exactly and Turso as a DOUBLE, is not lowered yet"
+        )));
+    }
+    if upper_name == "CONVERT_TZ" && dated_literal_kind(arg).is_some() {
+        return Ok(None);
+    }
+    Ok(Some(if time {
+        LiteralResult::Time(digits)
+    } else {
+        LiteralResult::DateTime(digits)
+    }))
+}
+
+fn is_exact_as_a_double(digits: &str) -> bool {
+    if digits.contains(['e', 'E']) || !digits.contains('.') {
+        return true;
+    }
+    let significant = digits.replace('.', "");
+    significant
+        .trim_start_matches('0')
+        .trim_end_matches('0')
+        .len()
+        <= 15
+}
+
+fn text_fraction_digits(text: &str) -> usize {
+    text.split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len().min(6))
+}
+
+fn literal_decimals(expr: &Expr) -> Option<usize> {
+    match expr {
+        Expr::Nested(inner)
+        | Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => literal_decimals(inner),
+        Expr::TypedString(_) => dated_literal_kind(expr).map(|_| fraction_length(expr)),
+        _ => {
+            let digits = number_literal(expr)?;
+            if digits.contains(['e', 'E']) {
+                return None;
+            }
+            Some(text_fraction_digits(digits))
+        }
+    }
+}
+
+fn round_decimal_integer_arguments(upper_name: &str, args: &mut [ast::Expr]) {
+    let positions: &[usize] = match upper_name {
+        "MAKEDATE" | "PERIOD_ADD" | "PERIOD_DIFF" => &[0, 1],
+        "MAKETIME" => &[0, 1],
+        "FROM_DAYS" => &[0],
+        _ => return,
+    };
+    for &position in positions {
+        let Some(arg) = args.get_mut(position) else {
+            continue;
+        };
+        let (negative, digits) = match &*arg {
+            ast::Expr::Literal(ast::Literal::Numeric(digits)) => (false, digits.clone()),
+            ast::Expr::Unary(ast::UnaryOperator::Negative, inner) => match inner.as_ref() {
+                ast::Expr::Literal(ast::Literal::Numeric(digits)) => (true, digits.clone()),
+                _ => continue,
+            },
+            ast::Expr::Cast {
+                expr: inner,
+                type_name: Some(type_name),
+            } if type_name.name.eq_ignore_ascii_case("DECIMAL") => match inner.as_ref() {
+                ast::Expr::Literal(ast::Literal::String(quoted)) => {
+                    let text = quoted.trim_matches('\'');
+                    match text.strip_prefix('-') {
+                        Some(digits) => (true, digits.to_string()),
+                        None => (false, text.to_string()),
+                    }
+                }
+                _ => continue,
+            },
+            _ => continue,
+        };
+        if digits.contains(['e', 'E']) {
+            continue;
+        }
+        let Some((whole, fraction)) = digits.split_once('.') else {
+            continue;
+        };
+        let Ok(whole) = (if whole.is_empty() { "0" } else { whole }).parse::<u64>() else {
+            continue;
+        };
+        let rounded = whole + u64::from(fraction.starts_with(['5', '6', '7', '8', '9']));
+        let literal = ast::Expr::Literal(ast::Literal::Numeric(rounded.to_string()));
+        *arg = if negative && rounded != 0 {
+            ast::Expr::Unary(ast::UnaryOperator::Negative, Box::new(literal))
+        } else {
+            literal
+        };
+    }
 }
 
 fn translate_function_without_parentheses(
@@ -3271,16 +3553,12 @@ fn translate_special_function(
         return Ok(None);
     };
     match (upper_name, args.as_slice()) {
-        ("DATE_ADD" | "ADDDATE", [date, Expr::Interval(interval)]) => {
-            let date = translate_expr(date, context)?;
-            let (amount, unit) = translate_interval(interval, context)?;
-            Ok(Some(function_call("DATE_ADD", vec![date, amount, unit])))
-        }
-        ("DATE_SUB" | "SUBDATE", [date, Expr::Interval(interval)]) => {
-            let date = translate_expr(date, context)?;
-            let (amount, unit) = translate_interval(interval, context)?;
-            Ok(Some(function_call("DATE_SUB", vec![date, amount, unit])))
-        }
+        ("DATE_ADD" | "ADDDATE", [date, Expr::Interval(interval)]) => Ok(Some(
+            translate_date_arithmetic("DATE_ADD", date, interval, context)?,
+        )),
+        ("DATE_SUB" | "SUBDATE", [date, Expr::Interval(interval)]) => Ok(Some(
+            translate_date_arithmetic("DATE_SUB", date, interval, context)?,
+        )),
         ("TIMESTAMPADD" | "TIMESTAMPDIFF", [Expr::Identifier(unit), rest @ ..])
             if unit.quote_style.is_none() =>
         {
@@ -3447,6 +3725,73 @@ fn translate_conv_of_literal(
     ))
 }
 
+fn translate_date_arithmetic(
+    name: &str,
+    date: &Expr,
+    interval: &Interval,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    const DATE_UNITS: &[&str] = &["YEAR", "QUARTER", "MONTH", "WEEK", "DAY", "YEAR_MONTH"];
+    let (amount, unit) = translate_interval(interval, context)?;
+    let unit_name = match &unit {
+        ast::Expr::Literal(ast::Literal::String(quoted)) => quoted.trim_matches('\'').to_string(),
+        other => unreachable!("a temporal unit lowers to a string literal, not `{other}`"),
+    };
+    let call = function_call(name, vec![translate_expr(date, context)?, amount, unit]);
+    let Some(kind) = dated_literal_kind(date) else {
+        return Ok(call);
+    };
+    if kind == TemporalKind::Time {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{name} of the TIME literal `{date}`, whose result MySQL types as TIME, is not lowered yet"
+        )));
+    }
+    if kind == TemporalKind::Date && DATE_UNITS.contains(&unit_name.as_str()) {
+        return Ok(call);
+    }
+    let Some(interval_digits) = interval_fraction_digits(&interval.value, &unit_name) else {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{name} of `{date}` and the interval `{interval}`, whose fractional digits MySQL takes from the interval's type, is not lowered yet"
+        )));
+    };
+    let digits = fraction_length(date).max(interval_digits);
+    Ok(function_call(
+        "__mysql_cast_as_datetime",
+        vec![call, number(digits as u64)],
+    ))
+}
+
+fn dated_literal_kind(expr: &Expr) -> Option<TemporalKind> {
+    match expr {
+        Expr::TypedString(typed) => temporal_literal(typed).map(|literal| literal.kind),
+        Expr::Nested(inner) => dated_literal_kind(inner),
+        _ => None,
+    }
+}
+
+fn interval_fraction_digits(value: &Expr, unit: &str) -> Option<usize> {
+    if unit.ends_with("MICROSECOND") {
+        return Some(6);
+    }
+    if unit != "SECOND" {
+        return Some(0);
+    }
+    if let Some(digits) = signed_number_literal(value) {
+        if digits.contains(['e', 'E']) {
+            return Some(6);
+        }
+        return Some(
+            digits
+                .split_once('.')
+                .map_or(0, |(_, fraction)| fraction.len().min(6)),
+        );
+    }
+    if string_literal(value).is_some() {
+        return Some(6);
+    }
+    matches!(value, Expr::Value(literal) if literal.value == Value::Null).then_some(0)
+}
+
 fn translate_interval(
     interval: &Interval,
     context: &mut TranslationContext,
@@ -3463,8 +3808,16 @@ fn translate_interval(
             "interval `{interval}` is not lowered yet"
         )));
     };
+    let unit = unit_literal(field)?;
     let amount = translate_expr(value, context)?;
-    Ok((amount, unit_literal(field)?))
+    let compound =
+        matches!(&unit, ast::Expr::Literal(ast::Literal::String(name)) if name.contains('_'));
+    let amount = if compound && string_literal(value).is_none() {
+        mysql_text(amount)
+    } else {
+        amount
+    };
+    Ok((amount, unit))
 }
 
 fn unit_literal(field: &DateTimeField) -> Result<ast::Expr, MysqlParserError> {

@@ -803,6 +803,34 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT 6.4e1 = 6.4e1, 1e0 IS 1.5e1, - 1e0 < - 5e-1, 1.7976931348623157e308 > 0e0",
         ),
         (
+            "SELECT BINARY s, CAST(X'FF' AS BINARY(2)), CONVERT(-1.5, BINARY(1)), CAST(CAST('[1]' AS JSON) AS BINARY), CAST(1e0 AS CHAR), STRCMP(BINARY 'a', s) FROM t ORDER BY BINARY s",
+            "SELECT CAST (CONCAT (s) AS BLOB), __mysql_cast_as_binary (x'FF', 2), __mysql_cast_as_binary (CAST (CONCAT (CAST ('-1.5' AS DECIMAL (2, 1))) AS BLOB), 1), CAST (CAST (CONCAT (__mysql_cast_as_json ('[1]')) AS TEXT) AS BLOB), CAST (CONCAT (1e0) AS TEXT), STRCMP (CAST (CONCAT ('a') AS BLOB), s) FROM t ORDER BY CAST (CONCAT (s) AS BLOB)",
+        ),
+        (
+            "SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0x' HOUR_MICROSECOND), DATE_ADD(20250101, INTERVAL 6/4 DAY_HOUR), TIMESTAMP '2025-01-01 00:00:00.1' + INTERVAL 1.5000 SECOND, DATE_ADD(DATE '2020-01-01', INTERVAL 1 DAY), DATE '2020-01-01' - INTERVAL 1 HOUR",
+            "SELECT __mysql_cast_as_datetime (DATE_SUB ('2025-01-01 00:00:00', '1.0x', 'HOUR_MICROSECOND'), 6), DATE_ADD (20250101, CONCAT (6 / 4), 'DAY_HOUR'), __mysql_cast_as_datetime (DATE_ADD ('2025-01-01 00:00:00.1', 1.5000, 'SECOND'), 4), DATE_ADD ('2020-01-01', 1, 'DAY'), __mysql_cast_as_datetime (DATE_SUB ('2020-01-01', 1, 'HOUR'), 0)",
+        ),
+        (
+            "SELECT SEC_TO_TIME(1.1), MAKETIME(1.5, 2.4, TIME '00:00:59.01011'), FROM_UNIXTIME(0.0), CONVERT_TZ(20000101103458.1234, '-01:00', '-00:00'), TIME(DATE '2000-01-01'), MAKEDATE(2000, -2.5), SEC_TO_TIME(s) FROM t",
+            "SELECT __mysql_cast_as_time (SEC_TO_TIME (1.1), 1), __mysql_cast_as_time (MAKETIME (2, 2, 000059.01011), 5), __mysql_cast_as_datetime (FROM_UNIXTIME (0.0), 1), __mysql_cast_as_datetime (CONVERT_TZ ('20000101103458.1234', '-01:00', '-00:00'), 4), '00:00:00', MAKEDATE (2000, - 3), SEC_TO_TIME (s) FROM t",
+        ),
+        (
+            "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
+            "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
+        ),
+        (
+            "SELECT a FROM t WHERE b = 3 GROUP BY a ORDER BY b, t.a",
+            "SELECT a FROM t WHERE b = 3 GROUP BY a ORDER BY b, t.a",
+        ),
+        (
+            "SELECT COUNT(*) FROM t ORDER BY b",
+            "SELECT COUNT (*) FROM t ORDER BY b",
+        ),
+        (
+            "SELECT CAST(CAST(0.000 AS JSON) AS DATE)",
+            "SELECT NULL",
+        ),
+        (
             "SELECT 'FOO' IN ('foo', 1), 64 NOT IN ('64', 'bar'), CASE 'abc' WHEN 'xyz' THEN 1 WHEN 0 THEN 2 END, GREATEST(-1, 0x1, TIMESTAMP '2020-12-31 23:59:59')",
             "SELECT ('FOO' COLLATE \"und-u-ks-level1\" = 'foo' OR 0e0 = 1e0), NOT (6.4e1 = 6.4e1 OR 6.4e1 = 0e0), CASE 0e0 WHEN 0e0 THEN 1 WHEN 0e0 THEN 2 END, '2020-12-31 23:59:59'",
         ),
@@ -906,7 +934,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT CAST('2000-01-01' AS DATE), CONVERT(1.5, DATETIME(3)), CAST('1:2' AS TIME), CAST(s AS CHAR(2)), CONVERT(s, NCHAR(1)), CAST(s AS NCHAR)",
-            "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
+            "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (CONCAT (s), 2), __mysql_cast_as_nchar (CONCAT (s), 1), __mysql_cast_as_nchar (CONCAT (s), 16777216)",
         ),
         (
             "SELECT REPLACE(0xC3BF, _latin1 0xFF, 'z'), LPAD(_binary 'ab', 3, _latin1 0xFF), LOCATE(_latin1 0xFF, 0xAAFF, 1) FROM t",
@@ -1221,10 +1249,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t ORDER BY a NULLS FIRST",
         },
         SqlCase {
-            name: "binary cast",
-            sql: "SELECT BINARY s FROM t",
-        },
-        SqlCase {
             name: "recursive cte",
             sql: "WITH RECURSIVE c(n) AS (SELECT 1) SELECT n FROM c",
         },
@@ -1243,6 +1267,46 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "uneven values rows",
             sql: "VALUES ROW(1), ROW(1, 2)",
+        },
+        SqlCase {
+            name: "a DECIMAL a double cannot hold in a date function",
+            sql: "SELECT SEC_TO_TIME(1234567890123.12345)",
+        },
+        SqlCase {
+            name: "a DATE_ADD of a TIME literal",
+            sql: "SELECT DATE_ADD(TIME '10:00:00', INTERVAL 1 HOUR)",
+        },
+        SqlCase {
+            name: "a DATE_ADD whose interval decimals are not known",
+            sql: "SELECT DATE_ADD(TIMESTAMP '2020-01-01 00:00:00', INTERVAL c SECOND) FROM t",
+        },
+        SqlCase {
+            name: "a decimal a JSON double cannot show",
+            sql: "SELECT CAST(1.50 AS JSON)",
+        },
+        SqlCase {
+            name: "a binary string cast to JSON",
+            sql: "SELECT CAST(BINARY 'a' AS JSON)",
+        },
+        SqlCase {
+            name: "ORDER BY a column outside GROUP BY",
+            sql: "SELECT BINARY s FROM t GROUP BY BINARY s ORDER BY s",
+        },
+        SqlCase {
+            name: "ORDER BY a column outside a DISTINCT select list",
+            sql: "SELECT DISTINCT BINARY t1.id AS id FROM t AS t1 ORDER BY t1.id",
+        },
+        SqlCase {
+            name: "a binary string cast in a comparison",
+            sql: "SELECT BINARY 1 = 1",
+        },
+        SqlCase {
+            name: "a binary string cast compared with a column",
+            sql: "SELECT 1 FROM t WHERE b = CAST('d' AS BINARY(3))",
+        },
+        SqlCase {
+            name: "a binary string cast in a comparing function",
+            sql: "SELECT GREATEST(BINARY s, s) FROM t",
         },
         SqlCase {
             name: "a negated hex literal whose decimals show",
