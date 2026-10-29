@@ -494,12 +494,12 @@ fn temporal_columns_store_the_text_mysql_stores() -> turso_core::Result<()> {
     connection.execute(
         "INSERT INTO t VALUES (1, '2024-3-5 9:4:5.25', '2024-03-05T10:00:00', '2024-3-5 00:00:00', '1:2:3.4', '1970-01-01 00:00:01')",
     )?;
-    connection.execute("UPDATE t SET b = '2024-1-2 3:4:5'")?;
+    connection.execute("UPDATE t SET b = '2024-02-29 23:59:59.5'")?;
     assert_eq!(
         query(&connection, "SELECT a, b, c, d, e FROM t")?,
         vec![vec![
             Value::build_text("2024-03-05 09:04:05.250000"),
-            Value::build_text("2024-01-02 03:04:05"),
+            Value::build_text("2024-03-01 00:00:00"),
             Value::build_text("2024-03-05"),
             Value::build_text("01:02:03.40"),
             Value::build_text("1970-01-01 00:00:01"),
@@ -510,7 +510,8 @@ fn temporal_columns_store_the_text_mysql_stores() -> turso_core::Result<()> {
         ("Incorrect datetime value", "e", "'1970-01-01 00:00:00'"),
         ("Incorrect date value", "c", "'2024-00-05'"),
         ("Incorrect time value", "d", "'839:00:00'"),
-        ("not supported yet", "b", "'2024-02-01 00:00:00.5'"),
+        ("not supported yet", "b", "'9999-12-31 23:59:59.5'"),
+        ("not supported yet", "d", "'-00:00:00.001'"),
         ("not supported yet", "c", "'2024-02-01 10:00:00'"),
         ("not supported yet", "b", "20240201"),
     ] {

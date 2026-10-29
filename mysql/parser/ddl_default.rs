@@ -141,13 +141,24 @@ pub enum TemporalColumn {
 /// The text MySQL stores for the string `text` in a column of type `column`
 /// under the target profile's strict SQL mode: `YYYY-MM-DD`,
 /// `YYYY-MM-DD HH:MM:SS[.fraction]` or `[-]HH:MM:SS[.fraction]`, with the
-/// column's fractional digits. A value MySQL rejects (an invalid or zero
-/// date, a time out of range, a `TIMESTAMP` outside 1970-2038) is
-/// [`MysqlParserError::Rejected`]; one whose conversion is not available
-/// (fractional digits to round, a time in a `DATE`, a form other than
-/// numbers separated by `-`, `:`, a space or `T`) is
-/// [`MysqlParserError::Unsupported`].
+/// column's fractional digits, rounded as MySQL rounds them. A value MySQL
+/// rejects (an invalid or zero date, a time out of range, a `TIMESTAMP`
+/// outside 1970-2038) is [`MysqlParserError::Rejected`]; one whose
+/// conversion is not available (a time in a `DATE`, a negative zero time, a
+/// rounding past year 9999 or `838:59:59`, a form other than numbers
+/// separated by `-`, `:`, a space or `T`) is [`MysqlParserError::Unsupported`].
 pub fn temporal_text(column: TemporalColumn, text: &str) -> Result<String, MysqlParserError> {
+    let datetime = |precision| -> Result<String, MysqlParserError> {
+        let (date, time) = parse_datetime(text)?;
+        let mut time = time.unwrap_or_default().rounded(precision)?;
+        let date = if time.hours == 24 {
+            time.hours = 0;
+            date.next_day()?
+        } else {
+            date
+        };
+        Ok(format!("{} {}", date.to_text(), time.to_text()))
+    };
     match column {
         TemporalColumn::Date => {
             let (date, time) = parse_datetime(text)?;
@@ -156,21 +167,21 @@ pub fn temporal_text(column: TemporalColumn, text: &str) -> Result<String, Mysql
             }
             Ok(date.to_text())
         }
-        TemporalColumn::Datetime(precision) => {
-            let (date, time) = parse_datetime(text)?;
-            let time = time.unwrap_or_default().to_text(precision)?;
-            Ok(format!("{} {time}", date.to_text()))
-        }
+        TemporalColumn::Datetime(precision) => datetime(precision),
         TemporalColumn::Timestamp(precision) => {
-            let (date, time) = parse_datetime(text)?;
-            let time = time.unwrap_or_default().to_text(precision)?;
-            let value = format!("{} {time}", date.to_text());
+            let value = datetime(precision)?;
             if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value.as_str()) {
                 return Err(rejected());
             }
             Ok(value)
         }
-        TemporalColumn::Time(precision) => parse_time(text, MAX_TIME_HOURS)?.to_text(precision),
+        TemporalColumn::Time(precision) => {
+            let time = parse_time(text, MAX_TIME_HOURS)?.rounded(precision)?;
+            if time.hours > MAX_TIME_HOURS || (time.negative && time.is_zero()) {
+                return Err(unsupported());
+            }
+            Ok(time.to_text())
+        }
     }
 }
 
@@ -389,6 +400,7 @@ fn increment(digits: &str) -> String {
     format!("1{}", String::from_utf8(bytes).expect("digits are ASCII"))
 }
 
+#[derive(Clone, Copy)]
 struct Date {
     year: u32,
     month: u32,
@@ -408,6 +420,29 @@ impl Date {
     fn to_text(&self) -> String {
         format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
+
+    fn next_day(self) -> Result<Date, MysqlParserError> {
+        Ok(if self.day < days_in_month(self.year, self.month) {
+            Date {
+                day: self.day + 1,
+                ..self
+            }
+        } else if self.month < 12 {
+            Date {
+                month: self.month + 1,
+                day: 1,
+                ..self
+            }
+        } else if self.year < 9999 {
+            Date {
+                year: self.year + 1,
+                month: 1,
+                day: 1,
+            }
+        } else {
+            return Err(unsupported());
+        })
+    }
 }
 
 impl Time {
@@ -418,22 +453,47 @@ impl Time {
             && self.fraction.bytes().all(|digit| digit == b'0')
     }
 
-    fn to_text(&self, precision: u64) -> Result<String, MysqlParserError> {
-        let precision = usize::try_from(precision).map_err(|_| unsupported())?;
-        if self.fraction.len() > precision {
-            return Err(unsupported());
+    /// The time with `precision` fractional digits, rounded as MySQL rounds
+    /// it: to microseconds by the seventh digit, then half up. The hours of
+    /// a time of day can reach 24.
+    fn rounded(&self, precision: u64) -> Result<Time, MysqlParserError> {
+        let precision = u32::try_from(precision)
+            .ok()
+            .filter(|precision| *precision <= 6)
+            .ok_or_else(unsupported)?;
+        let microseconds = format!("{:0<6}", &self.fraction[..self.fraction.len().min(6)]);
+        let mut total = (u64::from(self.hours) * 3600
+            + u64::from(self.minutes) * 60
+            + u64::from(self.seconds))
+            * 1_000_000
+            + microseconds.parse::<u64>().expect("the fraction is digits");
+        if self.fraction.as_bytes().get(6).is_some_and(|digit| *digit >= b'5') {
+            total += 1;
         }
+        let unit = 10u64.pow(6 - precision);
+        total = (total + unit / 2) / unit * unit;
+        let seconds = total / 1_000_000;
+        let part = |value: u64| u32::try_from(value).map_err(|_| unsupported());
+        Ok(Time {
+            negative: self.negative,
+            hours: part(seconds / 3600)?,
+            minutes: part(seconds / 60 % 60)?,
+            seconds: part(seconds % 60)?,
+            fraction: format!("{:06}", total % 1_000_000)[..precision as usize].to_string(),
+        })
+    }
+
+    fn to_text(&self) -> String {
         let sign = if self.negative { "-" } else { "" };
         let mut text = format!(
             "{sign}{:02}:{:02}:{:02}",
             self.hours, self.minutes, self.seconds
         );
-        if precision > 0 {
+        if !self.fraction.is_empty() {
             text.push('.');
             text.push_str(&self.fraction);
-            text.extend(std::iter::repeat_n('0', precision - self.fraction.len()));
         }
-        Ok(text)
+        text
     }
 }
 

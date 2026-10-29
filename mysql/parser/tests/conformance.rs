@@ -215,8 +215,8 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
             "CREATE TABLE t (e ENUM ('''a,b'',''c''''d''', 1), s \"SET\" ('''x''')) STRICT",
         ),
         (
-            "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
-            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP) STRICT",
+            "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP, r DATETIME DEFAULT '2020-12-31 23:59:59.5')",
+            "CREATE TABLE t (d DATE DEFAULT '2020-01-02', ts DATETIME (3) DEFAULT '2020-01-02 03:04:05.000', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP, r DATETIME DEFAULT '2021-01-01 00:00:00') STRICT",
         ),
         (
             "CREATE TABLE t (a DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), b TIMESTAMP(3) DEFAULT NOW(3), c DATETIME DEFAULT CURRENT_TIMESTAMP(0))",
@@ -377,10 +377,6 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
         SqlCase {
             name: "invisible column",
             sql: "CREATE TABLE users(id INT INVISIBLE)",
-        },
-        SqlCase {
-            name: "datetime default that needs rounding",
-            sql: "CREATE TABLE users(seen DATETIME DEFAULT '2020-01-01 00:00:00.5')",
         },
         SqlCase {
             name: "named inline primary key",
