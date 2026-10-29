@@ -29,7 +29,11 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse_for(&self, connection: &Connection, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        parse_statement(sql, &Session(connection))
+        let (cmd, end) = parse_statement(sql, &Session(connection))?;
+        if let Some(ast::Cmd::Stmt(stmt)) = &cmd {
+            check_default_functions(stmt, connection)?;
+        }
+        Ok((cmd, end))
     }
 
     fn parse_reads_transaction_state(&self) -> bool {
@@ -131,6 +135,60 @@ fn parse_statement(
         turso_mysql_parser::parse_and_translate_in(&sql[statement.text.clone()], environment)
             .map_err(|error| LimboError::ParseError(error.to_string()))?;
     Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
+}
+
+/// Refuses a column `DEFAULT` that calls a function Turso does not have, as
+/// Turso would fail only the first `INSERT` that uses it where MySQL fails
+/// the statement when the function does not exist (and accepts it when it
+/// is a MySQL function Turso does not have).
+fn check_default_functions(stmt: &ast::Stmt, connection: &Connection) -> Result<()> {
+    let columns: Vec<&ast::ColumnDefinition> = match stmt {
+        ast::Stmt::CreateTable {
+            body: ast::CreateTableBody::ColumnsAndConstraints { columns, .. },
+            ..
+        } => columns.iter().collect(),
+        ast::Stmt::AlterTable(alter) => match &alter.body {
+            ast::AlterTableBody::AddColumn(column) => vec![column],
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    };
+    let external = connection.get_syms_functions();
+    let exists = |name: &str, arg_count: usize| -> Result<bool> {
+        Ok(MySqlDialect.resolve_function(name, arg_count)?.is_some()
+            || external.iter().any(|(external, _, external_count, _)| {
+                external.eq_ignore_ascii_case(name)
+                    && (*external_count < 0 || *external_count as usize == arg_count)
+            }))
+    };
+    for column in columns {
+        for constraint in &column.constraints {
+            let ast::ColumnConstraint::Default(expr) = &constraint.constraint else {
+                continue;
+            };
+            turso_core::walk_expr(expr, &mut |expr: &ast::Expr| {
+                let call = match expr {
+                    ast::Expr::FunctionCall { name, args, .. } => Some((name, args.len())),
+                    ast::Expr::FunctionCallStar { name, .. } => Some((name, 0)),
+                    _ => None,
+                };
+                if let Some((name, arg_count)) = call {
+                    if !exists(name.as_str(), arg_count)? {
+                        return Err(LimboError::ParseError(
+                            turso_mysql_parser::MysqlParserError::Unsupported(format!(
+                                "function `{}` in the default of column `{}`, which Turso does not have",
+                                name.as_str(),
+                                column.col_name.as_str()
+                            ))
+                            .to_string(),
+                        ));
+                    }
+                }
+                Ok(turso_core::WalkControl::Continue)
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// The session of a connection, as the lowering of its statements sees it.

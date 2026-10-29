@@ -217,14 +217,16 @@ fn translate_function(function: &Function) -> Result<ast::Expr, MysqlParserError
     if !clauses.is_empty() {
         return Err(unsupported_function(function));
     }
-    let args = args
-        .iter()
-        .map(|arg| match arg {
-            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => translate_expr(expr),
-            _ => Err(unsupported_function(function)),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(function_call(&identifier.value, args))
+    for arg in args {
+        match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => translate_expr(expr)?,
+            _ => return Err(unsupported_function(function)),
+        };
+    }
+    crate::expr::translate_expr(
+        &Expr::Function(function.clone()),
+        &mut crate::query::TranslationContext::default(),
+    )
 }
 
 fn function_call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {

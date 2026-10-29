@@ -378,6 +378,24 @@ fn foreign_keys_are_checked_when_created_as_mysql_checks_them() -> turso_core::R
 }
 
 #[test]
+fn column_expressions_call_mysql_s_functions() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (pk INT PRIMARY KEY, a VARCHAR(5), c VARCHAR(10) AS (CONCAT(a, 'x')), w VARCHAR(10) DEFAULT (CONCAT('a', 'b')))",
+    )?;
+    connection.execute("INSERT INTO t (pk) VALUES (1)")?;
+    assert_eq!(
+        query(&connection, "SELECT c, w FROM t")?,
+        vec![vec![Value::Null, Value::from_text("ab")]]
+    );
+    let error = connection
+        .execute("CREATE TABLE u (pk INT PRIMARY KEY, v INT DEFAULT (CUSTOMFUNC(1)))")
+        .expect_err("Turso has no CUSTOMFUNC");
+    assert!(error.to_string().contains("unsupported"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn create_index_checks_the_types_of_the_columns() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (i INT, s TEXT, j JSON, v VARCHAR(10))")?;
