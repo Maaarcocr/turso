@@ -30,6 +30,7 @@ pub(super) fn execute_typed(
             &arg_types[1],
             Rounding::TowardZero,
         ))),
+        ("FORMAT", [Some(decimal), ..]) => Some(string::format_decimal(decimal, args)),
         ("MOD", [_, _]) if decimals.iter().any(Option::is_some) => {
             Some(Ok(remainder(args, &decimals)))
         }

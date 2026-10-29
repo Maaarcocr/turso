@@ -475,6 +475,34 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn format_rounds_and_groups_digits_as_mysql_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT FORMAT(1234567.891, 2), FORMAT(1, 3), FORMAT('12345.5', 0), FORMAT(12.5, 0),              FORMAT(12.5e0, 0), FORMAT(-1234.5, 1, 'de_DE'), FORMAT(NULL, 2)",
+        )?,
+        vec![vec![
+            Value::build_text("1,234,567.89"),
+            Value::build_text("1.000"),
+            Value::build_text("12,346"),
+            Value::build_text("13"),
+            Value::build_text("12"),
+            Value::build_text("-1.234,5"),
+            Value::Null,
+        ]]
+    );
+    for refused in ["SELECT FORMAT(-0.001, 2)", "SELECT FORMAT(1, 2, 'fr_FR')"] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(
+            error.to_string().contains("not supported"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn grouped_selects_use_columns_as_only_full_group_by_allows() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE p (id INT PRIMARY KEY, nm VARCHAR(10), r INT)")?;

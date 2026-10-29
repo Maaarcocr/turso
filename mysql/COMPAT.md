@@ -732,7 +732,12 @@ back to SQLite parsing. Owned specs: `conformance/my-sqltests/functions-string.s
 - Numeric: `ABS`, `ACOS`, `ASIN`, `ATAN` (one or two arguments), `ATAN2`,
   `BIN`, `BIT_COUNT`, `CEIL`/`CEILING`, `CONV`, `COS`, `COT`, `DEGREES`, `EXP`,
   `FLOOR`, `LN`, `LOG` (one or two arguments), `LOG10`, `LOG2`, `MOD`, `OCT`,
-  `POW`/`POWER`, `RADIANS`, `ROUND`, `SIGN`, `SIN`, `SQRT`, `TAN`, `TRUNCATE`.
+  `POW`/`POWER`, `RADIANS`, `ROUND`, `SIGN`, `SIN`, `SQRT`, `TAN`, `TRUNCATE`,
+  and `FORMAT(x, d[, locale])`, which rounds a DECIMAL or integer exactly,
+  half away from zero, and a DOUBLE or string half to even after scaling, as
+  MySQL does, to at most 30 places, then groups thousands for `en_US`
+  (the default and a NULL locale), `da_DK` or `de_DE`; other locales and a
+  negative value that rounds to zero are refused.
 - Comparison: `FIELD`, `GREATEST`, `INTERVAL`, `LEAST`, `STRCMP`.
 - String: `ASCII`, `BIT_LENGTH`, `CHAR`, `CHAR_LENGTH`/`CHARACTER_LENGTH`,
   `CONCAT`, `CONCAT_WS`, `ELT`, `EXPORT_SET`, `FIND_IN_SET`, `HEX`, `INSERT`,

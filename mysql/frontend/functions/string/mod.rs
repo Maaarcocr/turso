@@ -5,6 +5,7 @@ mod bitwise;
 mod collation;
 mod compare;
 mod convert;
+mod format;
 mod hash;
 mod like;
 mod network;
@@ -13,6 +14,7 @@ mod regexp;
 mod text;
 
 pub(crate) use convert::format_double;
+pub(super) use format::format_decimal;
 
 type Function = fn(&[Value]) -> Result<Value>;
 
@@ -100,6 +102,7 @@ pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
 fn function(name: &str, arg_count: usize) -> Option<Function> {
     let function: Function = match (name, arg_count) {
         ("ABS", 1) => numeric::abs,
+        ("FORMAT", 2 | 3) => format::format,
         ("ACOS", 1) => numeric::acos,
         ("ASIN", 1) => numeric::asin,
         ("ATAN", 1 | 2) => numeric::atan,
