@@ -1,10 +1,11 @@
 use crate::expr::{function_call, translate_condition, translate_expr};
+use crate::insert::{is_default_keyword, DefaultValue, Defaults};
 use crate::names::translate_identifier;
 use crate::query::{
     child_expressions, is_aggregate, only_changes_the_plan, translate_from,
     translate_order_by_expr, translate_table_name, TranslationContext,
 };
-use crate::MysqlParserError;
+use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     Assignment, AssignmentTarget, Delete, Expr, FromTable, Function, FunctionArg, FunctionArgExpr,
     FunctionArguments, Ident, ObjectName, ObjectNamePart, OrderByExpr, TableAlias, TableFactor,
@@ -15,7 +16,10 @@ use turso_parser::ast;
 const UPDATE_MODIFIERS: &[&str] = &["LOW_PRIORITY", "IGNORE"];
 const DELETE_MODIFIERS: &[&str] = &["LOW_PRIORITY", "QUICK", "IGNORE"];
 
-pub(crate) fn translate_update(update: &Update) -> Result<ast::Stmt, MysqlParserError> {
+pub(crate) fn translate_update(
+    update: &Update,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
     let Update {
         update_token: _,
         optimizer_hints,
@@ -48,11 +52,11 @@ pub(crate) fn translate_update(update: &Update) -> Result<ast::Stmt, MysqlParser
                 "MySQL has no ORDER BY or LIMIT for a multi-table UPDATE like `{update}`"
             )));
         }
-        return translate_multi_table_update(table, assignments, selection.as_ref());
+        return translate_multi_table_update(table, assignments, selection.as_ref(), environment);
     }
     let target = Target::from_table(table, "UPDATE", UPDATE_MODIFIERS)?;
     let mut context = TranslationContext::default();
-    let sets = translate_assignments(&target, assignments, &mut context)?;
+    let sets = translate_assignments(&target, assignments, environment, &mut context)?;
     let condition = translate_selection(selection.as_ref(), &mut context)?;
     let where_clause = if order_by.is_empty() && limit.is_none() {
         condition
@@ -375,6 +379,7 @@ fn translate_multi_table_update(
     table: &TableWithJoins,
     assignments: &[Assignment],
     selection: Option<&Expr>,
+    environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     if let TableFactor::Table { name, .. } = &table.relation {
         if is_modifier(name, UPDATE_MODIFIERS) {
@@ -414,7 +419,7 @@ fn translate_multi_table_update(
     let from = translate_from(std::slice::from_ref(table), &mut context)?
         .ok_or_else(|| unsupported(format!("UPDATE of `{table}`")))?;
     let read_by_join = context.tables_read_count();
-    let sets = translate_assignments(&target, assignments, &mut context)?;
+    let sets = translate_assignments(&target, assignments, environment, &mut context)?;
     let condition = translate_selection(selection, &mut context)?;
     joined.ensure_not_read_since(&context, read_by_join, "UPDATE")?;
 
@@ -744,8 +749,10 @@ impl<'a> Target<'a> {
 fn translate_assignments(
     target: &Target,
     assignments: &[Assignment],
+    environment: &dyn Environment,
     context: &mut TranslationContext,
 ) -> Result<Vec<ast::Set>, MysqlParserError> {
+    let mut defaults = Defaults::new(target.name.name.as_str(), environment, false);
     let mut assigned: Vec<&Ident> = Vec::with_capacity(assignments.len());
     let mut sets = Vec::with_capacity(assignments.len());
     for Assignment {
@@ -761,9 +768,17 @@ fn translate_assignments(
             return Err(unsupported(format!("UPDATE that assigns `{column}` twice")));
         }
         if is_default_keyword(value) {
-            return Err(unsupported(format!(
-                "`{column} = DEFAULT`, which Turso's UPDATE cannot express,"
-            )));
+            let DefaultValue::Value(default) = defaults.default_of(&column.value)? else {
+                return Err(unsupported(format!(
+                    "`{column} = DEFAULT` of a generated column"
+                )));
+            };
+            sets.push(ast::Set {
+                col_names: vec![translate_identifier(column)?],
+                expr: Box::new(default),
+            });
+            assigned.push(column);
+            continue;
         }
         if !assigned.is_empty() {
             let mut read = Vec::new();
@@ -847,14 +862,6 @@ fn function_arguments(function: &Function) -> Result<Vec<&Expr>, MysqlParserErro
             .collect(),
         FunctionArguments::List(_) | FunctionArguments::Subquery(_) => Err(unreadable()),
     }
-}
-
-fn is_default_keyword(expr: &Expr) -> bool {
-    matches!(
-        expr,
-        Expr::Identifier(identifier)
-            if identifier.quote_style.is_none() && identifier.value.eq_ignore_ascii_case("DEFAULT")
-    )
 }
 
 fn is_modifier(name: &ObjectName, modifiers: &[&str]) -> bool {

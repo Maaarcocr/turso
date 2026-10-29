@@ -1609,7 +1609,6 @@ fn lowering_rejects_unsupported_statement_families() {
         "DROP TEMPORARY TABLE users",
         "CREATE INDEX name_key ON users (name(10))",
         "INSERT IGNORE INTO users () VALUES ()",
-        "INSERT INTO users VALUES (DEFAULT)",
         "INSERT INTO users SET id = 1, name = id",
         "INSERT INTO users SET id = 1, id = 2",
         "INSERT INTO app.users VALUES (1)",
@@ -1752,6 +1751,8 @@ impl Environment for TriggerSchema {
             name: name.to_string(),
             auto_increment,
             generated,
+            default: None,
+            not_null: false,
         };
         Ok(match table {
             "a" => Some(vec![
@@ -2219,10 +2220,6 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
         SqlCase {
             name: "same column twice",
             sql: "UPDATE users SET qty = 1, QTY = 2",
-        },
-        SqlCase {
-            name: "default value",
-            sql: "UPDATE users SET qty = DEFAULT",
         },
         SqlCase {
             name: "tuple assignment",

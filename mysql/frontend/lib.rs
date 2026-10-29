@@ -266,6 +266,8 @@ impl turso_mysql_parser::Environment for Session<'_> {
                         name: column.name.clone().unwrap_or_default(),
                         auto_increment: table.has_autoincrement && column.is_rowid_alias(),
                         generated: column.is_generated(),
+                        default: column.default.as_deref().cloned(),
+                        not_null: column.notnull() || column.primary_key(),
                     })
                     .collect()
             })

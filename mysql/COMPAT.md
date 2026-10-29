@@ -350,6 +350,14 @@ cast as a DOUBLE (`CAST(20000101103458.1234 AS DATETIME(6))` ends in
 
 A column list that names a column twice fails with MySQL's error 1110.
 
+`DEFAULT` as a value of `VALUES`, `INSERT ... SET`, `ON DUPLICATE KEY UPDATE`
+or `UPDATE ... SET` writes the stored default of the column: NULL for the
+`AUTO_INCREMENT` key (the next value) and for a nullable column without a
+default. A generated column is left out of the insert when every row writes
+`DEFAULT` to it, and fails with MySQL's error 3105 otherwise. A `NOT NULL`
+column without a default fails a plain `INSERT` with error 1364 (as in strict
+mode) and is refused elsewhere.
+
 `mysql/parser/insert.rs` lowers `INSERT [INTO] t [(columns)]` with a
 `VALUES` list (several rows allowed), a `SELECT` (also a `UNION` or `WITH`
 query), or `SET c = expr, ...`, and `INSERT INTO t () VALUES ()` to

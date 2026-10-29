@@ -418,6 +418,55 @@ fn column_expressions_call_mysql_s_functions() -> turso_core::Result<()> {
 }
 
 #[test]
+fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (pk INT PRIMARY KEY AUTO_INCREMENT, i INT DEFAULT 7, \
+         s VARCHAR(5) DEFAULT 'x', n INT, g INT AS (i + 1))",
+    )?;
+    connection.execute("INSERT INTO t (pk) VALUES (DEFAULT), (10), (DEFAULT)")?;
+    connection.execute("INSERT INTO t VALUES (DEFAULT, 1, DEFAULT, DEFAULT, DEFAULT)")?;
+    connection.execute("INSERT INTO t SET i = DEFAULT, n = 5")?;
+    connection.execute("UPDATE t SET i = 2 WHERE pk IN (1, 10)")?;
+    connection.execute("UPDATE t SET s = DEFAULT, n = DEFAULT WHERE pk = 12")?;
+    connection
+        .execute("INSERT INTO t (pk, i) VALUES (1, 0) ON DUPLICATE KEY UPDATE i = DEFAULT")?;
+    let row = |pk: i64, i: i64, n: Option<i64>| {
+        vec![
+            Value::from_i64(pk),
+            Value::from_i64(i),
+            Value::build_text("x"),
+            n.map_or(Value::Null, Value::from_i64),
+            Value::from_i64(i + 1),
+        ]
+    };
+    assert_eq!(
+        query(&connection, "SELECT pk, i, s, n, g FROM t ORDER BY pk")?,
+        vec![
+            row(1, 7, None),
+            row(10, 2, None),
+            row(11, 7, None),
+            row(12, 1, None),
+            row(13, 7, Some(5)),
+        ]
+    );
+    connection.execute("CREATE TABLE r (a INT NOT NULL, b INT)")?;
+    for (statement, expected) in [
+        ("INSERT INTO r VALUES (DEFAULT, 1)", "MySQL rejects"),
+        (
+            "INSERT INTO t (i, g) VALUES (1, 2), (2, DEFAULT)",
+            "MySQL rejects",
+        ),
+        ("INSERT IGNORE INTO r VALUES (DEFAULT, 1)", "unsupported"),
+        ("UPDATE r SET a = DEFAULT", "unsupported"),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(expected), "{statement}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn create_index_checks_the_types_of_the_columns() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (i INT, s TEXT, j JSON, v VARCHAR(10))")?;

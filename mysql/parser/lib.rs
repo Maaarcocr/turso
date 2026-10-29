@@ -128,6 +128,10 @@ pub struct ColumnFacts {
     /// The column is the `AUTO_INCREMENT` key.
     pub auto_increment: bool,
     pub generated: bool,
+    /// The stored default of the column.
+    pub default: Option<ast::Expr>,
+    /// The column is `NOT NULL` (or in the primary key).
+    pub not_null: bool,
 }
 
 /// A session outside any transaction on an empty database.
@@ -251,8 +255,8 @@ pub fn translate_in(
         ));
     }
     let lowered = match statement {
-        Statement::Insert(insert) => insert::translate_insert(insert)?,
-        Statement::Update(update) => dml::translate_update(update)?,
+        Statement::Insert(insert) => insert::translate_insert(insert, environment)?,
+        Statement::Update(update) => dml::translate_update(update, environment)?,
         Statement::Delete(delete) => dml::translate_delete(delete)?,
         _ => return translate_other(statement, environment),
     };
