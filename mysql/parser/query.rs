@@ -1115,6 +1115,9 @@ fn selected_by_group_term<'a>(term: &Expr, select: &'a Select) -> Option<&'a Exp
             }
             _ => None,
         }),
+        Expr::Nested(inner) if matches!(without_parentheses(inner), Expr::Identifier(_)) => {
+            selected_by_group_term(without_parentheses(inner), select)
+        }
         _ => None,
     }
 }
