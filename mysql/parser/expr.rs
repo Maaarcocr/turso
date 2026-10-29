@@ -1237,10 +1237,117 @@ fn comparison(
             blob_literal(&rhs),
         ));
     }
+    if let Some((lhs, rhs)) = compared_doubles(left, right) {
+        return Ok(ast::Expr::binary(
+            double_literal(lhs),
+            operator,
+            double_literal(rhs),
+        ));
+    }
     let lhs = translate_compared(left, right, context)?;
     let rhs = translate_compared(right, left, context)?;
     let lhs = default_collated(lhs, explicit, &[left, right]);
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+enum ComparedLiteral {
+    Number(f64),
+    Text(f64),
+}
+
+fn compared_doubles(left: &Expr, right: &Expr) -> Option<(f64, f64)> {
+    match (compared_literal(left)?, compared_literal(right)?) {
+        (ComparedLiteral::Number(lhs), ComparedLiteral::Text(rhs))
+        | (ComparedLiteral::Text(lhs), ComparedLiteral::Number(rhs)) => Some((lhs, rhs)),
+        (ComparedLiteral::Number(_), ComparedLiteral::Number(_))
+        | (ComparedLiteral::Text(_), ComparedLiteral::Text(_)) => None,
+    }
+}
+
+fn compared_literal(expr: &Expr) -> Option<ComparedLiteral> {
+    match expr {
+        Expr::Nested(inner) => compared_literal(inner),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => match compared_literal(inner)? {
+            ComparedLiteral::Number(value) => Some(ComparedLiteral::Number(-value)),
+            ComparedLiteral::Text(_) => None,
+        },
+        Expr::Prefixed { prefix, value }
+            if prefix.quote_style.is_none()
+                && matches!(
+                    prefix.value.to_ascii_lowercase().as_str(),
+                    "_utf8mb4" | "_utf8mb3" | "_utf8"
+                ) =>
+        {
+            string_literal(value).map(|text| ComparedLiteral::Text(text_double(text)))
+        }
+        _ => match number_literal(expr) {
+            Some(digits) => Some(ComparedLiteral::Number(
+                digits
+                    .parse()
+                    .expect("the dialect lexes number literals MySQL reads"),
+            )),
+            None => string_literal(expr).map(|text| ComparedLiteral::Text(text_double(text))),
+        },
+    }
+}
+
+fn text_double(text: &str) -> f64 {
+    let bytes = text.as_bytes();
+    let start = bytes
+        .iter()
+        .take_while(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0B | 0x0C))
+        .count();
+    let digits_from = |from: usize| {
+        bytes[from.min(bytes.len())..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count()
+    };
+    let mut end = start;
+    if matches!(bytes.get(end), Some(b'+' | b'-')) {
+        end += 1;
+    }
+    let whole = digits_from(end);
+    end += whole;
+    let mut fraction = 0;
+    if bytes.get(end) == Some(&b'.') {
+        fraction = digits_from(end + 1);
+        if whole + fraction > 0 {
+            end += 1 + fraction;
+        }
+    }
+    if whole + fraction == 0 {
+        return 0.0;
+    }
+    if matches!(bytes.get(end), Some(b'e' | b'E')) {
+        let mut exponent = end + 1;
+        if matches!(bytes.get(exponent), Some(b'+' | b'-')) {
+            exponent += 1;
+        }
+        let digits = digits_from(exponent);
+        if digits > 0 {
+            end = exponent + digits;
+        }
+    }
+    let value: f64 = text[start..end]
+        .parse()
+        .expect("the prefix is a decimal number");
+    value.clamp(f64::MIN, f64::MAX)
+}
+
+fn double_literal(value: f64) -> ast::Expr {
+    if value == 0.0 {
+        return ast::Expr::Literal(ast::Literal::Numeric("0e0".to_string()));
+    }
+    let literal = ast::Expr::Literal(ast::Literal::Numeric(format!("{:e}", value.abs())));
+    if value < 0.0 {
+        ast::Expr::unary(ast::UnaryOperator::Negative, literal)
+    } else {
+        literal
+    }
 }
 
 fn compared_bytes(left: &Expr, right: &Expr) -> Option<(Vec<u8>, Vec<u8>)> {
@@ -1417,6 +1524,28 @@ fn translate_in_list(
 ) -> Result<ast::Expr, MysqlParserError> {
     let operands = std::iter::once(expr).chain(list).collect::<Vec<_>>();
     let explicit = single_explicit_collation(&operands)?;
+    let mixed = list
+        .iter()
+        .any(|item| compared_doubles(expr, item).is_some());
+    if mixed
+        && operands
+            .iter()
+            .all(|operand| compared_literal(operand).is_some())
+    {
+        let mut matches = list
+            .iter()
+            .map(|item| comparison(expr, ast::Operator::Equals, item, context));
+        let first = matches.next().expect("an IN list has items")?;
+        let any = matches.try_fold(first, |any, item| {
+            Ok::<_, MysqlParserError>(ast::Expr::binary(any, ast::Operator::Or, item?))
+        })?;
+        let any = ast::Expr::Parenthesized(vec![Box::new(any)]);
+        return Ok(if negated {
+            ast::Expr::unary(ast::UnaryOperator::Not, any)
+        } else {
+            any
+        });
+    }
     let lhs = match list.first() {
         Some(first) => translate_compared(expr, first, context)?,
         None => translate_expr(expr, context)?,
@@ -1569,14 +1698,16 @@ fn translate_case(
     literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let base = match (operand, conditions.first()) {
-        (Some(operand), Some(first)) => Some(Box::new(translate_compared(
+    let doubles = operand.and_then(|operand| case_compared_as_doubles(operand, conditions));
+    let base = match (operand, &doubles, conditions.first()) {
+        (Some(_), Some((base, _)), _) => Some(Box::new(base.clone())),
+        (Some(operand), None, Some(first)) => Some(Box::new(translate_compared(
             operand,
             &first.condition,
             context,
         )?)),
-        (Some(operand), None) => Some(Box::new(translate_expr(operand, context)?)),
-        (None, _) => None,
+        (Some(operand), None, None) => Some(Box::new(translate_expr(operand, context)?)),
+        (None, _, _) => None,
     };
     let results: Vec<&Expr> = conditions
         .iter()
@@ -1586,10 +1717,12 @@ fn translate_case(
     let results = Results::new(&results, literal_context);
     let when_then_pairs = conditions
         .iter()
-        .map(|case| {
-            let when = match operand {
-                Some(operand) => translate_compared(&case.condition, operand, context)?,
-                None => translate_condition(&case.condition, context)?,
+        .enumerate()
+        .map(|(index, case)| {
+            let when = match (operand, &doubles) {
+                (Some(_), Some((_, conditions))) => conditions[index].clone(),
+                (Some(operand), None) => translate_compared(&case.condition, operand, context)?,
+                (None, _) => translate_condition(&case.condition, context)?,
             };
             let then = translate_result(&case.result, results, context)?;
             Ok((Box::new(when), Box::new(then)))
@@ -1603,6 +1736,30 @@ fn translate_case(
         when_then_pairs,
         else_expr,
     })
+}
+
+fn case_compared_as_doubles(
+    operand: &Expr,
+    conditions: &[CaseWhen],
+) -> Option<(ast::Expr, Vec<ast::Expr>)> {
+    let literals = std::iter::once(operand)
+        .chain(conditions.iter().map(|case| &case.condition))
+        .map(compared_literal)
+        .collect::<Option<Vec<_>>>()?;
+    let numbers = literals
+        .iter()
+        .any(|literal| matches!(literal, ComparedLiteral::Number(_)));
+    let texts = literals
+        .iter()
+        .any(|literal| matches!(literal, ComparedLiteral::Text(_)));
+    if !numbers || !texts {
+        return None;
+    }
+    let mut doubles = literals.into_iter().map(|literal| match literal {
+        ComparedLiteral::Number(value) | ComparedLiteral::Text(value) => double_literal(value),
+    });
+    let base = doubles.next().expect("the operand is among the literals");
+    Some((base, doubles.collect()))
 }
 
 #[derive(Clone, Copy)]
@@ -2826,11 +2983,11 @@ fn is_dated_literal(expr: &Expr) -> bool {
 enum DateRead {
     Null,
     Temporal(TemporalKind, String),
-    NotADate(Option<usize>),
+    NotADate(usize),
 }
 
 fn date_read(expr: &Expr) -> Option<DateRead> {
-    const STRING_DECIMALS: Option<usize> = Some(6);
+    const STRING_DECIMALS: usize = 6;
     match expr {
         Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => date_read(inner),
         Expr::TypedString(typed) => {
@@ -2849,7 +3006,7 @@ fn date_read(expr: &Expr) -> Option<DateRead> {
             Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_) => {
                 let bytes = binary_literal_bytes(expr)?;
                 (std::str::from_utf8(&bytes).is_ok() && is_not_a_date(&bytes))
-                    .then_some(DateRead::NotADate(None))
+                    .then_some(DateRead::NotADate(0))
             }
             _ => None,
         },
@@ -2887,7 +3044,7 @@ fn date_read(expr: &Expr) -> Option<DateRead> {
         } => match inner.as_ref() {
             Expr::Value(value) => match &value.value {
                 Value::Number(digits, _) if digits.bytes().all(|byte| byte.is_ascii_digit()) => {
-                    is_not_a_date(digits.as_bytes()).then_some(DateRead::NotADate(Some(0)))
+                    is_not_a_date(digits.as_bytes()).then_some(DateRead::NotADate(0))
                 }
                 _ => None,
             },
@@ -2897,15 +3054,15 @@ fn date_read(expr: &Expr) -> Option<DateRead> {
     }
 }
 
-fn number_is_not_a_date(digits: &str) -> Option<Option<usize>> {
+fn number_is_not_a_date(digits: &str) -> Option<usize> {
     if digits.contains(['e', 'E']) {
         let value: f64 = digits.parse().ok()?;
-        return (value < 10_000.0).then_some(Some(6));
+        return (value < 10_000.0).then_some(6);
     }
     let scale = digits
         .split_once('.')
         .map_or(0, |(_, fraction)| fraction.len());
-    is_not_a_date(digits.as_bytes()).then_some(Some(scale))
+    is_not_a_date(digits.as_bytes()).then_some(scale)
 }
 
 fn is_not_a_date(text: &[u8]) -> bool {
@@ -2940,7 +3097,6 @@ fn greatest_of_dates(args: &[&Expr]) -> Result<Option<ast::Expr>, MysqlParserErr
     let mut best: Option<(String, String)> = None;
     let mut datetime = false;
     let mut decimals = 0;
-    let mut unknown_decimals = false;
     let mut read_a_value_that_is_not_a_date = false;
     let mut null = false;
     for arg in args {
@@ -2953,10 +3109,7 @@ fn greatest_of_dates(args: &[&Expr]) -> Result<Option<ast::Expr>, MysqlParserErr
             DateRead::Null => null = true,
             DateRead::NotADate(arg_decimals) => {
                 read_a_value_that_is_not_a_date = true;
-                match arg_decimals {
-                    Some(arg_decimals) => decimals = decimals.max(arg_decimals),
-                    None => unknown_decimals = true,
-                }
+                decimals = decimals.max(arg_decimals);
             }
             DateRead::Temporal(kind, text) => {
                 let (date, clock) = match kind {
@@ -2988,11 +3141,6 @@ fn greatest_of_dates(args: &[&Expr]) -> Result<Option<ast::Expr>, MysqlParserErr
         return Ok(Some(string_expr(&date)));
     }
     let decimals = decimals.min(6);
-    if unknown_decimals && decimals < 6 {
-        return Err(MysqlParserError::Unsupported(
-            "GREATEST of a datetime and a hex or bit literal, whose fractional digits in the result are not known, is not lowered yet".to_string(),
-        ));
-    }
     let clock = &key[date.len() + 1..date.len() + 9];
     let fraction = &key[date.len() + 10..date.len() + 10 + decimals];
     let text = if decimals == 0 {

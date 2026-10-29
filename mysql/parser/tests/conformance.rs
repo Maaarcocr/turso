@@ -791,6 +791,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_collated_strcmp ('utf8mb4_0900_as_ci', 'a' COLLATE \"und-u-ks-level2\", 'A')",
         ),
         (
+            "SELECT 64 = '64', 1e0 <=> ' 1.5e1x', -1 < _utf8mb4 '-0.5', '1e999' > 0",
+            "SELECT 6.4e1 = 6.4e1, 1e0 IS 1.5e1, - 1e0 < - 5e-1, 1.7976931348623157e308 > 0e0",
+        ),
+        (
+            "SELECT 'FOO' IN ('foo', 1), 64 NOT IN ('64', 'bar'), CASE 'abc' WHEN 'xyz' THEN 1 WHEN 0 THEN 2 END, GREATEST(-1, 0x1, TIMESTAMP '2020-12-31 23:59:59')",
+            "SELECT ('FOO' COLLATE \"und-u-ks-level1\" = 'foo' OR 0e0 = 1e0), NOT (6.4e1 = 6.4e1 OR 6.4e1 = 0e0), CASE 0e0 WHEN 0e0 THEN 1 WHEN 0e0 THEN 2 END, '2020-12-31 23:59:59'",
+        ),
+        (
             "SELECT GREATEST(DATE '2023-02-01', 'Abc' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED)), GREATEST('foobar', TIMESTAMP '2020-12-31 23:59:59'), GREATEST(-1.0, 9223372036854775807, DATE '2100-02-01', TIMESTAMP '2020-12-31 23:59:59'), GREATEST(DATE '2024-02-18', 'x', NULL)",
             "SELECT '2023-02-01', '2020-12-31 23:59:59.000000', '2100-02-01 00:00:00.0', NULL",
         ),
