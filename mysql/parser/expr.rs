@@ -3147,17 +3147,15 @@ fn literal_result_digits(
 }
 
 fn is_exact_as_a_double(digits: &str) -> bool {
-    if digits.contains(['e', 'E']) {
+    if digits.contains(['e', 'E']) || !digits.contains('.') {
         return true;
     }
     let significant = digits.replace('.', "");
-    let significant = significant.trim_start_matches('0');
-    let significant = if digits.contains('.') {
-        significant.trim_end_matches('0')
-    } else {
-        significant
-    };
-    significant.len() <= 15
+    significant
+        .trim_start_matches('0')
+        .trim_end_matches('0')
+        .len()
+        <= 15
 }
 
 fn text_fraction_digits(text: &str) -> usize {
