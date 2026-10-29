@@ -627,6 +627,10 @@ fn reports_decimal_casts_that_mysql_rejects() {
             name: "a string latin1 lacks compared with a latin1 FIELD subject",
             sql: "SELECT FIELD(_latin1 0xFF, 'a', '中')",
         },
+        SqlCase {
+            name: "STRCMP of a timestamp and a string that is not a date",
+            sql: "SELECT STRCMP(timestamp '2000-01-01 10:34:58', '20000101foo')",
+        },
     ];
 
     for case in cases {

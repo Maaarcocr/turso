@@ -380,6 +380,55 @@ fn enum_and_set_columns_store_the_members_a_value_names_or_numbers() -> turso_co
 }
 
 #[test]
+fn dates_compare_with_strings_and_other_dates_as_datetimes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id INT, d DATE, dt DATETIME(3), tm TIME)")?;
+    connection.execute(
+        "INSERT INTO t VALUES (1, '2020-01-02', '2020-01-02 00:00:00', '10:00:00'),          (2, '2020-01-03', '2020-01-02 10:00:00.5', NULL)",
+    )?;
+    let ids = |sql: &str| -> turso_core::Result<Vec<i64>> {
+        Ok(query(&connection, sql)?
+            .into_iter()
+            .map(|row| match row[0] {
+                Value::Numeric(turso_core::Numeric::Integer(id)) => id,
+                ref other => panic!("{sql}: {other}"),
+            })
+            .collect())
+    };
+    assert_eq!(
+        ids("SELECT id FROM t WHERE d = '2020-1-2' ORDER BY id")?,
+        vec![1]
+    );
+    assert_eq!(ids("SELECT id FROM t WHERE d = dt ORDER BY id")?, vec![1]);
+    assert_eq!(
+        ids("SELECT id FROM t WHERE '20200102095959' < dt ORDER BY id")?,
+        vec![2]
+    );
+    assert_eq!(
+        ids("SELECT id FROM t WHERE d >= '2020-01-02 00:00:01' ORDER BY id")?,
+        vec![2]
+    );
+    for failing in [
+        "SELECT id FROM t WHERE d >= 'not a valid date'",
+        "SELECT id FROM t WHERE dt < '12_4'",
+    ] {
+        query(&connection, failing).expect_err(failing);
+    }
+    for refused in [
+        "SELECT id FROM t WHERE d = 20200102",
+        "SELECT id FROM t WHERE d = '0000-00-00'",
+        "SELECT id FROM t WHERE d < tm",
+    ] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(
+            error.to_string().contains("not supported yet"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn binary_strings_cannot_be_stored_in_number_columns_yet() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute(

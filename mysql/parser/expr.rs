@@ -5074,6 +5074,21 @@ fn function_arguments(
     context: &mut TranslationContext,
 ) -> Result<Vec<ast::Expr>, MysqlParserError> {
     let args = unnamed_arguments(list)?;
+    if upper_name == "STRCMP" && args.iter().any(|arg| is_dated_literal(arg)) {
+        use crate::datetime::parse as datetime;
+        for text in args.iter().filter_map(|arg| string_literal(arg)) {
+            if datetime::parse_datetime(text.as_bytes(), datetime::DateFlags::FUZZY).is_err() {
+                return Err(MysqlParserError::Rejected(format!(
+                    "STRCMP reads `{text}` as a date next to a DATE or DATETIME, and it is not one"
+                )));
+            }
+            if datetime::parse_datetime(text.as_bytes(), datetime::DateFlags::CAST).is_err() {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "STRCMP of the zero date `{text}` and a DATE or DATETIME is not lowered yet"
+                )));
+            }
+        }
+    }
     if upper_name == "STRCMP"
         && args.iter().any(|arg| is_binary_literal(arg))
         && args.iter().any(|arg| has_a_date_type(arg))
