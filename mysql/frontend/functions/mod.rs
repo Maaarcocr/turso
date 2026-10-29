@@ -2,6 +2,7 @@ use crate::types::decimal_number::Rounding;
 use decimal::shown_decimal;
 use std::borrow::Cow;
 use turso_core::dialect::ArgumentType;
+use turso_core::types::Text;
 use turso_core::{Func, Result, Value};
 
 mod datetime;
@@ -9,6 +10,7 @@ mod decimal;
 mod json;
 mod string;
 
+pub(crate) use json::assign_column as assign_json;
 pub(crate) use string::format_double;
 
 pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
@@ -23,12 +25,14 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
 /// argument is a value with exact digits, rounded away from its hidden
 /// digits as MySQL shows it: string functions read its text (`1.50`), and
 /// their counts and positions round it half away from zero. Other functions
-/// read it as a DOUBLE, as before DECIMAL had a type.
+/// read it as a DOUBLE, as before DECIMAL had a type. A value of a JSON
+/// column is a JSON document, as the result of a JSON function is.
 pub(crate) fn execute_typed(
     name: &str,
     args: &[Value],
     arg_types: &[ArgumentType],
 ) -> Option<Result<Value>> {
+    let args = &*with_json_columns_read(args, arg_types);
     if let Some(result) = json::execute_typed(name, args, arg_types) {
         return Some(result);
     }
@@ -43,6 +47,29 @@ pub(crate) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
     datetime::execute(name, args)
         .or_else(|| string::execute(name, args))
         .or_else(|| json::execute(name, args))
+}
+
+fn with_json_columns_read<'a>(args: &'a [Value], arg_types: &[ArgumentType]) -> Cow<'a, [Value]> {
+    let is_json_column = |position: usize| {
+        matches!(
+            (&args[position], arg_types.get(position)),
+            (Value::Text(_), Some(ArgumentType::Named { name, .. })) if name.eq_ignore_ascii_case("json")
+        )
+    };
+    if !(0..args.len()).any(is_json_column) {
+        return Cow::Borrowed(args);
+    }
+    Cow::Owned(
+        args.iter()
+            .enumerate()
+            .map(|(position, value)| match value {
+                Value::Text(text) if is_json_column(position) => {
+                    Value::Text(Text::json(text.as_str().to_string()))
+                }
+                other => other.clone(),
+            })
+            .collect(),
+    )
 }
 
 fn with_decimals_read<'a>(

@@ -175,7 +175,7 @@ pub(crate) fn translate_column_type(data_type: &DataType) -> Result<ColumnType, 
             temporal("TIME", precision, Family::Time { precision })
         }
         DataType::JSON => ColumnType {
-            declared: simple_type("LONGTEXT"),
+            declared: simple_type("JSON"),
             family: Family::Json,
         },
         DataType::Enum(members, None) => enumeration(members)?,
@@ -210,30 +210,6 @@ impl ColumnType {
                 | Family::Enum(_)
                 | Family::Set(_)
         )
-    }
-
-    pub(crate) fn value_check(&self, column: &ast::Name) -> Option<ast::Expr> {
-        let id = || ast::Expr::Id(column.clone());
-        match &self.family {
-            Family::Json => Some(call("json_valid", vec![id()])),
-            Family::Enum(_) | Family::Set(_) => None,
-            Family::Integer { .. }
-            | Family::Bit { .. }
-            | Family::Decimal { .. }
-            | Family::Float { .. }
-            | Family::Char { .. }
-            | Family::Varchar { .. }
-            | Family::Text
-            | Family::Binary { .. }
-            | Family::Varbinary { .. }
-            | Family::Blob
-            | Family::Date
-            | Family::Datetime { .. }
-            | Family::Timestamp { .. }
-            | Family::Time { .. }
-            | Family::Year
-            | Family::Spatial => None,
-        }
     }
 
     pub(crate) fn key_part_bytes(
@@ -699,20 +675,6 @@ fn ensure_distinct_members(members: &[String]) -> Result<(), MysqlParserError> {
         }
     }
     Ok(())
-}
-
-fn call(name: &str, args: Vec<ast::Expr>) -> ast::Expr {
-    ast::Expr::FunctionCall {
-        name: ast::Name::exact(name.to_string()),
-        distinctness: None,
-        args: args.into_iter().map(Box::new).collect(),
-        order_by: Vec::new(),
-        within_group: Vec::new(),
-        filter_over: ast::FunctionTail {
-            filter_clause: None,
-            over_clause: None,
-        },
-    }
 }
 
 pub(crate) fn number(value: i128) -> ast::Expr {

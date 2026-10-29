@@ -208,7 +208,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
-            "CREATE TABLE t (e ENUM ('''x'',''y''') NOT NULL DEFAULT 'x', s \"SET\" ('''r'',''w''') DEFAULT 'r,w', j LONGTEXT CHECK (json_valid (j)), t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
+            "CREATE TABLE t (e ENUM ('''x'',''y''') NOT NULL DEFAULT 'x', s \"SET\" ('''r'',''w''') DEFAULT 'r,w', j JSON, t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
         ),
         (
             "CREATE TABLE t (e ENUM('a,b','c''d') COLLATE utf8mb4_0900_bin, s SET('x') COLLATE utf8mb4_0900_as_ci)",
@@ -244,7 +244,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (j JSON, b INT AS (j->>'$.b'))",
-            "CREATE TABLE t (j LONGTEXT CHECK (json_valid (j)), b INT GENERATED ALWAYS AS (JSON_UNQUOTE (JSON_EXTRACT (j, '$.b'))) VIRTUAL) STRICT",
+            "CREATE TABLE t (j JSON, b INT GENERATED ALWAYS AS (JSON_UNQUOTE (JSON_EXTRACT (j, '$.b'))) VIRTUAL) STRICT",
         ),
         (
             "CREATE UNIQUE INDEX idx USING BTREE ON t (a DESC, b)",

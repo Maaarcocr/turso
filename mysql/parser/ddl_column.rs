@@ -168,9 +168,6 @@ impl Column {
             }
             _ => {}
         }
-        if let Some(value_check) = column_type.value_check(&name) {
-            constraints.push(check(value_check));
-        }
         for (check_name, expr) in checks {
             constraints.push(ast::NamedColumnConstraint {
                 name: check_name,
@@ -367,13 +364,6 @@ fn constraint(constraint: ast::ColumnConstraint) -> ast::NamedColumnConstraint {
         name: None,
         constraint,
     }
-}
-
-fn check(expr: ast::Expr) -> ast::NamedColumnConstraint {
-    constraint(ast::ColumnConstraint::Check {
-        expr: Box::new(expr),
-        source: None,
-    })
 }
 
 fn unsupported_option(option: &ColumnOption) -> MysqlParserError {

@@ -77,7 +77,11 @@ fn operand(value: &Value, arg_type: &ArgumentType) -> Result<Option<Operand>> {
     if let Some(decimal) = shown_decimal(value, arg_type) {
         return Ok(Some(Operand::Decimal(decimal)));
     }
-    if let ArgumentType::Named { name, .. } = arg_type {
+    let named = match arg_type {
+        ArgumentType::Named { name, .. } if !name.eq_ignore_ascii_case("json") => Some(name),
+        _ => None,
+    };
+    if let Some(name) = named {
         let kind = match name.to_ascii_lowercase().as_str() {
             "date" => TemporalKind::Date,
             "time" => TemporalKind::Time,

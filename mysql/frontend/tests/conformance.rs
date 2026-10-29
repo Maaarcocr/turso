@@ -418,6 +418,40 @@ fn user_variables_keep_their_values_for_the_session() -> turso_core::Result<()> 
 }
 
 #[test]
+fn json_columns_store_mysql_documents() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id INT PRIMARY KEY, j JSON, s TEXT)")?;
+    connection.execute(
+        r#"INSERT INTO t VALUES (1, '{"b":2,  "a":[1,2], "aa": true, "b": 3}', '{"a": 1}')"#,
+    )?;
+    let texts = |sql: &str| -> turso_core::Result<Vec<Vec<String>>> {
+        Ok(query(&connection, sql)?
+            .into_iter()
+            .map(|row| row.iter().map(ToString::to_string).collect())
+            .collect())
+    };
+    assert_eq!(
+        texts("SELECT j, JSON_ARRAY(j), JSON_ARRAY(s), JSON_TYPE(j) FROM t")?,
+        vec![vec![
+            r#"{"a": [1, 2], "b": 3, "aa": true}"#,
+            r#"[{"a": [1, 2], "b": 3, "aa": true}]"#,
+            r#"["{\"a\": 1}"]"#,
+            "OBJECT",
+        ]]
+    );
+    for (value, error) in [
+        ("'{bad'", "ERROR 3140"),
+        ("1", "ERROR 3140"),
+        ("X'7B7D'", "ERROR 3144"),
+    ] {
+        let sql = format!("UPDATE t SET j = {value}");
+        let failure = connection.execute(&sql).expect_err(&sql);
+        assert!(failure.to_string().contains(error), "{sql}: {failure}");
+    }
+    Ok(())
+}
+
+#[test]
 fn temporal_columns_store_the_text_mysql_stores() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute(

@@ -325,6 +325,31 @@ impl Call<'_> {
     }
 }
 
+/// The text MySQL stores for a value assigned to a JSON column: the
+/// document in MySQL's form (`{"a": [1, 2], "b": 2, "aa": true}`, keys
+/// ordered by length and then bytes, the last of duplicate keys kept). Text
+/// that is not a JSON document fails (3140), as do numbers, which MySQL does
+/// not read as JSON text, and binary strings (3144).
+pub(crate) fn assign_column(args: &[Value]) -> Result<Value> {
+    let invalid = |message: &str, offset: usize| {
+        mysql_error(
+            3140,
+            "22032",
+            format!("Invalid JSON text: \"{message}\" at position {offset} in value for column."),
+        )
+    };
+    match &args[0] {
+        Value::Null => Ok(Value::Null),
+        Value::Text(text) => match parse(text.as_str()) {
+            Ok(document) => Ok(Value::build_text(document.to_text())),
+            Err(ParseError::Syntax { message, offset }) => Err(invalid(message, offset)),
+            Err(ParseError::TooDeep) => Err(too_deep_error()),
+        },
+        Value::Blob(_) => Err(binary_string_error()),
+        Value::Numeric(_) => Err(invalid("not a JSON text, may need CAST", 0)),
+    }
+}
+
 fn is_json(text: &Text) -> bool {
     text.subtype == TextSubtype::Json
 }
