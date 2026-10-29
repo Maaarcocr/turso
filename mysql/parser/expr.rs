@@ -959,15 +959,33 @@ fn translate_binary(
             Ok(ast::Expr::binary(left, operator, right))
         }
         BinaryOperator::And | BinaryOperator::Or | BinaryOperator::StringConcat => {
-            let operator = match op {
-                BinaryOperator::And => ast::Operator::And,
-                _ => ast::Operator::Or,
+            let conjunction = matches!(op, BinaryOperator::And);
+            let same_operator = |op: &BinaryOperator| match op {
+                BinaryOperator::And => conjunction,
+                BinaryOperator::Or | BinaryOperator::StringConcat => !conjunction,
+                _ => false,
             };
-            Ok(ast::Expr::binary(
-                translate_condition(left, context)?,
-                operator,
-                translate_condition(right, context)?,
-            ))
+            let mut operands = vec![right];
+            let mut first = left;
+            while let Expr::BinaryOp { left, op, right } = first {
+                if !same_operator(op) {
+                    break;
+                }
+                operands.push(right);
+                first = left;
+            }
+            operands.push(first);
+            let operands = operands
+                .into_iter()
+                .rev()
+                .map(|operand| translate_condition(operand, context))
+                .collect::<Result<Vec<_>, _>>()?;
+            let operator = if conjunction {
+                ast::Operator::And
+            } else {
+                ast::Operator::Or
+            };
+            Ok(balanced(operands, operator))
         }
         BinaryOperator::Plus => arithmetic(ast::Operator::Add, context),
         BinaryOperator::Minus => arithmetic(ast::Operator::Subtract, context),
@@ -987,6 +1005,21 @@ fn translate_binary(
         BinaryOperator::LongArrow => translate_json_arrow(left, right, true, context),
         other => Err(unsupported_operator(other)),
     }
+}
+
+/// A chain of `AND` or `OR` operands as a balanced tree, which evaluates
+/// them in the same order and nests only logarithmically deep, so a long
+/// generated chain stays under the expression depth limit.
+fn balanced(mut operands: Vec<ast::Expr>, operator: ast::Operator) -> ast::Expr {
+    if operands.len() == 1 {
+        return operands.pop().expect("one operand");
+    }
+    let right = operands.split_off(operands.len() / 2);
+    ast::Expr::binary(
+        balanced(operands, operator),
+        operator,
+        balanced(right, operator),
+    )
 }
 
 fn translate_integer_division(

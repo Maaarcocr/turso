@@ -610,6 +610,22 @@ fn measures_key_parts_by_their_innodb_size() {
 }
 
 #[test]
+fn lowers_long_and_or_chains_as_balanced_trees() {
+    for operator in ["OR", "AND", "||"] {
+        let terms = (1..=2000)
+            .map(|n| format!("(a = {n})"))
+            .collect::<Vec<_>>()
+            .join(&format!(" {operator} "));
+        let sql = format!("DELETE FROM t WHERE {terms}");
+        parse_and_translate(&sql).unwrap_or_else(|error| panic!("{operator}: {error}"));
+    }
+    let lowered = parse_and_translate("SELECT a OR b OR c OR d AND e AND f")
+        .expect("a chain lowers")
+        .to_string();
+    assert_eq!(lowered, "SELECT a OR b OR c OR d AND e AND f");
+}
+
+#[test]
 fn reports_decimal_casts_that_mysql_rejects() {
     let cases = [
         SqlCase {
