@@ -791,6 +791,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_collated_strcmp ('utf8mb4_0900_as_ci', 'a' COLLATE \"und-u-ks-level2\", 'A')",
         ),
         (
+            "SELECT -0.0 + -0xffff, -X'00' + -X'00', -0 + -0xffffffffffffffff, CASE WHEN TRUE THEN 0 WHEN FALSE THEN 9e0 ELSE -0x1 END",
+            "SELECT '-65535.0', '-0', '-18446744073709552000', CASE WHEN TRUE THEN 0e0 WHEN FALSE THEN 9e0 ELSE -1e0 END",
+        ),
+        (
+            "SELECT 0xFF DIV 13, '64' DIV 0x1",
+            "SELECT CAST (255 / 13 AS INTEGER), CAST ('64' / 1 AS INTEGER)",
+        ),
+        (
             "SELECT 64 = '64', 1e0 <=> ' 1.5e1x', -1 < _utf8mb4 '-0.5', '1e999' > 0",
             "SELECT 6.4e1 = 6.4e1, 1e0 IS 1.5e1, - 1e0 < - 5e-1, 1.7976931348623157e308 > 0e0",
         ),
@@ -1238,7 +1246,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "a negated hex literal whose decimals show",
-            sql: "SELECT -0x1 + 1.5",
+            sql: "SELECT CONCAT(-0x1 + 1.5)",
         },
         SqlCase {
             name: "GREATEST of a date and a string MySQL may read as a date",

@@ -974,22 +974,45 @@ fn translate_integer_division(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
         ));
     }
-    let operand = |expr: &Expr, context: &mut TranslationContext| {
+    let operand = |expr: &Expr, other: &Expr, context: &mut TranslationContext| {
         if json::is_json_value(expr) {
-            json::translate_numeric_coercion(expr, "__mysql_json_decimal", context)
-        } else {
-            translate_in(expr, Context::Arithmetic, context)
+            return json::translate_numeric_coercion(expr, "__mysql_json_decimal", context);
         }
+        if let Some(value) = hex_or_bit_literal(expr)
+            .and_then(|literal| binary_literal_value(literal).ok())
+            .and_then(|value| i64::try_from(value).ok())
+            .filter(|_| cannot_be_negative(other))
+        {
+            return Ok(ast::Expr::Literal(ast::Literal::Numeric(value.to_string())));
+        }
+        translate_in(expr, Context::Arithmetic, context)
     };
     let quotient = ast::Expr::binary(
-        operand(left, context)?,
+        operand(left, right, context)?,
         ast::Operator::Divide,
-        operand(right, context)?,
+        operand(right, left, context)?,
     );
     Ok(ast::Expr::cast(quotient, Some(type_name("INTEGER"))))
 }
 
 const BIGINT_LIMIT: f64 = 9_223_372_036_854_775_808.0;
+
+fn cannot_be_negative(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => cannot_be_negative(inner),
+        Expr::Value(value) => match &value.value {
+            Value::Number(..) | Value::Null => true,
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                text_double(text) >= 0.0
+            }
+            Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_) => {
+                binary_literal_value(&value.value).is_ok_and(|value| i64::try_from(value).is_ok())
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
 
 fn exceeds_bigint(expr: &Expr) -> bool {
     match expr {
@@ -1165,6 +1188,88 @@ fn negated_binary(expr: &Expr) -> Option<&Value> {
         Expr::Nested(inner) => negated_binary(inner),
         _ => None,
     }
+}
+
+/// The text MySQL shows for `a + b` or `a - b` of a negated hex or bit literal
+/// and another such literal or an exact number literal. MySQL computes the sum
+/// as a DOUBLE with the most decimals of the operands and shows it with exactly
+/// that many, from its shortest round-trip digits (`-0.0 + -0xffff` is
+/// `-65535.0`, `-0 + -0xffffffffffffffff` is `-18446744073709552000`).
+pub(crate) fn shown_negated_binary_sum(expr: &Expr) -> Option<Result<ast::Expr, MysqlParserError>> {
+    let Expr::BinaryOp { left, op, right } = expr else {
+        return match expr {
+            Expr::Nested(inner) => shown_negated_binary_sum(inner),
+            _ => None,
+        };
+    };
+    if negated_binary(left).is_none() && negated_binary(right).is_none() {
+        return None;
+    }
+    let (lhs, lhs_decimals) = fixed_double_operand(left)?;
+    let (rhs, rhs_decimals) = fixed_double_operand(right)?;
+    let value = match op {
+        BinaryOperator::Plus => lhs + rhs,
+        BinaryOperator::Minus => lhs - rhs,
+        _ => return None,
+    };
+    Some(fixed_double_text(value, lhs_decimals.max(rhs_decimals)).map(|text| string_expr(&text)))
+}
+
+fn fixed_double_operand(expr: &Expr) -> Option<(f64, usize)> {
+    if let Some(literal) = negated_binary(expr) {
+        let value = binary_literal_value(literal).ok()? as f64;
+        return Some((-value, 0));
+    }
+    let digits = signed_number_literal(expr)?;
+    if digits.contains(['e', 'E']) {
+        return None;
+    }
+    let decimals = digits
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    let magnitude: f64 = digits.parse().expect("the dialect lexes number literals");
+    let value = if is_negated(expr) && magnitude != 0.0 {
+        -magnitude
+    } else {
+        magnitude
+    };
+    Some((value, decimals))
+}
+
+fn fixed_double_text(value: f64, decimals: usize) -> Result<String, MysqlParserError> {
+    let sign = if value.is_sign_negative() { "-" } else { "" };
+    let scientific = format!("{:e}", value.abs());
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .expect("`{:e}` output has an exponent");
+    let exponent: i64 = exponent.parse().expect("`{:e}` exponent is an integer");
+    let digits = mantissa.replace('.', "");
+    let point = exponent + 1;
+    let (integer, fraction) = if point <= 0 {
+        (
+            "0".to_string(),
+            format!("{}{digits}", "0".repeat(point.unsigned_abs() as usize)),
+        )
+    } else if point as usize >= digits.len() {
+        (
+            format!("{digits}{}", "0".repeat(point as usize - digits.len())),
+            String::new(),
+        )
+    } else {
+        let (integer, fraction) = digits.split_at(point as usize);
+        (integer.to_string(), fraction.to_string())
+    };
+    let fraction = fraction.trim_end_matches('0');
+    if fraction.len() > decimals {
+        return Err(MysqlParserError::Unsupported(format!(
+            "a DOUBLE sum of {value:e} shown with {decimals} decimals, which MySQL rounds, is not lowered yet"
+        )));
+    }
+    Ok(if decimals == 0 {
+        format!("{sign}{integer}")
+    } else {
+        format!("{sign}{integer}.{fraction:0<decimals$}")
+    })
 }
 
 fn decimals_of_negated_binary_literal_show(expr: &Expr) -> MysqlParserError {
@@ -1774,7 +1879,10 @@ impl Results {
         Results {
             doubles: results.iter().any(|result| is_double_literal(result))
                 && !results.iter().any(|result| is_string_literal(result)),
-            hide_decimals: results.iter().all(|result| hides_decimals(result)),
+            hide_decimals: results.iter().all(|result| hides_decimals(result))
+                || results
+                    .iter()
+                    .any(|result| is_double_literal(result) || is_string_literal(result)),
             literal_context: if parent_context == Context::Bytes {
                 Context::Bytes
             } else {
