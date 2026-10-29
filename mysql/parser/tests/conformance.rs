@@ -871,6 +871,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT ROUND (255e0, 255), TRUNCATE (1e0, - 1), ROUND (64e0)",
         ),
         (
+            "SELECT CASE 'FOO' WHEN 'foo' THEN 1 ELSE 0 END, CASE 'FOO' WHEN _latin1 'foo' THEN 1 WHEN 'x y' THEN 2 END, _latin1 'FOO' = 'foo', _latin1 'a b' = 'A B', CASE a WHEN 'x' THEN 1 END FROM t",
+            "SELECT CASE 'FOO' COLLATE \"und-u-ks-level1\" WHEN 'foo' THEN 1 ELSE 0 END, CASE 'FOO' COLLATE \"und-u-ks-level1\" WHEN 'foo' THEN 1 WHEN 'x y' THEN 2 END, 'FOO' COLLATE \"und-u-ks-level1\" = 'foo', 'a b' = 'A B', CASE a WHEN 'x' THEN 1 END FROM t",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),

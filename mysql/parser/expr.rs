@@ -1857,10 +1857,23 @@ fn compared_bytes(left: &Expr, right: &Expr) -> Option<(Vec<u8>, Vec<u8>)> {
     non_text_binary.then_some((lhs, rhs))
 }
 
+/// Compares under the default collation when every operand is a string
+/// literal of it, or of another case-insensitive collation whose text is
+/// ASCII letters and digits, which all of them compare and order alike.
 fn default_collated(lhs: ast::Expr, explicit: Option<String>, operands: &[&Expr]) -> ast::Expr {
-    let literals_only = operands
-        .iter()
-        .all(|operand| collation_of(operand) == Some(DEFAULT_COLLATION));
+    fn alphanumeric_insensitive(operand: &Expr) -> bool {
+        let text = match operand {
+            Expr::Prefixed { value, .. } => string_literal(value),
+            other => string_literal(other),
+        };
+        matches!(
+            collation_of(operand),
+            Some("latin1_swedish_ci" | "ascii_general_ci" | "utf8mb3_general_ci")
+        ) && text.is_some_and(|text| text.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+    }
+    let literals_only = operands.iter().all(|operand| {
+        collation_of(operand) == Some(DEFAULT_COLLATION) || alphanumeric_insensitive(operand)
+    });
     if explicit.is_none() && literals_only {
         let sequence = collation_sequence(DEFAULT_COLLATION).expect("the default collation maps");
         ast::Expr::collate(lhs, ast::Name::exact(sequence.to_string()))
@@ -2237,11 +2250,14 @@ fn translate_case(
     let doubles = operand.and_then(|operand| case_compared_as_doubles(operand, conditions));
     let base = match (operand, &doubles, conditions.first()) {
         (Some(_), Some((base, _)), _) => Some(Box::new(base.clone())),
-        (Some(operand), None, Some(first)) => Some(Box::new(translate_compared(
-            operand,
-            &first.condition,
-            context,
-        )?)),
+        (Some(operand), None, Some(first)) => {
+            let compared: Vec<&Expr> = std::iter::once(operand)
+                .chain(conditions.iter().map(|case| &case.condition))
+                .collect();
+            let explicit = single_explicit_collation(&compared)?;
+            let base = translate_compared(operand, &first.condition, context)?;
+            Some(Box::new(default_collated(base, explicit, &compared)))
+        }
         (Some(operand), None, None) => Some(Box::new(translate_expr(operand, context)?)),
         (None, _, _) => None,
     };
