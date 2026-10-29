@@ -108,6 +108,14 @@ fn sqlite_cast(args: &[Value]) -> Result<Value> {
     Ok(value.exec_cast(type_name.as_str())?)
 }
 
+pub(crate) fn unsupported_value(message: String) -> LimboError {
+    LimboError::InvalidArgument(format!(
+        "{UNSUPPORTED_MYSQL_VALUE} {message} is not supported yet"
+    ))
+}
+
+pub(crate) const UNSUPPORTED_MYSQL_VALUE: &str = "unsupported MySQL value:";
+
 fn out_of_range() -> LimboError {
     TypeConversionError::raise(ConversionErrorKind::OutOfRange, "Out of range value")
 }

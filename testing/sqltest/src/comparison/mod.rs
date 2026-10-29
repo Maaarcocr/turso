@@ -71,16 +71,20 @@ fn normalize_whitespace(s: &str) -> String {
 }
 
 /// The MySQL frontend's refusal of a statement it cannot lower with MySQL's
-/// meaning. A refusal is not the error MySQL raises, so it never matches one.
-const MYSQL_REFUSAL: &str = "unsupported MySQL syntax:";
+/// meaning, or of a value it cannot compute with MySQL's meaning while the
+/// statement runs. A refusal is not the error MySQL raises, so it never
+/// matches one.
+const MYSQL_REFUSALS: [&str; 2] = ["unsupported MySQL syntax:", "unsupported MySQL value:"];
 
 /// Compare when expecting an error
 fn compare_error(actual: &QueryResult, expected_pattern: Option<&str>) -> ComparisonResult {
     match (&actual.error, expected_pattern) {
         (None, _) => ComparisonResult::mismatch("expected error but query succeeded"),
-        (Some(err), _) if err.contains(MYSQL_REFUSAL) => ComparisonResult::mismatch(format!(
-            "expected error but the statement was refused: {err}"
-        )),
+        (Some(err), _) if MYSQL_REFUSALS.iter().any(|refusal| err.contains(refusal)) => {
+            ComparisonResult::mismatch(format!(
+                "expected error but the statement was refused: {err}"
+            ))
+        }
         (Some(_err), None) => {
             // Any error is fine
             ComparisonResult::Match
@@ -137,6 +141,14 @@ mod tests {
         let expectation = Expectation::Exact(vec!["1|Alice".to_string()]);
 
         assert!(!compare(&actual, &expectation).is_match());
+    }
+
+    #[test]
+    fn test_compare_error_value_refusal() {
+        let actual =
+            QueryResult::error("Invalid argument: unsupported MySQL value: x is not supported yet");
+
+        assert!(!compare(&actual, &Expectation::Error(None)).is_match());
     }
 
     #[test]

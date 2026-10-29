@@ -1,3 +1,4 @@
+use crate::bitwise::{is_bit_operation, translate_bit_operation};
 use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
@@ -68,6 +69,7 @@ fn translate_node(
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
         Expr::Identifier(identifier) => translate_identifier_expr(identifier),
         Expr::CompoundIdentifier(parts) => translate_compound_identifier(parts),
+        expr if is_bit_operation(expr) => translate_bit_operation(expr, context),
         Expr::UnaryOp { op, expr } => translate_unary(*op, expr, literal_context, context),
         Expr::BinaryOp { left, op, right } => {
             translate_binary(left, op, right, literal_context, context)
@@ -602,13 +604,6 @@ fn translate_unary(
                 translate_condition(expr, context)?,
             ))
         }
-        UnaryOperator::BitwiseNot if temporal_type(expr).is_some() => {
-            return Err(temporal_operand(expr, "`~`"));
-        }
-        UnaryOperator::BitwiseNot if is_binary_string(expr) => {
-            return Err(binary_string_outside_arithmetic(&op))
-        }
-        UnaryOperator::BitwiseNot => (ast::UnaryOperator::BitwiseNot, Context::Arithmetic),
         other => {
             return Err(MysqlParserError::Unsupported(format!(
                 "unary operator `{other}` is not lowered yet"
@@ -660,22 +655,18 @@ fn translate_binary(
     let arithmetic = |operator, context: &mut TranslationContext| {
         arithmetic(left, operator, right, parent_context, context)
     };
-    if matches!(
-        op,
-        BinaryOperator::Modulo
-            | BinaryOperator::PGBitwiseShiftLeft
-            | BinaryOperator::MyIntegerDivide
-    ) && (is_binary_string(left) || is_binary_string(right))
+    if matches!(op, BinaryOperator::Modulo | BinaryOperator::MyIntegerDivide)
+        && (is_binary_string(left) || is_binary_string(right))
     {
         return Err(binary_string_outside_arithmetic(op));
     }
-    let (operator, literal_context) = match op {
+    match op {
         BinaryOperator::Plus | BinaryOperator::Minus
             if matches!(left, Expr::Interval(_)) || matches!(right, Expr::Interval(_)) =>
         {
-            return translate_interval_arithmetic(left, op, right, context)
+            translate_interval_arithmetic(left, op, right, context)
         }
-        BinaryOperator::Modulo | BinaryOperator::PGBitwiseShiftLeft
+        BinaryOperator::Modulo
             if temporal_type(left).is_some() || temporal_type(right).is_some() =>
         {
             let operand = if temporal_type(left).is_some() {
@@ -683,7 +674,7 @@ fn translate_binary(
             } else {
                 right
             };
-            return Err(temporal_operand(operand, &format!("`{op}`")));
+            Err(temporal_operand(operand, &format!("`{op}`")))
         }
         BinaryOperator::Plus
         | BinaryOperator::Minus
@@ -701,45 +692,37 @@ fn translate_binary(
                 BinaryOperator::Divide => ast::Operator::Divide,
                 _ => return Ok(function_call("__mysql_json_remainder", vec![left, right])),
             };
-            return Ok(ast::Expr::binary(left, operator, right));
+            Ok(ast::Expr::binary(left, operator, right))
         }
         BinaryOperator::And | BinaryOperator::Or | BinaryOperator::StringConcat => {
             let operator = match op {
                 BinaryOperator::And => ast::Operator::And,
                 _ => ast::Operator::Or,
             };
-            return Ok(ast::Expr::binary(
+            Ok(ast::Expr::binary(
                 translate_condition(left, context)?,
                 operator,
                 translate_condition(right, context)?,
-            ));
+            ))
         }
-        BinaryOperator::Plus => return arithmetic(ast::Operator::Add, context),
-        BinaryOperator::Minus => return arithmetic(ast::Operator::Subtract, context),
-        BinaryOperator::Multiply => return arithmetic(ast::Operator::Multiply, context),
-        BinaryOperator::Divide => return arithmetic(ast::Operator::Divide, context),
-        BinaryOperator::Modulo => return arithmetic(ast::Operator::Modulus, context),
-        BinaryOperator::PGBitwiseShiftLeft => (ast::Operator::LeftShift, Context::Arithmetic),
-        BinaryOperator::BitwiseOr => (ast::Operator::BitwiseOr, Context::Bitwise),
-        BinaryOperator::BitwiseAnd => (ast::Operator::BitwiseAnd, Context::Bitwise),
-        BinaryOperator::PGBitwiseShiftRight => (ast::Operator::RightShift, Context::Bitwise),
-        BinaryOperator::Eq => return comparison(left, ast::Operator::Equals, right, context),
-        BinaryOperator::NotEq => return comparison(left, ast::Operator::NotEquals, right, context),
-        BinaryOperator::Lt => return comparison(left, ast::Operator::Less, right, context),
-        BinaryOperator::LtEq => return comparison(left, ast::Operator::LessEquals, right, context),
-        BinaryOperator::Gt => return comparison(left, ast::Operator::Greater, right, context),
-        BinaryOperator::GtEq => {
-            return comparison(left, ast::Operator::GreaterEquals, right, context)
-        }
-        BinaryOperator::Spaceship => return comparison(left, ast::Operator::Is, right, context),
-        BinaryOperator::MyIntegerDivide => return translate_integer_division(left, right, context),
-        BinaryOperator::Xor => return translate_logical_xor(left, right, context),
-        BinaryOperator::BitwiseXor => return translate_bitwise_xor(left, right, context),
-        BinaryOperator::Arrow => return translate_json_arrow(left, right, false, context),
-        BinaryOperator::LongArrow => return translate_json_arrow(left, right, true, context),
-        other => return Err(unsupported_operator(other)),
-    };
-    operation(left, operator, right, literal_context, context)
+        BinaryOperator::Plus => arithmetic(ast::Operator::Add, context),
+        BinaryOperator::Minus => arithmetic(ast::Operator::Subtract, context),
+        BinaryOperator::Multiply => arithmetic(ast::Operator::Multiply, context),
+        BinaryOperator::Divide => arithmetic(ast::Operator::Divide, context),
+        BinaryOperator::Modulo => arithmetic(ast::Operator::Modulus, context),
+        BinaryOperator::Eq => comparison(left, ast::Operator::Equals, right, context),
+        BinaryOperator::NotEq => comparison(left, ast::Operator::NotEquals, right, context),
+        BinaryOperator::Lt => comparison(left, ast::Operator::Less, right, context),
+        BinaryOperator::LtEq => comparison(left, ast::Operator::LessEquals, right, context),
+        BinaryOperator::Gt => comparison(left, ast::Operator::Greater, right, context),
+        BinaryOperator::GtEq => comparison(left, ast::Operator::GreaterEquals, right, context),
+        BinaryOperator::Spaceship => comparison(left, ast::Operator::Is, right, context),
+        BinaryOperator::MyIntegerDivide => translate_integer_division(left, right, context),
+        BinaryOperator::Xor => translate_logical_xor(left, right, context),
+        BinaryOperator::Arrow => translate_json_arrow(left, right, false, context),
+        BinaryOperator::LongArrow => translate_json_arrow(left, right, true, context),
+        other => Err(unsupported_operator(other)),
+    }
 }
 
 fn translate_integer_division(
@@ -1152,7 +1135,10 @@ fn translate_null_test(
     literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let inner = Box::new(translate_in(inner, literal_context, context)?);
+    context.unsigned_as_text = is_bit_operation(inner);
+    let inner = translate_in(inner, literal_context, context);
+    context.unsigned_as_text = false;
+    let inner = Box::new(inner?);
     Ok(if not_null {
         ast::Expr::NotNull(inner)
     } else {
@@ -1581,48 +1567,12 @@ fn translate_substring(
     Ok(function_call(name, args))
 }
 
-fn translate_bitwise_xor(
-    left: &Expr,
-    right: &Expr,
-    context: &mut TranslationContext,
-) -> Result<ast::Expr, MysqlParserError> {
-    if !has_no_side_effects(left) || !has_no_side_effects(right) {
-        return Err(MysqlParserError::Unsupported(
-            "`^` over function calls or subqueries is not lowered yet".to_string(),
-        ));
-    }
-    let lhs = translate_in(left, Context::Bitwise, context)?;
-    let rhs = translate_in(right, Context::Bitwise, context)?;
-    let either = ast::Expr::binary(lhs.clone(), ast::Operator::BitwiseOr, rhs.clone());
-    let both = ast::Expr::binary(lhs, ast::Operator::BitwiseAnd, rhs);
-    Ok(parenthesized(ast::Expr::binary(
-        parenthesized(either),
-        ast::Operator::Subtract,
-        parenthesized(both),
-    )))
-}
-
 fn negation(expr: ast::Expr) -> ast::Expr {
     parenthesized(ast::Expr::unary(ast::UnaryOperator::Not, expr))
 }
 
 pub(crate) fn parenthesized(expr: ast::Expr) -> ast::Expr {
     ast::Expr::Parenthesized(vec![Box::new(expr)])
-}
-
-fn has_no_side_effects(expr: &Expr) -> bool {
-    match expr {
-        Expr::Value(value) => !matches!(value.value, Value::Placeholder(_)),
-        Expr::Identifier(_)
-        | Expr::CompoundIdentifier(_)
-        | Expr::TypedString(_)
-        | Expr::Prefixed { .. } => true,
-        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => has_no_side_effects(inner),
-        Expr::BinaryOp { left, right, .. } => {
-            has_no_side_effects(left) && has_no_side_effects(right)
-        }
-        _ => false,
-    }
 }
 
 fn translate_like(
@@ -3034,7 +2984,7 @@ fn is_json_function(expr: &Expr) -> bool {
     }
 }
 
-fn hex_or_bit_literal(expr: &Expr) -> Option<&Value> {
+pub(crate) fn hex_or_bit_literal(expr: &Expr) -> Option<&Value> {
     match expr {
         Expr::Value(value)
             if matches!(

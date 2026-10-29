@@ -1,3 +1,4 @@
+use crate::bitwise::is_bit_operation;
 use crate::expr::{
     failing_json_cast, shows_latin1_as_text, translate_bytes, translate_condition, translate_expr,
     translate_window,
@@ -23,6 +24,7 @@ pub(crate) struct TranslationContext {
     select_list_runs_once: bool,
     select_list_is_shown: bool,
     pub(crate) latin1_as_text: bool,
+    pub(crate) unsigned_as_text: bool,
     pub(crate) inserted_row_is_readable: bool,
     tables_read: Vec<ast::Name>,
 }
@@ -732,12 +734,14 @@ fn translate_selected(
         .then(|| invalid_json_text_evaluated(expr))
         .flatten();
     context.latin1_as_text = runs_once && shown && shows_latin1_as_text(expr);
+    context.unsigned_as_text = runs_once && shown && is_bit_operation(expr);
     let translated = match failing_text {
         Some(text) => Ok(failing_json_cast(text)),
         None if shown => translate_bytes(expr, context),
         None => translate_expr(expr, context),
     };
     context.latin1_as_text = false;
+    context.unsigned_as_text = false;
     translated
 }
 

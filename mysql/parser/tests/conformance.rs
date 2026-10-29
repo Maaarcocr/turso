@@ -794,7 +794,30 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT DATE '2020-1-1' = DATE '2020-01-01'",
             "SELECT '2020-01-01' = '2020-01-01'",
         ),
-        ("SELECT TIME '10:04:58' | 1", "SELECT 100458 | 1"),
+        (
+            "SELECT TIME '10:04:58' | 1, ~DATE '2000-01-01'",
+            "SELECT __mysql_unsigned_shown (__mysql_bit_or (__mysql_bit_operand (100458), 1)), __mysql_unsigned_shown (__mysql_bit_not (__mysql_bit_operand (20000101)))",
+        ),
+        (
+            "SELECT ~0",
+            "SELECT __mysql_unsigned_shown (__mysql_bit_not (0))",
+        ),
+        (
+            "SELECT 1 FROM t WHERE (~ (a || 0)) IS NULL AND a | 1 IS NOT NULL AND ~a + 1 IS NULL",
+            "SELECT 1 FROM t WHERE (__mysql_unsigned_shown (__mysql_bit_not (__mysql_bit_operand (a OR 0)))) ISNULL AND __mysql_unsigned_shown (__mysql_bit_or (__mysql_bit_operand (a), 1)) NOTNULL AND __mysql_unsigned_value (__mysql_bit_not (__mysql_bit_operand (a))) + 1 ISNULL",
+        ),
+        (
+            "SELECT _utf8 'foobar' | 1, 0 & _latin1 ' 7x'",
+            "SELECT __mysql_unsigned_shown (__mysql_bit_or (0, 1)), __mysql_unsigned_shown (__mysql_bit_and (0, 7))",
+        ),
+        (
+            "SELECT 5 & 1.5, -1.5 >> '2.5x', 18446744073709540000e0 ^ b'1', 7 | 18446744073709551616, 9223372036854775808 << NULL",
+            "SELECT __mysql_unsigned_shown (__mysql_bit_and (5, 2)), __mysql_unsigned_shown (__mysql_shift_right (- 2, 2)), __mysql_unsigned_shown (__mysql_bit_xor (9223372036854775807, 1)), __mysql_unsigned_shown (__mysql_bit_or (7, 9223372036854775807)), __mysql_unsigned_shown (__mysql_shift_left (- 9223372036854775808, NULL))",
+        ),
+        (
+            "SELECT (a ^ RAND()) + 1, CAST(1 AS JSON) | 1 FROM t",
+            "SELECT (__mysql_unsigned_value (__mysql_bit_xor (__mysql_bit_operand (a), __mysql_bit_operand (RAND ())))) + 1, __mysql_unsigned_value (__mysql_bit_or (__mysql_json_integer (__mysql_cast_as_json (1)), 1)) FROM t",
+        ),
         ("SELECT TIME '-5 10:34:58' * 2", "SELECT - 1303458 * 2"),
         (
             "SELECT TIME '00:00:59.2132234' / 2",
@@ -1050,16 +1073,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
         },
         SqlCase {
-            name: "shift of a temporal literal",
-            sql: "SELECT TIME '10:00:00' << 1",
-        },
-        SqlCase {
             name: "modulo of a temporal literal",
             sql: "SELECT 1.5e0 % TIMESTAMP '2000-01-01 10:34:58'",
-        },
-        SqlCase {
-            name: "bitwise not of a temporal literal",
-            sql: "SELECT ~DATE '2000-01-01'",
         },
         SqlCase {
             name: "negated temporal literal with a fraction",
@@ -1088,10 +1103,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "except all",
             sql: "SELECT 1 EXCEPT ALL SELECT 1",
-        },
-        SqlCase {
-            name: "caret over a function",
-            sql: "SELECT a ^ RAND() FROM t",
         },
         SqlCase {
             name: "temporal cast of a column whose type may be DATE or TIME",
@@ -1174,8 +1185,16 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT _binary '3' | 1",
         },
         SqlCase {
-            name: "bit operation on a fraction",
-            sql: "SELECT 5 & 1.5",
+            name: "bit operation on a DOUBLE below the BIGINT range",
+            sql: "SELECT -18446744073709540000e0 & 1",
+        },
+        SqlCase {
+            name: "bit operation on a string with an exponent",
+            sql: "SELECT '1e3' | 0",
+        },
+        SqlCase {
+            name: "bit operation on a string above the BIGINT range",
+            sql: "SELECT '18446744073709551615' | 0",
         },
         SqlCase {
             name: "column outside group by",
@@ -1204,10 +1223,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "json of an integer above the signed range in a comparison",
             sql: "SELECT CAST(18446744073709551615 AS JSON) = 1",
-        },
-        SqlCase {
-            name: "json in a bit operation",
-            sql: "SELECT CAST(1 AS JSON) | 1",
         },
         SqlCase {
             name: "json time of more than a day read as text",

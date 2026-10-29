@@ -1,6 +1,7 @@
 use super::DecimalArgument;
 use turso_core::{Result, Value};
 
+mod bitwise;
 mod collation;
 mod compare;
 mod convert;
@@ -38,6 +39,7 @@ pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
     }
     let counts: &[usize] = match name {
         "LEFT" | "RIGHT" | "LPAD" | "RPAD" | "REPEAT" | "SHA2" => &[1],
+        "__MYSQL_BIT_OPERAND" => &[0],
         "SUBSTR" | "SUBSTRING" | "MID" | "INSERT" => &[1, 2],
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => &[2, 3],
         "REGEXP_INSTR" => &[2, 3, 4],
@@ -193,6 +195,16 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("UUID_TO_BIN", 1 | 2) => network::uuid_to_bin,
 
         ("__MYSQL_LIKE_BIN", 3) => like::like_bin,
+
+        ("__MYSQL_BIT_AND", 2) => bitwise::bit_and,
+        ("__MYSQL_BIT_NOT", 1) => bitwise::bit_not,
+        ("__MYSQL_BIT_OPERAND", 1) => bitwise::bit_operand,
+        ("__MYSQL_BIT_OR", 2) => bitwise::bit_or,
+        ("__MYSQL_BIT_XOR", 2) => bitwise::bit_xor,
+        ("__MYSQL_SHIFT_LEFT", 2) => bitwise::shift_left,
+        ("__MYSQL_SHIFT_RIGHT", 2) => bitwise::shift_right,
+        ("__MYSQL_UNSIGNED_SHOWN", 1) => bitwise::unsigned_shown,
+        ("__MYSQL_UNSIGNED_VALUE", 1) => bitwise::unsigned_value,
 
         ("REGEXP", 2) => regexp::regexp_operator,
         ("REGEXP_INSTR", 2..=6) => regexp::regexp_instr,
