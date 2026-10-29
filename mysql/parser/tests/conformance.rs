@@ -848,7 +848,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT TIME '10:04:58' * 0b1001, NULL * 1 + x'09', 18446744073709551615 + 0x0, -9223372036854775808 % 0x9, TIME '5 10:34:58.9' / 0xFF666F6F626172FF, TRUE AND 0xFF666F6F626172FF, _utf8 'foobar' + x'09'",
-            "SELECT 904122, NULL * 1 + 9, CAST ('18446744073709551615' AS DECIMAL (20, 0)), -8, 1303458.9 / CAST ('18403519451478717183' AS DECIMAL (20, 0)), TRUE AND 1, 'foobar' + 9e0",
+            "SELECT 904122, NULL * 1 + 9, CAST ('18446744073709551615' AS DECIMAL (20, 0)), -8, 1303458.9 / CAST ('18403519451478717183' AS DECIMAL (20, 0)), TRUE AND 1, 0e0 + 9e0",
         ),
         (
             "SELECT 'abc' COLLATE utf8mb4_0900_as_cs LIKE 'A%', 1.5 NOT LIKE _utf8mb4 '1._' COLLATE utf8mb4_bin",
@@ -863,8 +863,8 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT CAST (UNIX_TIMESTAMP (0e0) AS DECIMAL (65, 6)), CAST (UNIX_TIMESTAMP (1.10) AS DECIMAL (13, 2)) + 1, CAST (UNIX_TIMESTAMP (-1.5e0) AS DECIMAL (17, 6)), CAST (UNIX_TIMESTAMP ('20000101103458.1234') AS DECIMAL (15, 4)), CAST (UNIX_TIMESTAMP ('foo') AS DECIMAL (17, 6)), CAST (UNIX_TIMESTAMP ('2000-01-01 00:00:00.12') AS DECIMAL (13, 2)), UNIX_TIMESTAMP ('2000-01-01'), UNIX_TIMESTAMP (1)",
         ),
         (
-            "SELECT -'foobar', - _utf8 '0000-01-03', -('1')",
-            "SELECT (('foobar') * -1e0), (('0000-01-03') * -1e0), ((('1')) * -1e0)",
+            "SELECT -'foobar', - _utf8 '0000-01-03', -('1'), '' * TIME '-10:04:58', ' 255 ' * 2, '1' / 3, 'a' + 'b'",
+            "SELECT - 0e0, - 0e0, - 1e0, 0e0 * - 100458, 2.55e2 * 2, 1e0 / 3, 0e0 + 0e0",
         ),
         (
             "SELECT 18446744073709551615 * 1 - NULL",

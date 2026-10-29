@@ -855,22 +855,8 @@ fn translate_unary(
             if json::is_json_value(expr) {
                 return json::translate_negation(expr, context);
             }
-            let utf8_text = match unnested(expr) {
-                Expr::Prefixed { prefix, value } => {
-                    matches!(
-                        prefix.value.to_ascii_lowercase().as_str(),
-                        "_utf8mb4" | "_utf8mb3" | "_utf8"
-                    ) && is_text_literal(value)
-                }
-                other => is_text_literal(other),
-            };
-            if utf8_text {
-                let negated = translate_in(expr, sign_context, context)?;
-                return Ok(parenthesized(ast::Expr::binary(
-                    parenthesized(negated),
-                    ast::Operator::Multiply,
-                    ast::Expr::Literal(ast::Literal::Numeric("-1e0".to_string())),
-                )));
+            if let Some(value) = arithmetic_text_double(expr) {
+                return Ok(double_literal(-value));
             }
             if number_literal(expr).is_none() {
                 let negated = translate_in(expr, sign_context, context)?;
@@ -1393,11 +1379,31 @@ fn is_null_literal(expr: &Expr) -> bool {
     }
 }
 
+/// The DOUBLE MySQL computes `+ - * /` and unary `-` of a plain or utf8
+/// string literal with: the number its text starts with, 0 for none.
+fn arithmetic_text_double(expr: &Expr) -> Option<f64> {
+    let text = match unnested(expr) {
+        Expr::Prefixed { prefix, value }
+            if matches!(
+                prefix.value.to_ascii_lowercase().as_str(),
+                "_utf8mb4" | "_utf8mb3" | "_utf8"
+            ) =>
+        {
+            string_literal(value)?
+        }
+        other => string_literal(other)?,
+    };
+    Some(text_double(text))
+}
+
 fn arithmetic_operand(
     expr: &Expr,
     other_operand: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(value) = arithmetic_text_double(expr) {
+        return Ok(double_literal(value));
+    }
     let introduced_text = matches!(
         other_operand,
         Expr::Prefixed { value, .. } if is_text_literal(value)
@@ -1831,11 +1837,8 @@ fn text_double(text: &str) -> f64 {
 }
 
 fn double_literal(value: f64) -> ast::Expr {
-    if value == 0.0 {
-        return ast::Expr::Literal(ast::Literal::Numeric("0e0".to_string()));
-    }
     let literal = ast::Expr::Literal(ast::Literal::Numeric(format!("{:e}", value.abs())));
-    if value < 0.0 {
+    if value.is_sign_negative() {
         ast::Expr::unary(ast::UnaryOperator::Negative, literal)
     } else {
         literal
