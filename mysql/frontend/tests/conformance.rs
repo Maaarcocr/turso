@@ -545,6 +545,18 @@ fn geometries_are_stored_read_and_written_as_in_mysql() -> turso_core::Result<()
             Value::from_f64(1.5),
         ]]
     );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT ST_AsGeoJSON(LINESTRING(POINT(1, 2), POINT(3.5, 4))), ST_GeoHash(-87.65, 41.85, 10), ST_LatFromGeoHash('s0000'), ST_AsWKT(ST_PointFromGeoHash('dp3wjztvtc', 0))",
+        )?,
+        vec![vec![
+            Value::build_text(r#"{"type": "LineString", "coordinates": [[1.0, 2.0], [3.5, 4.0]]}"#),
+            Value::build_text("dp3wj6x1yv"),
+            Value::from_f64(0.0),
+            Value::build_text("POINT(-87.62979 41.87809)"),
+        ]]
+    );
     connection.execute("CREATE TABLE p (p POINT SRID 4326)")?;
     connection.execute("INSERT INTO p VALUES (ST_SRID(POINT(1, 2), 4326))")?;
     for rejected in [

@@ -244,7 +244,7 @@ fn base64(bytes: &[u8]) -> String {
     out
 }
 
-fn format_json_double(value: f64) -> String {
+pub(crate) fn format_json_double(value: f64) -> String {
     let mut text = format_double(value);
     if !text.contains(['.', 'e']) {
         text.push_str(".0");

@@ -57,6 +57,7 @@ fn json_function_name(function: &Function) -> Option<String> {
             | "JSON_MERGE_PATCH"
             | "JSON_KEYS"
             | "JSON_SEARCH"
+            | "ST_ASGEOJSON"
     );
     (name.quote_style.is_none() && returns_json).then_some(upper_name)
 }

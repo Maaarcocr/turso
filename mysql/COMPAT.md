@@ -805,8 +805,13 @@ optional SRID; `ST_AsText`/`ST_AsWKT` and `ST_AsBinary`/`ST_AsWKB`; `ST_SRID`
 (also setting it), `ST_X` and `ST_Y` of a Cartesian point (also setting
 them), `ST_Dimension`, `ST_GeometryType`, `ST_IsEmpty`, `ST_NumPoints`,
 `ST_PointN`, `ST_StartPoint`, `ST_EndPoint`, `ST_NumGeometries`,
-`ST_GeometryN`, `ST_ExteriorRing`, `ST_NumInteriorRings`, `ST_InteriorRingN`
-and `ST_Envelope` of a Cartesian geometry. Text MySQL cannot read, and a
+`ST_GeometryN`, `ST_ExteriorRing`, `ST_NumInteriorRings`, `ST_InteriorRingN`,
+`ST_Envelope` and `ST_AsGeoJSON` (one argument) of a Cartesian geometry, and
+`ST_GeoHash`, `ST_LatFromGeoHash`, `ST_LongFromGeoHash` and
+`ST_PointFromGeoHash` (SRID 0), which round the decoded coordinates as MySQL
+does; a point at the center of a cell before the last character, where
+MySQL may stop early, and a hash with upper-case or other characters are
+refused. Text MySQL cannot read, and a
 geometry argument that is not one, fail with MySQL's error 3037; a WGS 84
 coordinate out of range fails with 3616 or 3617. Refused: the options
 argument of these functions, constructors with geometries of different

@@ -1,9 +1,11 @@
 //! MySQL's spatial functions over geometries in its storage format. Only the
 //! Cartesian plane (SRID 0) and WGS 84 (SRID 4326) are modeled; a geometry
 //! in another spatial reference system is refused.
+mod geohash;
 mod geometry;
 mod wkt;
 
+use super::json::format_json_double;
 use super::string::{double, integer};
 use crate::types::unsupported_value;
 use geometry::{Geometry, Point};
@@ -47,6 +49,11 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("ST_NUMINTERIORRINGS" | "ST_NUMINTERIORRING", 1) => num_interior_rings,
         ("ST_INTERIORRINGN", 2) => interior_ring_n,
         ("ST_ENVELOPE", 1) => envelope,
+        ("ST_ASGEOJSON", 1) => as_geojson,
+        ("ST_GEOHASH", 2 | 3) => geohash,
+        ("ST_LATFROMGEOHASH", 1) => latitude_from_geohash,
+        ("ST_LONGFROMGEOHASH", 1) => longitude_from_geohash,
+        ("ST_POINTFROMGEOHASH", 2) => point_from_geohash,
         (_, 1..=3) if read_kind(name, &["FROMTEXT", "FROMTXT"]).is_some() => from_text,
         (_, 1..=3) if read_kind(name, &["FROMWKB"]).is_some() => from_wkb,
         _ => return None,
@@ -639,4 +646,166 @@ fn envelope(name: &str, args: &[Value]) -> Result<Value> {
         ]])
     };
     stored_value(stored.srid, envelope)
+}
+
+/// `ST_AsGeoJSON(g)` of a Cartesian geometry, as MySQL writes the JSON.
+fn as_geojson(name: &str, args: &[Value]) -> Result<Value> {
+    fn list<T>(text: &mut String, items: &[T], item: &impl Fn(&mut String, &T)) {
+        text.push('[');
+        for (index, value) in items.iter().enumerate() {
+            if index > 0 {
+                text.push_str(", ");
+            }
+            item(text, value);
+        }
+        text.push(']');
+    }
+    fn point(text: &mut String, point: &Point) {
+        text.push('[');
+        text.push_str(&format_json_double(point.x));
+        text.push_str(", ");
+        text.push_str(&format_json_double(point.y));
+        text.push(']');
+    }
+    fn line(text: &mut String, points: &[Point]) {
+        list(text, points, &point);
+    }
+    fn rings(text: &mut String, rings: &[Vec<Point>]) {
+        list(text, rings, &|text: &mut String, ring: &Vec<Point>| {
+            line(text, ring)
+        });
+    }
+    fn polygons(text: &mut String, polygons: &[Vec<Vec<Point>>]) {
+        list(
+            text,
+            polygons,
+            &|text: &mut String, polygon: &Vec<Vec<Point>>| rings(text, polygon),
+        );
+    }
+    fn write(text: &mut String, geometry: &Geometry) {
+        let kind = match geometry {
+            Geometry::Point(_) => "Point",
+            Geometry::LineString(_) => "LineString",
+            Geometry::Polygon(_) => "Polygon",
+            Geometry::MultiPoint(_) => "MultiPoint",
+            Geometry::MultiLineString(_) => "MultiLineString",
+            Geometry::MultiPolygon(_) => "MultiPolygon",
+            Geometry::Collection(geometries) => {
+                text.push_str("{\"type\": \"GeometryCollection\", \"geometries\": ");
+                list(text, geometries, &write);
+                text.push('}');
+                return;
+            }
+        };
+        text.push_str("{\"type\": \"");
+        text.push_str(kind);
+        text.push_str("\", \"coordinates\": ");
+        match geometry {
+            Geometry::Point(p) => point(text, p),
+            Geometry::LineString(points) | Geometry::MultiPoint(points) => line(text, points),
+            Geometry::Polygon(lines) | Geometry::MultiLineString(lines) => rings(text, lines),
+            Geometry::MultiPolygon(members) => polygons(text, members),
+            Geometry::Collection(_) => unreachable!("a collection has no coordinates"),
+        }
+        text.push('}');
+    }
+    let Some(stored) = geometry(name, &args[0])? else {
+        return Ok(Value::Null);
+    };
+    if stored.is_geographic() {
+        return Err(unsupported_value(format!(
+            "{name} of a geometry in a geographic spatial reference system"
+        )));
+    }
+    let mut text = String::new();
+    write(&mut text, &stored.geometry);
+    Ok(Value::build_text(text))
+}
+
+/// `ST_GeoHash(longitude, latitude, length)` or `ST_GeoHash(point, length)`.
+fn geohash(name: &str, args: &[Value]) -> Result<Value> {
+    let (longitude, latitude, length) = if let [longitude, latitude, length] = args {
+        let (Some(longitude), Some(latitude), Some(length)) =
+            (double(longitude), double(latitude), integer(length))
+        else {
+            return Ok(Value::Null);
+        };
+        (longitude, latitude, length.value)
+    } else {
+        let Some(stored) = geometry(name, &args[0])? else {
+            return Ok(Value::Null);
+        };
+        let (Geometry::Point(point), false) = (&stored.geometry, stored.is_geographic()) else {
+            return Err(unsupported_value(format!(
+                "{name} of a geometry that is not a Cartesian point"
+            )));
+        };
+        let Some(length) = integer(&args[1]) else {
+            return Ok(Value::Null);
+        };
+        (point.x, point.y, length.value)
+    };
+    if !(-180.0..=180.0).contains(&longitude)
+        || !(-90.0..=90.0).contains(&latitude)
+        || !(1..=100).contains(&length)
+    {
+        return Err(unsupported_value(format!(
+            "{name} of a coordinate or length out of range"
+        )));
+    }
+    let length = usize::try_from(length).expect("a length from 1 to 100");
+    let hash = geohash::encode(longitude, latitude, length).ok_or_else(|| {
+        unsupported_value(format!(
+            "{name} of a point at the center of a cell shorter than the length"
+        ))
+    })?;
+    Ok(Value::build_text(hash))
+}
+
+/// The longitude and latitude of a geohash argument; `None` for NULL.
+fn geohash_argument(name: &str, value: &Value) -> Result<Option<(f64, f64)>> {
+    let hash = match value {
+        Value::Null => return Ok(None),
+        Value::Text(text) => text.as_str().to_string(),
+        Value::Blob(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        Value::Numeric(_) => {
+            return Err(unsupported_value(format!("{name} of a number")));
+        }
+    };
+    geohash::decode(&hash).map(Some).ok_or_else(|| {
+        unsupported_value(format!(
+            "{name} of `{hash}`, which is not a lower-case geohash"
+        ))
+    })
+}
+
+fn latitude_from_geohash(name: &str, args: &[Value]) -> Result<Value> {
+    Ok(geohash_argument(name, &args[0])?
+        .map_or(Value::Null, |(_, latitude)| Value::from_f64(latitude)))
+}
+
+fn longitude_from_geohash(name: &str, args: &[Value]) -> Result<Value> {
+    Ok(geohash_argument(name, &args[0])?
+        .map_or(Value::Null, |(longitude, _)| Value::from_f64(longitude)))
+}
+
+/// `ST_PointFromGeoHash(hash, 0)`: a Cartesian point of the longitude and
+/// latitude.
+fn point_from_geohash(name: &str, args: &[Value]) -> Result<Value> {
+    let Some((longitude, latitude)) = geohash_argument(name, &args[0])? else {
+        return Ok(Value::Null);
+    };
+    match srid_argument(name, &args[1])? {
+        None => Ok(Value::Null),
+        Some(CARTESIAN) => stored_value(
+            CARTESIAN,
+            Geometry::Point(Point {
+                x: longitude,
+                y: latitude,
+            }),
+        ),
+        Some(srid) => Err(unsupported_value(format!(
+            "{name} in the spatial reference system {srid}"
+        ))),
+    }
 }
