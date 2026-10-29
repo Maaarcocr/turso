@@ -124,7 +124,7 @@ pub(crate) fn is_latin1_char(character: char) -> bool {
     }
 }
 
-fn latin1_text(bytes: &[u8]) -> String {
+pub(crate) fn latin1_text(bytes: &[u8]) -> String {
     bytes
         .iter()
         .map(|&byte| match byte {
@@ -273,7 +273,7 @@ fn not_plain_text() -> MysqlParserError {
     unsupported("a binary string that is not NUL-free UTF-8 outside a numeric context".to_string())
 }
 
-fn blob_literal(bytes: &[u8]) -> ast::Expr {
+pub(crate) fn blob_literal(bytes: &[u8]) -> ast::Expr {
     let digits: String = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
     ast::Expr::Literal(ast::Literal::Blob(format!("x'{digits}'")))
 }
@@ -302,7 +302,7 @@ fn unsigned_number(bytes: &[u8]) -> Result<i64, MysqlParserError> {
     })
 }
 
-fn hex_bytes(digits: &str) -> Result<Vec<u8>, MysqlParserError> {
+pub(crate) fn hex_bytes(digits: &str) -> Result<Vec<u8>, MysqlParserError> {
     if digits.len() % 2 == 1 {
         return Err(unsupported(format!(
             "hexadecimal literal X'{digits}' with an odd number of digits"
@@ -317,7 +317,7 @@ fn hex_bytes(digits: &str) -> Result<Vec<u8>, MysqlParserError> {
         .collect()
 }
 
-fn bit_bytes(bits: &str) -> Result<Vec<u8>, MysqlParserError> {
+pub(crate) fn bit_bytes(bits: &str) -> Result<Vec<u8>, MysqlParserError> {
     if !bits.bytes().all(|bit| matches!(bit, b'0' | b'1')) {
         return Err(unsupported(format!("bit-value literal b'{bits}'")));
     }
