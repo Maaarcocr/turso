@@ -170,7 +170,8 @@ Lowered:
 | `_latin1 X'..'`/`_latin1 0x..` as an argument of `CONCAT`, `CONCAT_WS`, `ELT`, `FIELD` (compared as strings), `FIND_IN_SET`, `INSTR`, `LOCATE` or `SUBSTRING_INDEX` next to a hex, bit or `_binary` literal in another string argument, or of `INSERT`, `LPAD`, `REPLACE` or `RPAD` whose subject is such a literal | A blob of its bytes, since MySQL computes these calls on binary strings |
 | `_utf8mb4'..'`, `_utf8mb3`, `_utf8`, `_binary`, and `_ascii`/`_latin1` with ASCII text, with a string or hex value | Text; `_binary` is a blob where a hex literal is one, text in a date or time function argument, and in a numeric function argument the text MySQL parses (its bytes up to the first NUL or non-ASCII byte, so `_binary X'40'` is `'@'`, 0), and in `+ - * /` the DOUBLE MySQL parses from its text (`_binary 'foobar' * -1` is `-0`). A plain or `_utf8` string literal in `+ - * /` or under unary `-` is the DOUBLE MySQL reads from its text (the number it starts with, 0 for none), so `-'foobar'` is `-0` and `'' * TIME '-10:04:58'` is `-0`; compared with a column or other non-literal it keeps Turso's number conversion, as Turso compares a text column with a DOUBLE as text (`v IN (0e0)` is false for a `VARCHAR` `'0'`, where MySQL compares doubles) |
 | `DATE '..'`, `TIME '..'`, `TIMESTAMP '..'`, `{d '..'}` | Canonical text (`'2018-05-01'`, `'26:00:00'`, `'2020-01-02 03:04:05.5'`); a string literal compared with a `DATE` or `TIMESTAMP` one is converted the same way (`DATE '2018-05-01' = '2018-5-1'`), and one compared with a `TIME` stays a string, which MySQL compares with the canonical text under the default collation (`'5 10:34:58' > TIME '130:34:58.6'` is 1); in arithmetic, a comparison with a number, a logical operator, a condition or a numeric function argument (including `MAKEDATE`, `MAKETIME`, `SEC_TO_TIME`, `FROM_UNIXTIME`, `FROM_DAYS` and `PERIOD_*`), the number MySQL uses (`20180501`, `-1013458`, `103458.5`), with fractions past 6 digits rounded; `TIME '..'` compared with `TIME '..'` as numbers. A `DATE 'YYYY-MM-DD'` with a month above 12, a day past the end of its month, or `'0000-00-00'` fails like MySQL (1525) |
-| `/*+ ... */` optimizer hints | Ignored (they only choose a plan), except `SET_VAR` and `MAX_EXECUTION_TIME`, which are refused |
+| `/*+ ... */` optimizer hints | Ignored: they choose a plan or bound the run time (`MAX_EXECUTION_TIME`), which leaves the result of a statement that finishes unchanged. `SET_VAR` is accepted for variables that only size buffers or steer the optimizer (`sort_buffer_size`, `optimizer_switch`, ...) and refused for any other |
+| Index hints (`USE`, `FORCE`, `IGNORE` `INDEX`/`KEY`) | Ignored, in `SELECT` and `UPDATE`. An index name the table does not have is not rejected (MySQL's error 1176), since the frontend does not see the schema |
 
 Refused, because Turso cannot run it with MySQL's meaning yet:
 
@@ -263,7 +264,7 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   the decimal in the JSON value, Turso a DOUBLE. And of a `BINARY` cast:
   MySQL's opaque JSON value reaches other functions as a JSON string.
 - `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN` modifiers, `STRAIGHT_JOIN`
-  joins, index hints, `PARTITION (...)` selection, `INTO`, locking reads
+  joins, `PARTITION (...)` selection, `INTO`, locking reads
   (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`, `VALUES` without
   `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`, `INTERSECT
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.

@@ -755,6 +755,14 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT *", "SELECT *"),
         ("SELECT users.* FROM users", "SELECT users.* FROM users"),
         ("SELECT 1 FROM dual", "SELECT 1"),
+        (
+            "SELECT /*+ MAX_EXECUTION_TIME(2000) SET_VAR(sort_buffer_size=262144) */ id FROM t",
+            "SELECT id FROM t",
+        ),
+        (
+            "SELECT i.id FROM t AS i USE INDEX (a) JOIN u FORCE INDEX FOR JOIN (PRIMARY, b) IGNORE KEY (c)",
+            "SELECT i.id FROM t AS i JOIN u",
+        ),
         ("SELECT 1 WHERE TRUE", "SELECT 1 WHERE TRUE"),
         ("SELECT DISTINCT 1", "SELECT DISTINCT 1"),
         ("SELECT 1 GROUP BY 1", "SELECT 1 GROUP BY 1"),
@@ -1137,10 +1145,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t1 STRAIGHT_JOIN t2",
         },
         SqlCase {
-            name: "index hint",
-            sql: "SELECT a FROM t USE INDEX (i)",
-        },
-        SqlCase {
             name: "partition selection",
             sql: "SELECT a FROM t PARTITION (p0)",
         },
@@ -1163,6 +1167,14 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "setting hint",
             sql: "SELECT /*+ SET_VAR(sql_mode='') */ 1",
+        },
+        SqlCase {
+            name: "setting hint after a plan setting",
+            sql: "SELECT /*+ SET_VAR(sort_buffer_size=262144) SET_VAR(div_precision_increment=8) */ 1",
+        },
+        SqlCase {
+            name: "malformed setting hint",
+            sql: "SELECT /*+ SET_VAR */ 1",
         },
         SqlCase {
             name: "collation",
@@ -1690,6 +1702,10 @@ fn lowers_single_table_update_and_delete() {
             "UPDATE users SET qty = 1",
         ),
         ("UPDATE quick SET qty = 1", "UPDATE quick SET qty = 1"),
+        (
+            "UPDATE users USE INDEX (i) SET qty = 1",
+            "UPDATE users SET qty = 1",
+        ),
         ("DELETE FROM users", "DELETE FROM users"),
         (
             "DELETE FROM users WHERE id = 3",
@@ -1783,10 +1799,6 @@ fn rejects_update_and_delete_shapes_without_a_faithful_lowering() {
         SqlCase {
             name: "update partition",
             sql: "UPDATE users PARTITION (p0) SET qty = 1",
-        },
-        SqlCase {
-            name: "update index hint",
-            sql: "UPDATE users USE INDEX (i) SET qty = 1",
         },
         SqlCase {
             name: "update setting hint",
