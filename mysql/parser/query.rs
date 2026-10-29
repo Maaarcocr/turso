@@ -26,6 +26,11 @@ pub(crate) struct TranslationContext {
     select_list_is_shown: bool,
     pub(crate) latin1_as_text: bool,
     pub(crate) unsigned_as_text: bool,
+    /// Inside an operand compared with a column or another non-literal,
+    /// where Turso compares a text column with a DOUBLE as text (`v IN
+    /// (0e0)` is false for `v = '0'`). String literals in arithmetic keep
+    /// Turso's number conversion there instead of becoming MySQL's DOUBLE.
+    pub(crate) compared_beside_non_literal: bool,
     pub(crate) inserted_row_is_readable: bool,
     tables_read: Vec<ast::Name>,
 }

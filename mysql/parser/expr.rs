@@ -855,7 +855,9 @@ fn translate_unary(
             if json::is_json_value(expr) {
                 return json::translate_negation(expr, context);
             }
-            if let Some(value) = arithmetic_text_double(expr) {
+            if let Some(value) = arithmetic_text_double(expr)
+                .filter(|_| !context.compared_beside_non_literal)
+            {
                 return Ok(double_literal(-value));
             }
             if number_literal(expr).is_none() {
@@ -1401,7 +1403,9 @@ fn arithmetic_operand(
     other_operand: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    if let Some(value) = arithmetic_text_double(expr) {
+    if let Some(value) =
+        arithmetic_text_double(expr).filter(|_| !context.compared_beside_non_literal)
+    {
         return Ok(double_literal(value));
     }
     let introduced_text = matches!(
@@ -1896,7 +1900,13 @@ fn translate_compared(
     if is_binary_cast(expr) {
         return Err(binary_cast_outside_a_value_position(expr));
     }
-    translate_compared_value(expr, other_side, context)
+    let outer = std::mem::replace(
+        &mut context.compared_beside_non_literal,
+        !is_literal(other_side),
+    );
+    let translated = translate_compared_value(expr, other_side, context);
+    context.compared_beside_non_literal = outer;
+    translated
 }
 
 fn translate_compared_value(
@@ -4535,6 +4545,48 @@ fn greatest_of_dates(args: &[&Expr]) -> Result<Option<ast::Expr>, MysqlParserErr
     Ok(Some(string_expr(&text)))
 }
 
+/// The fractional digits MySQL shows `TIMESTAMPADD(SECOND, n, d)` with when
+/// `n` is a literal with decimals: those of a DECIMAL, four more than the
+/// dividend's for a division of exact numbers, six for a double or a string,
+/// or the date's when it has more; `None` when `n` has none or `d` is not a
+/// literal.
+fn added_seconds_digits(seconds: &Expr, date: &Expr) -> Option<u64> {
+    fn scale(expr: &Expr) -> Option<u64> {
+        let digits = signed_number_literal(expr)?;
+        if digits.contains(['e', 'E']) {
+            return None;
+        }
+        Some(digits.split_once('.').map_or(0, |(_, fraction)| fraction.len() as u64))
+    }
+    let seconds_digits = match unnested(seconds) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Divide,
+            right,
+        } => scale(left).zip(scale(right)).map(|(dividend, _)| dividend + 4)?,
+        _ if is_double_literal(seconds) => 6,
+        _ if is_text_literal(seconds)
+            || matches!(unnested(seconds), Expr::Prefixed { value, .. } if is_text_literal(value)) =>
+        {
+            6
+        }
+        _ => scale(seconds)?,
+    }
+    .min(6);
+    if seconds_digits == 0 {
+        return None;
+    }
+    let date_digits = match unnested(date) {
+        Expr::TypedString(_) => {
+            dated_literal_kind(date)?;
+            fraction_length(date) as u64
+        }
+        _ if is_text_literal(date) => 6,
+        _ => return None,
+    };
+    Some(seconds_digits.max(date_digits))
+}
+
 fn translate_special_function(
     upper_name: &str,
     list: &FunctionArgumentList,
@@ -4556,12 +4608,26 @@ fn translate_special_function(
         ("TIMESTAMPADD" | "TIMESTAMPDIFF", [Expr::Identifier(unit), rest @ ..])
             if unit.quote_style.is_none() =>
         {
+            let digits = match (upper_name, rest) {
+                ("TIMESTAMPADD", [seconds, date])
+                    if unit.value.eq_ignore_ascii_case("SECOND") =>
+                {
+                    added_seconds_digits(seconds, date)
+                }
+                _ => None,
+            };
             let unit = unit_literal(&DateTimeField::Custom(unit.clone()))?;
             let mut translated = vec![unit];
             for arg in rest {
                 translated.push(translate_expr(arg, context)?);
             }
-            Ok(Some(function_call(upper_name, translated)))
+            let call = function_call(upper_name, translated);
+            Ok(Some(match digits {
+                Some(digits) => {
+                    function_call("__mysql_cast_as_datetime", vec![call, number(digits)])
+                }
+                None => call,
+            }))
         }
         ("GET_FORMAT", [Expr::Identifier(kind), format])
             if kind.quote_style.is_none()

@@ -863,8 +863,8 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT CAST (UNIX_TIMESTAMP (0e0) AS DECIMAL (65, 6)), CAST (UNIX_TIMESTAMP (1.10) AS DECIMAL (13, 2)) + 1, CAST (UNIX_TIMESTAMP (-1.5e0) AS DECIMAL (17, 6)), CAST (UNIX_TIMESTAMP ('20000101103458.1234') AS DECIMAL (15, 4)), CAST (UNIX_TIMESTAMP ('foo') AS DECIMAL (17, 6)), CAST (UNIX_TIMESTAMP ('2000-01-01 00:00:00.12') AS DECIMAL (13, 2)), UNIX_TIMESTAMP ('2000-01-01'), UNIX_TIMESTAMP (1)",
         ),
         (
-            "SELECT -'foobar', - _utf8 '0000-01-03', -('1'), '' * TIME '-10:04:58', ' 255 ' * 2, '1' / 3, 'a' + 'b'",
-            "SELECT - 0e0, - 0e0, - 1e0, 0e0 * - 100458, 2.55e2 * 2, 1e0 / 3, 0e0 + 0e0",
+            "SELECT -'foobar', - _utf8 '0000-01-03', -('1'), '' * TIME '-10:04:58', ' 255 ' * 2, '1' / 3, 'a' + 'b', a IN (-''), -'' = 0 FROM t",
+            "SELECT - 0e0, - 0e0, - 1e0, 0e0 * - 100458, 2.55e2 * 2, 1e0 / 3, 0e0 + 0e0, a IN ((('') * - 1)), - 0e0 = 0 FROM t",
         ),
         (
             "SELECT ROUND(X'ff', 255), TRUNCATE(0b1, -1), ROUND(0x40)",
@@ -881,6 +881,10 @@ fn lowers_select_statements_to_shared_ast() {
         (
             "SELECT BIN(18446744073709551616), OCT(-9223372036854775810.4), CONV(9223372036854775808, 13, 9e0), BIN(9223372036854775807), HEX(9223372036854775808), BIT_COUNT(18446744073709551615), HEX(255)",
             "SELECT BIN ('18446744073709551616'), OCT ('-9223372036854775810.4'), CONV ('9223372036854775808', 13, 9e0), BIN (9223372036854775807), '8000000000000000', 64, HEX (255)",
+        ),
+        (
+            "SELECT TIMESTAMPADD(SECOND, 1.5, TIMESTAMP '2020-12-31 23:59:59'), TIMESTAMPADD(second, '1.0', DATE '2018-05-01'), TIMESTAMPADD(SECOND, 6/4, TIMESTAMP '2020-12-31 23:59:59.12'), TIMESTAMPADD(SECOND, 1, '2020-01-01'), TIMESTAMPADD(SECOND, 1.5, a) FROM t",
+            "SELECT __mysql_cast_as_datetime (TIMESTAMPADD ('SECOND', 1.5, '2020-12-31 23:59:59'), 1), __mysql_cast_as_datetime (TIMESTAMPADD ('SECOND', '1.0', '2018-05-01'), 6), __mysql_cast_as_datetime (TIMESTAMPADD ('SECOND', 6 / 4, '2020-12-31 23:59:59.12'), 4), TIMESTAMPADD ('SECOND', 1, '2020-01-01'), TIMESTAMPADD ('SECOND', 1.5, a) FROM t",
         ),
         (
             "SELECT 18446744073709551615 * 1 - NULL",
