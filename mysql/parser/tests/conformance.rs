@@ -351,7 +351,7 @@ fn rejects_create_table_shapes_without_a_faithful_lowering() {
         },
         SqlCase {
             name: "geometry with a reference system",
-            sql: "CREATE TABLE users(location POINT SRID 4326)",
+            sql: "CREATE TABLE users(location POINT SRID 3857)",
         },
         SqlCase {
             name: "set with more than 64 members",

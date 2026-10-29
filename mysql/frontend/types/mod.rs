@@ -22,6 +22,10 @@ pub(crate) const DATA_TRUNCATED: &str = "Data truncated";
 pub(crate) const NOT_A_GEOMETRY: &str =
     "Cannot get geometry object from data you send to the GEOMETRY field";
 
+/// Starts the message of a geometry whose SRID is not its column's, which
+/// goes on with the two SRIDs.
+pub(crate) const SRID_MISMATCH: &str = "SRID mismatch:";
+
 pub(crate) fn rules() -> &'static TypeRules {
     &RULES
 }
@@ -97,7 +101,7 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_VARBINARY", 2) => binary::assign_varbinary,
         ("__MYSQL_ASSIGN_DOUBLE", 4) => float::assign_double,
         ("__MYSQL_ASSIGN_BIT", 2) => bit::assign_bit,
-        ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,
+        ("__MYSQL_ASSIGN_GEOMETRY", 3) => spatial::assign_geometry,
         ("__MYSQL_ASSIGN_ENUM", 2) => labels::assign_enum,
         ("__MYSQL_ASSIGN_ENUM_EXACT", 2) => labels::assign_enum_exact,
         ("__MYSQL_ASSIGN_JSON", 1) => crate::functions::assign_json,

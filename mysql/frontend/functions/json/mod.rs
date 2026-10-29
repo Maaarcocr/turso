@@ -17,6 +17,8 @@ use document::{format_double, Json};
 use parse::{parse, ParseError};
 use path::{Path, PathError};
 
+pub(super) use document::format_json_double;
+
 pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
     Function::from_name(name).is_some() || compare::accepts(name, arg_count)
 }

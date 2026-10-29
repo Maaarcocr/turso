@@ -249,6 +249,14 @@ impl Column {
                 )));
             }
             ColumnOption::Comment(_) => {}
+            ColumnOption::Srid(srid)
+                if matches!(self.column_type.family, Family::Spatial)
+                    && self.column_type.declared.size.is_none() =>
+            {
+                self.column_type.declared.size = Some(ast::TypeSize::MaxSize(Box::new(
+                    ast::Expr::Literal(ast::Literal::Numeric(column_srid(srid)?.to_string())),
+                )));
+            }
             ColumnOption::Generated {
                 generated_as,
                 sequence_options: None,
@@ -368,6 +376,23 @@ fn constraint(constraint: ast::ColumnConstraint) -> ast::NamedColumnConstraint {
     ast::NamedColumnConstraint {
         name: None,
         constraint,
+    }
+}
+
+/// The SRID of a spatial column: 0, the Cartesian plane, or 4326, WGS 84,
+/// the spatial reference systems the spatial functions model.
+fn column_srid(srid: &sqlparser::ast::Expr) -> Result<u32, MysqlParserError> {
+    let sqlparser::ast::Expr::Value(value) = srid else {
+        return Err(MysqlParserError::Unsupported(format!(
+            "SRID `{srid}`, which is not a number, is not lowered yet"
+        )));
+    };
+    match &value.value {
+        sqlparser::ast::Value::Number(digits, false) if digits == "0" => Ok(0),
+        sqlparser::ast::Value::Number(digits, false) if digits == "4326" => Ok(4326),
+        _ => Err(MysqlParserError::Unsupported(format!(
+            "SRID `{srid}` names a spatial reference system Turso does not model"
+        ))),
     }
 }
 

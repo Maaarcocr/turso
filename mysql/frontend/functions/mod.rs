@@ -7,6 +7,7 @@ use turso_core::{Func, Result, Value};
 mod datetime;
 mod decimal;
 mod json;
+pub(crate) mod spatial;
 mod string;
 mod variance;
 
@@ -18,7 +19,8 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
     let name = name.to_ascii_uppercase();
     let accepted = datetime::accepts(&name, arg_count)
         || string::accepts(&name, arg_count)
-        || json::accepts(&name, arg_count);
+        || json::accepts(&name, arg_count)
+        || spatial::accepts(&name, arg_count);
     accepted.then_some(Func::Dialect(name))
 }
 
@@ -48,6 +50,7 @@ pub(crate) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
     datetime::execute(name, args)
         .or_else(|| string::execute(name, args))
         .or_else(|| json::execute(name, args))
+        .or_else(|| spatial::execute(name, args))
 }
 
 fn with_json_columns_read<'a>(args: &'a [Value], arg_types: &[ArgumentType]) -> Cow<'a, [Value]> {

@@ -35,6 +35,8 @@ pub(super) fn leading_integer(bytes: &[u8]) -> i64 {
 
 /// How a string function reads a DECIMAL argument at `position`: as its
 /// text, or as a count or position. `Double` for every other function.
+pub(super) use convert::{double, integer};
+
 pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
     if name == "CHAR" {
         return DecimalArgument::Count;

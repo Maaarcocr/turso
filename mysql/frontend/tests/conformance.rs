@@ -475,6 +475,111 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn geometries_are_stored_read_and_written_as_in_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE g (i INT PRIMARY KEY, g GEOMETRY NOT NULL)")?;
+    connection.execute(
+        "INSERT INTO g VALUES (1, ST_GeomFromText('Point(1 2)')), (2, ST_SRID(ST_GeomFromText('Linestring(1 2,3 4)'), 4326)), (3, ST_GeomFromText('MultiPoint(1 2,3 4)')), (4, ST_GeomFromText('GeometryCollection(GeometryCollection())'))",
+    )?;
+    let text = |row: &[&str]| {
+        row.iter()
+            .map(|text| Value::build_text(text.to_string()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT ST_AsWKT(g), HEX(ST_AsWKB(g)), ST_GeometryType(g) FROM g ORDER BY i",
+        )?,
+        vec![
+            text(&[
+                "POINT(1 2)",
+                "0101000000000000000000F03F0000000000000040",
+                "POINT"
+            ]),
+            text(&[
+                "LINESTRING(2 1,4 3)",
+                "0102000000020000000000000000000040000000000000F03F00000000000010400000000000000840",
+                "LINESTRING"
+            ]),
+            text(&[
+                "MULTIPOINT((1 2),(3 4))",
+                "0104000000020000000101000000000000000000F03F0000000000000040010100000000000000000008400000000000001040",
+                "MULTIPOINT"
+            ]),
+            text(&[
+                "GEOMETRYCOLLECTION(GEOMETRYCOLLECTION EMPTY)",
+                "010700000001000000010700000000000000",
+                "GEOMCOLLECTION"
+            ]),
+        ]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT ST_SRID(g), ST_Dimension(g), ST_IsEmpty(g) FROM g WHERE i < 4 ORDER BY i"
+        )?,
+        [(0, 0), (4326, 1), (0, 0)].map(|(srid, dimension)| vec![
+            Value::from_i64(srid),
+            Value::from_i64(dimension),
+            Value::from_i64(0),
+        ])
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT ST_Dimension(g), ST_IsEmpty(GEOMETRYCOLLECTION()) FROM g WHERE i = 4"
+        )?,
+        vec![vec![Value::Null, Value::from_i64(1)]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT ST_AsWKT(ST_PointN(LINESTRING(POINT(0,0),POINT(1,1)), 2)), ST_NumPoints(POINT(0,0)), ST_AsWKT(ST_Envelope(LINESTRING(POINT(0,0),POINT(3,4)))), ST_AsWKT(ST_GeomFromText('POINT(1 2)', 4326)), ST_X(POINT(1.5, 2))",
+        )?,
+        vec![vec![
+            Value::build_text("POINT(1 1)"),
+            Value::Null,
+            Value::build_text("POLYGON((0 0,3 0,3 4,0 4,0 0))"),
+            Value::build_text("POINT(1 2)"),
+            Value::from_f64(1.5),
+        ]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT ST_AsGeoJSON(LINESTRING(POINT(1, 2), POINT(3.5, 4))), ST_GeoHash(-87.65, 41.85, 10), ST_LatFromGeoHash('s0000'), ST_AsWKT(ST_PointFromGeoHash('dp3wjztvtc', 0))",
+        )?,
+        vec![vec![
+            Value::build_text(r#"{"type": "LineString", "coordinates": [[1.0, 2.0], [3.5, 4.0]]}"#),
+            Value::build_text("dp3wj6x1yv"),
+            Value::from_f64(0.0),
+            Value::build_text("POINT(-87.62979 41.87809)"),
+        ]]
+    );
+    connection.execute("CREATE TABLE p (p POINT SRID 4326)")?;
+    connection.execute("INSERT INTO p VALUES (ST_SRID(POINT(1, 2), 4326))")?;
+    for rejected in [
+        "INSERT INTO p VALUES (POINT(1, 2))",
+        "INSERT INTO p VALUES (ST_SRID(LINESTRING(POINT(0, 0), POINT(1, 1)), 4326))",
+        "SELECT ST_GeomFromText('POINT(1)')",
+        "SELECT ST_GeomFromText('POINT(100 1)', 4326)",
+        "SELECT ST_AsWKT('not a geometry')",
+    ] {
+        query(&connection, rejected).expect_err(rejected);
+    }
+    for refused in [
+        "SELECT ST_GeomFromText('POINT(1 2)', 3857)",
+        "SELECT LINESTRING(POINT(0, 0))",
+        "CREATE TABLE q (p POINT SRID 3857)",
+    ] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(error.to_string().contains("not "), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn random_bytes_reads_its_length_as_mysql_does() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
