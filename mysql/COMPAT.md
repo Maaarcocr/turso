@@ -417,6 +417,19 @@ fixes reads as that constant: `sql_mode`, `time_zone` (`+00:00`),
 `div_precision_increment`, `group_concat_max_len`, `max_allowed_packet` and
 `default_storage_engine`. `@@global.` and other variables are refused.
 
+### Connection id and user-level locks
+
+`CONNECTION_ID()` is a number that identifies the session among those of the
+process. `GET_LOCK`, `RELEASE_LOCK`, `RELEASE_ALL_LOCKS`, `IS_FREE_LOCK` and
+`IS_USED_LOCK` keep MySQL's user-level locks: a lock belongs to the session
+that took it (as many times as it took it) until it releases it or closes,
+names are compared without case, and a `NULL`, empty or longer than 64
+characters name fails (3057). Like MySQL's, which belong to the server, the
+locks are shared by every session of the process. `GET_LOCK` of a lock that
+another session holds returns 0 with a timeout of 0 and is refused with any
+other timeout, since it would wait. Names that are not ASCII and values other
+than strings and integers are refused.
+
 ## JSON functions
 
 `mysql/frontend/functions/json/` implements MySQL's JSON functions for the

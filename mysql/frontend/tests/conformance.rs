@@ -237,6 +237,40 @@ fn tables_made_by_create_table_as_select_keep_their_column_types_after_reopen(
     Ok(())
 }
 
+#[test]
+fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<()> {
+    let first = open_memory()?;
+    let second = open_memory()?;
+    let one = |connection: &Arc<turso_core::Connection>, sql: &str| {
+        query(connection, sql).map(|rows| rows[0].clone())
+    };
+    assert_eq!(
+        one(&first, "SELECT GET_LOCK('conformance_lock', 0), GET_LOCK('CONFORMANCE_LOCK', 5)")?,
+        vec![Value::from_i64(1), Value::from_i64(1)]
+    );
+    assert_eq!(
+        one(
+            &second,
+            "SELECT GET_LOCK('conformance_lock', 0), RELEASE_LOCK('conformance_lock'),              IS_FREE_LOCK('conformance_lock'), IS_USED_LOCK('conformance_lock') <> CONNECTION_ID()"
+        )?,
+        vec![Value::from_i64(0), Value::from_i64(0), Value::from_i64(0), Value::from_i64(1)]
+    );
+    let error = second
+        .execute("SELECT GET_LOCK('conformance_lock', 1)")
+        .expect_err("waiting for a lock is refused");
+    assert!(error.to_string().contains("not supported yet"), "{error}");
+    first.close()?;
+    drop(first);
+    assert_eq!(
+        one(
+            &second,
+            "SELECT GET_LOCK('conformance_lock', 0), RELEASE_ALL_LOCKS(), RELEASE_LOCK('conformance_lock')"
+        )?,
+        vec![Value::from_i64(1), Value::from_i64(1), Value::Null]
+    );
+    Ok(())
+}
+
 fn query(
     connection: &Arc<turso_core::Connection>,
     sql: &str,

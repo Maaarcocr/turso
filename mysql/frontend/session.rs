@@ -1,15 +1,47 @@
 use crate::types::unsupported_value;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
 use turso_core::dialect::ArgumentType;
 use turso_core::types::TextSubtype;
 use turso_core::{Connection, Func, LimboError, Numeric, Result, Value};
 
 /// The state of a MySQL session that outlives its statements, kept as the
-/// context of the connection: the user variables.
-#[derive(Default)]
+/// context of the connection: its connection id and user variables. The
+/// user-level locks it holds are released when it closes.
 pub(crate) struct Session {
+    id: u64,
     user_variables: Mutex<HashMap<String, UserVariable>>,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+        Self {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            user_variables: Mutex::default(),
+        }
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        user_locks().retain(|_, holder| holder.session != self.id);
+    }
+}
+
+/// A user-level lock (`GET_LOCK`), held by one session as many times as it
+/// took it. Like MySQL's, which belong to the server, these belong to the
+/// process and are shared by every session in it.
+struct LockHolder {
+    session: u64,
+    count: u64,
+}
+
+static USER_LOCKS: LazyLock<Mutex<HashMap<String, LockHolder>>> = LazyLock::new(Mutex::default);
+
+fn user_locks() -> std::sync::MutexGuard<'static, HashMap<String, LockHolder>> {
+    USER_LOCKS.lock().expect("the user-level locks are not poisoned")
 }
 
 /// A user variable's value, and whether a string value has MySQL's default
@@ -26,6 +58,9 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         USER_VARIABLE | USER_VARIABLE_VALUE | ONE_JOINED_ROW => arg_count == 1,
         SET_USER_VARIABLES => arg_count >= 3 && arg_count % 3 == 0,
         KEEP_SESSION_SETTINGS => arg_count >= 2 && arg_count % 2 == 0,
+        "GET_LOCK" => arg_count == 2,
+        "RELEASE_LOCK" | "IS_FREE_LOCK" | "IS_USED_LOCK" => arg_count == 1,
+        "RELEASE_ALL_LOCKS" | "CONNECTION_ID" => arg_count == 0,
         _ => false,
     };
     accepted.then_some(Func::Dialect(name))
@@ -60,6 +95,18 @@ pub(crate) fn execute(
         }
         KEEP_SESSION_SETTINGS => keep_session_settings(args),
         ONE_JOINED_ROW => one_joined_row(args),
+        "GET_LOCK" => session(connection).and_then(|session| session.get_lock(args)),
+        "RELEASE_LOCK" => session(connection).and_then(|session| session.release_lock(args)),
+        "IS_FREE_LOCK" => lock_name(&args[0]).map(|name| {
+            Value::from_i64(i64::from(!user_locks().contains_key(&name)))
+        }),
+        "IS_USED_LOCK" => lock_name(&args[0]).map(|name| {
+            user_locks()
+                .get(&name)
+                .map_or(Value::Null, |holder| connection_id(holder.session))
+        }),
+        "RELEASE_ALL_LOCKS" => session(connection).map(Session::release_all_locks),
+        "CONNECTION_ID" => session(connection).map(|session| connection_id(session.id)),
         _ => return None,
     };
     Some(result)
@@ -116,6 +163,41 @@ const USER_VARIABLE_VALUE: &str = "__MYSQL_USER_VARIABLE_VALUE";
 
 const SET_USER_VARIABLES: &str = "__MYSQL_SET_USER_VARIABLES";
 
+/// The key of a user-level lock: MySQL compares lock names without case and
+/// rejects a `NULL`, empty or longer than 64 characters name (3057). A
+/// number names the lock by its text; other values, and names that are not
+/// ASCII, whose case folding is MySQL's, are refused.
+fn lock_name(name: &Value) -> Result<String> {
+    let wrong_name = |name: &str| {
+        LimboError::SqlError(format!(
+            "ERROR 3057 (42000): Incorrect user-level lock name '{name}'."
+        ))
+    };
+    let name = match name {
+        Value::Null => return Err(wrong_name("NULL")),
+        Value::Text(text) if text.subtype != TextSubtype::Json => text.as_str().to_string(),
+        Value::Numeric(Numeric::Integer(number)) => number.to_string(),
+        other => {
+            return Err(unsupported_value(format!(
+                "a user-level lock named by `{other}`"
+            )))
+        }
+    };
+    if !name.is_ascii() {
+        return Err(unsupported_value(format!(
+            "a user-level lock named `{name}`, which is not ASCII,"
+        )));
+    }
+    if name.is_empty() || name.len() > 64 {
+        return Err(wrong_name(&name));
+    }
+    Ok(name.to_ascii_lowercase())
+}
+
+fn connection_id(session: u64) -> Value {
+    Value::from_i64(i64::try_from(session).expect("connection ids fit a BIGINT"))
+}
+
 fn session(connection: &Connection) -> Result<&Session> {
     connection.context::<Session>().ok_or_else(|| {
         LimboError::InvalidArgument(
@@ -125,6 +207,68 @@ fn session(connection: &Connection) -> Result<&Session> {
 }
 
 impl Session {
+    /// `GET_LOCK(name, timeout)`: 1 when this session takes the lock, also
+    /// again; 0 when another session holds it and `timeout` is 0. Waiting for
+    /// another session to release it is refused.
+    fn get_lock(&self, args: &[Value]) -> Result<Value> {
+        let name = lock_name(&args[0])?;
+        let mut locks = user_locks();
+        match locks.get_mut(&name) {
+            None => {
+                locks.insert(
+                    name,
+                    LockHolder {
+                        session: self.id,
+                        count: 1,
+                    },
+                );
+                Ok(Value::from_i64(1))
+            }
+            Some(holder) if holder.session == self.id => {
+                holder.count += 1;
+                Ok(Value::from_i64(1))
+            }
+            Some(_) if args[1] == Value::from_i64(0) => Ok(Value::from_i64(0)),
+            Some(_) => Err(unsupported_value(format!(
+                "GET_LOCK('{name}', {}), which waits for another session to release the lock,",
+                args[1]
+            ))),
+        }
+    }
+
+    /// `RELEASE_LOCK(name)`: 1 when this session held the lock, which it
+    /// then holds once less; 0 when another session holds it; NULL when no
+    /// session does.
+    fn release_lock(&self, args: &[Value]) -> Result<Value> {
+        let name = lock_name(&args[0])?;
+        let mut locks = user_locks();
+        let Some(holder) = locks.get_mut(&name) else {
+            return Ok(Value::Null);
+        };
+        if holder.session != self.id {
+            return Ok(Value::from_i64(0));
+        }
+        holder.count -= 1;
+        if holder.count == 0 {
+            locks.remove(&name);
+        }
+        Ok(Value::from_i64(1))
+    }
+
+    /// `RELEASE_ALL_LOCKS()`: releases every lock this session holds and
+    /// returns how many times it held them.
+    fn release_all_locks(&self) -> Value {
+        let mut released = 0;
+        user_locks().retain(|_, holder| {
+            let own = holder.session == self.id;
+            if own {
+                released += holder.count;
+            }
+            !own
+        });
+        Value::from_i64(i64::try_from(released).expect("lock counts fit a BIGINT"))
+    }
+
     fn user_variable(&self, args: &[Value], compared: bool) -> Result<Value> {
         let [Value::Text(name)] = args else {
             return Err(LimboError::InternalError(
