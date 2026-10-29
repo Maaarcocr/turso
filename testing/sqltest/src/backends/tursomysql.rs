@@ -93,11 +93,12 @@ impl SqlBackend for TursomysqlBackend {
             _ => (turso_mysql::open_memory(), None),
         };
         let conn = conn.map_err(|e| BackendError::CreateDatabase(e.to_string()))?;
-        let blocks = spawn_block_thread(Arc::clone(&conn))
+        let (blocks, thread) = spawn_block_thread(Arc::clone(&conn))
             .map_err(|e| BackendError::CreateDatabase(format!("cannot start a thread: {e}")))?;
         Ok(Box::new(TursomysqlDatabaseInstance {
             conn,
             blocks,
+            thread,
             timeout: self.timeout,
             abandoned: false,
             _temp_file: temp_file,
@@ -111,6 +112,10 @@ pub struct TursomysqlDatabaseInstance {
     /// Sends blocks to the thread that runs them on `conn`. Dropping it ends
     /// the thread once its current block finishes.
     blocks: mpsc::Sender<Block>,
+    /// The thread, joined on close so that the session of `conn` (its
+    /// user-level locks, which every session of the process shares) ends
+    /// before the next database is created.
+    thread: thread::JoinHandle<()>,
     timeout: Duration,
     /// Set when a block did not stop after its deadline. Its thread may still
     /// be using the connection, so no further block runs on it.
@@ -135,9 +140,11 @@ enum BlockOutcome {
 /// Starts the thread that runs every block of one connection in order. A
 /// panic while running a block is sent back to be resumed in the runner's
 /// task, which reports it like any panic of a test.
-fn spawn_block_thread(conn: Arc<Connection>) -> std::io::Result<mpsc::Sender<Block>> {
+fn spawn_block_thread(
+    conn: Arc<Connection>,
+) -> std::io::Result<(mpsc::Sender<Block>, thread::JoinHandle<()>)> {
     let (sender, receiver) = mpsc::channel::<Block>();
-    thread::Builder::new()
+    let thread = thread::Builder::new()
         .name("tursomysql".to_string())
         .spawn(move || {
             for block in receiver {
@@ -149,7 +156,7 @@ fn spawn_block_thread(conn: Arc<Connection>) -> std::io::Result<mpsc::Sender<Blo
                 let _ = block.reply.send(outcome);
             }
         })?;
-    Ok(sender)
+    Ok((sender, thread))
 }
 
 /// Runs every statement in order and concatenates their rows. The first
@@ -249,7 +256,25 @@ impl DatabaseInstance for TursomysqlDatabaseInstance {
     }
 
     async fn close(self: Box<Self>) -> Result<DatabaseFileHandle, BackendError> {
-        match self._temp_file {
+        let Self {
+            conn,
+            blocks,
+            thread,
+            timeout: _,
+            abandoned,
+            _temp_file,
+        } = *self;
+        drop(blocks);
+        drop(conn);
+        if !abandoned {
+            let joined = tokio::task::spawn_blocking(move || thread.join())
+                .await
+                .map_err(|e| BackendError::Execute(format!("cannot join the thread: {e}")))?;
+            if let Err(payload) = joined {
+                panic::resume_unwind(payload);
+            }
+        }
+        match _temp_file {
             Some(tf) => Ok(DatabaseFileHandle::temp(tf)),
             None => Ok(DatabaseFileHandle::none()),
         }
@@ -322,10 +347,19 @@ mod tests {
         assert!(db.execute_setup("SELECT 'open").await.is_err());
     }
 
-    /// MySQL stops this query after `cte_max_recursion_depth` iterations;
-    /// Turso keeps recursing, so only the timeout ends it.
-    const ENDLESS_RECURSION: &str =
-        "WITH RECURSIVE c AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM c) SELECT COUNT(*) FROM c";
+    /// A count of the 10^10 rows of ten joined tables of ten digits, which
+    /// only the timeout ends.
+    fn endless_count() -> String {
+        let digits = (0..10)
+            .map(|digit| format!("SELECT {digit} AS n"))
+            .collect::<Vec<_>>()
+            .join(" UNION ALL ");
+        let tables = (0..10)
+            .map(|table| format!("({digits}) AS d{table}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("SELECT COUNT(*) FROM {tables}")
+    }
 
     #[tokio::test]
     async fn a_block_that_outlives_the_timeout_fails_with_a_timeout() {
@@ -337,7 +371,7 @@ mod tests {
         };
         let mut db = backend.create_database(&config).await.unwrap();
         let start = Instant::now();
-        let result = db.execute(ENDLESS_RECURSION).await;
+        let result = db.execute(&endless_count()).await;
         assert!(
             matches!(result, Err(BackendError::Timeout(t)) if t == timeout),
             "{result:?}"
@@ -366,7 +400,7 @@ mod tests {
         // Once the first statement used up the time, the block ends without
         // running the rest.
         let result = db
-            .execute(&format!("{ENDLESS_RECURSION}; CREATE TABLE t(x INTEGER)"))
+            .execute(&format!("{}; CREATE TABLE t(x INTEGER)", endless_count()))
             .await;
         assert!(
             matches!(result, Err(BackendError::Timeout(_))),

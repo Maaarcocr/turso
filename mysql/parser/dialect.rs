@@ -57,16 +57,37 @@ pub(crate) const TEMPORAL_UNITS: &[&str] = &[
     "YEAR_MONTH",
 ];
 
+/// The word after the leading `SET` of `sql`, in upper case (`SESSION` in
+/// `SET SESSION TRANSACTION ...`, which the parsed statement does not keep).
+pub(crate) fn word_after_set(sql: &str) -> Option<String> {
+    let dialect = MySql::default();
+    let tokens = Tokenizer::new(&dialect, sql).tokenize().ok()?;
+    let mut words = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)))
+        .map(|token| match token {
+            Token::Word(word) if word.quote_style.is_none() => {
+                Some(word.value.to_ascii_uppercase())
+            }
+            _ => None,
+        });
+    match words.next() {
+        Some(Some(set)) if set == "SET" => words.next().flatten(),
+        _ => None,
+    }
+}
+
 pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {
     let dialect = MySql::default();
     let tokens = Tokenizer::new(&dialect, sql)
         .with_unescape(false)
         .tokenize_with_location()
         .map_err(ParserError::from)?;
-    let tokens = tokens
+    let mut tokens: Vec<TokenWithSpan> = tokens
         .into_iter()
         .map(|token| unescape_token(token, sql))
         .collect();
+    end_trigger_body(&mut tokens);
     let statements = Parser::new(&dialect)
         .with_tokens_with_locations(tokens)
         .parse_statements()?;
@@ -74,6 +95,28 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserE
         return Err(MysqlParserError::Rejected(reason));
     }
     Ok(statements)
+}
+
+/// Ends a `CREATE TRIGGER` with a `;`, which the parser expects after the
+/// statement of a trigger body and the `mysql` client takes away as the end
+/// of the whole statement.
+fn end_trigger_body(tokens: &mut Vec<TokenWithSpan>) {
+    let mut words = tokens.iter().filter_map(|token| match &token.token {
+        Token::Whitespace(_) => None,
+        Token::Word(word) if word.quote_style.is_none() => Some(Some(word.keyword)),
+        _ => Some(None),
+    });
+    if words.next() != Some(Some(Keyword::CREATE)) || words.next() != Some(Some(Keyword::TRIGGER)) {
+        return;
+    }
+    let last = tokens
+        .iter()
+        .rev()
+        .find(|token| !matches!(token.token, Token::Whitespace(_) | Token::EOF));
+    if let Some(last) = last.filter(|last| last.token != Token::SemiColon) {
+        let span = last.span;
+        tokens.push(TokenWithSpan::new(Token::SemiColon, span));
+    }
 }
 
 fn unescape_token(token: TokenWithSpan, sql: &str) -> TokenWithSpan {

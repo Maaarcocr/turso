@@ -12,6 +12,7 @@ use turso_core::{Connection, Func, LimboError, Numeric, Result, Value};
 pub(crate) struct Session {
     id: u64,
     user_variables: Mutex<HashMap<String, UserVariable>>,
+    transaction_isolation: Mutex<&'static str>,
 }
 
 impl Default for Session {
@@ -20,6 +21,7 @@ impl Default for Session {
         Self {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             user_variables: Mutex::default(),
+            transaction_isolation: Mutex::new("REPEATABLE-READ"),
         }
     }
 }
@@ -62,7 +64,8 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         KEEP_SESSION_SETTINGS => arg_count >= 2 && arg_count % 2 == 0,
         "GET_LOCK" => arg_count == 2,
         "RELEASE_LOCK" | "IS_FREE_LOCK" | "IS_USED_LOCK" => arg_count == 1,
-        "RELEASE_ALL_LOCKS" | "CONNECTION_ID" => arg_count == 0,
+        "RELEASE_ALL_LOCKS" | "CONNECTION_ID" | TRANSACTION_ISOLATION => arg_count == 0,
+        SET_TRANSACTION_ISOLATION => arg_count == 1,
         _ => false,
     };
     accepted.then_some(Func::Dialect(name))
@@ -108,6 +111,17 @@ pub(crate) fn execute(
         }),
         "RELEASE_ALL_LOCKS" => session(connection).map(Session::release_all_locks),
         "CONNECTION_ID" => session(connection).map(|session| connection_id(session.id)),
+        TRANSACTION_ISOLATION => session(connection).map(|session| {
+            Value::build_text(
+                *session
+                    .transaction_isolation
+                    .lock()
+                    .expect("the isolation level is not poisoned"),
+            )
+        }),
+        SET_TRANSACTION_ISOLATION => {
+            session(connection).and_then(|session| session.set_transaction_isolation(args))
+        }
         _ => return None,
     };
     Some(result)
@@ -155,6 +169,13 @@ fn one_joined_row(args: &[Value]) -> Result<Value> {
 }
 
 const ONE_JOINED_ROW: &str = "__MYSQL_ONE_JOINED_ROW";
+
+/// `__mysql_transaction_isolation()`: the session's
+/// `@@transaction_isolation`; `__mysql_set_transaction_isolation(level)`,
+/// from `SET SESSION TRANSACTION ISOLATION LEVEL`, stores it and returns 0.
+const TRANSACTION_ISOLATION: &str = "__MYSQL_TRANSACTION_ISOLATION";
+
+const SET_TRANSACTION_ISOLATION: &str = "__MYSQL_SET_TRANSACTION_ISOLATION";
 
 const KEEP_SESSION_SETTINGS: &str = "__MYSQL_KEEP_SESSION_SETTINGS";
 
@@ -268,6 +289,30 @@ impl Session {
             !own
         });
         Value::from_i64(i64::try_from(released).expect("lock counts fit a BIGINT"))
+    }
+
+    fn set_transaction_isolation(&self, args: &[Value]) -> Result<Value> {
+        let level = match args {
+            [Value::Text(level)] => match level.as_str() {
+                "READ-UNCOMMITTED" => "READ-UNCOMMITTED",
+                "READ-COMMITTED" => "READ-COMMITTED",
+                "REPEATABLE-READ" => "REPEATABLE-READ",
+                "SERIALIZABLE" => "SERIALIZABLE",
+                _ => None.ok_or_else(|| {
+                    LimboError::InternalError(format!("no isolation level {}", level.as_str()))
+                })?,
+            },
+            _ => {
+                return Err(LimboError::InternalError(
+                    "an isolation level is set by its name".to_string(),
+                ))
+            }
+        };
+        *self
+            .transaction_isolation
+            .lock()
+            .expect("the isolation level is not poisoned") = level;
+        Ok(Value::from_i64(0))
     }
 
     fn user_variable(&self, args: &[Value], compared: bool) -> Result<Value> {

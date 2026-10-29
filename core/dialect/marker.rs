@@ -61,11 +61,12 @@ impl TableMarker {
 
 pub(crate) fn parse_statement(
     dialect: &dyn Dialect,
+    connection: &crate::Connection,
     sql: &str,
 ) -> Result<(Option<ast::Cmd>, usize)> {
     let statement_sql = sql.trim_start();
     let Some((marker, table_sql)) = TableMarker::read(statement_sql)? else {
-        return dialect.parse(sql);
+        return dialect.parse_for(connection, sql);
     };
     if !dialect_writes_marker(dialect, &marker) {
         crate::bail_parse_error!(
@@ -280,7 +281,10 @@ mod tests {
     fn marked_table_text_may_have_type_parameter_lists() {
         let table_sql = "CREATE TABLE t(e LABELS('small','large')) STRICT";
         let marked = TableMarker::new("marking", false).write(table_sql);
-        let (cmd, consumed) = parse_statement(marking().as_ref(), &marked).unwrap();
+        let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+        let db = open_db(&io, "marker-type-parameters.db", marking()).unwrap();
+        let conn = db.connect(ConnectOpts::new()).unwrap();
+        let (cmd, consumed) = parse_statement(marking().as_ref(), &conn, &marked).unwrap();
         assert_eq!(consumed, marked.len());
         let Some(ast::Cmd::Stmt(stmt)) = cmd else {
             panic!("expected a statement");

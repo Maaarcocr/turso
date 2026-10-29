@@ -2,7 +2,7 @@ use crate::ddl_column::Column;
 use crate::ddl_index::{drop_index_statement, translate_drop_index};
 use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_column_name, translate_ddl_identifier, translate_ddl_name};
-use crate::MysqlParserError;
+use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTable, AlterTableOperation, ObjectType, RenameTable, RenameTableNameKind, Statement,
 };
@@ -10,6 +10,7 @@ use turso_parser::ast;
 
 pub(crate) fn translate_alter_table(
     alter_table: &AlterTable,
+    environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     let AlterTable {
         name,
@@ -63,7 +64,7 @@ pub(crate) fn translate_alter_table(
             table_name: RenameTableNameKind::To(new_name) | RenameTableNameKind::As(new_name),
         } => ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
         AlterTableOperation::DropIndex { name } => {
-            return drop_index_statement(translate_ddl_identifier(name)?);
+            return drop_index_statement(translate_ddl_identifier(name)?, &table_name, environment);
         }
         _ => return Err(unsupported_operation(operation)),
     };
@@ -87,7 +88,10 @@ pub(crate) fn translate_rename_table(
     }))
 }
 
-pub(crate) fn translate_drop(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
+pub(crate) fn translate_drop(
+    statement: &Statement,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
     let Statement::Drop {
         object_type,
         if_exists,
@@ -120,7 +124,9 @@ pub(crate) fn translate_drop(statement: &Statement) -> Result<ast::Stmt, MysqlPa
                 tbl_name: ast::QualifiedName::single(translate_ddl_name(name)?),
             })
         }
-        (ObjectType::Index, Some(_)) if !*if_exists => translate_drop_index(names),
+        (ObjectType::Index, Some(table)) if !*if_exists => {
+            translate_drop_index(names, &translate_ddl_name(table)?, environment)
+        }
         (ObjectType::View, None) => crate::ddl_view::translate_drop_view(names, *if_exists),
         _ => Err(MysqlParserError::Unsupported(format!(
             "`{statement}` is not available"

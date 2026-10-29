@@ -1,4 +1,7 @@
-use turso_mysql_parser::{parse, parse_and_translate, parse_one, translate, MysqlParserError};
+use turso_mysql_parser::{
+    parse, parse_and_translate, parse_and_translate_in, parse_one, translate, ColumnFacts,
+    Environment, ForeignKeyTo, MysqlParserError,
+};
 use turso_parser::ast;
 
 struct SqlCase {
@@ -253,14 +256,6 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         (
             "CREATE UNIQUE INDEX idx ON t ((C1*10), c2, ((c1+c2)*-2) DESC)",
             "CREATE UNIQUE INDEX idx ON t (C1 * 10, c2, (c1 + c2) * - 2 DESC)",
-        ),
-        (
-            "DROP INDEX idx ON t",
-            "DROP INDEX idx",
-        ),
-        (
-            "ALTER TABLE t DROP INDEX idx",
-            "DROP INDEX idx",
         ),
         (
             "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0 COMMENT 'x'",
@@ -1222,8 +1217,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 1 INTO @x",
         },
         SqlCase {
-            name: "locking read",
-            sql: "SELECT a FROM t FOR UPDATE",
+            name: "locking read of a named table",
+            sql: "SELECT a FROM t FOR UPDATE OF t",
         },
         SqlCase {
             name: "global system variable",
@@ -1641,15 +1636,246 @@ fn lowering_rejects_unsupported_statement_families() {
         "SET autocommit = 0",
         "SET FOREIGN_KEY_CHECKS = 2",
         "SET FOREIGN_KEY_CHECKS = 0, FOREIGN_KEY_CHECKS = 1",
-        "START TRANSACTION",
-        "COMMIT",
-        "ROLLBACK",
+        "START TRANSACTION READ ONLY",
+        "COMMIT AND CHAIN",
+        "ROLLBACK AND CHAIN",
+        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED",
+        "SET GLOBAL TRANSACTION ISOLATION LEVEL READ COMMITTED",
+        "SET SESSION TRANSACTION READ ONLY",
+        "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE",
     ];
 
     for sql in cases {
         let error = parse_and_translate(sql).expect_err("unsupported statement must be rejected");
         assert!(
             matches!(error, MysqlParserError::Unsupported(_)),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+}
+
+/// A session outside a transaction whose only index is `idx` of table `t`.
+struct IndexOfT;
+
+impl Environment for IndexOfT {
+    fn in_transaction(&self) -> bool {
+        false
+    }
+
+    fn index_table(&self, name: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(name.eq_ignore_ascii_case("idx").then(|| "t".to_string()))
+    }
+
+    fn has_triggers(&self) -> bool {
+        false
+    }
+
+    fn triggers_on(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_keys_to(&self, _table: &str) -> Result<Vec<ForeignKeyTo>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn columns_of(&self, _table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError> {
+        Ok(None)
+    }
+}
+
+/// A session outside a transaction on tables `a (id AUTO_INCREMENT, x, g
+/// generated)`, `b` and `c`, where `c` references `b` with `ON DELETE
+/// CASCADE`, `a` has trigger `a1` (after insert, writing `b`) and `c` has `c1`
+/// (after delete, writing `log`).
+struct TriggerSchema;
+
+impl Environment for TriggerSchema {
+    fn in_transaction(&self) -> bool {
+        false
+    }
+
+    fn index_table(&self, _name: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn has_triggers(&self) -> bool {
+        true
+    }
+
+    fn triggers_on(&self, table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(match table {
+            "a" => vec![
+                "CREATE TRIGGER a1 AFTER INSERT ON a FOR EACH ROW BEGIN INSERT INTO b VALUES (NEW.x); END"
+                    .to_string(),
+            ],
+            "c" => vec![
+                "CREATE TRIGGER c1 AFTER DELETE ON c FOR EACH ROW BEGIN INSERT INTO log VALUES (OLD.y); END"
+                    .to_string(),
+            ],
+            _ => Vec::new(),
+        })
+    }
+
+    fn foreign_keys_to(&self, table: &str) -> Result<Vec<ForeignKeyTo>, MysqlParserError> {
+        Ok(match table {
+            "b" => vec![ForeignKeyTo {
+                table: "c".to_string(),
+                on_delete: ast::RefAct::Cascade,
+                on_update: ast::RefAct::NoAction,
+            }],
+            _ => Vec::new(),
+        })
+    }
+
+    fn columns_of(&self, table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError> {
+        let column = |name: &str, auto_increment, generated| ColumnFacts {
+            name: name.to_string(),
+            auto_increment,
+            generated,
+        };
+        Ok(match table {
+            "a" => Some(vec![
+                column("id", true, false),
+                column("x", false, false),
+                column("g", false, true),
+            ]),
+            "b" | "c" | "log" => Some(vec![column("y", false, false)]),
+            _ => None,
+        })
+    }
+}
+
+#[test]
+fn lowers_triggers_that_fire_as_mysql_s() {
+    let cases = [
+        (
+            "CREATE TRIGGER b1 BEFORE INSERT ON b FOR EACH ROW INSERT INTO log VALUES (NEW.y * 2)",
+            "CREATE TRIGGER b1 BEFORE INSERT ON b FOR EACH ROW BEGIN INSERT INTO log VALUES (NEW.y * 2); END",
+        ),
+        (
+            "CREATE TRIGGER a2 BEFORE UPDATE ON a FOR EACH ROW UPDATE b SET y = y + OLD.x + NEW.x",
+            "CREATE TRIGGER a2 BEFORE UPDATE ON a FOR EACH ROW BEGIN UPDATE b SET y = y + OLD.x + NEW.x; END",
+        ),
+        (
+            "CREATE TRIGGER a3 AFTER DELETE ON a FOR EACH ROW DELETE FROM b WHERE y = OLD.x",
+            "CREATE TRIGGER a3 AFTER DELETE ON a FOR EACH ROW BEGIN DELETE FROM b WHERE y = OLD.x; END",
+        ),
+        ("DROP TRIGGER a1", "DROP TRIGGER a1"),
+        ("DROP TRIGGER IF EXISTS a1", "DROP TRIGGER IF EXISTS a1"),
+        ("INSERT INTO a (x) VALUES (1)", "INSERT INTO a (x) VALUES (1)"),
+        ("DELETE FROM c", "DELETE FROM c"),
+    ];
+    for (sql, expected) in cases {
+        let statement = parse_and_translate_in(sql, &TriggerSchema)
+            .unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        let text = statement.to_string();
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert_eq!(text, expected, "SQL: {sql}");
+    }
+
+    let unsupported = [
+        "CREATE TRIGGER a4 AFTER INSERT ON a FOR EACH ROW INSERT INTO log VALUES (1)",
+        "CREATE TRIGGER a4 BEFORE INSERT ON a FOR EACH ROW INSERT INTO log VALUES (NEW.id)",
+        "CREATE TRIGGER a4 BEFORE UPDATE ON a FOR EACH ROW INSERT INTO log VALUES (NEW.g)",
+        "CREATE TRIGGER a4 BEFORE INSERT ON a FOR EACH ROW SET NEW.x = NEW.x + 1",
+        "CREATE TRIGGER a4 BEFORE INSERT ON a FOR EACH ROW FOLLOWS a1 INSERT INTO log VALUES (1)",
+        "INSERT INTO a (x) SELECT y FROM b",
+        "INSERT IGNORE INTO a (x) VALUES (1)",
+        "REPLACE INTO a (x) VALUES (1)",
+        "DELETE FROM b",
+        "ALTER TABLE b ADD COLUMN z INT",
+        "RENAME TABLE b TO d",
+    ];
+    for sql in unsupported {
+        let error = parse_and_translate_in(sql, &TriggerSchema)
+            .expect_err("a trigger that would fire unlike MySQL's is refused");
+        assert!(
+            matches!(
+                error,
+                MysqlParserError::Unsupported(_) | MysqlParserError::Parse(_)
+            ),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+
+    let rejected = [
+        "CREATE TRIGGER b2 AFTER INSERT ON b FOR EACH ROW INSERT INTO log VALUES (OLD.y)",
+        "CREATE TRIGGER b2 AFTER DELETE ON b FOR EACH ROW INSERT INTO log VALUES (NEW.y)",
+        "CREATE TRIGGER b2 BEFORE UPDATE ON b FOR EACH ROW SET OLD.y = 1",
+        "CREATE TRIGGER b2 AFTER UPDATE ON b FOR EACH ROW SET NEW.y = 1",
+        "CREATE TRIGGER b2 AFTER UPDATE ON b FOR EACH ROW SELECT 1",
+    ];
+    for sql in rejected {
+        let error = parse_and_translate_in(sql, &TriggerSchema).expect_err("MySQL rejects it");
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+}
+
+#[test]
+fn drops_an_index_of_the_named_table_only() {
+    for sql in [
+        "DROP INDEX idx ON t",
+        "DROP INDEX IDX ON T",
+        "ALTER TABLE t DROP INDEX idx",
+    ] {
+        let statement = parse_and_translate_in(sql, &IndexOfT)
+            .unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert!(
+            statement.to_string().eq_ignore_ascii_case("DROP INDEX idx"),
+            "SQL: {sql}"
+        );
+    }
+    for sql in [
+        "DROP INDEX idx ON u",
+        "ALTER TABLE u DROP INDEX idx",
+        "DROP INDEX other ON t",
+    ] {
+        let error = parse_and_translate_in(sql, &IndexOfT).expect_err(sql);
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+    let error =
+        parse_and_translate("DROP INDEX idx ON t").expect_err("an empty database has no index");
+    assert!(matches!(error, MysqlParserError::Rejected(_)), "{error}");
+}
+
+#[test]
+fn lowers_transactions_for_a_session_outside_one() {
+    let cases = [
+        ("START TRANSACTION", "BEGIN IMMEDIATE"),
+        ("BEGIN", "BEGIN IMMEDIATE"),
+        ("BEGIN WORK", "BEGIN IMMEDIATE"),
+        ("COMMIT", "SELECT 0 WHERE 0"),
+        ("ROLLBACK", "SELECT 0 WHERE 0"),
+        ("SAVEPOINT a", "SELECT 0 WHERE 0"),
+        ("SELECT a FROM t FOR UPDATE", "SELECT a FROM t"),
+        ("SELECT a FROM t FOR SHARE SKIP LOCKED", "SELECT a FROM t"),
+        (
+            "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
+            "SELECT 0 WHERE __mysql_set_transaction_isolation ('READ-COMMITTED')",
+        ),
+        (
+            "set local transaction isolation level serializable",
+            "SELECT 0 WHERE __mysql_set_transaction_isolation ('SERIALIZABLE')",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+
+    for sql in ["ROLLBACK TO SAVEPOINT a", "RELEASE SAVEPOINT a"] {
+        let error =
+            parse_and_translate(sql).expect_err("no savepoint exists outside a transaction");
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
             "SQL: {sql}\nerror: {error}"
         );
     }

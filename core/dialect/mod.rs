@@ -53,6 +53,29 @@ pub trait Dialect: Send + Sync + 'static {
     /// engine-generated and AST-only statements use that representation.
     fn parse(&self, sql: &str) -> crate::Result<(Option<turso_parser::ast::Cmd>, usize)>;
 
+    /// Parse the first statement in `sql` for `connection`, whose schema,
+    /// transaction state and context the dialect may read to choose the
+    /// statement's meaning. The engine prepares and re-prepares statements
+    /// through this method; it defaults to [`Dialect::parse`]. A prepared
+    /// statement is re-prepared when the schema changes, and also when the
+    /// connection enters or leaves a transaction if
+    /// [`Dialect::parse_reads_transaction_state`] is true.
+    fn parse_for(
+        &self,
+        connection: &crate::Connection,
+        sql: &str,
+    ) -> crate::Result<(Option<turso_parser::ast::Cmd>, usize)> {
+        let _ = connection;
+        self.parse(sql)
+    }
+
+    /// Whether [`Dialect::parse_for`] reads whether the connection is in a
+    /// transaction, so that a statement prepared in one state is prepared
+    /// again before it runs in the other.
+    fn parse_reads_transaction_state(&self) -> bool {
+        false
+    }
+
     /// Parse a `sqlite_schema` `type='table'` row's SQL into a table
     /// definition.
     ///

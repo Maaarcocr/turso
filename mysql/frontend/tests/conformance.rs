@@ -238,6 +238,160 @@ fn tables_made_by_create_table_as_select_keep_their_column_types_after_reopen(
 }
 
 #[test]
+fn transactions_keep_mysql_semantics() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id INT PRIMARY KEY, d DATE)")?;
+    for statement in ["COMMIT", "ROLLBACK", "SAVEPOINT a"] {
+        connection.execute(statement)?;
+    }
+    for statement in ["RELEASE SAVEPOINT a", "ROLLBACK TO SAVEPOINT a"] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains("does not exist"), "{error}");
+    }
+    let commit_prepared_outside = connection.prepare("COMMIT")?;
+    connection.execute("BEGIN")?;
+    connection.execute("INSERT INTO t VALUES (1, '2024-01-01')")?;
+    connection
+        .execute("INSERT INTO t VALUES (2, '2024-01-02'), (1, '2024-01-03')")
+        .expect_err("a duplicate key fails the statement");
+    connection
+        .execute("INSERT INTO t VALUES (3, '2024-01-03'), (4, '2024-02-30')")
+        .expect_err("an invalid date fails the statement");
+    connection.execute("SAVEPOINT s")?;
+    connection.execute("INSERT INTO t VALUES (5, NULL)")?;
+    connection.execute("ROLLBACK TO SAVEPOINT s")?;
+    for statement in [
+        "CREATE TABLE u (i INT)",
+        "DROP TABLE t",
+        "START TRANSACTION",
+        "SET autocommit = 1",
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("inside a transaction"),
+            "{statement}: {error}"
+        );
+    }
+    let mut commit = commit_prepared_outside;
+    commit.run_collect_rows()?;
+    assert!(
+        connection.get_auto_commit(),
+        "COMMIT must end the transaction"
+    );
+    connection.execute("ROLLBACK")?;
+    assert_eq!(
+        query(&connection, "SELECT id FROM t")?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    connection.execute("START TRANSACTION")?;
+    connection.execute("INSERT INTO t VALUES (6, NULL)")?;
+    connection.execute("ROLLBACK")?;
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM t")?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    let mut isolation = connection.prepare("SELECT @@transaction_isolation")?;
+    assert_eq!(
+        isolation.run_collect_rows()?,
+        vec![vec![Value::build_text("REPEATABLE-READ")]]
+    );
+    connection.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")?;
+    isolation.reset()?;
+    assert_eq!(
+        isolation.run_collect_rows()?,
+        vec![vec![Value::build_text("READ-COMMITTED")]]
+    );
+    let other = open_memory()?;
+    assert_eq!(
+        query(&other, "SELECT @@transaction_isolation")?,
+        vec![vec![Value::build_text("REPEATABLE-READ")]]
+    );
+    Ok(())
+}
+
+#[test]
+fn drop_index_names_the_table_of_the_index() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t1 (a INT)")?;
+    connection.execute("CREATE TABLE t2 (a INT)")?;
+    connection.execute("CREATE INDEX idx ON t1 (a)")?;
+    let mut drop_from_t2 = connection.prepare("DROP INDEX idx ON t2");
+    let error = drop_from_t2
+        .as_mut()
+        .map(|_| ())
+        .expect_err("idx is not an index of t2");
+    assert!(
+        error.to_string().contains("check that column/key exists"),
+        "{error}"
+    );
+    let index_count = "SELECT count(*) FROM sqlite_schema WHERE type = 'index'";
+    assert_eq!(
+        query(&connection, index_count)?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    let mut drop_from_t1 = connection.prepare("ALTER TABLE t1 DROP INDEX IDX")?;
+    drop_from_t1.run_collect_rows()?;
+    assert_eq!(
+        query(&connection, index_count)?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    connection
+        .execute("DROP INDEX idx ON t1")
+        .expect_err("idx was dropped");
+    Ok(())
+}
+
+#[test]
+fn triggers_fire_as_mysql_s_or_are_refused() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for statement in [
+        "CREATE TABLE a (id INT AUTO_INCREMENT PRIMARY KEY, x INT)",
+        "CREATE TABLE b (y INT PRIMARY KEY)",
+        "CREATE TABLE c (pid INT, FOREIGN KEY (pid) REFERENCES b (y) ON DELETE CASCADE)",
+        "CREATE TABLE log (z INT)",
+        "CREATE TRIGGER a1 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (NEW.x * 7)",
+        "CREATE TRIGGER a2 BEFORE INSERT ON a FOR EACH ROW INSERT INTO log VALUES (NEW.x)",
+        "INSERT INTO a (x) VALUES (1), (2)",
+    ] {
+        connection.execute(statement)?;
+    }
+    assert_eq!(
+        query(&connection, "SELECT y FROM b ORDER BY y")?,
+        vec![vec![Value::from_i64(7)], vec![Value::from_i64(14)]]
+    );
+    connection
+        .execute("INSERT INTO a (x) VALUES (3), (1)")
+        .expect_err("the trigger's duplicate key fails the statement");
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM a")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    for refused in [
+        "CREATE TRIGGER a3 AFTER INSERT ON a FOR EACH ROW INSERT INTO log VALUES (1)",
+        "CREATE TRIGGER a3 BEFORE INSERT ON a FOR EACH ROW FOLLOWS a2 INSERT INTO log VALUES (1)",
+        "INSERT INTO a (x) SELECT y FROM b",
+        "ALTER TABLE log ADD COLUMN w INT",
+    ] {
+        connection.execute(refused).expect_err(refused);
+    }
+    connection.execute(
+        "CREATE TRIGGER c1 AFTER DELETE ON c FOR EACH ROW INSERT INTO log VALUES (OLD.pid)",
+    )?;
+    connection.execute("INSERT INTO c VALUES (7)")?;
+    let error = connection
+        .execute("DELETE FROM b WHERE y = 7")
+        .expect_err("MySQL does not fire c1 for the cascade");
+    assert!(error.to_string().contains("foreign key action"), "{error}");
+    connection.execute("DROP TRIGGER c1")?;
+    connection.execute("DELETE FROM b WHERE y = 7")?;
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM c")?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<()> {
     let first = open_memory()?;
     let second = open_memory()?;

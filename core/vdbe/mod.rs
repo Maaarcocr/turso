@@ -2140,6 +2140,10 @@ pub struct PrepareContext {
     /// attach/detach, extension registration, etc.) without rebuilding the full
     /// context on every step.
     generation: u64,
+    /// Whether the connection was outside a transaction at prepare time, kept
+    /// when the dialect's parsing reads it
+    /// ([`crate::Dialect::parse_reads_transaction_state`]).
+    auto_commit: Option<bool>,
 }
 
 impl PrepareContext {
@@ -2147,6 +2151,10 @@ impl PrepareContext {
         Self {
             database_ptr: connection.database_ptr(),
             generation: connection.prepare_context_generation(),
+            auto_commit: connection
+                .dialect()
+                .parse_reads_transaction_state()
+                .then(|| connection.get_auto_commit()),
         }
     }
 
@@ -2154,6 +2162,9 @@ impl PrepareContext {
     pub fn matches_connection(&self, connection: &Connection) -> bool {
         self.database_ptr == connection.database_ptr()
             && self.generation == connection.prepare_context_generation()
+            && self
+                .auto_commit
+                .is_none_or(|auto_commit| auto_commit == connection.get_auto_commit())
     }
 }
 
