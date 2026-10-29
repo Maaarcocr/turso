@@ -1865,8 +1865,9 @@ fn rejects_what_mysql_rejects_when_it_resolves_names() {
         "SELECT a FROM t WHERE a = ANY (SELECT a FROM u LIMIT 1)",
         "SELECT * FROM t AS x, u AS x",
         "SELECT * FROM t, t",
+        "SELECT * FROM (SELECT 1 AS a) AS d, (SELECT 2 AS a) AS d",
+
         "SELECT * FROM t AS x, x",
-        "SELECT * FROM t JOIN (SELECT 1 AS a) AS t",
         "SELECT * FROM t UNION SELECT * FROM u AS x JOIN v AS x ON 1",
         "SELECT a AS c, b AS c FROM t ORDER BY c",
         "SELECT * FROM t t0, t t1, t t2, t t3, t t4, t t5, t t6, t t7, t t8, t t9, t t10, t t11, t t12, t t13, t t14, t t15, t t16, t t17, t t18, t t19, t t20, t t21, t t22, t t23, t t24, t t25, t t26, t t27, t t28, t t29, t t30, t t31, t t32, t t33, t t34, t t35, t t36, t t37, t t38, t t39, t t40, t t41, t t42, t t43, t t44, t t45, t t46, t t47, t t48, t t49, t t50, t t51, t t52, t t53, t t54, t t55, t t56, t t57, t t58, t t59, t t60, t t61",
@@ -1881,6 +1882,8 @@ fn rejects_what_mysql_rejects_when_it_resolves_names() {
         "SELECT a FROM t WHERE a IN (SELECT a FROM (SELECT a FROM u LIMIT 2) AS d)",
         "SELECT a FROM t WHERE EXISTS (SELECT a FROM u LIMIT 1)",
         "SELECT * FROM t AS x JOIN t AS y ON x.a = y.a",
+        "SELECT * FROM t JOIN (SELECT 1 AS a) AS t",
+        "SELECT * FROM (SELECT 1 AS a) AS t JOIN t",
         "SELECT a AS c, a AS c FROM t ORDER BY c",
         "SELECT a AS c, b AS d FROM t ORDER BY c",
     ] {

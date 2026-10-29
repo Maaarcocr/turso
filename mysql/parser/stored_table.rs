@@ -24,6 +24,8 @@ pub(crate) struct ColumnDefinition {
     pub(crate) type_text: String,
     pub(crate) collation: Option<String>,
     pub(crate) not_null: bool,
+    pub(crate) default: Option<ast::Expr>,
+    pub(crate) generated: bool,
 }
 
 impl ColumnDefinition {
@@ -60,8 +62,12 @@ impl ColumnDefinition {
         };
         let mut collation = None;
         let mut not_null = false;
+        let mut default = None;
+        let mut generated = false;
         for constraint in &definition.constraints {
             match &constraint.constraint {
+                ast::ColumnConstraint::Default(expr) => default = Some(expr.as_ref().clone()),
+                ast::ColumnConstraint::Generated { .. } => generated = true,
                 ast::ColumnConstraint::Collate { collation_name } => {
                     collation = Some(collation_name.as_str().to_string());
                 }
@@ -75,6 +81,8 @@ impl ColumnDefinition {
             type_text,
             collation,
             not_null,
+            default,
+            generated,
         }
     }
 
@@ -119,7 +127,8 @@ pub(crate) struct TableDefinition {
 
 impl TableDefinition {
     pub(crate) fn parse(sql: &str) -> Result<Self, MysqlParserError> {
-        let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+        let mut parser =
+            turso_parser::parser::Parser::new(sql.as_bytes()).with_type_parameter_lists();
         match parser.next_cmd() {
             Ok(Some(ast::Cmd::Stmt(ast::Stmt::CreateTable {
                 body:

@@ -18,8 +18,10 @@ use turso_parser::ast;
 /// - constraint names are unique in the database (1826).
 ///
 /// MySQL accepts keys between `DECIMAL` columns of different scales or
-/// sizes and between `DATETIME` and `TIMESTAMP` columns, which then match
-/// no value, and so does Turso, refusing writes to the table instead (see
+/// sizes and between temporal columns of different types or fractional
+/// seconds, which then match no value, and between `CHAR` and `VARCHAR`
+/// columns, whose values may match unlike Turso's when they end in spaces;
+/// so does Turso, checking writes to the table instead (see
 /// `check_writes`). Refused: other columns of different types, which MySQL
 /// accepts or rejects by rules not modeled here. With `FOREIGN_KEY_CHECKS` 0, every failed
 /// check refuses instead of failing.
@@ -190,13 +192,6 @@ pub(crate) fn check_foreign_keys(
                     if child.collation != parent.collation {
                         return Err(incompatible());
                     }
-                    if child.base_type() != parent.base_type() {
-                        return Err(MysqlParserError::Unsupported(format!(
-                            "foreign key `{constraint}` between a {} and a {} column is not lowered yet",
-                            child.base_type(),
-                            parent.base_type()
-                        )));
-                    }
                 }
                 _ if child.type_text == parent.type_text => {}
                 _ if stored_match(child, parent) != StoredMatch::Unknown => {}
@@ -220,18 +215,33 @@ pub(crate) fn check_foreign_keys(
 
 /// How MySQL matches the values of a referencing column with those of the
 /// referenced one, comparing their stored bytes.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StoredMatch {
     /// Equal values are stored alike, so they match as Turso matches them.
     Values,
     /// The types store every value differently, so no value matches.
     Never,
+    /// A `CHAR` and a `VARCHAR` column of one collation: values that do not
+    /// end in a space match as Turso matches them.
+    UnlessTrailingSpaces,
     /// Not modeled.
     Unknown,
 }
 
 fn stored_match(child: &ColumnDefinition, parent: &ColumnDefinition) -> StoredMatch {
     if child.type_text == parent.type_text {
+        return StoredMatch::Values;
+    }
+    if child.family() == Family::String && parent.family() == Family::String {
+        return if child.base_type() == parent.base_type() {
+            StoredMatch::Values
+        } else {
+            StoredMatch::UnlessTrailingSpaces
+        };
+    }
+    let is_binary =
+        |column: &ColumnDefinition| matches!(column.base_type(), "BINARY" | "VARBINARY");
+    if is_binary(child) && is_binary(parent) {
         return StoredMatch::Values;
     }
     if let (Some(child), Some(parent)) = (decimal_storage(child), decimal_storage(parent)) {
@@ -273,11 +283,11 @@ fn decimal_storage(column: &ColumnDefinition) -> Option<(u32, u32)> {
     ))
 }
 
-/// The type and the bytes of the fractional seconds of a `DATETIME` or
-/// `TIMESTAMP` column.
+/// The type and the bytes of the fractional seconds of a `DATETIME`,
+/// `TIMESTAMP` or `TIME` column.
 fn temporal_storage(column: &ColumnDefinition) -> Option<(&str, u32)> {
     let base = column.base_type();
-    if base != "DATETIME" && base != "TIMESTAMP" {
+    if !matches!(base, "DATETIME" | "TIMESTAMP" | "TIME") {
         return None;
     }
     let precision: u32 = match column.type_text.strip_prefix(base)? {
@@ -291,11 +301,11 @@ fn temporal_storage(column: &ColumnDefinition) -> Option<(&str, u32)> {
     Some((base, precision.div_ceil(2)))
 }
 
-/// Refuses a write to a table with a foreign key MySQL never matches, as it
-/// compares the stored bytes of columns of types that store every value
-/// differently (`DECIMAL(4,1)` and `DECIMAL(4,2)`, `DATETIME` and
-/// `TIMESTAMP`): MySQL fails every row with a non-NULL key, and Turso
-/// compares the values.
+/// Checks a write to a table whose foreign key MySQL matches unlike Turso
+/// (see `StoredMatch`). MySQL fails a row whose key is not NULL when the key
+/// matches no value (1452), so an `INSERT` of such literal rows fails as in
+/// MySQL; a write whose key values are NULL or match alike runs, and other
+/// writes of the key are refused.
 pub(crate) fn check_writes(
     lowered: &ast::Stmt,
     environment: &dyn Environment,
@@ -312,32 +322,198 @@ pub(crate) fn check_writes(
     if keys.is_empty() {
         return Ok(());
     }
-    let Some(child) = environment
-        .table_sql(table)?
-        .and_then(|sql| TableDefinition::parse(&sql).ok())
-    else {
+    let Some(child) = environment.table_sql(table)? else {
         return Ok(());
     };
+    let child = TableDefinition::parse(&child)?;
     for key in keys {
-        let Some(parent) = environment
-            .table_sql(&key.parent_table)?
-            .and_then(|sql| TableDefinition::parse(&sql).ok())
-        else {
+        let Some(parent) = environment.table_sql(&key.parent_table)? else {
             continue;
         };
+        let parent = TableDefinition::parse(&parent)?;
+        let mut columns = Vec::with_capacity(key.child_columns.len());
         for (child_name, parent_name) in key.child_columns.iter().zip(&key.parent_columns) {
             let (Some(child_column), Some(parent_column)) =
                 (child.column(child_name), parent.column(parent_name))
             else {
-                continue;
-            };
-            if stored_match(child_column, parent_column) == StoredMatch::Never {
                 return Err(MysqlParserError::Unsupported(format!(
-                    "a write to `{table}`, whose foreign key MySQL never matches (it compares {} and {} values as stored), is not lowered yet",
-                    child_column.type_text, parent_column.type_text
+                    "a write to `{table}`, whose foreign key names a column its table lacks, is not lowered yet"
                 )));
+            };
+            columns.push((child_column, stored_match(child_column, parent_column)));
+        }
+        if columns
+            .iter()
+            .all(|(_, matched)| matches!(matched, StoredMatch::Values | StoredMatch::Unknown))
+        {
+            continue;
+        }
+        let refused = || {
+            MysqlParserError::Unsupported(format!(
+                "a write to `{table}` of the key of a foreign key MySQL matches as stored ({}) is not lowered yet",
+                columns
+                    .iter()
+                    .map(|(column, _)| column.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+        };
+        match lowered {
+            ast::Stmt::Insert {
+                columns: listed,
+                body,
+                ..
+            } => {
+                let rows: Vec<Vec<Option<&ast::Expr>>> = match body {
+                    ast::InsertBody::DefaultValues => vec![vec![None; columns.len()]],
+                    ast::InsertBody::Select(select, None) => {
+                        let ast::OneSelect::Values(rows) = &select.body.select else {
+                            return Err(refused());
+                        };
+                        if !select.body.compounds.is_empty() {
+                            return Err(refused());
+                        }
+                        if listed.is_empty() && child.columns.iter().any(|column| column.generated)
+                        {
+                            return Err(refused());
+                        }
+                        let width = if listed.is_empty() {
+                            child.columns.len()
+                        } else {
+                            listed.len()
+                        };
+                        if rows.iter().any(|row| row.len() != width) {
+                            return Err(refused());
+                        }
+                        let positions: Vec<Option<usize>> = columns
+                            .iter()
+                            .map(|(column, _)| {
+                                if listed.is_empty() {
+                                    child.columns.iter().position(|other| {
+                                        other.name.eq_ignore_ascii_case(&column.name)
+                                    })
+                                } else {
+                                    listed.iter().position(|other| {
+                                        other.as_str().eq_ignore_ascii_case(&column.name)
+                                    })
+                                }
+                            })
+                            .collect();
+                        rows.iter()
+                            .map(|row| {
+                                positions
+                                    .iter()
+                                    .map(|position| position.map(|index| row[index].as_ref()))
+                                    .collect()
+                            })
+                            .collect()
+                    }
+                    ast::InsertBody::Select(_, Some(_)) => return Err(refused()),
+                };
+                for row in rows {
+                    let values: Vec<KeyValue> = row
+                        .iter()
+                        .zip(&columns)
+                        .map(|(value, (column, _))| KeyValue::of(value.or(column.default.as_ref())))
+                        .collect();
+                    if values.contains(&KeyValue::Null) {
+                        continue;
+                    }
+                    if values.contains(&KeyValue::Unknown) {
+                        return Err(refused());
+                    }
+                    if columns
+                        .iter()
+                        .any(|(_, matched)| *matched == StoredMatch::Never)
+                    {
+                        return Err(MysqlParserError::Rejected(format!(
+                            "Cannot add or update a child row: a foreign key constraint fails (`{table}`)"
+                        )));
+                    }
+                    if values.iter().zip(&columns).any(|(value, (_, matched))| {
+                        *value == KeyValue::TrailingSpaces
+                            && *matched == StoredMatch::UnlessTrailingSpaces
+                    }) {
+                        return Err(refused());
+                    }
+                }
             }
+            ast::Stmt::Update(update) => {
+                let assigned: Vec<Option<&ast::Expr>> = columns
+                    .iter()
+                    .map(|(column, _)| {
+                        update.sets.iter().find_map(|set| {
+                            set.col_names
+                                .iter()
+                                .any(|name| name.as_str().eq_ignore_ascii_case(&column.name))
+                                .then_some(set.expr.as_ref())
+                        })
+                    })
+                    .collect();
+                if assigned.iter().all(Option::is_none) {
+                    continue;
+                }
+                let values: Vec<KeyValue> = assigned
+                    .iter()
+                    .map(|value| value.map_or(KeyValue::Unknown, |value| KeyValue::of(Some(value))))
+                    .collect();
+                if values.contains(&KeyValue::Null) {
+                    continue;
+                }
+                let alike =
+                    values
+                        .iter()
+                        .zip(&columns)
+                        .all(|(value, (_, matched))| match matched {
+                            StoredMatch::Values | StoredMatch::Unknown => true,
+                            StoredMatch::UnlessTrailingSpaces => *value == KeyValue::Plain,
+                            StoredMatch::Never => false,
+                        });
+                if !alike {
+                    return Err(refused());
+                }
+            }
+            _ => unreachable!("only INSERT and UPDATE write rows"),
         }
     }
     Ok(())
+}
+
+/// What lowering knows of a value written to a column of a foreign key.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum KeyValue {
+    Null,
+    /// A literal that does not end in a space.
+    Plain,
+    /// A string literal that ends in a space.
+    TrailingSpaces,
+    Unknown,
+}
+
+impl KeyValue {
+    /// `None` is a column the statement leaves out without a default.
+    fn of(value: Option<&ast::Expr>) -> Self {
+        match value {
+            None | Some(ast::Expr::Literal(ast::Literal::Null)) => Self::Null,
+            Some(ast::Expr::Literal(ast::Literal::String(text))) => {
+                if text.trim_end_matches('\'').ends_with(' ') {
+                    Self::TrailingSpaces
+                } else {
+                    Self::Plain
+                }
+            }
+            Some(ast::Expr::Literal(ast::Literal::Numeric(_) | ast::Literal::Blob(_))) => {
+                Self::Plain
+            }
+            Some(ast::Expr::Unary(ast::UnaryOperator::Negative, operand))
+                if matches!(
+                    operand.as_ref(),
+                    ast::Expr::Literal(ast::Literal::Numeric(_))
+                ) =>
+            {
+                Self::Plain
+            }
+            Some(_) => Self::Unknown,
+        }
+    }
 }

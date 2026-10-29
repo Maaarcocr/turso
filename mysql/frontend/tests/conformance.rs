@@ -382,17 +382,25 @@ fn foreign_keys_are_checked_when_created_as_mysql_checks_them() -> turso_core::R
     ] {
         connection.execute(statement)?;
     }
-    for statement in [
-        "INSERT INTO scale VALUES (1.2)",
-        "INSERT INTO stamp VALUES ('2001-02-03 12:34:56')",
+    connection.execute("INSERT INTO scale VALUES (NULL)")?;
+    connection.execute("CREATE TABLE cp (c CHAR(3) PRIMARY KEY)")?;
+    connection.execute("INSERT INTO cp VALUES ('abc')")?;
+    connection.execute("CREATE TABLE vc (v VARCHAR(10), FOREIGN KEY (v) REFERENCES cp (c))")?;
+    connection.execute("INSERT INTO vc VALUES ('abc')")?;
+    for (statement, expected) in [
+        ("INSERT INTO scale VALUES (1.2)", "MySQL rejects"),
+        (
+            "INSERT INTO stamp VALUES ('2001-02-03 12:34:56')",
+            "MySQL rejects",
+        ),
+        ("UPDATE scale SET d = 1.2", "unsupported"),
+        ("INSERT INTO scale SELECT 1.2", "unsupported"),
+        ("INSERT INTO vc VALUES ('abc ')", "unsupported"),
     ] {
         let error = connection
             .execute(statement)
-            .expect_err("MySQL never matches these keys");
-        assert!(
-            error.to_string().contains("unsupported"),
-            "{statement}: {error}"
-        );
+            .expect_err("MySQL matches these keys as stored");
+        assert!(error.to_string().contains(expected), "{statement}: {error}");
     }
     connection.execute("SET FOREIGN_KEY_CHECKS = 0")?;
     connection.execute("CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES later (id))")?;

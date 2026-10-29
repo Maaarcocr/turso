@@ -1114,9 +1114,19 @@ pub(crate) fn translate_from(
 /// into the join.
 fn check_table_references(from: &[TableWithJoins]) -> Result<(), MysqlParserError> {
     const MAX_TABLES: usize = 61;
+    /// Where MySQL places a table of a `FROM`: two tables with one name (or
+    /// alias) conflict only when they are in the same place.
+    #[derive(Clone, PartialEq, Eq)]
+    enum Place {
+        /// A table of the current database, named without a database.
+        Current,
+        Database(String),
+        /// A derived table or a table function, which is in no database.
+        Derived,
+    }
     #[derive(Default)]
     struct Count {
-        names: Vec<String>,
+        names: Vec<(Place, String)>,
         tables: usize,
         merged: usize,
     }
@@ -1134,25 +1144,34 @@ fn check_table_references(from: &[TableWithJoins]) -> Result<(), MysqlParserErro
             }
             TableFactor::Table { name, alias, .. } => {
                 count.merged += 1;
-                Some(alias.as_ref().map_or_else(
-                    || {
-                        name.0
-                            .iter()
-                            .map(|part| match part {
-                                ObjectNamePart::Identifier(identifier) => identifier.value.clone(),
-                                other => other.to_string(),
-                            })
-                            .collect::<Vec<_>>()
-                            .join(".")
-                    },
-                    |alias| alias.name.value.clone(),
+                let parts: Vec<String> = name
+                    .0
+                    .iter()
+                    .map(|part| match part {
+                        ObjectNamePart::Identifier(identifier) => identifier.value.clone(),
+                        other => other.to_string(),
+                    })
+                    .collect();
+                let place = match parts.as_slice() {
+                    [_] => Place::Current,
+                    [database, _] => Place::Database(database.clone()),
+                    _ => return Err(unsupported(format!("table name `{name}`"))),
+                };
+                let table = parts.last().cloned().unwrap_or_default();
+                Some((
+                    place,
+                    alias
+                        .as_ref()
+                        .map_or(table, |alias| alias.name.value.clone()),
                 ))
             }
             TableFactor::Derived {
                 subquery, alias, ..
             } => {
                 count.merged += query_tables(subquery).max(1);
-                alias.as_ref().map(|alias| alias.name.value.clone())
+                alias
+                    .as_ref()
+                    .map(|alias| (Place::Derived, alias.name.value.clone()))
             }
             _ => {
                 count.merged += 1;
@@ -1160,13 +1179,26 @@ fn check_table_references(from: &[TableWithJoins]) -> Result<(), MysqlParserErro
             }
         };
         count.tables += 1;
-        if let Some(name) = name {
-            if count.names.contains(&name) {
-                return Err(MysqlParserError::Rejected(format!(
-                    "Not unique table/alias: '{name}'"
-                )));
+        if let Some((place, name)) = name {
+            for (other_place, other) in &count.names {
+                if *other != name {
+                    continue;
+                }
+                match (&place, other_place) {
+                    _ if place == *other_place => {
+                        return Err(MysqlParserError::Rejected(format!(
+                            "Not unique table/alias: '{name}'"
+                        )));
+                    }
+                    (Place::Current, Place::Database(_)) | (Place::Database(_), Place::Current) => {
+                        return Err(unsupported(format!(
+                            "two tables named `{name}`, one of them in a named database,"
+                        )));
+                    }
+                    _ => {}
+                }
             }
-            count.names.push(name);
+            count.names.push((place, name));
         }
         Ok(())
     }
