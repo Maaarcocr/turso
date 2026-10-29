@@ -754,7 +754,7 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT a FROM t1 LEFT JOIN t2 USING (a) NATURAL JOIN t3, t4",
         ),
         ("SELECT 7 DIV 2", "SELECT CAST (7 / 2 AS INTEGER)"),
-        ("SELECT 7 MOD 2", "SELECT 7 % 2"),
+        ("SELECT 7 MOD 2", "SELECT MOD (7, 2)"),
         (
             "SELECT -1.5, -.5, -a, - -2, +b, 18446744073709551616",
             "SELECT CAST ('-1.5' AS DECIMAL (2, 1)), CAST ('-.5' AS DECIMAL (1, 1)), ((a) * - 1), ((- 2) * - 1), b, CAST ('18446744073709551616' AS DECIMAL (20, 0))",
@@ -825,6 +825,10 @@ fn lowers_select_statements_to_shared_ast() {
         (
             "SELECT COUNT(*) FROM t ORDER BY b",
             "SELECT COUNT (*) FROM t ORDER BY b",
+        ),
+        (
+            "SELECT MOD(18446744073709551615, 7), 1.5e0 % 1, ABS(9223372036854775808), 9223372036854775808 - 1",
+            "SELECT MOD (CAST ('18446744073709551615' AS DECIMAL (20, 0)), 7), MOD (1.5e0, 1), ABS (CAST ('9223372036854775808' AS DECIMAL (19, 0))), 9223372036854775807",
         ),
         (
             "SELECT CAST(CAST(0.000 AS JSON) AS DATE)",
@@ -978,7 +982,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT 9223372036854775808, -9223372036854775809, -9223372036854775808",
-            "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), - 9223372036854775808",
+            "SELECT CAST ('9223372036854775808' AS DECIMAL (19, 0)), CAST ('-9223372036854775809' AS DECIMAL (19, 0)), (-9223372036854775807 - 1)",
         ),
         (
             "SELECT CAST('[1]' AS JSON) = 1, JSON_ARRAY(1) <=> CAST(TRUE AS JSON), CAST(1 AS JSON) < DATE '2000-01-01'",
@@ -1287,6 +1291,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "a binary string cast to JSON",
             sql: "SELECT CAST(BINARY 'a' AS JSON)",
+        },
+        SqlCase {
+            name: "BIGINT UNSIGNED arithmetic outside its range",
+            sql: "SELECT 18446744073709551615 + 1",
         },
         SqlCase {
             name: "ORDER BY a column outside GROUP BY",
@@ -1793,8 +1801,8 @@ fn lowers_numbers_with_the_same_text_as_the_sqlite_parser() {
     let cases = [
         "SELECT 1.5",
         "SELECT 1e3",
-        "SELECT 18446744073709551615 + 1",
-        "SELECT 9223372036854775808 * 2",
+        "SELECT 18446744073709551615 + c",
+        "SELECT 9223372036854775808 * c",
     ];
 
     for sql in cases {

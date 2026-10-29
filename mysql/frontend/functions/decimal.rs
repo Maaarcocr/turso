@@ -33,6 +33,9 @@ pub(super) fn execute_typed(
         ("MOD", [_, _]) if decimals.iter().any(Option::is_some) => {
             Some(Ok(remainder(args, &decimals)))
         }
+        ("INTERVAL", [_, _, ..]) if decimals.iter().any(Option::is_some) => {
+            interval(args, &decimals)
+        }
         ("GREATEST", _) if decimals.iter().any(Option::is_some) => {
             extreme(name, args, &decimals, Ordering::Greater)
         }
@@ -102,6 +105,46 @@ fn remainder(args: &[Value], decimals: &[Option<Decimal>]) -> Value {
             }
         }
     }
+}
+
+/// `INTERVAL(n, n1, n2, ...)` with a DECIMAL argument and an integer or
+/// DECIMAL `n`: MySQL compares `n` with each integer or DECIMAL bound as
+/// DECIMAL and with any other bound as DOUBLE. Over more than eight bounds,
+/// none NULL, it binary searches them; otherwise it returns the position
+/// before the first bound above `n`, skipping NULL bounds.
+fn interval(args: &[Value], decimals: &[Option<Decimal>]) -> Option<Result<Value>> {
+    let exact = |position: usize| match (&args[position], &decimals[position]) {
+        (_, Some(decimal)) => Some(decimal.clone()),
+        (Value::Numeric(Numeric::Integer(number)), None) => Some(Decimal::from_i64(*number)),
+        _ => None,
+    };
+    if matches!(args[0], Value::Null) {
+        return Some(Ok(Value::from_i64(-1)));
+    }
+    let target = exact(0)?;
+    let target_double = target.to_f64();
+    let above = |position: usize| match exact(position) {
+        Some(bound) => bound.compare(&target) == Ordering::Greater,
+        None => string::double_argument(&args[position]) > target_double,
+    };
+    let bounds = args.len() - 1;
+    if bounds > 8 && args[1..].iter().all(|bound| !matches!(bound, Value::Null)) {
+        let (mut start, mut end) = (0, bounds - 1);
+        while start != end {
+            let middle = (start + end).div_ceil(2);
+            if above(middle + 1) {
+                end = middle - 1;
+            } else {
+                start = middle;
+            }
+        }
+        let position = if above(start + 1) { 0 } else { start + 1 };
+        return Some(Ok(Value::from_i64(position as i64)));
+    }
+    let position = (1..args.len())
+        .find(|&position| !matches!(args[position], Value::Null) && above(position))
+        .map_or(bounds, |position| position - 1);
+    Some(Ok(Value::from_i64(position as i64)))
 }
 
 /// GREATEST and LEAST with a DECIMAL argument: compared as DECIMAL when

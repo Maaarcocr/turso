@@ -713,6 +713,18 @@ fn exact_decimal(digits: &str, negative: bool) -> ast::Expr {
     )
 }
 
+/// `-9223372036854775808`, which MySQL reads as the smallest BIGINT, as an
+/// integer: core reads its digits as a DOUBLE before negating them.
+fn smallest_bigint() -> ast::Expr {
+    ast::Expr::Parenthesized(vec![Box::new(ast::Expr::binary(
+        ast::Expr::Literal(ast::Literal::Numeric(
+            i64::MIN.saturating_add(1).to_string(),
+        )),
+        ast::Operator::Subtract,
+        ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
+    ))])
+}
+
 fn exceeds_unsigned_bigint(digits: &str) -> bool {
     let significant = digits.trim_start_matches('0');
     significant.bytes().all(|byte| byte.is_ascii_digit())
@@ -813,6 +825,11 @@ fn translate_unary(
             if temporal_has_fraction(expr) {
                 return Err(temporal_operand(expr, "unary `-`"));
             }
+            if let Some(digits) = negated_number_literal(expr)
+                .filter(|digits| digits.parse::<u64>() == Ok(i64::MIN.unsigned_abs()))
+            {
+                return Ok(exact_decimal(digits, false));
+            }
             if let Some(digits) = number_literal(expr) {
                 if is_decimal_literal(digits)
                     || exceeds_unsigned_bigint(digits)
@@ -824,6 +841,9 @@ fn translate_unary(
                     return Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
                         "-{digits}"
                     ))));
+                }
+                if digits.parse::<u64>() == Ok(i64::MIN.unsigned_abs()) {
+                    return Ok(smallest_bigint());
                 }
             }
             if json::is_json_value(expr) {
@@ -1027,18 +1047,6 @@ fn exceeds_bigint(expr: &Expr) -> bool {
     }
 }
 
-fn operation(
-    left: &Expr,
-    operator: ast::Operator,
-    right: &Expr,
-    literal_context: Context,
-    context: &mut TranslationContext,
-) -> Result<ast::Expr, MysqlParserError> {
-    let lhs = translate_in(left, literal_context, context)?;
-    let rhs = translate_in(right, literal_context, context)?;
-    Ok(ast::Expr::binary(lhs, operator, rhs))
-}
-
 fn arithmetic(
     left: &Expr,
     operator: ast::Operator,
@@ -1050,11 +1058,97 @@ fn arithmetic(
         return Ok(unsigned);
     }
     if operator == ast::Operator::Modulus {
-        return operation(left, operator, right, Context::Arithmetic, context);
+        let dividend = unsigned_bigint_operand(left, Context::Arithmetic, context)?;
+        let divisor = unsigned_bigint_operand(right, Context::Arithmetic, context)?;
+        return Ok(function_call("MOD", vec![dividend, divisor]));
     }
-    let lhs = arithmetic_operand(left, right, context)?;
-    let rhs = arithmetic_operand(right, left, context)?;
+    let unsigned = |expr: &Expr| number_literal(expr).is_some_and(exceeds_signed_bigint);
+    if unsigned(left) || unsigned(right) {
+        if let Some(result) = folded_unsigned_bigint(left, operator, right, parent_context)? {
+            return Ok(result);
+        }
+    }
+    let lhs = match exact_unsigned_bigint(left, right, operator) {
+        Some(lhs) => lhs,
+        None => arithmetic_operand(left, right, context)?,
+    };
+    let rhs = match exact_unsigned_bigint(right, left, operator) {
+        Some(rhs) => rhs,
+        None => arithmetic_operand(right, left, context)?,
+    };
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+/// An integer literal between the BIGINT and BIGINT UNSIGNED limits as the
+/// exact DECIMAL of its digits where MySQL's result is a DECIMAL: in a
+/// division, and next to a DECIMAL literal or a temporal literal.
+fn exact_unsigned_bigint(expr: &Expr, other: &Expr, operator: ast::Operator) -> Option<ast::Expr> {
+    let digits = number_literal(expr).filter(|digits| exceeds_signed_bigint(digits))?;
+    if is_double_literal(other) || is_text_literal(other) {
+        return None;
+    }
+    let exact = operator == ast::Operator::Divide
+        || signed_number_literal(other)
+            .is_some_and(|digits| is_decimal_literal(digits) || exceeds_unsigned_bigint(digits))
+        || temporal_type(other).is_some();
+    exact.then(|| exact_decimal(digits, false))
+}
+
+/// `a + b`, `a - b` or `a * b` of two integer literals, one between the
+/// BIGINT and BIGINT UNSIGNED limits, which MySQL computes as BIGINT
+/// UNSIGNED: the result, which MySQL rejects outside that range.
+fn folded_unsigned_bigint(
+    left: &Expr,
+    operator: ast::Operator,
+    right: &Expr,
+    parent_context: Context,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let integer = |expr: &Expr| {
+        let digits = signed_number_literal(expr)?;
+        if is_decimal_literal(digits) || exceeds_unsigned_bigint(digits) {
+            return None;
+        }
+        let magnitude = digits.parse::<i128>().ok()?;
+        Some(if is_negated(expr) {
+            -magnitude
+        } else {
+            magnitude
+        })
+    };
+    let (Some(lhs), Some(rhs)) = (integer(left), integer(right)) else {
+        return Ok(None);
+    };
+    let result = match operator {
+        ast::Operator::Add => lhs + rhs,
+        ast::Operator::Subtract => lhs - rhs,
+        ast::Operator::Multiply => lhs * rhs,
+        _ => return Ok(None),
+    };
+    if parent_context == Context::Arithmetic || !(0..=i128::from(u64::MAX)).contains(&result) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "`{left} {operator} {right}`, which MySQL computes as BIGINT UNSIGNED and rejects outside its range or changes inside arithmetic, is not lowered yet"
+        )));
+    }
+    Ok(Some(match i64::try_from(result) {
+        Ok(result) => ast::Expr::Literal(ast::Literal::Numeric(result.to_string())),
+        Err(_) => exact_decimal(&result.to_string(), false),
+    }))
+}
+
+/// An operand whose integer literal between the BIGINT and BIGINT UNSIGNED
+/// limits is the exact DECIMAL of its digits, where MySQL's BIGINT UNSIGNED
+/// result cannot leave that range and so shows the same digits: `MOD`, `%`,
+/// `ABS`, `CEIL`, `FLOOR`, `ROUND`, `TRUNCATE` and the separator of
+/// `CONCAT_WS`.
+fn unsigned_bigint_operand(
+    expr: &Expr,
+    literal_context: Context,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    match number_literal(expr) {
+        Some(digits) if exceeds_signed_bigint(digits) => Ok(exact_decimal(digits, false)),
+        _ => translate_in(expr, literal_context, context),
+    }
 }
 
 fn unsigned_arithmetic(
@@ -1167,7 +1261,24 @@ fn arithmetic_operand(
     other_operand: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    if !is_double_literal(other_operand) && !is_text_literal(other_operand) {
+    let introduced_text = matches!(
+        other_operand,
+        Expr::Prefixed { value, .. } if is_text_literal(value)
+    );
+    if !is_double_literal(other_operand) && !is_text_literal(other_operand) && !introduced_text {
+        return translate_in(expr, Context::Arithmetic, context);
+    }
+    if let Some(digits) = signed_number_literal(expr).filter(|digits| {
+        !is_decimal_literal(digits)
+            && !digits.contains(['e', 'E'])
+            && digits.trim_start_matches('0').len() > 15
+    }) {
+        let sign = if is_negated(expr) { "-" } else { "" };
+        return Ok(ast::Expr::Literal(ast::Literal::Numeric(format!(
+            "{sign}{digits}e0"
+        ))));
+    }
+    if introduced_text {
         return translate_in(expr, Context::Arithmetic, context);
     }
     if let Some(literal) = negated_binary(expr) {
@@ -1966,6 +2077,17 @@ fn signed_number_literal(expr: &Expr) -> Option<&str> {
     }
 }
 
+fn negated_number_literal(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Nested(inner) => negated_number_literal(inner),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => number_literal(expr),
+        _ => None,
+    }
+}
+
 fn is_negated(expr: &Expr) -> bool {
     match expr {
         Expr::UnaryOp {
@@ -2060,7 +2182,7 @@ fn translate_single_argument_call(
 ) -> Result<ast::Expr, MysqlParserError> {
     Ok(function_call(
         name,
-        vec![translate_in(
+        vec![unsigned_bigint_operand(
             expr,
             argument_context(name, 0, &[expr]),
             context,
@@ -3960,7 +4082,17 @@ fn function_arguments(
                     _ => {}
                 }
             }
-            translate_in(arg, argument_context(upper_name, position, &args), context)
+            let literal_context = argument_context(upper_name, position, &args);
+            if upper_name == "MOD"
+                || (position == 0
+                    && matches!(
+                        upper_name,
+                        "ABS" | "CEIL" | "CEILING" | "FLOOR" | "ROUND" | "TRUNCATE" | "CONCAT_WS"
+                    ))
+            {
+                return unsigned_bigint_operand(arg, literal_context, context);
+            }
+            translate_in(arg, literal_context, context)
         })
         .collect()
 }
