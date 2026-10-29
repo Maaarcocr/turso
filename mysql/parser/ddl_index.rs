@@ -1,9 +1,9 @@
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::MysqlParserError;
 use sqlparser::ast::{
-    AlterTableOperation, CreateIndex, Expr, Function, FunctionArg, FunctionArgExpr,
+    AlterTableOperation, BinaryOperator, CreateIndex, Expr, Function, FunctionArg, FunctionArgExpr,
     FunctionArguments, IndexColumn, IndexOption, IndexType, ObjectName, ObjectNamePart,
-    OrderByExpr, OrderByOptions, Value,
+    OrderByExpr, OrderByOptions, UnaryOperator, Value,
 };
 use turso_parser::ast;
 
@@ -64,27 +64,133 @@ pub(crate) fn translate_create_index(
             "CREATE INDEX `{create_index}` contains a clause that is not available"
         )));
     }
-    let index_name = translate_ddl_name(name)?;
+    index_statement(
+        *unique,
+        translate_ddl_name(name)?,
+        translate_ddl_name(table_name)?,
+        columns,
+    )
+}
+
+fn index_statement(
+    unique: bool,
+    index_name: ast::Name,
+    table_name: ast::Name,
+    columns: &[IndexColumn],
+) -> Result<ast::Stmt, MysqlParserError> {
     if index_name.as_str().eq_ignore_ascii_case("PRIMARY") {
         return Err(MysqlParserError::Rejected(
             "an index cannot be named PRIMARY".to_string(),
         ));
     }
-    let key_parts = translate_key_parts(columns)?;
-    if key_parts.iter().any(|part| part.prefix.is_some()) {
-        return Err(MysqlParserError::Unsupported(
-            "CREATE INDEX with a prefix length needs the column types to validate it".to_string(),
-        ));
-    }
+    let columns = columns
+        .iter()
+        .map(index_column)
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::Stmt::CreateIndex {
-        unique: *unique,
+        unique,
         if_not_exists: false,
         idx_name: ast::QualifiedName::single(index_name),
-        tbl_name: translate_ddl_name(table_name)?,
+        tbl_name: table_name,
         using: None,
-        columns: key_parts.iter().map(KeyPart::sorted_column).collect(),
+        columns,
         with_clause: Vec::new(),
         where_clause: None,
+    })
+}
+
+fn index_column(column: &IndexColumn) -> Result<ast::SortedColumn, MysqlParserError> {
+    let Expr::Nested(expr) = &column.column.expr else {
+        let [part] = translate_key_parts(std::slice::from_ref(column))?
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("one key part per index column"));
+        if part.prefix.is_some() {
+            return Err(MysqlParserError::Unsupported(
+                "an index with a prefix length needs the column types to validate it".to_string(),
+            ));
+        }
+        return Ok(part.sorted_column());
+    };
+    let IndexColumn {
+        column:
+            OrderByExpr {
+                expr: _,
+                options: OrderByOptions { asc, nulls_first },
+                with_fill,
+            },
+        operator_class,
+    } = column;
+    if operator_class.is_some() || nulls_first.is_some() || with_fill.is_some() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "key part `{}` is not MySQL syntax",
+            column.column
+        )));
+    }
+    if matches!(unnested(expr), Expr::Identifier(_)) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "functional key part `{}` of a bare column, which MySQL rejects, is not lowered",
+            column.column.expr
+        )));
+    }
+    Ok(ast::SortedColumn {
+        expr: Box::new(functional_expr(expr).ok_or_else(|| {
+            MysqlParserError::Unsupported(format!(
+                "functional key part `{}` is not available",
+                column.column.expr
+            ))
+        })?),
+        order: asc.map(|asc| {
+            if asc {
+                ast::SortOrder::Asc
+            } else {
+                ast::SortOrder::Desc
+            }
+        }),
+        nulls: None,
+    })
+}
+
+fn unnested(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Nested(inner) => unnested(inner),
+        other => other,
+    }
+}
+
+/// A functional key part of columns and integer literals under `+`, `-`
+/// and `*`, whose values Turso computes as MySQL does (other than BIGINT
+/// overflow, which becomes a REAL).
+fn functional_expr(expr: &Expr) -> Option<ast::Expr> {
+    Some(match expr {
+        Expr::Identifier(identifier) => ast::Expr::Id(translate_ddl_identifier(identifier).ok()?),
+        Expr::Value(value) => match &value.value {
+            Value::Number(digits, false)
+                if digits.bytes().all(|byte| byte.is_ascii_digit())
+                    && digits.parse::<i64>().is_ok() =>
+            {
+                ast::Expr::Literal(ast::Literal::Numeric(digits.clone()))
+            }
+            _ => return None,
+        },
+        Expr::Nested(inner) => ast::Expr::Parenthesized(vec![Box::new(functional_expr(inner)?)]),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => ast::Expr::Unary(
+            ast::UnaryOperator::Negative,
+            Box::new(functional_expr(expr)?),
+        ),
+        Expr::BinaryOp { left, op, right } => ast::Expr::Binary(
+            Box::new(functional_expr(left)?),
+            match op {
+                BinaryOperator::Plus => ast::Operator::Add,
+                BinaryOperator::Minus => ast::Operator::Subtract,
+                BinaryOperator::Multiply => ast::Operator::Multiply,
+                _ => return None,
+            },
+            Box::new(functional_expr(right)?),
+        ),
+        _ => return None,
     })
 }
 
