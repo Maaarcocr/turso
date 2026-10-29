@@ -74,7 +74,18 @@ fn translate_node(
         }
         Expr::TypedString(typed) => translate_typed_string(typed, literal_context),
         Expr::Nested(inner) => translate_nested(inner, literal_context, context),
-        Expr::Identifier(identifier) => translate_identifier_expr(identifier),
+        Expr::Identifier(identifier) => {
+            match context.having_column(&identifier.value).map(str::to_string) {
+                Some(qualifier) => {
+                    let qualified = Expr::CompoundIdentifier(vec![
+                        sqlparser::ast::Ident::with_quote('`', qualifier),
+                        identifier.clone(),
+                    ]);
+                    translate_node(&qualified, literal_context, context)
+                }
+                None => translate_identifier_expr(identifier),
+            }
+        }
         Expr::CompoundIdentifier(parts) => match parts.as_slice() {
             [scope, name] if is_system_variable_scope(scope) => {
                 crate::session::system_variable(&scope.value, name)
@@ -3168,7 +3179,10 @@ fn translate_cast(
         other => return Err(unsupported_cast(other)),
     };
     Ok(ast::Expr::cast(
-        translate_in(expr, operand_context, context)?,
+        function_call(
+            "__mysql_numeric_cast_operand",
+            vec![translate_in(expr, operand_context, context)?],
+        ),
         Some(target),
     ))
 }
@@ -3859,6 +3873,18 @@ fn translate_function(
             _ => None,
         }) {
             return Err(binary_cast_outside_a_value_position(cast));
+        }
+    }
+    if identifier.quote_style.is_none() {
+        let variance = match upper_name.as_str() {
+            "VARIANCE" | "VAR_POP" => Some("__mysql_var_pop"),
+            "VAR_SAMP" => Some("__mysql_var_samp"),
+            "STD" | "STDDEV" | "STDDEV_POP" => Some("__mysql_stddev_pop"),
+            "STDDEV_SAMP" => Some("__mysql_stddev_samp"),
+            _ => None,
+        };
+        if let Some(variance) = variance {
+            return translate_variance(function, &upper_name, variance, list, context);
         }
     }
     if identifier.quote_style.is_none()
@@ -4745,6 +4771,50 @@ fn translate_json_aggregate(
     ))
 }
 
+/// `VARIANCE(x)`, `STD(x)` and their sample and population variants: MySQL
+/// reads `x` as a DOUBLE and runs Welford's recurrence over the rows, as the
+/// dialect's aggregates do. Turso runs no extension aggregate as a window
+/// function.
+fn translate_variance(
+    function: &Function,
+    upper_name: &str,
+    variance: &str,
+    list: &FunctionArgumentList,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if matches!(list.duplicate_treatment, Some(DuplicateTreatment::Distinct))
+        || !list.clauses.is_empty()
+    {
+        return Err(MysqlParserError::Rejected(format!(
+            "{upper_name} takes no DISTINCT, ORDER BY or other clause"
+        )));
+    }
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(arg))] = list.args.as_slice() else {
+        return Err(MysqlParserError::Rejected(format!(
+            "incorrect parameter count in the call to {upper_name}"
+        )));
+    };
+    if function.over.is_some() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} as a window function is not lowered yet"
+        )));
+    }
+    let mut call = function.clone();
+    call.name = ObjectName(vec![ObjectNamePart::Identifier(Ident::new(variance))]);
+    call.args = FunctionArguments::List(FunctionArgumentList {
+        duplicate_treatment: None,
+        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(arg.clone()),
+            data_type: DataType::Double(ExactNumberInfo::None),
+            array: false,
+            format: None,
+        }))],
+        clauses: Vec::new(),
+    });
+    translate_in(&Expr::Function(call), Context::Value, context)
+}
+
 fn translate_special_function(
     upper_name: &str,
     list: &FunctionArgumentList,
@@ -4757,6 +4827,13 @@ fn translate_special_function(
         return Ok(None);
     };
     match (upper_name, args.as_slice()) {
+        ("RANDOM_BYTES", [length]) => {
+            let length = translate_in(length, argument_context(upper_name, 0, &args), context)?;
+            Ok(Some(function_call(
+                "__mysql_random_bytes",
+                vec![length, function_call("randomblob", vec![number(1024)])],
+            )))
+        }
         ("DATE_ADD" | "ADDDATE", [date, Expr::Interval(interval)]) => Ok(Some(
             translate_date_arithmetic("DATE_ADD", date, interval, context)?,
         )),
@@ -5603,8 +5680,8 @@ pub(crate) fn reads_temporal_as_number(upper_name: &str, position: usize) -> boo
 
 fn reads_number(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
     match upper_name {
-        "ELT" | "MAKE_SET" | "SPACE" => position == 0,
-        "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
+        "ELT" | "MAKE_SET" | "SPACE" | "RANDOM_BYTES" => position == 0,
+        "FORMAT" | "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
         "CONV" | "INSERT" | "MID" | "SUBSTR" | "SUBSTRING" => matches!(position, 1 | 2),
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => matches!(position, 2 | 3),
         "REGEXP_INSTR" => matches!(position, 2..=4),

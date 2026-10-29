@@ -85,9 +85,12 @@ impl ColumnDefinition {
             not_null,
             default,
             generated,
-            members: matches!(base, "ENUM" | "SET" | "\"SET\"")
-                .then(|| members(&declared))
-                .flatten(),
+            members: matches!(
+                base,
+                "ENUM" | "ENUM_EXACT" | "SET" | "\"SET\"" | "SET_EXACT"
+            )
+            .then(|| members(definition.col_type.as_ref()?))
+            .flatten(),
         }
     }
 
@@ -116,28 +119,19 @@ impl ColumnDefinition {
     }
 }
 
-/// The members of a stored `ENUM ('''a'',''b''')` or `"SET" (...)` type,
-/// whose parameter is one string literal holding the quoted members.
-fn members(declared: &str) -> Option<Vec<String>> {
-    let parameter = declared[declared.find('(')? + 1..declared.rfind(')')?].trim();
-    let list = unquote(parameter)?;
-    let mut members = Vec::new();
-    let mut rest = list.as_str();
-    loop {
-        let rest_trimmed = rest.trim_start();
-        let (member, after) = quoted_prefix(rest_trimmed)?;
-        members.push(member);
-        let after = after.trim_start();
-        if after.is_empty() {
-            return Some(members);
-        }
-        rest = after.strip_prefix(',')?;
-    }
-}
-
-/// The text of a lowered string literal.
-pub(crate) fn string_text(literal: &str) -> Option<String> {
-    unquote(literal)
+/// The members of a stored `ENUM('a','b')` or `"SET"(...)` type, one string
+/// literal per parameter.
+fn members(col_type: &ast::Type) -> Option<Vec<String>> {
+    col_type
+        .size
+        .as_ref()?
+        .parameters()
+        .iter()
+        .map(|parameter| match parameter.as_ref() {
+            ast::Expr::Literal(ast::Literal::String(literal)) => unquote(literal),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The text of a whole SQL string literal.

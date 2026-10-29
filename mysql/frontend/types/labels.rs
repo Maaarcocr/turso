@@ -62,15 +62,15 @@ macro_rules! compared {
 }
 
 macro_rules! labels {
-    ($name:literal, $assign:literal) => {
+    ($name:literal, $storage:expr, $assign:literal) => {
         DialectType {
             name: $name,
-            storage: StorageType::Text,
-            parameters: "labels text, exact integer DEFAULT 0",
+            storage: $storage,
+            parameters: "",
             behaviour: concat!(
                 "ASSIGN ",
                 $assign,
-                "(value, labels, exact) ",
+                "(value, labels) ",
                 numbers!(concat!("\"", $name, "\"")),
                 "CAST __mysql_sqlite_cast(value, 'TEXT') ",
                 "FUNCTION __mysql_cast_as_signed(\"",
@@ -78,15 +78,31 @@ macro_rules! labels {
                 "\") RETURNS integer __mysql_cast_as_integer_unsupported ",
                 "FUNCTION __mysql_cast_as_unsigned(\"",
                 $name,
-                "\") RETURNS integer __mysql_cast_as_integer_unsupported"
+                "\") RETURNS integer __mysql_cast_as_integer_unsupported ",
+                "FUNCTION __mysql_numeric_cast_operand(\"",
+                $name,
+                "\") RETURNS integer __mysql_cast_as_number_unsupported"
             ),
         }
     };
 }
 
-pub(super) const TYPES: [DialectType; 2] = [
-    labels!("enum", "__mysql_assign_enum"),
-    labels!("set", "__mysql_assign_set"),
+/// `ENUM` and `SET`, stored as the member position and the bitmask so that
+/// they sort as in MySQL, and their variants that match member names with
+/// their letter case, as under a case-sensitive collation.
+pub(super) const TYPES: [DialectType; 4] = [
+    labels!("enum", StorageType::Enumeration, "__mysql_assign_enum"),
+    labels!(
+        "enum_exact",
+        StorageType::Enumeration,
+        "__mysql_assign_enum_exact"
+    ),
+    labels!("set", StorageType::LabelSet, "__mysql_assign_set"),
+    labels!(
+        "set_exact",
+        StorageType::LabelSet,
+        "__mysql_assign_set_exact"
+    ),
 ];
 
 /// A number made of an `ENUM` or `SET` value, which MySQL reads as its member
@@ -132,8 +148,15 @@ fn compared(args: &[Value], holds: fn(&[u8], &[u8]) -> bool) -> Result<Value> {
 /// or the member at an integer position, also written as a string of
 /// at most five digits that names no member.
 pub(super) fn assign_enum(args: &[Value]) -> Result<Value> {
+    member_of_enum(args, false)
+}
+
+pub(super) fn assign_enum_exact(args: &[Value]) -> Result<Value> {
+    member_of_enum(args, true)
+}
+
+fn member_of_enum(args: &[Value], exact: bool) -> Result<Value> {
     let labels = labels(&args[1])?;
-    let exact = exact(&args[2])?;
     let position = match &args[0] {
         Value::Null => return Ok(Value::Null),
         Value::Numeric(Numeric::Integer(position)) => *position,
@@ -167,8 +190,15 @@ pub(super) fn assign_enum(args: &[Value]) -> Result<Value> {
 /// a string of digits when the text names no members. Turso passes numbers
 /// as text, so a DOUBLE or DECIMAL reads as text naming no member.
 pub(super) fn assign_set(args: &[Value]) -> Result<Value> {
+    members_of_set(args, false)
+}
+
+pub(super) fn assign_set_exact(args: &[Value]) -> Result<Value> {
+    members_of_set(args, true)
+}
+
+fn members_of_set(args: &[Value], exact: bool) -> Result<Value> {
     let labels = labels(&args[1])?;
-    let exact = exact(&args[2])?;
     let mask = match &args[0] {
         Value::Null => return Ok(Value::Null),
         Value::Numeric(Numeric::Integer(mask)) => {
@@ -252,14 +282,6 @@ fn text_of(value: &Value) -> Result<String> {
         Value::Text(text) => Ok(text.as_str().to_string()),
         Value::Blob(bytes) => String::from_utf8(bytes.clone()).map_err(|_| data_truncated()),
         other => unreachable!("only text and blobs are read as names, got {other}"),
-    }
-}
-
-fn exact(flag: &Value) -> Result<bool> {
-    match flag {
-        Value::Numeric(Numeric::Integer(0)) => Ok(false),
-        Value::Numeric(Numeric::Integer(1)) => Ok(true),
-        other => Err(LimboError::InternalError(format!("bad exact flag {other}"))),
     }
 }
 

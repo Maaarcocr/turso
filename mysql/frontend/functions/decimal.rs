@@ -30,6 +30,13 @@ pub(super) fn execute_typed(
             &arg_types[1],
             Rounding::TowardZero,
         ))),
+        ("FORMAT", [Some(decimal), places, ..]) => {
+            let mut args = args.to_vec();
+            if let Some(places) = places {
+                args[1] = Value::from_i64(whole(places));
+            }
+            Some(string::format_decimal(decimal, &args))
+        }
         ("MOD", [_, _]) if decimals.iter().any(Option::is_some) => {
             Some(Ok(remainder(args, &decimals)))
         }
@@ -46,6 +53,21 @@ pub(super) fn execute_typed(
     }
 }
 
+/// The integer MySQL reads from a DECIMAL: rounded half away from zero and
+/// clamped to BIGINT.
+pub(super) fn whole(decimal: &Decimal) -> i64 {
+    decimal
+        .rounded(0, Rounding::HalfAwayFromZero)
+        .to_i64()
+        .unwrap_or_else(|| {
+            if decimal.is_negative() {
+                i64::MIN
+            } else {
+                i64::MAX
+            }
+        })
+}
+
 fn rounded(
     decimal: &Decimal,
     places: &Value,
@@ -53,16 +75,7 @@ fn rounded(
     rounding: Rounding,
 ) -> Value {
     let places = match (shown_decimal(places, places_type), places) {
-        (Some(places), _) => places
-            .rounded(0, Rounding::HalfAwayFromZero)
-            .to_i64()
-            .unwrap_or_else(|| {
-                if places.is_negative() {
-                    i64::MIN
-                } else {
-                    i64::MAX
-                }
-            }),
+        (Some(places), _) => whole(&places),
         (None, Value::Null) => return Value::Null,
         (None, Value::Numeric(Numeric::Integer(places))) => *places,
         (None, Value::Numeric(Numeric::Float(places))) => {

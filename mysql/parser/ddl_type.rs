@@ -635,29 +635,29 @@ impl ColumnType {
     /// Marks an `ENUM` or `SET` type to match names with their letter case,
     /// as under a case-sensitive collation.
     pub(crate) fn match_labels_exactly(&mut self) {
-        let Some(ast::TypeSize::MaxSize(labels)) = self.declared.size.take() else {
-            unreachable!("an ENUM or SET type has its labels as its one parameter");
-        };
-        self.declared.size = Some(ast::TypeSize::TypeSize(
-            labels,
-            Box::new(ast::Expr::Literal(ast::Literal::Numeric("1".to_string()))),
-        ));
+        self.declared.name = match self.family {
+            Family::Enum(_) => "ENUM_EXACT",
+            Family::Set(_) => "SET_EXACT",
+            _ => unreachable!("only ENUM and SET types match labels"),
+        }
+        .to_string();
     }
 }
 
-/// An `ENUM` or `SET` type with its members, quoted and joined with commas,
-/// as its parameter.
+/// An `ENUM` or `SET` type with its members as its parameters.
 fn labeled_type(name: &str, members: &[String]) -> ast::Type {
-    let labels = members
-        .iter()
-        .map(|member| quote_string(member))
-        .collect::<Vec<_>>()
-        .join(",");
     ast::Type {
         name: name.to_string(),
-        size: Some(ast::TypeSize::MaxSize(Box::new(ast::Expr::Literal(
-            ast::Literal::String(quote_string(&labels)),
-        )))),
+        size: Some(ast::TypeSize::List(
+            members
+                .iter()
+                .map(|member| {
+                    Box::new(ast::Expr::Literal(ast::Literal::String(quote_string(
+                        member,
+                    ))))
+                })
+                .collect(),
+        )),
         array_dimensions: 0,
     }
 }

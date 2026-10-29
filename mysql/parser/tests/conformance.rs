@@ -211,11 +211,11 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (e ENUM('x','y') NOT NULL, s SET('r','w') DEFAULT 'w,r', j JSON, t TINYTEXT)",
-            "CREATE TABLE t (e ENUM ('''x'',''y''') NOT NULL DEFAULT 'x', s \"SET\" ('''r'',''w''') DEFAULT 'r,w', j JSON, t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
+            "CREATE TABLE t (e ENUM ('x', 'y') NOT NULL DEFAULT 'x', s \"SET\" ('r', 'w') DEFAULT 'r,w', j JSON, t TINYTEXT COLLATE \"und-u-ks-level1\") STRICT",
         ),
         (
             "CREATE TABLE t (e ENUM('a,b','c''d') COLLATE utf8mb4_0900_bin, s SET('x') COLLATE utf8mb4_0900_as_ci)",
-            "CREATE TABLE t (e ENUM ('''a,b'',''c''''d''', 1), s \"SET\" ('''x''')) STRICT",
+            "CREATE TABLE t (e ENUM_EXACT ('a,b', 'c''d'), s \"SET\" ('x')) STRICT",
         ),
         (
             "CREATE TABLE t (d DATE DEFAULT '2020-1-2', ts DATETIME(3) DEFAULT '2020-01-02 03:04:05', c TIMESTAMP DEFAULT CURRENT_TIMESTAMP, r DATETIME DEFAULT '2020-12-31 23:59:59.5')",
@@ -831,8 +831,8 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT DISTINCT 1", "SELECT DISTINCT 1"),
         ("SELECT 1 GROUP BY 1", "SELECT 1 GROUP BY 1"),
         (
-            "SELECT a DIV 2 AS x, COUNT(*) FROM t GROUP BY x HAVING x > 1",
-            "SELECT CAST (a / 2 AS INTEGER) AS x, COUNT (*) FROM t GROUP BY x HAVING x > 1",
+            "SELECT a DIV 2 AS x, COUNT(*) FROM t GROUP BY x HAVING COUNT(*) > 1",
+            "SELECT CAST (a / 2 AS INTEGER) AS x, COUNT (*) FROM t GROUP BY x HAVING COUNT (*) > 1",
         ),
         ("SELECT 1 HAVING TRUE", "SELECT 1 HAVING TRUE"),
         ("SELECT 1 ORDER BY 1", "SELECT 1 ORDER BY 1"),
@@ -857,7 +857,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT CAST(a AS DECIMAL), CAST(a AS DECIMAL(5)), CONVERT(a, DECIMAL(0))",
-            "SELECT CAST (a AS DECIMAL (10, 0)), CAST (a AS DECIMAL (5, 0)), CAST (a AS DECIMAL (10, 0))",
+            "SELECT CAST (__mysql_numeric_cast_operand (a) AS DECIMAL (10, 0)), CAST (__mysql_numeric_cast_operand (a) AS DECIMAL (5, 0)), CAST (__mysql_numeric_cast_operand (a) AS DECIMAL (10, 0))",
         ),
         ("SELECT a <=> b", "SELECT a IS b"),
         ("SELECT a && b || c", "SELECT a AND b OR c"),

@@ -1,4 +1,3 @@
-use crate::types::decimal_number::Rounding;
 use decimal::shown_decimal;
 use std::borrow::Cow;
 use turso_core::dialect::ArgumentType;
@@ -9,9 +8,11 @@ mod datetime;
 mod decimal;
 mod json;
 mod string;
+mod variance;
 
 pub(crate) use json::assign_column as assign_json;
 pub(crate) use string::format_double;
+pub(crate) use variance::register as register_variances;
 
 pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
     let name = name.to_ascii_uppercase();
@@ -87,16 +88,7 @@ fn with_decimals_read<'a>(
                 None => args[position].clone(),
                 Some(decimal) => match string::decimal_argument(name, position) {
                     DecimalArgument::Text => Value::build_text(decimal.to_text()),
-                    DecimalArgument::Count => {
-                        let whole = decimal.rounded(0, Rounding::HalfAwayFromZero);
-                        Value::from_i64(whole.to_i64().unwrap_or_else(|| {
-                            if whole.is_negative() {
-                                i64::MIN
-                            } else {
-                                i64::MAX
-                            }
-                        }))
-                    }
+                    DecimalArgument::Count => Value::from_i64(decimal::whole(&decimal)),
                     DecimalArgument::Double => Value::from_f64(decimal.to_f64()),
                 },
             })

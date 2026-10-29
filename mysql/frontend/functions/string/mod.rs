@@ -5,6 +5,7 @@ mod bitwise;
 mod collation;
 mod compare;
 mod convert;
+mod format;
 mod hash;
 mod like;
 mod network;
@@ -13,6 +14,7 @@ mod regexp;
 mod text;
 
 pub(crate) use convert::format_double;
+pub(super) use format::format_decimal;
 
 type Function = fn(&[Value]) -> Result<Value>;
 
@@ -38,8 +40,8 @@ pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
         return DecimalArgument::Count;
     }
     let counts: &[usize] = match name {
-        "LEFT" | "RIGHT" | "LPAD" | "RPAD" | "REPEAT" | "SHA2" => &[1],
-        "__MYSQL_BIT_OPERAND" => &[0],
+        "FORMAT" | "LEFT" | "RIGHT" | "LPAD" | "RPAD" | "REPEAT" | "SHA2" => &[1],
+        "__MYSQL_BIT_OPERAND" | "__MYSQL_RANDOM_BYTES" => &[0],
         "SUBSTR" | "SUBSTRING" | "MID" | "INSERT" => &[1, 2],
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => &[2, 3],
         "REGEXP_INSTR" => &[2, 3, 4],
@@ -100,6 +102,7 @@ pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
 fn function(name: &str, arg_count: usize) -> Option<Function> {
     let function: Function = match (name, arg_count) {
         ("ABS", 1) => numeric::abs,
+        ("FORMAT", 2 | 3) => format::format,
         ("ACOS", 1) => numeric::acos,
         ("ASIN", 1) => numeric::asin,
         ("ATAN", 1 | 2) => numeric::atan,
@@ -161,6 +164,7 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("ORD", 1) => text::ord,
         ("POSITION", 2) => text::locate,
         ("REPEAT", 2) => text::repeat,
+        ("__MYSQL_RANDOM_BYTES", 2) => text::random_bytes,
         ("REPLACE", 3) => text::replace,
         ("RIGHT", 2) => text::right,
         ("RPAD", 3) => text::rpad,

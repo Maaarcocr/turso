@@ -475,6 +475,152 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn random_bytes_reads_its_length_as_mysql_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT LENGTH(RANDOM_BYTES(1.5)), LENGTH(RANDOM_BYTES('1.5')), LENGTH(RANDOM_BYTES(X'40')), RANDOM_BYTES(NULL)",
+        )?,
+        vec![vec![
+            Value::from_i64(2),
+            Value::from_i64(1),
+            Value::from_i64(64),
+            Value::Null,
+        ]]
+    );
+    connection.execute("CREATE TABLE t (i INT)")?;
+    connection.execute("INSERT INTO t VALUES (1), (2), (3)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(DISTINCT RANDOM_BYTES(16)) FROM t"
+        )?,
+        vec![vec![Value::from_i64(3)]]
+    );
+    for out_of_range in ["SELECT RANDOM_BYTES(0)", "SELECT RANDOM_BYTES(1025)"] {
+        let error = query(&connection, out_of_range).expect_err(out_of_range);
+        assert!(
+            error.to_string().contains("ERROR 1690"),
+            "{out_of_range}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn variances_follow_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (i INT, j DECIMAL(5, 2))")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT VARIANCE(i), STD(i), VAR_SAMP(i) FROM t"
+        )?,
+        vec![vec![Value::Null, Value::Null, Value::Null]]
+    );
+    connection.execute("INSERT INTO t VALUES (1, 1.5)")?;
+    assert_eq!(
+        query(&connection, "SELECT VAR_POP(i), STDDEV_SAMP(i) FROM t")?,
+        vec![vec![Value::from_f64(0.0), Value::Null]]
+    );
+    connection.execute("INSERT INTO t VALUES (2, 2.25), (2, NULL), (3, NULL)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT STD(i), STDDEV_POP(i), STDDEV_SAMP(i), VARIANCE(i), VAR_SAMP(i), VARIANCE(j) FROM t",
+        )?,
+        vec![vec![
+            Value::from_f64(std::f64::consts::FRAC_1_SQRT_2),
+            Value::from_f64(std::f64::consts::FRAC_1_SQRT_2),
+            Value::from_f64(0.816496580927726),
+            Value::from_f64(0.5),
+            Value::from_f64(0.6666666666666666),
+            Value::from_f64(0.140625),
+        ]]
+    );
+    for refused in [
+        "SELECT STD(i) OVER () FROM t",
+        "SELECT VARIANCE(DISTINCT i) FROM t",
+    ] {
+        query(&connection, refused).expect_err(refused);
+    }
+    Ok(())
+}
+
+#[test]
+fn having_resolves_names_as_mysql_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (a INT, b INT)")?;
+    connection.execute("INSERT INTO t VALUES (1, 2), (2, 3)")?;
+    for (sql, rows) in [
+        (
+            "SELECT -b AS a FROM t GROUP BY a, b HAVING b > -a ORDER BY 1",
+            vec![-3, -2],
+        ),
+        ("SELECT a AS b FROM t GROUP BY a HAVING AVG(b) > 2", vec![2]),
+        ("SELECT a AS b FROM t GROUP BY a HAVING b > 1", vec![2]),
+        ("SELECT 1 AS a GROUP BY a HAVING a = 1", vec![1]),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            rows.into_iter()
+                .map(|row| vec![Value::from_i64(row)])
+                .collect::<Vec<_>>(),
+            "{sql}"
+        );
+    }
+    connection.execute("CREATE VIEW v AS SELECT 1 AS k")?;
+    let refused = "SELECT 5 AS k FROM v GROUP BY k HAVING k = 1";
+    let error = query(&connection, refused).expect_err(refused);
+    assert!(
+        error.to_string().contains("not lowered"),
+        "{refused}: {error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn format_rounds_and_groups_digits_as_mysql_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT FORMAT(1234567.891, 2), FORMAT(1, 3), FORMAT('12345.5', 0), FORMAT(12.5, 0), FORMAT(12.5e0, 0), FORMAT(-1234.5, 1, 'de_DE'), FORMAT(NULL, 2)",
+        )?,
+        vec![vec![
+            Value::build_text("1,234,567.89"),
+            Value::build_text("1.000"),
+            Value::build_text("12,346"),
+            Value::build_text("13"),
+            Value::build_text("12"),
+            Value::build_text("-1.234,5"),
+            Value::Null,
+        ]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT FORMAT(1.25, 1.5), FORMAT(1.25, 2.5), FORMAT(1.25, '1.5'), FORMAT(1, X'02')",
+        )?,
+        vec![vec![
+            Value::build_text("1.25"),
+            Value::build_text("1.250"),
+            Value::build_text("1.3"),
+            Value::build_text("1.00"),
+        ]]
+    );
+    for refused in ["SELECT FORMAT(-0.001, 2)", "SELECT FORMAT(1, 2, 'fr_FR')"] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(
+            error.to_string().contains("not supported"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn grouped_selects_use_columns_as_only_full_group_by_allows() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE p (id INT PRIMARY KEY, nm VARCHAR(10), r INT)")?;
@@ -733,6 +879,37 @@ fn enum_and_set_columns_store_the_members_a_value_names_or_numbers() -> turso_co
             "{rejected}"
         );
     }
+    assert_eq!(
+        query(&connection, "SELECT id FROM t WHERE id < 4 ORDER BY e, id")?,
+        vec![
+            vec![Value::from_i64(1)],
+            vec![Value::from_i64(3)],
+            vec![Value::from_i64(2)],
+        ]
+    );
+    assert_eq!(
+        query(&connection, "SELECT id FROM t ORDER BY s DESC, id")?,
+        [2, 1, 3, 5, 4].map(|id| vec![Value::from_i64(id)])
+    );
+    for refused in [
+        "SELECT CAST(e AS DECIMAL) FROM t",
+        "SELECT CAST(s AS DOUBLE) FROM t",
+    ] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(
+            error.to_string().contains("not supported"),
+            "{refused}: {error}"
+        );
+    }
+    connection.execute("CREATE TABLE animals (e ENUM('rat', 'ox', 'dog') PRIMARY KEY)")?;
+    connection.execute(
+        "CREATE TABLE pets (e ENUM('cat', 'dog', 'rat'), FOREIGN KEY (e) REFERENCES animals (e))",
+    )?;
+    connection.execute("INSERT INTO animals VALUES ('rat')")?;
+    connection.execute("INSERT INTO pets VALUES ('cat')")?;
+    connection
+        .execute("INSERT INTO pets VALUES ('rat')")
+        .expect_err("MySQL matches ENUM keys by member position");
     connection.execute("CREATE TABLE b (s SET('x', 'y') COLLATE utf8mb4_0900_bin)")?;
     connection.execute("INSERT INTO b VALUES ('y,x')")?;
     connection
