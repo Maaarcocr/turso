@@ -887,6 +887,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT __mysql_cast_as_datetime (TIMESTAMPADD ('SECOND', 1.5, '2020-12-31 23:59:59'), 1), __mysql_cast_as_datetime (TIMESTAMPADD ('SECOND', '1.0', '2018-05-01'), 6), __mysql_cast_as_datetime (TIMESTAMPADD ('SECOND', 6 / 4, '2020-12-31 23:59:59.12'), 4), TIMESTAMPADD ('SECOND', 1, '2020-01-01'), TIMESTAMPADD ('SECOND', 1.5, a) FROM t",
         ),
         (
+            "SELECT MICROSECOND(20000101103458.1234), CAST(20000101103458.1234 AS DATETIME(6)), DAY(20000101103458.5), MINUTE(2000010110345.1234)",
+            "SELECT MICROSECOND ('20000101103458.1234'), __mysql_cast_as_datetime ('20000101103458.1234', 6), DAY (20000101103458.5), MINUTE (2000010110345.1234)",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),

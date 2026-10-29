@@ -487,9 +487,14 @@ Turso has no `DATE`, `TIME`, `DATETIME`, `DECIMAL` or unsigned types, so:
   parser reads the string with the frontend's datetime parser, which lives
   in `mysql/parser/datetime/` for that. A DECIMAL literal there with more
   than 6 decimals, or with more than 15 significant digits other than a
-  14-digit date and time (passed as its text), is refused. Other decimal
-  arguments still lose digits (`MICROSECOND(20000101103458.1234)` gives
-  `125000`).
+  14-digit date and time (passed as its text), is refused. Such a DECIMAL
+  with a 14-digit integer part read as a datetime or time (the first argument
+  of `DATE`, `DATE_FORMAT`, `DAY` and the other part functions, `HOUR`,
+  `MINUTE`, `SECOND`, `MICROSECOND`, `TIME_TO_SEC`, `TO_DAYS`, `TO_SECONDS`,
+  `WEEK`, `YEARWEEK`, and a `DATE`, `DATETIME` or `TIME` cast) is passed as
+  its text, which MySQL reads alike, so `MICROSECOND(20000101103458.1234)` is
+  `123400`. Other decimal arguments still lose digits
+  (`MICROSECOND(2000010110345.1234)`).
 - A `BLOB` argument is read as MySQL reads a hexadecimal literal: as a
   string in date and time positions and as a `BIGINT UNSIGNED` made of its
   bytes in numeric positions (`MAKEDATE(X'31', 1)` is `2049-01-01`). A

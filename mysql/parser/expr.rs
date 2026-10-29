@@ -3268,6 +3268,8 @@ fn translate_temporal_cast(
     }
     let value = if is_binary_literal(expr) {
         translate_bytes(expr, context)?
+    } else if let Some(text) = datetime_number_text(expr) {
+        string_expr(&text)
     } else {
         translate_expr(expr, context)?
     };
@@ -3282,6 +3284,16 @@ fn translate_temporal_cast(
             vec![value, number(cast_precision(precision))],
         ),
     })
+}
+
+/// The digits of a DECIMAL literal a DOUBLE cannot hold exactly whose
+/// integer part is a 14-digit date and time (`20000101103458.1234`), which
+/// MySQL reads as a datetime or time exactly as it reads that text.
+fn datetime_number_text(expr: &Expr) -> Option<String> {
+    let digits = number_literal(expr).filter(|_| !is_negated(expr))?;
+    let (whole, _) = digits.split_once('.')?;
+    (is_decimal_literal(digits) && !is_exact_as_a_double(digits) && whole.len() == 14)
+        .then(|| digits.to_string())
 }
 
 fn temporal_operand(expr: &Expr, operator: &str) -> MysqlParserError {
@@ -3832,6 +3844,39 @@ fn translate_function(
     round_decimal_integer_arguments(&upper_name, &mut args);
     if let Some(text) = converted_number_text(&upper_name, list)? {
         args[0] = string_expr(&text);
+    }
+    if matches!(
+        upper_name.as_str(),
+        "DATE"
+            | "DATE_FORMAT"
+            | "DAY"
+            | "DAYNAME"
+            | "DAYOFMONTH"
+            | "DAYOFWEEK"
+            | "DAYOFYEAR"
+            | "HOUR"
+            | "LAST_DAY"
+            | "MICROSECOND"
+            | "MINUTE"
+            | "MONTH"
+            | "MONTHNAME"
+            | "QUARTER"
+            | "SECOND"
+            | "TIME_TO_SEC"
+            | "TO_DAYS"
+            | "TO_SECONDS"
+            | "WEEK"
+            | "WEEKDAY"
+            | "WEEKOFYEAR"
+            | "YEAR"
+            | "YEARWEEK"
+    ) {
+        if let Some(text) = unnamed_arguments(list)?
+            .first()
+            .and_then(|value| datetime_number_text(value))
+        {
+            args[0] = string_expr(&text);
+        }
     }
     if matches!(upper_name.as_str(), "ROUND" | "TRUNCATE") {
         if let Some(literal) = unnamed_arguments(list)?
