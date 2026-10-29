@@ -378,6 +378,21 @@ fn foreign_keys_are_checked_when_created_as_mysql_checks_them() -> turso_core::R
 }
 
 #[test]
+fn create_index_checks_the_types_of_the_columns() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (i INT, s TEXT, j JSON, v VARCHAR(10))")?;
+    for statement in ["CREATE INDEX x ON t (j)", "CREATE INDEX x ON t (i, s)"] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("MySQL rejects"),
+            "{statement}: {error}"
+        );
+    }
+    connection.execute("CREATE INDEX x ON t (i, v)")?;
+    Ok(())
+}
+
+#[test]
 fn triggers_fire_as_mysql_s_or_are_refused() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for statement in [

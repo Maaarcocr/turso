@@ -36,6 +36,17 @@ pub(crate) fn translate_insert(insert: &Insert) -> Result<ast::Stmt, MysqlParser
                 .iter()
                 .map(|column| translate_identifier(single_identifier(column)?))
                 .collect::<Result<Vec<_>, _>>()?;
+            for (index, column) in columns.iter().enumerate() {
+                if columns[..index]
+                    .iter()
+                    .any(|earlier| earlier.as_str().eq_ignore_ascii_case(column.as_str()))
+                {
+                    return Err(MysqlParserError::Rejected(format!(
+                        "Column '{}' specified twice",
+                        column.as_str()
+                    )));
+                }
+            }
             if let SetExpr::Values(values) = source.body.as_ref() {
                 if values.rows.iter().all(|row| row.is_empty()) {
                     if !columns.is_empty()

@@ -28,6 +28,7 @@ mod query;
 mod session;
 mod show;
 mod split;
+mod stored_table;
 mod transaction;
 mod trigger;
 
@@ -267,7 +268,9 @@ fn translate_other(
         Statement::CreateTable(create_table) => {
             ddl::translate_create_table(create_table, environment)
         }
-        Statement::CreateIndex(create_index) => ddl_index::translate_create_index(create_index),
+        Statement::CreateIndex(create_index) => {
+            ddl_index::translate_create_index(create_index, environment)
+        }
         Statement::AlterTable(alter_table) => {
             ddl_alter::translate_alter_table(alter_table, environment)
         }

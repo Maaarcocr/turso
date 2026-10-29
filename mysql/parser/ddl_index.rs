@@ -1,4 +1,5 @@
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
+use crate::stored_table::{Family, TableDefinition};
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTableOperation, BinaryOperator, CreateIndex, Expr, Function, FunctionArg, FunctionArgExpr,
@@ -29,6 +30,7 @@ impl KeyPart {
 
 pub(crate) fn translate_create_index(
     create_index: &CreateIndex,
+    environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     let CreateIndex {
         name,
@@ -64,12 +66,36 @@ pub(crate) fn translate_create_index(
             "CREATE INDEX `{create_index}` contains a clause that is not available"
         )));
     }
-    index_statement(
-        *unique,
-        translate_ddl_name(name)?,
-        translate_ddl_name(table_name)?,
-        columns,
-    )
+    let table_name = translate_ddl_name(table_name)?;
+    if let Some(table) = environment
+        .table_sql(table_name.as_str())?
+        .and_then(|sql| TableDefinition::parse(&sql).ok())
+    {
+        for column in columns {
+            let Expr::Identifier(identifier) = &column.column.expr else {
+                continue;
+            };
+            let Some(definition) = table.column(&identifier.value) else {
+                continue;
+            };
+            match definition.family() {
+                Family::Json => {
+                    return Err(MysqlParserError::Rejected(format!(
+                        "JSON column `{}` cannot be indexed directly",
+                        identifier.value
+                    )))
+                }
+                Family::Blob => {
+                    return Err(MysqlParserError::Rejected(format!(
+                        "BLOB/TEXT column `{}` used in a key needs a key length",
+                        identifier.value
+                    )))
+                }
+                Family::String | Family::Integer | Family::Other => {}
+            }
+        }
+    }
+    index_statement(*unique, translate_ddl_name(name)?, table_name, columns)
 }
 
 fn index_statement(

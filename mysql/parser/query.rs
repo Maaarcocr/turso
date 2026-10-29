@@ -137,6 +137,7 @@ pub(crate) fn translate_subquery(
         .map(|with| translate_with(with, context))
         .transpose()?;
     if let (SetExpr::Select(select), Some(order_by)) = (body.as_ref(), order_by) {
+        check_order_by_names(select, order_by)?;
         if let Some(term) = order_by_outside_the_rows(select, order_by) {
             return Err(unsupported(format!(
                 "ORDER BY `{term}` of a grouped or DISTINCT SELECT, which may use a column outside the selected rows that MySQL rejects and Turso allows, in `{query}`"
@@ -496,6 +497,77 @@ fn may_break_only_full_group_by(select: &Select) -> bool {
         .having
         .as_ref()
         .is_some_and(|having| uses_ungrouped_column(having, &having_groups))
+}
+
+/// Fails as MySQL does when an `ORDER BY` name is the alias of two different
+/// selected expressions (1052). Refused: a name that is also a selected
+/// column, or whose expressions may be the same column.
+fn check_order_by_names(select: &Select, order_by: &OrderBy) -> Result<(), MysqlParserError> {
+    let OrderByKind::Expressions(terms) = &order_by.kind else {
+        return Ok(());
+    };
+    for term in terms {
+        let Expr::Identifier(name) = &term.expr else {
+            continue;
+        };
+        let mut aliased = Vec::new();
+        let mut columns = 0;
+        for item in &select.projection {
+            match item {
+                SelectItem::ExprWithAlias { expr, alias }
+                    if alias.value.eq_ignore_ascii_case(&name.value) =>
+                {
+                    aliased.push(expr);
+                }
+                SelectItem::UnnamedExpr(Expr::Identifier(column))
+                    if column.value.eq_ignore_ascii_case(&name.value) =>
+                {
+                    columns += 1;
+                }
+                SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts))
+                    if parts
+                        .last()
+                        .is_some_and(|column| column.value.eq_ignore_ascii_case(&name.value)) =>
+                {
+                    columns += 1;
+                }
+                _ => {}
+            }
+        }
+        let column_name = |expr: &Expr| match expr {
+            Expr::Identifier(column) => Some(column.value.to_lowercase()),
+            Expr::CompoundIdentifier(parts) => {
+                parts.last().map(|column| column.value.to_lowercase())
+            }
+            _ => None,
+        };
+        let texts = aliased
+            .iter()
+            .map(|expr| expr.to_string())
+            .collect::<std::collections::HashSet<_>>();
+        if aliased.len() + columns < 2 || (columns == 0 && texts.len() < 2) {
+            continue;
+        }
+        let column_names = aliased
+            .iter()
+            .filter_map(|expr| column_name(expr))
+            .collect::<Vec<_>>();
+        let same_column = column_names
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            < column_names.len();
+        if columns > 0 || same_column {
+            return Err(unsupported(format!(
+                "ORDER BY `{name}`, which names more than one selected expression that MySQL may find ambiguous"
+            )));
+        }
+        return Err(MysqlParserError::Rejected(format!(
+            "Column '{}' in order clause is ambiguous",
+            name.value
+        )));
+    }
+    Ok(())
 }
 
 fn order_by_outside_the_rows<'a>(select: &Select, order_by: &'a OrderBy) -> Option<&'a Expr> {
@@ -1019,6 +1091,7 @@ pub(crate) fn translate_from(
     if rest.is_empty() && first.joins.is_empty() && is_dual(&first.relation) {
         return Ok(None);
     }
+    check_table_references(from)?;
     let select = translate_table_factor(&first.relation, context)?;
     let mut joins = translate_joins(&first.joins, context)?;
     for table in rest {
@@ -1033,6 +1106,102 @@ pub(crate) fn translate_from(
         select: Box::new(select),
         joins,
     }))
+}
+
+/// Fails as MySQL does when two tables of one `FROM` have the same name or
+/// alias (1066) or when it joins more than 61 tables (1116). Refused: more
+/// than 61 tables counting those of derived tables, which MySQL may merge
+/// into the join.
+fn check_table_references(from: &[TableWithJoins]) -> Result<(), MysqlParserError> {
+    const MAX_TABLES: usize = 61;
+    #[derive(Default)]
+    struct Count {
+        names: Vec<String>,
+        tables: usize,
+        merged: usize,
+    }
+    fn visit(factor: &TableFactor, count: &mut Count) -> Result<(), MysqlParserError> {
+        let name = match factor {
+            TableFactor::NestedJoin {
+                table_with_joins,
+                alias: None,
+            } => {
+                visit(&table_with_joins.relation, count)?;
+                for join in &table_with_joins.joins {
+                    visit(&join.relation, count)?;
+                }
+                return Ok(());
+            }
+            TableFactor::Table { name, alias, .. } => {
+                count.merged += 1;
+                Some(alias.as_ref().map_or_else(
+                    || {
+                        name.0
+                            .iter()
+                            .map(|part| match part {
+                                ObjectNamePart::Identifier(identifier) => identifier.value.clone(),
+                                other => other.to_string(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(".")
+                    },
+                    |alias| alias.name.value.clone(),
+                ))
+            }
+            TableFactor::Derived {
+                subquery, alias, ..
+            } => {
+                count.merged += query_tables(subquery).max(1);
+                alias.as_ref().map(|alias| alias.name.value.clone())
+            }
+            _ => {
+                count.merged += 1;
+                None
+            }
+        };
+        count.tables += 1;
+        if let Some(name) = name {
+            if count.names.contains(&name) {
+                return Err(MysqlParserError::Rejected(format!(
+                    "Not unique table/alias: '{name}'"
+                )));
+            }
+            count.names.push(name);
+        }
+        Ok(())
+    }
+    fn query_tables(query: &Query) -> usize {
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return 1;
+        };
+        let mut count = Count::default();
+        for table in &select.from {
+            let _ = visit(&table.relation, &mut count);
+            for join in &table.joins {
+                let _ = visit(&join.relation, &mut count);
+            }
+        }
+        count.merged
+    }
+    let mut count = Count::default();
+    for table in from {
+        visit(&table.relation, &mut count)?;
+        for join in &table.joins {
+            visit(&join.relation, &mut count)?;
+        }
+    }
+    if count.tables > MAX_TABLES {
+        return Err(MysqlParserError::Rejected(format!(
+            "Too many tables; MySQL can only use {MAX_TABLES} tables in a join"
+        )));
+    }
+    if count.merged > MAX_TABLES {
+        return Err(unsupported(format!(
+            "a join of {} tables counting those of its derived tables, which MySQL may merge past its limit of {MAX_TABLES}",
+            count.merged
+        )));
+    }
+    Ok(())
 }
 
 fn is_dual(relation: &TableFactor) -> bool {
