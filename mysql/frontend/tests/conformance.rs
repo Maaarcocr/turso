@@ -238,6 +238,78 @@ fn tables_made_by_create_table_as_select_keep_their_column_types_after_reopen(
 }
 
 #[test]
+fn transactions_keep_mysql_semantics() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id INT PRIMARY KEY, d DATE)")?;
+    for statement in ["COMMIT", "ROLLBACK", "SAVEPOINT a"] {
+        connection.execute(statement)?;
+    }
+    for statement in ["RELEASE SAVEPOINT a", "ROLLBACK TO SAVEPOINT a"] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains("does not exist"), "{error}");
+    }
+    let commit_prepared_outside = connection.prepare("COMMIT")?;
+    connection.execute("BEGIN")?;
+    connection.execute("INSERT INTO t VALUES (1, '2024-01-01')")?;
+    connection
+        .execute("INSERT INTO t VALUES (2, '2024-01-02'), (1, '2024-01-03')")
+        .expect_err("a duplicate key fails the statement");
+    connection
+        .execute("INSERT INTO t VALUES (3, '2024-01-03'), (4, '2024-02-30')")
+        .expect_err("an invalid date fails the statement");
+    connection.execute("SAVEPOINT s")?;
+    connection.execute("INSERT INTO t VALUES (5, NULL)")?;
+    connection.execute("ROLLBACK TO SAVEPOINT s")?;
+    for statement in [
+        "CREATE TABLE u (i INT)",
+        "DROP TABLE t",
+        "START TRANSACTION",
+        "SET autocommit = 1",
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("inside a transaction"),
+            "{statement}: {error}"
+        );
+    }
+    let mut commit = commit_prepared_outside;
+    commit.run_collect_rows()?;
+    assert!(
+        connection.get_auto_commit(),
+        "COMMIT must end the transaction"
+    );
+    connection.execute("ROLLBACK")?;
+    assert_eq!(
+        query(&connection, "SELECT id FROM t")?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    connection.execute("START TRANSACTION")?;
+    connection.execute("INSERT INTO t VALUES (6, NULL)")?;
+    connection.execute("ROLLBACK")?;
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM t")?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    let mut isolation = connection.prepare("SELECT @@transaction_isolation")?;
+    assert_eq!(
+        isolation.run_collect_rows()?,
+        vec![vec![Value::build_text("REPEATABLE-READ")]]
+    );
+    connection.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")?;
+    isolation.reset()?;
+    assert_eq!(
+        isolation.run_collect_rows()?,
+        vec![vec![Value::build_text("READ-COMMITTED")]]
+    );
+    let other = open_memory()?;
+    assert_eq!(
+        query(&other, "SELECT @@transaction_isolation")?,
+        vec![vec![Value::build_text("REPEATABLE-READ")]]
+    );
+    Ok(())
+}
+
+#[test]
 fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<()> {
     let first = open_memory()?;
     let second = open_memory()?;

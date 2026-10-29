@@ -1222,8 +1222,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT 1 INTO @x",
         },
         SqlCase {
-            name: "locking read",
-            sql: "SELECT a FROM t FOR UPDATE",
+            name: "locking read of a named table",
+            sql: "SELECT a FROM t FOR UPDATE OF t",
         },
         SqlCase {
             name: "global system variable",
@@ -1641,15 +1641,56 @@ fn lowering_rejects_unsupported_statement_families() {
         "SET autocommit = 0",
         "SET FOREIGN_KEY_CHECKS = 2",
         "SET FOREIGN_KEY_CHECKS = 0, FOREIGN_KEY_CHECKS = 1",
-        "START TRANSACTION",
-        "COMMIT",
-        "ROLLBACK",
+        "START TRANSACTION READ ONLY",
+        "COMMIT AND CHAIN",
+        "ROLLBACK AND CHAIN",
+        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED",
+        "SET GLOBAL TRANSACTION ISOLATION LEVEL READ COMMITTED",
+        "SET SESSION TRANSACTION READ ONLY",
+        "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE",
     ];
 
     for sql in cases {
         let error = parse_and_translate(sql).expect_err("unsupported statement must be rejected");
         assert!(
             matches!(error, MysqlParserError::Unsupported(_)),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+}
+
+#[test]
+fn lowers_transactions_for_a_session_outside_one() {
+    let cases = [
+        ("START TRANSACTION", "BEGIN IMMEDIATE"),
+        ("BEGIN", "BEGIN IMMEDIATE"),
+        ("BEGIN WORK", "BEGIN IMMEDIATE"),
+        ("COMMIT", "SELECT 0 WHERE 0"),
+        ("ROLLBACK", "SELECT 0 WHERE 0"),
+        ("SAVEPOINT a", "SELECT 0 WHERE 0"),
+        ("SELECT a FROM t FOR UPDATE", "SELECT a FROM t"),
+        ("SELECT a FROM t FOR SHARE SKIP LOCKED", "SELECT a FROM t"),
+        (
+            "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
+            "SELECT 0 WHERE __mysql_set_transaction_isolation ('READ-COMMITTED')",
+        ),
+        (
+            "set local transaction isolation level serializable",
+            "SELECT 0 WHERE __mysql_set_transaction_isolation ('SERIALIZABLE')",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let statement =
+            parse_and_translate(sql).unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert_eq!(statement.to_string(), expected, "SQL: {sql}");
+    }
+
+    for sql in ["ROLLBACK TO SAVEPOINT a", "RELEASE SAVEPOINT a"] {
+        let error =
+            parse_and_translate(sql).expect_err("no savepoint exists outside a transaction");
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
             "SQL: {sql}\nerror: {error}"
         );
     }

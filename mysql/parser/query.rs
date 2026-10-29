@@ -124,7 +124,7 @@ pub(crate) fn translate_subquery(
         pipe_operators,
     } = query;
     if fetch.is_some()
-        || !locks.is_empty()
+        || locks.iter().any(|lock| lock.of.is_some())
         || for_clause.is_some()
         || settings.is_some()
         || format_clause.is_some()

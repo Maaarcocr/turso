@@ -4,7 +4,16 @@ use crate::MysqlParserError;
 use sqlparser::ast::{ContextModifier, Expr, Ident, ObjectName, ObjectNamePart, Set, Value};
 use turso_parser::ast;
 
-pub(crate) fn translate_set(set: &Set) -> Result<ast::Stmt, MysqlParserError> {
+/// A statement that does nothing and returns no rows, for statements whose
+/// effect the session already has.
+pub(crate) fn no_op() -> ast::Stmt {
+    statement_with_effect(number("0"))
+}
+
+pub(crate) fn translate_set(
+    set: &Set,
+    in_transaction: bool,
+) -> Result<ast::Stmt, MysqlParserError> {
     let changes = match set {
         Set::SetNames {
             charset_name,
@@ -37,6 +46,12 @@ pub(crate) fn translate_set(set: &Set) -> Result<ast::Stmt, MysqlParserError> {
     for change in &changes {
         match change {
             Change::KeepsTheTargetProfile => {}
+            Change::Autocommit if in_transaction => {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "`{set}` inside a transaction, which MySQL may commit, is not lowered yet"
+                )))
+            }
+            Change::Autocommit => {}
             Change::ForeignKeyChecks(enabled) => foreign_key_checks.push(*enabled),
             Change::Checked(name, value) => checked.push((name.as_str(), *value)),
             Change::UserVariable(name, value) => user_variables.push((name.as_str(), *value)),
@@ -80,6 +95,8 @@ pub(crate) fn translate_set(set: &Set) -> Result<ast::Stmt, MysqlParserError> {
 
 enum Change<'a> {
     KeepsTheTargetProfile,
+    /// `autocommit` set to 1, which the session has outside a transaction.
+    Autocommit,
     ForeignKeyChecks(bool),
     /// A setting assigned an expression, which keeps the target profile only
     /// if its value at run time is the profile's.
@@ -167,7 +184,7 @@ pub(crate) fn system_variable(scope: &str, name: &Ident) -> Result<ast::Expr, My
     Ok(match name.value.to_ascii_lowercase().as_str() {
         "sql_mode" => string_expr(&sql_mode),
         "time_zone" => string_expr("+00:00"),
-        "transaction_isolation" => string_expr("REPEATABLE-READ"),
+        "transaction_isolation" => function_call("__mysql_transaction_isolation", Vec::new()),
         "character_set_client"
         | "character_set_connection"
         | "character_set_results"
@@ -240,7 +257,7 @@ fn assignment<'a>(
     let variable = session_variable(scope, name)?;
     let change = match variable.as_str() {
         "foreign_key_checks" => switch(value).map(Change::ForeignKeyChecks),
-        "autocommit" => (switch(value) == Some(true)).then_some(Change::KeepsTheTargetProfile),
+        "autocommit" => (switch(value) == Some(true)).then_some(Change::Autocommit),
         "time_zone" => string(value)
             .filter(|zone| *zone == "+00:00" || zone.eq_ignore_ascii_case("UTC"))
             .map(|_| Change::KeepsTheTargetProfile),
@@ -375,7 +392,7 @@ fn is_target_sql_mode(modes: &str) -> bool {
 
 /// `SELECT 0 WHERE condition`, for a statement that returns no row: the
 /// condition runs for its effect and is false.
-fn statement_with_effect(condition: ast::Expr) -> ast::Stmt {
+pub(crate) fn statement_with_effect(condition: ast::Expr) -> ast::Stmt {
     ast::Stmt::Select(ast::Select {
         with: None,
         body: ast::SelectBody {

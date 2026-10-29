@@ -61,11 +61,12 @@ impl TableMarker {
 
 pub(crate) fn parse_statement(
     dialect: &dyn Dialect,
+    connection: &crate::Connection,
     sql: &str,
 ) -> Result<(Option<ast::Cmd>, usize)> {
     let statement_sql = sql.trim_start();
     let Some((marker, table_sql)) = TableMarker::read(statement_sql)? else {
-        return dialect.parse(sql);
+        return dialect.parse_for(connection, sql);
     };
     if !dialect_writes_marker(dialect, &marker) {
         crate::bail_parse_error!(

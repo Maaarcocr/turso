@@ -1778,7 +1778,7 @@ impl Connection {
     }
 
     pub(crate) fn parse_sql(&self, sql: &str) -> Result<(Option<Cmd>, usize)> {
-        crate::dialect::marker::parse_statement(self.db.dialect().as_ref(), sql)
+        crate::dialect::marker::parse_statement(self.db.dialect().as_ref(), self, sql)
     }
 
     pub(crate) fn parse_sql_with_origin(
@@ -1788,7 +1788,7 @@ impl Connection {
     ) -> Result<(Option<Cmd>, usize)> {
         match origin {
             StatementOrigin::InternalHelper => {
-                crate::dialect::marker::parse_statement(&crate::SqliteDialect, sql)
+                crate::dialect::marker::parse_statement(&crate::SqliteDialect, self, sql)
             }
             StatementOrigin::Root | StatementOrigin::Subprogram => self.parse_sql(sql),
         }

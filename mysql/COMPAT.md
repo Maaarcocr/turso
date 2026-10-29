@@ -12,7 +12,7 @@ Target: MySQL 8.4.10 with the profile in [`TARGET.md`](TARGET.md).
 | Expressions and functions | Yes | Explicit error | No | No | No |
 | `FROM`, filtering, grouping, ordering, limits | Yes | Explicit error | No | No | No |
 | DDL and DML | Yes | Explicit error | No | No | No |
-| Transactions | Yes | Explicit error | No | No | No |
+| Transactions | Yes | Partial | Partial | No | No |
 | MySQL wire protocol | N/A | N/A | N/A | N/A | No |
 
 Anonymous parameters are limited to standalone projection items in the embedded API and are indexed from 1 in encounter order. Callers must bind every slot with `Statement::bind_at`; MySQL missing-argument diagnostics, numbered and named placeholders, parameter expressions, CLI binding, and wire behavior are not supported.
@@ -264,8 +264,8 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   the decimal in the JSON value, Turso a DOUBLE. And of a `BINARY` cast:
   MySQL's opaque JSON value reaches other functions as a JSON string.
 - `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN` modifiers, `STRAIGHT_JOIN`
-  joins, `PARTITION (...)` selection, `INTO`, locking reads
-  (`FOR UPDATE`, `FOR SHARE`), `WITH ROLLUP`, `TABLE t`, `VALUES` without
+  joins, `PARTITION (...)` selection, `INTO`, locking reads that name
+  their tables (`FOR UPDATE OF t`; see Transactions), `WITH ROLLUP`, `TABLE t`, `VALUES` without
   `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`, `INTERSECT
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables outside the cases under Session settings, `:name` and `?N` parameters,
@@ -379,6 +379,44 @@ or `VIEW`). The column is named `Tables_in_main`, after Turso's name for the
 database. A pattern with a `\` escape, `WHERE`, `FROM`/`IN` and the other
 `SHOW` statements are refused.
 
+## Transactions
+
+The lowering of a statement depends on whether the session is inside a
+transaction. Core asks the dialect to parse with the connection
+(`Dialect::parse_for`), and the MySQL dialect passes its autocommit state to
+`turso_mysql_parser::parse_and_translate_in`. A prepared statement records
+that state, and core prepares it again when it runs in the other state
+(`Dialect::parse_reads_transaction_state`; other dialects keep the plain
+`Dialect::parse`). `mysql/parser/transaction.rs` lowers, for a session with
+the default `autocommit = 1`:
+
+| Statement | Outside a transaction | Inside one |
+|---|---|---|
+| `START TRANSACTION`, `BEGIN [WORK]` | `BEGIN IMMEDIATE` | Refused (MySQL commits the open transaction first) |
+| `COMMIT [WORK]`, `ROLLBACK [WORK]` | No-op, as in MySQL | `COMMIT`, `ROLLBACK` |
+| `SAVEPOINT s` | No-op | `SAVEPOINT s` |
+| `ROLLBACK TO [SAVEPOINT] s`, `RELEASE SAVEPOINT s` | Fails: the savepoint does not exist (1305) | `ROLLBACK TO s`, `RELEASE s` |
+
+A failed statement inside a transaction is undone and the transaction stays
+open, as in InnoDB. DDL, `TRUNCATE`, `LOCK TABLES`, `UNLOCK TABLES` and
+`SET autocommit` inside a transaction are refused, since MySQL commits the
+transaction before them. `AND CHAIN`, `RELEASE` after `COMMIT`/`ROLLBACK`,
+and access modes (`READ ONLY`, `READ WRITE`, `WITH CONSISTENT SNAPSHOT`) are
+refused.
+
+`BEGIN IMMEDIATE` takes the database's write lock when the transaction
+starts, so the transactions of different connections run one after the other
+(a connection that writes while another holds a transaction fails with
+`database is locked` instead of waiting, as InnoDB does). A transaction's
+reads then see the latest committed rows, and every isolation level gives
+the result of running the transactions in that order. So locking reads
+(`FOR UPDATE`, `FOR SHARE`, with `NOWAIT` or `SKIP LOCKED`; `LOCK IN
+SHARE MODE` does not parse yet) read what a plain read does: no other transaction can hold a row.
+`SET SESSION TRANSACTION ISOLATION LEVEL level` (or `LOCAL`) stores the
+session's `@@transaction_isolation` through
+`__mysql_set_transaction_isolation(level)`. The form without `SESSION`, which
+applies to the next transaction only, and `GLOBAL` are refused.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or
@@ -387,7 +425,7 @@ assignments in one statement are allowed):
 
 | Statement | Lowering |
 |---|---|
-| `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON`, `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
+| `SET NAMES utf8mb4 [COLLATE utf8mb4_0900_ai_ci]`, `time_zone` set to `'+00:00'` or `'UTC'`, `autocommit` set to 1 or `ON` (outside a transaction), `sql_mode` set to exactly the default modes of the target profile (in any order), `character_set_client`, `character_set_connection` or `character_set_results` set to `utf8mb4`, `collation_connection` set to `utf8mb4_0900_ai_ci` | A compatibility no-op (`SELECT 0 WHERE 0`, which returns no rows): the session already has these values in the target profile |
 | `FOREIGN_KEY_CHECKS` set to 0, 1, `ON`, `OFF`, `TRUE` or `FALSE` | `PRAGMA foreign_keys = 0/1`, which Turso applies at once, also inside a transaction, as MySQL does. Turso then checks foreign keys like SQLite: an `UPDATE` that writes the same key value is checked too, where InnoDB skips it |
 
 | `time_zone`, `sql_mode`, the character sets or `collation_connection` set to an expression (`SET character_set_client = @saved_cs_client` in mysqldump output) | `__mysql_keep_session_settings(name, value, ...)`, which accepts the values above when it runs and refuses any other |
@@ -418,15 +456,17 @@ the rest:
 - `@a := x` and `SELECT ... INTO @a` are not lowered.
 
 A system variable `@@name` or `@@session.name` whose value the target profile
-fixes reads as that constant: `sql_mode`, `time_zone` (`+00:00`),
-`transaction_isolation` (`REPEATABLE-READ`), the `character_set_*` and
+fixes reads as that constant: `sql_mode`, `time_zone` (`+00:00`), the
+`character_set_*` and
 `collation_*` variables of the connection, server and database, `version`
 (`8.4.10`), `autocommit`, `auto_increment_increment`,
 `auto_increment_offset`, `unique_checks`, `explicit_defaults_for_timestamp`,
 `lower_case_table_names`, `sql_auto_is_null`, `transaction_read_only`,
 `max_execution_time`, `sql_safe_updates`, `default_week_format`,
 `div_precision_increment`, `group_concat_max_len`, `max_allowed_packet` and
-`default_storage_engine`. `@@global.` and other variables are refused.
+`default_storage_engine`. `@@transaction_isolation` reads the session's
+level (`REPEATABLE-READ` until `SET SESSION TRANSACTION ISOLATION LEVEL`
+changes it). `@@global.` and other variables are refused.
 
 ### Connection id and user-level locks
 

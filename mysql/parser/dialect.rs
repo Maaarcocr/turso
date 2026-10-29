@@ -57,6 +57,26 @@ pub(crate) const TEMPORAL_UNITS: &[&str] = &[
     "YEAR_MONTH",
 ];
 
+/// The word after the leading `SET` of `sql`, in upper case (`SESSION` in
+/// `SET SESSION TRANSACTION ...`, which the parsed statement does not keep).
+pub(crate) fn word_after_set(sql: &str) -> Option<String> {
+    let dialect = MySql::default();
+    let tokens = Tokenizer::new(&dialect, sql).tokenize().ok()?;
+    let mut words = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)))
+        .map(|token| match token {
+            Token::Word(word) if word.quote_style.is_none() => {
+                Some(word.value.to_ascii_uppercase())
+            }
+            _ => None,
+        });
+    match words.next() {
+        Some(Some(set)) if set == "SET" => words.next().flatten(),
+        _ => None,
+    }
+}
+
 pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {
     let dialect = MySql::default();
     let tokens = Tokenizer::new(&dialect, sql)

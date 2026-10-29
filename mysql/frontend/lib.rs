@@ -25,14 +25,15 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        let statement = match turso_mysql_parser::first_statement(sql) {
-            Ok(Some(statement)) => statement,
-            Ok(None) => return Ok((None, sql.len())),
-            Err(error) => return Err(LimboError::ParseError(error.to_string())),
-        };
-        let stmt = turso_mysql_parser::parse_and_translate(&sql[statement.text.clone()])
-            .map_err(|error| LimboError::ParseError(error.to_string()))?;
-        Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
+        parse_statement(sql, &turso_mysql_parser::Autocommit)
+    }
+
+    fn parse_for(&self, connection: &Connection, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
+        parse_statement(sql, &Session(connection))
+    }
+
+    fn parse_reads_transaction_state(&self) -> bool {
+        true
     }
 
     fn parse_table_sql(&self, sql: &str, root_page: i64) -> Result<BTreeTable> {
@@ -112,6 +113,32 @@ impl Dialect for MySqlDialect {
 
     fn marks_tables(&self) -> bool {
         true
+    }
+}
+
+/// The first statement of `sql`, lowered for a session described by
+/// `environment`, and the number of bytes it takes.
+fn parse_statement(
+    sql: &str,
+    environment: &dyn turso_mysql_parser::Environment,
+) -> Result<(Option<ast::Cmd>, usize)> {
+    let statement = match turso_mysql_parser::first_statement(sql) {
+        Ok(Some(statement)) => statement,
+        Ok(None) => return Ok((None, sql.len())),
+        Err(error) => return Err(LimboError::ParseError(error.to_string())),
+    };
+    let stmt =
+        turso_mysql_parser::parse_and_translate_in(&sql[statement.text.clone()], environment)
+            .map_err(|error| LimboError::ParseError(error.to_string()))?;
+    Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
+}
+
+/// The session of a connection, as the lowering of its statements sees it.
+struct Session<'a>(&'a Connection);
+
+impl turso_mysql_parser::Environment for Session<'_> {
+    fn in_transaction(&self) -> bool {
+        !self.0.get_auto_commit()
     }
 }
 

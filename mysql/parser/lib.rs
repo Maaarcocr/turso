@@ -27,6 +27,7 @@ mod query;
 mod session;
 mod show;
 mod split;
+mod transaction;
 
 pub use ddl_default::{temporal_text, TemporalColumn};
 pub use function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
@@ -64,13 +65,88 @@ pub fn parse_one(sql: &str) -> Result<Statement, MysqlParserError> {
     }
 }
 
+/// What the lowering of a statement may know about the session that runs it.
+pub trait Environment {
+    /// Whether a transaction started with `BEGIN` or `START TRANSACTION` is
+    /// open.
+    fn in_transaction(&self) -> bool;
+}
+
+/// A session outside any transaction, about which nothing else is known.
+pub struct Autocommit;
+
+impl Environment for Autocommit {
+    fn in_transaction(&self) -> bool {
+        false
+    }
+}
+
 pub fn parse_and_translate(sql: &str) -> Result<ast::Stmt, MysqlParserError> {
+    parse_and_translate_in(sql, &Autocommit)
+}
+
+pub fn parse_and_translate_in(
+    sql: &str,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
     let statement = parse_one(sql)?;
-    translate(&statement)
+    if let Statement::Set(sqlparser::ast::Set::SetTransaction {
+        modes,
+        snapshot: None,
+        session: false,
+    }) = &statement
+    {
+        let scope = dialect::word_after_set(sql);
+        return transaction::translate_set_transaction(modes, scope.as_deref(), &statement);
+    }
+    translate_in(&statement, environment)
 }
 
 pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
+    translate_in(statement, &Autocommit)
+}
+
+/// Lowers `statement` for a session described by `environment`. Inside a
+/// transaction, DDL, which MySQL runs after committing the transaction, is
+/// refused.
+pub fn translate_in(
+    statement: &Statement,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
+    let in_transaction = environment.in_transaction();
+    if in_transaction
+        && matches!(
+            statement,
+            Statement::CreateTable(_)
+                | Statement::CreateIndex(_)
+                | Statement::AlterTable(_)
+                | Statement::RenameTable(_)
+                | Statement::Drop { .. }
+                | Statement::CreateView(_)
+                | Statement::Truncate(_)
+                | Statement::LockTables { .. }
+                | Statement::UnlockTables
+        )
+    {
+        let text = statement.to_string();
+        let keyword = text
+            .split_whitespace()
+            .take(2)
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Err(MysqlParserError::Unsupported(format!(
+            "{} inside a transaction, which MySQL commits first, is not lowered yet",
+            keyword.to_ascii_uppercase()
+        )));
+    }
     match statement {
+        Statement::StartTransaction { .. }
+        | Statement::Commit { .. }
+        | Statement::Rollback { .. }
+        | Statement::Savepoint { .. }
+        | Statement::ReleaseSavepoint { .. } => {
+            transaction::translate_transaction(statement, in_transaction)
+        }
         Statement::Query(query) => {
             let mut context = query::TranslationContext::default();
             query::translate_query(query, &mut context)
@@ -81,7 +157,7 @@ pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement),
         Statement::CreateView(create_view) => ddl_view::translate_create_view(create_view),
-        Statement::Set(set) => session::translate_set(set),
+        Statement::Set(set) => session::translate_set(set, in_transaction),
         Statement::Insert(insert) => insert::translate_insert(insert),
         Statement::Update(update) => dml::translate_update(update),
         Statement::Delete(delete) => dml::translate_delete(delete),
