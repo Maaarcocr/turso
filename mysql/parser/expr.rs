@@ -1349,17 +1349,17 @@ impl OperandKind {
 /// literal, which cannot fail before the result is `NULL`.
 fn is_null_valued(expr: &Expr) -> bool {
     match unnested(expr) {
-        Expr::BinaryOp { left, op, right }
-            if matches!(
-                op,
+        Expr::BinaryOp {
+            left,
+            op:
                 BinaryOperator::Plus
-                    | BinaryOperator::Minus
-                    | BinaryOperator::Multiply
-                    | BinaryOperator::Divide
-                    | BinaryOperator::Modulo
-                    | BinaryOperator::MyIntegerDivide
-            ) =>
-        {
+                | BinaryOperator::Minus
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Modulo
+                | BinaryOperator::MyIntegerDivide,
+            right,
+        } => {
             let number = |expr: &Expr| signed_number_literal(expr).is_some();
             (is_null_valued(left) && (number(right) || is_null_valued(right)))
                 || (number(left) && is_null_valued(right))
