@@ -537,6 +537,10 @@ fn reports_ddl_that_mysql_rejects() {
             sql: "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_cs, 0xff)",
         },
         SqlCase {
+            name: "collated STRCMP of a date and a string that is not a date",
+            sql: "SELECT STRCMP(DATE '2000-01-01', 'foobar' COLLATE utf8mb4_0900_as_cs)",
+        },
+        SqlCase {
             name: "LIKE of a JSON value and a binary string that is not UTF-8",
             sql: "SELECT CAST(TRUE AS JSON) LIKE 0xFF",
         },
@@ -785,6 +789,14 @@ fn lowers_select_statements_to_shared_ast() {
         (
             "SELECT STRCMP('a' COLLATE utf8mb4_0900_as_ci, 'A')",
             "SELECT __mysql_collated_strcmp ('utf8mb4_0900_as_ci', 'a' COLLATE \"und-u-ks-level2\", 'A')",
+        ),
+        (
+            "SELECT GREATEST(DATE '2023-02-01', 'Abc' COLLATE utf8mb4_0900_as_ci, CAST(2 AS UNSIGNED)), GREATEST('foobar', TIMESTAMP '2020-12-31 23:59:59'), GREATEST(-1.0, 9223372036854775807, DATE '2100-02-01', TIMESTAMP '2020-12-31 23:59:59'), GREATEST(DATE '2024-02-18', 'x', NULL)",
+            "SELECT '2023-02-01', '2020-12-31 23:59:59.000000', '2100-02-01 00:00:00.0', NULL",
+        ),
+        (
+            "SELECT LEAST(DATE '2100-02-01', 'Abc' COLLATE utf8mb4_0900_as_ci, 'FOOBAR'), STRCMP(TIME '00:00:59', '12$4' COLLATE utf8mb4_0900_ai_ci)",
+            "SELECT __mysql_collated_least ('utf8mb4_0900_as_ci', '2100-02-01', 'Abc' COLLATE \"und-u-ks-level2\", 'FOOBAR'), __mysql_collated_strcmp ('utf8mb4_0900_ai_ci', '00:00:59', '12$4' COLLATE \"und-u-ks-level1\")",
         ),
         (
             "SELECT MAKEDATE(TIME '00:00:59', 1)",
@@ -1219,6 +1231,18 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "a negated hex literal whose decimals show",
             sql: "SELECT -0x1 + 1.5",
+        },
+        SqlCase {
+            name: "GREATEST of a date and a string MySQL may read as a date",
+            sql: "SELECT GREATEST(DATE '2100-02-01', '2020-01-01')",
+        },
+        SqlCase {
+            name: "GREATEST of a date and a time",
+            sql: "SELECT GREATEST(DATE '2100-02-01', TIME '10:00:00', 'x')",
+        },
+        SqlCase {
+            name: "collated LEAST of a date and a string MySQL may read as a date",
+            sql: "SELECT LEAST(DATE '2100-02-01', '2000-01-01' COLLATE utf8mb4_0900_as_ci)",
         },
         SqlCase {
             name: "a binary string compared as a date",
