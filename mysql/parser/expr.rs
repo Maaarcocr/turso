@@ -2118,6 +2118,76 @@ impl NumberComparison {
     }
 }
 
+/// The signed digits of an integer or decimal literal whose integer part is
+/// beyond the BIGINT range.
+fn beyond_bigint_digits(expr: &Expr) -> Option<String> {
+    let digits = signed_number_literal(expr)?;
+    if digits.contains(['e', 'E']) {
+        return None;
+    }
+    let whole = digits.split_once('.').map_or(digits, |(whole, _)| whole);
+    let whole = whole.trim_start_matches('0');
+    let limit = if is_negated(expr) {
+        "9223372036854775808"
+    } else {
+        "9223372036854775807"
+    };
+    let beyond = whole.len() > limit.len() || (whole.len() == limit.len() && whole > limit);
+    let sign = if is_negated(expr) { "-" } else { "" };
+    beyond.then(|| format!("{sign}{digits}"))
+}
+
+/// The text `BIN`, `OCT` and `CONV` read a number literal beyond the BIGINT
+/// range as: MySQL converts the number's text, saturating at the BIGINT
+/// UNSIGNED limit and wrapping a negative number to its 64 bits
+/// (`BIN(-9223372036854775809)` is 63 ones), which Turso's conversion of a
+/// string does too.
+fn converted_number_text(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<String>, MysqlParserError> {
+    if !matches!(upper_name, "BIN" | "OCT" | "CONV") {
+        return Ok(None);
+    }
+    let args = unnamed_arguments(list)?;
+    let Some(text) = args.first().and_then(|arg| beyond_bigint_digits(arg)) else {
+        return Ok(None);
+    };
+    if args[1..].iter().any(|base| is_negated(base)) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "CONV of `{}` to or from a negative base is not lowered yet",
+            args[0]
+        )));
+    }
+    Ok(Some(text))
+}
+
+/// `HEX` and `BIT_COUNT` of an integer literal above the BIGINT range, which
+/// MySQL reads as its BIGINT UNSIGNED value.
+fn folded_unsigned_bits(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    if !matches!(upper_name, "HEX" | "BIT_COUNT") {
+        return Ok(None);
+    }
+    let args = unnamed_arguments(list)?;
+    let [arg] = args.as_slice() else {
+        return Ok(None);
+    };
+    let Some(value) = number_literal(arg)
+        .filter(|_| !is_negated(arg))
+        .and_then(|digits| digits.parse::<u64>().ok())
+        .filter(|value| *value > i64::MAX as u64)
+    else {
+        return Ok(None);
+    };
+    Ok(Some(match upper_name {
+        "HEX" => string_expr(&format!("{value:X}")),
+        _ => number(u64::from(value.count_ones())),
+    }))
+}
+
 /// `FIELD` of number literals only, whose position MySQL finds comparing
 /// them as `NumberComparison` says.
 fn folded_number_field(
@@ -3691,6 +3761,9 @@ fn translate_function(
             return Ok(folded);
         }
     }
+    if let Some(folded) = folded_unsigned_bits(&upper_name, list)? {
+        return Ok(folded);
+    }
     if matches!(
         upper_name.as_str(),
         "GREATEST" | "LEAST" | "FIELD" | "NULLIF" | "INTERVAL"
@@ -3747,6 +3820,9 @@ fn translate_function(
     }
     let mut args = function_arguments(&upper_name, list, literal_context, context)?;
     round_decimal_integer_arguments(&upper_name, &mut args);
+    if let Some(text) = converted_number_text(&upper_name, list)? {
+        args[0] = string_expr(&text);
+    }
     if matches!(upper_name.as_str(), "ROUND" | "TRUNCATE") {
         if let Some(literal) = unnamed_arguments(list)?
             .first()
