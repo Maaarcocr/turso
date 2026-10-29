@@ -389,7 +389,18 @@ pub(crate) fn temporal_json_argument(
         (Read::DateTime { .. }, TemporalKind::Date | TemporalKind::DateTime) => {
             Some(typed_value("__mysql_cast_as_datetime"))
         }
-        (Read::DateTime { fails_as_null }, TemporalKind::Time) => fails_as_null.then_some(null),
+        (
+            Read::DateTime {
+                fails_as_null: true,
+            },
+            TemporalKind::Time,
+        ) => Some(null),
+        (
+            Read::DateTime {
+                fails_as_null: false,
+            },
+            TemporalKind::Time,
+        ) => Some(ast::Expr::Literal(ast::Literal::Numeric("0e0".to_string()))),
         (Read::Time, TemporalKind::Time) => Some(typed_value("__mysql_cast_as_time")),
         (Read::Time, TemporalKind::Date | TemporalKind::DateTime) => Some(null),
     }

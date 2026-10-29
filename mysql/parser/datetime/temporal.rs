@@ -1,10 +1,10 @@
 use super::calendar;
 
-pub(super) const MAX_TIME_HOUR: u32 = 838;
-pub(super) const MAX_FSP: u8 = 6;
+pub const MAX_TIME_HOUR: u32 = 838;
+pub const MAX_FSP: u8 = 6;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) enum Kind {
+pub enum Kind {
     #[default]
     Date,
     DateTime,
@@ -12,7 +12,7 @@ pub(super) enum Kind {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct MyTime {
+pub struct MyTime {
     pub kind: Kind,
     pub negative: bool,
     pub year: u32,

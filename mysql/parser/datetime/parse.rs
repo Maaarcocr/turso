@@ -2,7 +2,7 @@ use super::calendar;
 use super::temporal::{Kind, MyTime};
 
 #[derive(Clone, Copy, Default)]
-pub(super) struct DateFlags {
+pub struct DateFlags {
     pub fuzzy: bool,
     pub no_zero_in_date: bool,
     pub no_zero_date: bool,
@@ -31,21 +31,21 @@ impl DateFlags {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Parsed {
+pub struct Parsed {
     pub time: MyTime,
     pub fraction_digits: u8,
     pub rounding_nanos: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum NotParsed {
+pub enum NotParsed {
     NotDatetime,
     InvalidDatetime,
 }
 
 const MAX_TIME_NUMBER: i64 = 8_385_959;
 
-pub(super) fn parse_datetime(text: &[u8], flags: DateFlags) -> Result<Parsed, NotParsed> {
+pub fn parse_datetime(text: &[u8], flags: DateFlags) -> Result<Parsed, NotParsed> {
     let start = skip_spaces(text, 0);
     if start == text.len() || !text[start].is_ascii_digit() {
         return Err(NotParsed::NotDatetime);
@@ -244,7 +244,7 @@ fn parse_displacement(text: &[u8]) -> Result<i64, NotParsed> {
     }
 }
 
-pub(super) fn parse_time(text: &[u8]) -> Option<Parsed> {
+pub fn parse_time(text: &[u8]) -> Option<Parsed> {
     let end = text.len();
     let mut pos = skip_spaces(text, 0);
     let negative = pos < end && text[pos] == b'-';
@@ -363,7 +363,7 @@ pub(super) fn parse_time(text: &[u8]) -> Option<Parsed> {
     })
 }
 
-pub(super) fn time_from_number(number: i64) -> Option<MyTime> {
+pub fn time_from_number(number: i64) -> Option<MyTime> {
     if number > MAX_TIME_NUMBER {
         if number >= 10_000_000_000 {
             return datetime_from_number(number, DateFlags::default());
@@ -387,7 +387,7 @@ pub(super) fn time_from_number(number: i64) -> Option<MyTime> {
     ))
 }
 
-pub(super) fn datetime_from_number(number: i64, flags: DateFlags) -> Option<MyTime> {
+pub fn datetime_from_number(number: i64, flags: DateFlags) -> Option<MyTime> {
     let mut kind = Kind::Date;
     let packed = if number == 0 || number >= 10_000_101_000_000 {
         kind = Kind::DateTime;
@@ -437,7 +437,7 @@ pub(super) fn datetime_from_number(number: i64, flags: DateFlags) -> Option<MyTi
     (time.date_in_range() && date_is_allowed(&time, packed != 0, flags)).then_some(time)
 }
 
-pub(super) fn date_is_allowed(time: &MyTime, not_zero_date: bool, flags: DateFlags) -> bool {
+pub fn date_is_allowed(time: &MyTime, not_zero_date: bool, flags: DateFlags) -> bool {
     if !not_zero_date {
         return !flags.no_zero_date;
     }
@@ -454,6 +454,6 @@ fn skip_spaces(text: &[u8], mut pos: usize) -> usize {
     pos
 }
 
-pub(super) fn is_space(byte: u8) -> bool {
+pub fn is_space(byte: u8) -> bool {
     matches!(byte, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
 }

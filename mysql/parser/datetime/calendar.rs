@@ -1,12 +1,12 @@
-pub(super) const MAX_DAY_NUMBER: i64 = 3_652_424;
+pub const MAX_DAY_NUMBER: i64 = 3_652_424;
 
 const DAYS_IN_MONTH: [u32; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-pub(super) const WEEK_MONDAY_FIRST: u32 = 1;
-pub(super) const WEEK_YEAR: u32 = 2;
-pub(super) const WEEK_FIRST_WEEKDAY: u32 = 4;
+pub const WEEK_MONDAY_FIRST: u32 = 1;
+pub const WEEK_YEAR: u32 = 2;
+pub const WEEK_FIRST_WEEKDAY: u32 = 4;
 
-pub(super) fn week_mode(mode: u32) -> u32 {
+pub fn week_mode(mode: u32) -> u32 {
     let mut behaviour = mode & 7;
     if behaviour & WEEK_MONDAY_FIRST == 0 {
         behaviour ^= WEEK_FIRST_WEEKDAY;
@@ -14,7 +14,7 @@ pub(super) fn week_mode(mode: u32) -> u32 {
     behaviour
 }
 
-pub(super) fn week(year: u32, month: u32, day: u32, behaviour: u32) -> (u32, u32) {
+pub fn week(year: u32, month: u32, day: u32, behaviour: u32) -> (u32, u32) {
     let day_number = day_number(year, month, day) as u64;
     let mut first_day_number = self::day_number(year, 1, 1) as u64;
     let monday_first = behaviour & WEEK_MONDAY_FIRST != 0;
@@ -49,7 +49,7 @@ pub(super) fn week(year: u32, month: u32, day: u32, behaviour: u32) -> (u32, u32
     (days / 7 + 1, year)
 }
 
-pub(super) fn seconds_since_epoch(
+pub fn seconds_since_epoch(
     year: u32,
     month: u32,
     day: u32,
@@ -61,7 +61,7 @@ pub(super) fn seconds_since_epoch(
     days * 86_400 + i64::from(hour) * 3_600 + i64::from(minute) * 60 + i64::from(second)
 }
 
-pub(super) fn date_from_day_number(day_number: i64) -> (u32, u32, u32) {
+pub fn date_from_day_number(day_number: i64) -> (u32, u32, u32) {
     if day_number <= 365 || day_number >= 3_652_500 {
         return (0, 0, 0);
     }
@@ -95,7 +95,7 @@ pub(super) fn date_from_day_number(day_number: i64) -> (u32, u32, u32) {
     (year, month, day_of_year + leap_day)
 }
 
-pub(super) fn days_in_month(year: u32, month: u32) -> u32 {
+pub fn days_in_month(year: u32, month: u32) -> u32 {
     if month == 2 && days_in_year(year) == 366 {
         29
     } else {
@@ -103,7 +103,7 @@ pub(super) fn days_in_month(year: u32, month: u32) -> u32 {
     }
 }
 
-pub(super) fn days_in_year(year: u32) -> u32 {
+pub fn days_in_year(year: u32) -> u32 {
     if year & 3 == 0 && (year % 100 != 0 || (year % 400 == 0 && year != 0)) {
         366
     } else {
@@ -111,11 +111,11 @@ pub(super) fn days_in_year(year: u32) -> u32 {
     }
 }
 
-pub(super) fn weekday(day_number: i64, sunday_first: bool) -> u32 {
+pub fn weekday(day_number: i64, sunday_first: bool) -> u32 {
     ((day_number + 5 + i64::from(sunday_first)) % 7) as u32
 }
 
-pub(super) fn day_number(year: u32, month: u32, day: u32) -> i64 {
+pub fn day_number(year: u32, month: u32, day: u32) -> i64 {
     if year == 0 && month == 0 {
         return 0;
     }

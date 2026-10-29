@@ -855,6 +855,11 @@ fn translate_unary(
             if json::is_json_value(expr) {
                 return json::translate_negation(expr, context);
             }
+            if let Some(value) =
+                arithmetic_text_double(expr).filter(|_| !context.compared_beside_non_literal)
+            {
+                return Ok(double_literal(-value));
+            }
             if number_literal(expr).is_none() {
                 let negated = translate_in(expr, sign_context, context)?;
                 return Ok(times_minus_one(negated));
@@ -1376,11 +1381,33 @@ fn is_null_literal(expr: &Expr) -> bool {
     }
 }
 
+/// The DOUBLE MySQL computes `+ - * /` and unary `-` of a plain or utf8
+/// string literal with: the number its text starts with, 0 for none.
+fn arithmetic_text_double(expr: &Expr) -> Option<f64> {
+    let text = match unnested(expr) {
+        Expr::Prefixed { prefix, value }
+            if matches!(
+                prefix.value.to_ascii_lowercase().as_str(),
+                "_utf8mb4" | "_utf8mb3" | "_utf8"
+            ) =>
+        {
+            string_literal(value)?
+        }
+        other => string_literal(other)?,
+    };
+    Some(text_double(text))
+}
+
 fn arithmetic_operand(
     expr: &Expr,
     other_operand: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(value) =
+        arithmetic_text_double(expr).filter(|_| !context.compared_beside_non_literal)
+    {
+        return Ok(double_literal(value));
+    }
     let introduced_text = matches!(
         other_operand,
         Expr::Prefixed { value, .. } if is_text_literal(value)
@@ -1814,11 +1841,8 @@ fn text_double(text: &str) -> f64 {
 }
 
 fn double_literal(value: f64) -> ast::Expr {
-    if value == 0.0 {
-        return ast::Expr::Literal(ast::Literal::Numeric("0e0".to_string()));
-    }
     let literal = ast::Expr::Literal(ast::Literal::Numeric(format!("{:e}", value.abs())));
-    if value < 0.0 {
+    if value.is_sign_negative() {
         ast::Expr::unary(ast::UnaryOperator::Negative, literal)
     } else {
         literal
@@ -1837,10 +1861,23 @@ fn compared_bytes(left: &Expr, right: &Expr) -> Option<(Vec<u8>, Vec<u8>)> {
     non_text_binary.then_some((lhs, rhs))
 }
 
+/// Compares under the default collation when every operand is a string
+/// literal of it, or of another case-insensitive collation whose text is
+/// ASCII letters and digits, which all of them compare and order alike.
 fn default_collated(lhs: ast::Expr, explicit: Option<String>, operands: &[&Expr]) -> ast::Expr {
-    let literals_only = operands
-        .iter()
-        .all(|operand| collation_of(operand) == Some(DEFAULT_COLLATION));
+    fn alphanumeric_insensitive(operand: &Expr) -> bool {
+        let text = match operand {
+            Expr::Prefixed { value, .. } => string_literal(value),
+            other => string_literal(other),
+        };
+        matches!(
+            collation_of(operand),
+            Some("latin1_swedish_ci" | "ascii_general_ci" | "utf8mb3_general_ci")
+        ) && text.is_some_and(|text| text.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+    }
+    let literals_only = operands.iter().all(|operand| {
+        collation_of(operand) == Some(DEFAULT_COLLATION) || alphanumeric_insensitive(operand)
+    });
     if explicit.is_none() && literals_only {
         let sequence = collation_sequence(DEFAULT_COLLATION).expect("the default collation maps");
         ast::Expr::collate(lhs, ast::Name::exact(sequence.to_string()))
@@ -1863,7 +1900,13 @@ fn translate_compared(
     if is_binary_cast(expr) {
         return Err(binary_cast_outside_a_value_position(expr));
     }
-    translate_compared_value(expr, other_side, context)
+    let outer = std::mem::replace(
+        &mut context.compared_beside_non_literal,
+        !is_literal(other_side),
+    );
+    let translated = translate_compared_value(expr, other_side, context);
+    context.compared_beside_non_literal = outer;
+    translated
 }
 
 fn translate_compared_value(
@@ -1997,12 +2040,203 @@ fn translate_null_test(
     })
 }
 
+/// How MySQL compares number literals with each other in `IN`, `CASE` and
+/// `FIELD`: as DOUBLE when one is a double, else as DECIMAL when one has
+/// decimals, is above the BIGINT UNSIGNED range or below the BIGINT range,
+/// else as BIGINT.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum NumberComparison {
+    Integer,
+    Decimal,
+    Double,
+}
+
+impl NumberComparison {
+    fn of(exprs: &[&Expr]) -> Option<Self> {
+        exprs.iter().try_fold(Self::Integer, |kind, expr| {
+            let digits = signed_number_literal(expr)?;
+            let own = if digits.contains(['e', 'E']) {
+                Self::Double
+            } else if is_decimal_literal(digits)
+                || exceeds_unsigned_bigint(digits)
+                || (is_negated(expr) && exceeds_negated_bigint(digits))
+            {
+                Self::Decimal
+            } else {
+                Self::Integer
+            };
+            Some(kind.max(own))
+        })
+    }
+
+    /// Whether two number literals are equal compared this way. As BIGINT, a
+    /// literal above the BIGINT range reads as its 64 bits, as MySQL reads it
+    /// in `FIELD` and `CASE` (`FIELD(18446744073709551615, -1)` is 1).
+    fn equal(self, left: &Expr, right: &Expr) -> bool {
+        fn digits(expr: &Expr) -> &str {
+            signed_number_literal(expr).expect("a number literal")
+        }
+        match self {
+            Self::Double => {
+                let value = |expr: &Expr| {
+                    let magnitude: f64 = digits(expr).parse().expect("a number literal parses");
+                    if is_negated(expr) {
+                        -magnitude
+                    } else {
+                        magnitude
+                    }
+                };
+                value(left) == value(right)
+            }
+            Self::Decimal => {
+                let value = |expr: &Expr| {
+                    let kept = kept_digits(digits(expr));
+                    let (whole, fraction) = kept.split_once('.').unwrap_or((&kept, ""));
+                    let whole = whole.trim_start_matches('0').to_string();
+                    let fraction = fraction.trim_end_matches('0').to_string();
+                    let zero = whole.is_empty() && fraction.is_empty();
+                    (is_negated(expr) && !zero, whole, fraction)
+                };
+                value(left) == value(right)
+            }
+            Self::Integer => {
+                let value = |expr: &Expr| {
+                    let magnitude: u64 = digits(expr).parse().expect("an integer literal parses");
+                    if is_negated(expr) {
+                        0i64.wrapping_sub_unsigned(magnitude)
+                    } else {
+                        magnitude as i64
+                    }
+                };
+                value(left) == value(right)
+            }
+        }
+    }
+
+    /// Whether comparing as BIGINT signed and as BIGINT UNSIGNED could
+    /// differ: a literal above the BIGINT range among negative ones.
+    fn sign_matters(self, exprs: &[&Expr]) -> bool {
+        let above = |expr: &&Expr| {
+            !is_negated(expr)
+                && signed_number_literal(expr)
+                    .and_then(|digits| digits.parse::<u64>().ok())
+                    .is_some_and(|value| value > i64::MAX as u64)
+        };
+        self == Self::Integer
+            && exprs.iter().any(above)
+            && exprs.iter().any(|expr| is_negated(expr))
+    }
+}
+
+/// The signed digits of an integer or decimal literal whose integer part is
+/// beyond the BIGINT range.
+fn beyond_bigint_digits(expr: &Expr) -> Option<String> {
+    let digits = signed_number_literal(expr)?;
+    if digits.contains(['e', 'E']) {
+        return None;
+    }
+    let whole = digits.split_once('.').map_or(digits, |(whole, _)| whole);
+    let whole = whole.trim_start_matches('0');
+    let limit = if is_negated(expr) {
+        "9223372036854775808"
+    } else {
+        "9223372036854775807"
+    };
+    let beyond = whole.len() > limit.len() || (whole.len() == limit.len() && whole > limit);
+    let sign = if is_negated(expr) { "-" } else { "" };
+    beyond.then(|| format!("{sign}{digits}"))
+}
+
+/// The text `BIN`, `OCT` and `CONV` read a number literal beyond the BIGINT
+/// range as: MySQL converts the number's text, saturating at the BIGINT
+/// UNSIGNED limit and wrapping a negative number to its 64 bits
+/// (`BIN(-9223372036854775809)` is 63 ones), which Turso's conversion of a
+/// string does too.
+fn converted_number_text(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<String>, MysqlParserError> {
+    if !matches!(upper_name, "BIN" | "OCT" | "CONV") {
+        return Ok(None);
+    }
+    let args = unnamed_arguments(list)?;
+    let Some(text) = args.first().and_then(|arg| beyond_bigint_digits(arg)) else {
+        return Ok(None);
+    };
+    Ok(Some(text))
+}
+
+/// `HEX` and `BIT_COUNT` of an integer literal above the BIGINT range, which
+/// MySQL reads as its BIGINT UNSIGNED value.
+fn folded_unsigned_bits(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    if !matches!(upper_name, "HEX" | "BIT_COUNT") {
+        return Ok(None);
+    }
+    let args = unnamed_arguments(list)?;
+    let [arg] = args.as_slice() else {
+        return Ok(None);
+    };
+    let Some(value) = number_literal(arg)
+        .filter(|_| !is_negated(arg))
+        .and_then(|digits| digits.parse::<u64>().ok())
+        .filter(|value| *value > i64::MAX as u64)
+    else {
+        return Ok(None);
+    };
+    Ok(Some(match upper_name {
+        "HEX" => string_expr(&format!("{value:X}")),
+        _ => number(u64::from(value.count_ones())),
+    }))
+}
+
+/// `FIELD` of number literals only, whose position MySQL finds comparing
+/// them as `NumberComparison` says.
+fn folded_number_field(list: &FunctionArgumentList) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let args = unnamed_arguments(list)?;
+    let Some((first, rest)) = args.split_first() else {
+        return Ok(None);
+    };
+    let Some(kind) = NumberComparison::of(&args) else {
+        return Ok(None);
+    };
+    let position = rest
+        .iter()
+        .position(|arg| kind.equal(first, arg))
+        .map_or(0, |index| index + 1);
+    Ok(Some(number(position as u64)))
+}
+
+/// `IN` of number literals only, as the truth MySQL finds comparing the left
+/// operand with each item as `NumberComparison` says for that pair
+/// (`9223372036854775808 IN (9223372036854775807, 9e0)` compares the first
+/// pair as BIGINT), other than a pair of BIGINTs with the same 64 bits, one
+/// negative and the other above the BIGINT range.
+fn folded_number_in(expr: &Expr, list: &[Expr], negated: bool) -> Option<ast::Expr> {
+    let mut found = false;
+    for item in list {
+        let pair = [expr, item];
+        let kind = NumberComparison::of(&pair)?;
+        let equal = kind.equal(expr, item);
+        if equal && kind.sign_matters(&pair) {
+            return None;
+        }
+        found |= equal;
+    }
+    Some(number(u64::from(found != negated)))
+}
+
 fn translate_in_list(
     expr: &Expr,
     list: &[Expr],
     negated: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(folded) = folded_number_in(expr, list, negated) {
+        return Ok(folded);
+    }
     let operands = std::iter::once(expr).chain(list).collect::<Vec<_>>();
     let explicit = single_explicit_collation(&operands)?;
     let mixed = list
@@ -2214,14 +2448,34 @@ fn translate_case(
     literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let doubles = operand.and_then(|operand| case_compared_as_doubles(operand, conditions));
+    let numbers = operand.and_then(|operand| {
+        let compared: Vec<&Expr> = std::iter::once(operand)
+            .chain(conditions.iter().map(|case| &case.condition))
+            .collect();
+        let kind = NumberComparison::of(&compared)?;
+        (!kind.sign_matters(&compared)).then(|| {
+            conditions
+                .iter()
+                .map(|case| number(u64::from(kind.equal(operand, &case.condition))))
+                .collect::<Vec<_>>()
+        })
+    });
+    let doubles = match numbers {
+        Some(conditions) => Some((None, conditions)),
+        None => operand
+            .and_then(|operand| case_compared_as_doubles(operand, conditions))
+            .map(|(base, conditions)| (Some(base), conditions)),
+    };
     let base = match (operand, &doubles, conditions.first()) {
-        (Some(_), Some((base, _)), _) => Some(Box::new(base.clone())),
-        (Some(operand), None, Some(first)) => Some(Box::new(translate_compared(
-            operand,
-            &first.condition,
-            context,
-        )?)),
+        (Some(_), Some((base, _)), _) => base.clone().map(Box::new),
+        (Some(operand), None, Some(first)) => {
+            let compared: Vec<&Expr> = std::iter::once(operand)
+                .chain(conditions.iter().map(|case| &case.condition))
+                .collect();
+            let explicit = single_explicit_collation(&compared)?;
+            let base = translate_compared(operand, &first.condition, context)?;
+            Some(Box::new(default_collated(base, explicit, &compared)))
+        }
         (Some(operand), None, None) => Some(Box::new(translate_expr(operand, context)?)),
         (None, _, _) => None,
     };
@@ -3012,6 +3266,8 @@ fn translate_temporal_cast(
     }
     let value = if is_binary_literal(expr) {
         translate_bytes(expr, context)?
+    } else if let Some(text) = datetime_number_text(expr) {
+        string_expr(&text)
     } else {
         translate_expr(expr, context)?
     };
@@ -3026,6 +3282,16 @@ fn translate_temporal_cast(
             vec![value, number(cast_precision(precision))],
         ),
     })
+}
+
+/// The digits of a DECIMAL literal a DOUBLE cannot hold exactly whose
+/// integer part is a 14-digit date and time (`20000101103458.1234`), which
+/// MySQL reads as a datetime or time exactly as it reads that text.
+fn datetime_number_text(expr: &Expr) -> Option<String> {
+    let digits = number_literal(expr).filter(|_| !is_negated(expr))?;
+    let (whole, _) = digits.split_once('.')?;
+    (is_decimal_literal(digits) && !is_exact_as_a_double(digits) && whole.len() == 14)
+        .then(|| digits.to_string())
 }
 
 fn temporal_operand(expr: &Expr, operator: &str) -> MysqlParserError {
@@ -3510,6 +3776,14 @@ fn translate_function(
     if let Some(error) = latin1_subject_collation_error(&upper_name, list) {
         return Err(error);
     }
+    if upper_name == "FIELD" && over.is_none() {
+        if let Some(folded) = folded_number_field(list)? {
+            return Ok(folded);
+        }
+    }
+    if let Some(folded) = folded_unsigned_bits(&upper_name, list)? {
+        return Ok(folded);
+    }
     if matches!(
         upper_name.as_str(),
         "GREATEST" | "LEAST" | "FIELD" | "NULLIF" | "INTERVAL"
@@ -3566,9 +3840,57 @@ fn translate_function(
     }
     let mut args = function_arguments(&upper_name, list, literal_context, context)?;
     round_decimal_integer_arguments(&upper_name, &mut args);
+    if let Some(text) = converted_number_text(&upper_name, list)? {
+        args[0] = string_expr(&text);
+    }
+    if matches!(
+        upper_name.as_str(),
+        "DATE"
+            | "DATE_FORMAT"
+            | "DAY"
+            | "DAYNAME"
+            | "DAYOFMONTH"
+            | "DAYOFWEEK"
+            | "DAYOFYEAR"
+            | "HOUR"
+            | "LAST_DAY"
+            | "MICROSECOND"
+            | "MINUTE"
+            | "MONTH"
+            | "MONTHNAME"
+            | "QUARTER"
+            | "SECOND"
+            | "TIME_TO_SEC"
+            | "TO_DAYS"
+            | "TO_SECONDS"
+            | "WEEK"
+            | "WEEKDAY"
+            | "WEEKOFYEAR"
+            | "YEAR"
+            | "YEARWEEK"
+    ) {
+        if let Some(text) = unnamed_arguments(list)?
+            .first()
+            .and_then(|value| datetime_number_text(value))
+        {
+            args[0] = string_expr(&text);
+        }
+    }
+    if matches!(upper_name.as_str(), "ROUND" | "TRUNCATE") {
+        if let Some(literal) = unnamed_arguments(list)?
+            .first()
+            .and_then(|value| hex_or_bit_literal(value))
+        {
+            args[0] = binary_literal_as_double(literal)?;
+        }
+    }
     if let Some(LiteralResult::TextArgument(position, text)) = &digits {
         args[*position] = string_expr(text);
     }
+    let timestamp_decimals = match upper_name.as_str() {
+        "UNIX_TIMESTAMP" if over.is_none() => unix_timestamp_decimals(list, &mut args)?,
+        _ => None,
+    };
     let mut order_by = Vec::new();
     let mut separator = None;
     for clause in &list.clauses {
@@ -3600,6 +3922,12 @@ fn translate_function(
             ..filter_over
         },
     };
+    if let Some(decimals) = timestamp_decimals {
+        return Ok(ast::Expr::cast(
+            call,
+            Some(sized_decimal_type(11 + decimals, decimals)),
+        ));
+    }
     let json_timestamp = upper_name == "UNIX_TIMESTAMP"
         && matches!(unnamed_arguments(list)?.as_slice(), [arg] if json::is_json_value(arg));
     Ok(match digits {
@@ -3618,6 +3946,66 @@ fn translate_function(
         Some(LiteralResult::Text(_)) => unreachable!("a text result returns early"),
         None => call,
     })
+}
+
+/// The decimals of `UNIX_TIMESTAMP` of a literal, which MySQL types as a
+/// DECIMAL with the fractional digits its argument reads with: those of a
+/// DECIMAL literal, six for a DOUBLE, and for a string those it reads as a
+/// datetime with, or six when it does not read as one. A DECIMAL literal a
+/// DOUBLE cannot hold exactly is passed as its text where both read alike,
+/// as a 14-digit date and time.
+fn unix_timestamp_decimals(
+    list: &FunctionArgumentList,
+    args: &mut [ast::Expr],
+) -> Result<Option<u64>, MysqlParserError> {
+    use crate::datetime::parse::{parse_datetime, DateFlags};
+    let arguments = unnamed_arguments(list)?;
+    let [arg] = arguments.as_slice() else {
+        return Ok(None);
+    };
+    if let Some(digits) = signed_number_literal(arg) {
+        if digits.contains(['e', 'E']) {
+            return Ok(Some(6));
+        }
+        let Some((whole, fraction)) = digits.split_once('.') else {
+            return Ok(None);
+        };
+        if fraction.len() > 6 {
+            return Err(MysqlParserError::Unsupported(format!(
+                "UNIX_TIMESTAMP of `{arg}`, with more than six decimals, is not lowered yet"
+            )));
+        }
+        if !is_exact_as_a_double(digits) {
+            if is_negated(arg) || whole.len() != 14 {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "UNIX_TIMESTAMP of `{arg}`, which a DOUBLE cannot hold exactly, is not lowered yet"
+                )));
+            }
+            args[0] = string_expr(digits);
+        }
+        return Ok(Some(fraction.len() as u64));
+    }
+    let text = match unnested(arg) {
+        Expr::Value(value) => match &value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text,
+            _ => return Ok(None),
+        },
+        Expr::Prefixed { prefix, value } => {
+            match (prefix.value.to_ascii_lowercase().as_str(), value.as_ref()) {
+                ("_utf8mb4" | "_utf8mb3" | "_utf8" | "_binary", Expr::Value(value)) => {
+                    match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text,
+                        _ => return Ok(None),
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
+        _ => return Ok(None),
+    };
+    let decimals = parse_datetime(text.as_bytes(), DateFlags::FUZZY)
+        .map_or(6, |parsed| u64::from(parsed.fraction_digits));
+    Ok((decimals > 0).then_some(decimals))
 }
 
 enum LiteralResult {
@@ -4200,6 +4588,51 @@ fn greatest_of_dates(args: &[&Expr]) -> Result<Option<ast::Expr>, MysqlParserErr
     Ok(Some(string_expr(&text)))
 }
 
+/// The fractional digits MySQL shows `TIMESTAMPADD(SECOND, n, d)` with when
+/// `n` is a literal with decimals: those of a DECIMAL, four more than the
+/// dividend's for a division of exact numbers, six for a double or a string,
+/// or the date's when it has more; `None` when `n` has none or `d` is not a
+/// literal.
+fn added_seconds_digits(seconds: &Expr, date: &Expr) -> Option<u64> {
+    fn scale(expr: &Expr) -> Option<u64> {
+        let digits = signed_number_literal(expr)?;
+        if digits.contains(['e', 'E']) {
+            return None;
+        }
+        Some(
+            digits
+                .split_once('.')
+                .map_or(0, |(_, fraction)| fraction.len() as u64),
+        )
+    }
+    let seconds_digits = match unnested(seconds) {
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Divide,
+            right,
+        } => scale(left).zip(scale(right)).map(|(dividend, _)| dividend + 4)?,
+        _ if is_double_literal(seconds) => 6,
+        _ if is_text_literal(seconds)
+            || matches!(unnested(seconds), Expr::Prefixed { value, .. } if is_text_literal(value)) =>
+        {
+            6
+        }
+        _ => scale(seconds)?,
+    }
+    .min(6);
+    if seconds_digits == 0 {
+        return None;
+    }
+    let date_digits = match unnested(date) {
+        Expr::TypedString(_) => {
+            dated_literal_kind(date)?;
+            fraction_length(date) as u64
+        }
+        _ => return None,
+    };
+    Some(seconds_digits.max(date_digits))
+}
+
 fn translate_special_function(
     upper_name: &str,
     list: &FunctionArgumentList,
@@ -4221,12 +4654,24 @@ fn translate_special_function(
         ("TIMESTAMPADD" | "TIMESTAMPDIFF", [Expr::Identifier(unit), rest @ ..])
             if unit.quote_style.is_none() =>
         {
+            let digits = match (upper_name, rest) {
+                ("TIMESTAMPADD", [seconds, date]) if unit.value.eq_ignore_ascii_case("SECOND") => {
+                    added_seconds_digits(seconds, date)
+                }
+                _ => None,
+            };
             let unit = unit_literal(&DateTimeField::Custom(unit.clone()))?;
             let mut translated = vec![unit];
             for arg in rest {
                 translated.push(translate_expr(arg, context)?);
             }
-            Ok(Some(function_call(upper_name, translated)))
+            let call = function_call(upper_name, translated);
+            Ok(Some(match digits {
+                Some(digits) => {
+                    function_call("__mysql_cast_as_datetime", vec![call, number(digits)])
+                }
+                None => call,
+            }))
         }
         ("GET_FORMAT", [Expr::Identifier(kind), format])
             if kind.quote_style.is_none()
