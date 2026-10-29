@@ -358,6 +358,12 @@ impl turso_mysql_parser::Environment for Session<'_> {
                 })
         }))
     }
+
+    fn prepared_statement(&self, name: &str) -> Option<String> {
+        self.0
+            .context::<session::Session>()?
+            .prepared_statement(name)
+    }
 }
 
 type LoweringResult<T> = std::result::Result<T, turso_mysql_parser::MysqlParserError>;
@@ -373,6 +379,10 @@ pub fn open_with_io(io: Arc<dyn IO>, path: &str) -> Result<Arc<Connection>> {
             .db_opts(turso_core::DatabaseOpts::new().with_generated_columns(true)),
     )?;
     let connection = database.connect_with_context(Arc::new(session::Session::default()))?;
+    connection
+        .context::<session::Session>()
+        .expect("the connection has its session")
+        .attach(&connection);
     connection.set_foreign_keys_enabled(true);
     Ok(connection)
 }

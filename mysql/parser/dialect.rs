@@ -77,16 +77,22 @@ pub(crate) fn word_after_set(sql: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {
-    let dialect = MySql::default();
-    let tokens = Tokenizer::new(&dialect, sql)
+/// The tokens of `sql`, with strings and quoted identifiers unescaped as
+/// MySQL reads them.
+pub(crate) fn tokens(sql: &str) -> Result<Vec<TokenWithSpan>, MysqlParserError> {
+    let tokens = Tokenizer::new(&MySql::default(), sql)
         .with_unescape(false)
         .tokenize_with_location()
         .map_err(ParserError::from)?;
-    let mut tokens: Vec<TokenWithSpan> = tokens
+    Ok(tokens
         .into_iter()
         .map(|token| unescape_token(token, sql))
-        .collect();
+        .collect())
+}
+
+pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserError> {
+    let dialect = MySql::default();
+    let mut tokens = tokens(sql)?;
     end_trigger_body(&mut tokens);
     let statements = Parser::new(&dialect)
         .with_tokens_with_locations(tokens)

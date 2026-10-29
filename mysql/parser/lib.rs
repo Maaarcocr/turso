@@ -24,6 +24,7 @@ mod invalid_json;
 mod json;
 mod literal;
 mod names;
+mod prepared;
 mod query;
 mod session;
 mod show;
@@ -34,6 +35,7 @@ mod trigger;
 
 pub use ddl_default::{temporal_text, TemporalColumn};
 pub use function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
+pub use prepared::lower_prepared;
 pub use session::keeps_target_profile;
 pub use split::{first_statement, split_statements, StatementSpan};
 
@@ -106,6 +108,10 @@ pub trait Environment {
 
     /// The foreign keys of `table`.
     fn foreign_keys_of(&self, table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError>;
+
+    /// The text of the session's prepared statement `name` (lower case), or
+    /// `None` when the session has none of that name.
+    fn prepared_statement(&self, name: &str) -> Option<String>;
 }
 
 /// A foreign key of the table asked about.
@@ -181,6 +187,10 @@ impl Environment for Autocommit {
     fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
         Ok(Vec::new())
     }
+
+    fn prepared_statement(&self, _name: &str) -> Option<String> {
+        None
+    }
 }
 
 pub fn parse_and_translate(sql: &str) -> Result<ast::Stmt, MysqlParserError> {
@@ -191,6 +201,25 @@ pub fn parse_and_translate_in(
     sql: &str,
     environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
+    let first_word = sql
+        .trim_start()
+        .split(|ch: char| !ch.is_ascii_alphabetic())
+        .next()
+        .unwrap_or_default();
+    if ["PREPARE", "EXECUTE", "DEALLOCATE", "DROP"]
+        .iter()
+        .any(|keyword| first_word.eq_ignore_ascii_case(keyword))
+    {
+        if let Some(command) = prepared::command(sql)? {
+            return prepared::translate(command, environment);
+        }
+    }
+    translate_text(sql, environment)
+}
+
+/// Lowers the one statement `sql`, which is not a prepared-statement
+/// command.
+fn translate_text(sql: &str, environment: &dyn Environment) -> Result<ast::Stmt, MysqlParserError> {
     let statement = parse_one(sql)?;
     if let Statement::Set(sqlparser::ast::Set::SetTransaction {
         modes,

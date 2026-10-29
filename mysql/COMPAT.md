@@ -509,12 +509,21 @@ assignments in one statement are allowed):
 
 | `time_zone`, `sql_mode`, the character sets or `collation_connection` set to an expression (`SET character_set_client = @saved_cs_client` in mysqldump output) | `__mysql_keep_session_settings(name, value, ...)`, which accepts the values above when it runs and refuses any other |
 | `SET @a = x, @b = y` (user variables) | `SELECT 0 WHERE __mysql_set_user_variables('a', default_collation, x, ...)`, which stores the values in the connection's session (`turso_mysql::open_*` connections only) |
+| `PREPARE name FROM 'text'` or `FROM @variable` | `SELECT 0 WHERE __mysql_prepare('name', text)`, which drops the session's statement `name`, then lowers `text` with each `?` read from a user variable and compiles it without running it, so a syntax error, an unknown table or column, more than one statement or a nested `PREPARE`/`EXECUTE`/`DEALLOCATE` (1295) fails as in MySQL, and keeps `text` as `name` (names are compared without case). A NULL variable fails (1064) and a number is refused |
+| `EXECUTE name [USING @a, @b, ...]` | The kept text lowered with its `?` parameters replaced, in order, by the user variables, so each reads as `@a` does above; an unknown name fails (1243) and a different number of variables (1210). A `LIMIT` or `OFFSET` parameter must hold a count of rows; another value is refused |
+| `DEALLOCATE PREPARE name`, `DROP PREPARE name` | `SELECT 0 WHERE __mysql_deallocate_prepare('name')`, which drops it; an unknown name fails (1243) |
 
 Everything else is refused: other values of these variables (`sql_mode`,
 `time_zone`, `autocommit = 0` and character sets change the semantics of
 later statements), `GLOBAL` scope, other variables, and an assignment that
 reads a user variable assigned earlier in the same `SET` (the values are all
 read before any is stored).
+
+`PREPARE` and `DEALLOCATE PREPARE` make the connection prepare its statements
+again before they next run, so an API statement of `EXECUTE name` runs the
+text `name` has then. A parameter reads its variable when the statement runs,
+as MySQL binds it, so a temporal or `DECIMAL` value, which a user variable
+does not keep, is refused when it is assigned.
 
 ### User and system variables
 

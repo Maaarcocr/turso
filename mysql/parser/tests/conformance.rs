@@ -1700,6 +1700,10 @@ impl Environment for IndexOfT {
     fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
         Ok(Vec::new())
     }
+
+    fn prepared_statement(&self, _name: &str) -> Option<String> {
+        None
+    }
 }
 
 /// A session outside a transaction on tables `a (id AUTO_INCREMENT, x, g
@@ -1783,6 +1787,10 @@ impl Environment for TriggerSchema {
 
     fn foreign_keys_of(&self, _table: &str) -> Result<Vec<ForeignKeyOf>, MysqlParserError> {
         Ok(Vec::new())
+    }
+
+    fn prepared_statement(&self, _name: &str) -> Option<String> {
+        None
     }
 }
 
