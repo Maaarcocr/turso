@@ -1052,18 +1052,23 @@ fn arithmetic(
         return Ok(unsigned);
     }
     if operator == ast::Operator::Modulus {
-        let mut operand = |expr: &Expr, other: &Expr| {
-            let reads_double = is_double_literal(other)
-                || is_text_literal(other)
-                || matches!(other, Expr::Prefixed { value, .. } if is_text_literal(value));
-            match hex_or_bit_literal(expr) {
-                Some(literal) if reads_double => binary_literal_as_double(literal),
-                _ => unsigned_bigint_operand(expr, Context::Arithmetic, context),
-            }
+        let reads_double = |expr: &Expr| {
+            is_double_literal(expr)
+                || is_text_literal(expr)
+                || matches!(expr, Expr::Prefixed { value, .. } if is_text_literal(value))
         };
-        let dividend = operand(left, right)?;
-        let divisor = operand(right, left)?;
-        return Ok(function_call("MOD", vec![dividend, divisor]));
+        let double = reads_double(left) || reads_double(right);
+        let mut operand = |expr: &Expr| match hex_or_bit_literal(expr) {
+            Some(literal) if double => binary_literal_as_double(literal),
+            _ => unsigned_bigint_operand(expr, Context::Arithmetic, context),
+        };
+        let dividend = operand(left)?;
+        let divisor = operand(right)?;
+        return Ok(if double {
+            function_call("MOD", vec![dividend, divisor])
+        } else {
+            ast::Expr::binary(dividend, operator, divisor)
+        });
     }
     let unsigned = |expr: &Expr| number_literal(expr).is_some_and(exceeds_signed_bigint);
     if unsigned(left) || unsigned(right) {
@@ -1465,7 +1470,16 @@ fn comparison(
     }
     let lhs = translate_compared(left, right, context)?;
     let rhs = translate_compared(right, left, context)?;
-    let lhs = default_collated(lhs, explicit, &[left, right]);
+    let time_with_text = |time: &Expr, text: &Expr| {
+        matches!(temporal_type(time), Some(DataType::Time(..))) && string_literal(text).is_some()
+    };
+    let lhs = if explicit.is_none() && (time_with_text(left, right) || time_with_text(right, left))
+    {
+        let sequence = collation_sequence(DEFAULT_COLLATION).expect("the default collation maps");
+        ast::Expr::collate(lhs, ast::Name::exact(sequence.to_string()))
+    } else {
+        default_collated(lhs, explicit, &[left, right])
+    };
     Ok(ast::Expr::binary(lhs, operator, rhs))
 }
 
@@ -1497,11 +1511,14 @@ fn compared_literal(expr: &Expr) -> Option<ComparedLiteral> {
             if prefix.quote_style.is_none()
                 && matches!(
                     prefix.value.to_ascii_lowercase().as_str(),
-                    "_utf8mb4" | "_utf8mb3" | "_utf8"
+                    "_utf8mb4" | "_utf8mb3" | "_utf8" | "_latin1" | "_ascii" | "_binary"
                 ) =>
         {
             string_literal(value).map(|text| ComparedLiteral::Text(text_double(text)))
         }
+        Expr::Value(value) if matches!(value.value, Value::Boolean(_)) => Some(
+            ComparedLiteral::Number(f64::from(u8::from(value.value == Value::Boolean(true)))),
+        ),
         _ => match number_literal(expr) {
             Some(digits) => Some(ComparedLiteral::Number(
                 digits
@@ -1634,6 +1651,9 @@ fn translate_compared_value(
     }
     if let Some(data_type) = temporal_type(other_side) {
         if let Some(text) = string_literal(expr) {
+            if matches!(data_type, DataType::Time(..)) {
+                return translate_in(expr, Context::Text, context);
+            }
             return translate_temporal_text(data_type, text);
         }
         if number_literal(expr)

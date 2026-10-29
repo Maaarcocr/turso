@@ -754,7 +754,7 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT a FROM t1 LEFT JOIN t2 USING (a) NATURAL JOIN t3, t4",
         ),
         ("SELECT 7 DIV 2", "SELECT CAST (7 / 2 AS INTEGER)"),
-        ("SELECT 7 MOD 2", "SELECT MOD (7, 2)"),
+        ("SELECT 7 MOD 2", "SELECT 7 % 2"),
         (
             "SELECT -1.5, -.5, -a, - -2, +b, 18446744073709551616",
             "SELECT CAST ('-1.5' AS DECIMAL (2, 1)), CAST ('-.5' AS DECIMAL (1, 1)), ((a) * - 1), ((- 2) * - 1), b, CAST ('18446744073709551616' AS DECIMAL (20, 0))",
