@@ -831,6 +831,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MOD (CAST ('18446744073709551615' AS DECIMAL (20, 0)), 7), MOD (1.5e0, 1), ABS (CAST ('9223372036854775808' AS DECIMAL (19, 0))), 9223372036854775807",
         ),
         (
+            "SELECT IF(a, 1.5, -0x1), CASE WHEN a THEN 7 ELSE -0x1 END, MOD(-0x1, 1.0), -255 % -0x1, MOD(3.141592653589793, -0x1), '64' % -0x1 FROM t",
+            "SELECT \"IF\" (a, '1.5', '-1.0'), CASE WHEN a THEN '7' ELSE '-1' END, '-0.0', '-0', '0.141592653589793', MOD ('64', -1e0) FROM t",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),

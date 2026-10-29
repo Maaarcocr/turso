@@ -1058,8 +1058,9 @@ fn arithmetic(
                 || matches!(expr, Expr::Prefixed { value, .. } if is_text_literal(value))
         };
         let double = reads_double(left) || reads_double(right);
-        let mut operand = |expr: &Expr| match hex_or_bit_literal(expr) {
-            Some(literal) if double => binary_literal_as_double(literal),
+        let mut operand = |expr: &Expr| match (hex_or_bit_literal(expr), negated_binary(expr)) {
+            (Some(literal), _) if double => binary_literal_as_double(literal),
+            (_, Some(literal)) if double => negated_binary_literal(literal),
             _ => unsigned_bigint_operand(expr, Context::Arithmetic, context),
         };
         let dividend = operand(left)?;
@@ -1340,29 +1341,134 @@ fn negated_binary(expr: &Expr) -> Option<&Value> {
     }
 }
 
-/// The text MySQL shows for `a + b` or `a - b` of a negated hex or bit literal
-/// and another such literal or an exact number literal. MySQL computes the sum
-/// as a DOUBLE with the most decimals of the operands and shows it with exactly
-/// that many, from its shortest round-trip digits (`-0.0 + -0xffff` is
-/// `-65535.0`, `-0 + -0xffffffffffffffff` is `-18446744073709552000`).
-pub(crate) fn shown_negated_binary_sum(expr: &Expr) -> Option<Result<ast::Expr, MysqlParserError>> {
-    let Expr::BinaryOp { left, op, right } = expr else {
-        return match expr {
-            Expr::Nested(inner) => shown_negated_binary_sum(inner),
-            _ => None,
-        };
-    };
+/// The text MySQL shows for a selected `a + b`, `a - b`, `a % b` or `MOD(a, b)`
+/// of a negated hex or bit literal and another such literal or an exact number
+/// literal, and for a selected IF, IFNULL, COALESCE or CASE among such
+/// results. MySQL computes them as a DOUBLE with the most decimals of the
+/// operands and shows it with exactly that many, rounded from its shortest
+/// round-trip digits (`-0.0 + -0xffff` is `-65535.0`, `-0 + -0xffffffffffffffff`
+/// is `-18446744073709552000`).
+pub(crate) fn shown_negated_binary(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Option<Result<ast::Expr, MysqlParserError>> {
+    match expr {
+        Expr::Nested(inner) => shown_negated_binary(inner, context),
+        Expr::BinaryOp { left, op, right } => shown_negated_binary_operation(left, op, right),
+        Expr::Function(function) => match function_shape(function)? {
+            (name, args) if name == "MOD" && args.len() == 2 => {
+                shown_negated_binary_operation(args[0], &BinaryOperator::Modulo, args[1])
+            }
+            _ => shown_fixed_double_results(expr, context),
+        },
+        Expr::Case { .. } => shown_fixed_double_results(expr, context),
+        _ => None,
+    }
+}
+
+fn shown_negated_binary_operation(
+    left: &Expr,
+    op: &BinaryOperator,
+    right: &Expr,
+) -> Option<Result<ast::Expr, MysqlParserError>> {
     if negated_binary(left).is_none() && negated_binary(right).is_none() {
         return None;
     }
-    let (lhs, lhs_decimals) = fixed_double_operand(left)?;
-    let (rhs, rhs_decimals) = fixed_double_operand(right)?;
+    let operand = |expr: &Expr| {
+        fixed_double_operand(expr).or_else(|| match op {
+            BinaryOperator::Modulo => {
+                let value = binary_literal_value(hex_or_bit_literal(expr)?).ok()?;
+                Some((value as f64, 0))
+            }
+            _ => None,
+        })
+    };
+    let (lhs, lhs_decimals) = operand(left)?;
+    let (rhs, rhs_decimals) = operand(right)?;
     let value = match op {
         BinaryOperator::Plus => lhs + rhs,
         BinaryOperator::Minus => lhs - rhs,
+        BinaryOperator::Modulo if rhs == 0.0 => {
+            return Some(Ok(ast::Expr::Literal(ast::Literal::Null)));
+        }
+        BinaryOperator::Modulo => lhs % rhs,
         _ => return None,
     };
     Some(fixed_double_text(value, lhs_decimals.max(rhs_decimals)).map(|text| string_expr(&text)))
+}
+
+/// A selected IF, IFNULL, COALESCE or CASE whose results are NULL, exact
+/// number literals and a negated hex or bit literal, a DOUBLE without
+/// decimals. MySQL computes every result as a DOUBLE with the most decimals
+/// of any and shows it with exactly that many (`IF(c, 1.5, -0x1)` shows
+/// `-1.0` or `1.5`), so each result becomes that text.
+fn shown_fixed_double_results(
+    expr: &Expr,
+    context: &mut TranslationContext,
+) -> Option<Result<ast::Expr, MysqlParserError>> {
+    let mut shown = expr.clone();
+    let results: Vec<&mut Expr> = match &mut shown {
+        Expr::Case {
+            conditions,
+            else_result,
+            ..
+        } => conditions
+            .iter_mut()
+            .map(|case| &mut case.result)
+            .chain(else_result.as_deref_mut())
+            .collect(),
+        Expr::Function(function) => {
+            let (name, args) = function_shape(function)?;
+            let positions = result_positions(&name, args.len());
+            if positions.is_empty() {
+                return None;
+            }
+            let FunctionArguments::List(list) = &mut function.args else {
+                unreachable!("function_shape accepts only argument lists");
+            };
+            list.args
+                .iter_mut()
+                .enumerate()
+                .filter(|(position, _)| positions.contains(position))
+                .map(|(_, arg)| match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) => arg,
+                    _ => unreachable!("function_shape accepts only unnamed arguments"),
+                })
+                .collect()
+        }
+        _ => return None,
+    };
+    if !results
+        .iter()
+        .any(|result| negated_binary(result).is_some())
+    {
+        return None;
+    }
+    let is_null = |expr: &Expr| matches!(expr, Expr::Value(value) if value.value == Value::Null);
+    let operands = results
+        .iter()
+        .map(|result| match is_null(result) {
+            true => Some(None),
+            false => fixed_double_operand(result).map(Some),
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let decimals = operands
+        .iter()
+        .flatten()
+        .map(|(_, decimals)| *decimals)
+        .max()
+        .expect("a negated binary literal is among the results");
+    for (result, operand) in results.into_iter().zip(operands) {
+        if let Some((value, _)) = operand {
+            match fixed_double_text(value, decimals) {
+                Ok(text) => {
+                    *result = Expr::Value(Value::SingleQuotedString(text).with_empty_span())
+                }
+                Err(error) => return Some(Err(error)),
+            }
+        }
+    }
+    Some(translate_bytes(&shown, context))
 }
 
 fn fixed_double_operand(expr: &Expr) -> Option<(f64, usize)> {
@@ -1410,11 +1516,30 @@ fn fixed_double_text(value: f64, decimals: usize) -> Result<String, MysqlParserE
         (integer.to_string(), fraction.to_string())
     };
     let fraction = fraction.trim_end_matches('0');
-    if fraction.len() > decimals {
-        return Err(MysqlParserError::Unsupported(format!(
-            "a DOUBLE sum of {value:e} shown with {decimals} decimals, which MySQL rounds, is not lowered yet"
-        )));
-    }
+    let (integer, fraction) = if fraction.len() > decimals {
+        let (kept, dropped) = fraction.split_at(decimals);
+        if dropped == "5" {
+            return Err(MysqlParserError::Unsupported(format!(
+                "a DOUBLE of {value:e} halfway between two values of {decimals} decimals, which MySQL rounds by its exact binary value, is not lowered yet"
+            )));
+        }
+        let mut digits = format!("{integer}{kept}").into_bytes();
+        if dropped.as_bytes()[0] >= b'5' {
+            let carried = digits.iter_mut().rev().all(|digit| {
+                let nine = *digit == b'9';
+                *digit = if nine { b'0' } else { *digit + 1 };
+                nine
+            });
+            if carried {
+                digits.insert(0, b'1');
+            }
+        }
+        let digits = String::from_utf8(digits).expect("decimal digits are ASCII");
+        let (integer, kept) = digits.split_at(digits.len() - decimals);
+        (integer.to_string(), kept.to_string())
+    } else {
+        (integer, fraction.to_string())
+    };
     Ok(if decimals == 0 {
         format!("{sign}{integer}")
     } else {
