@@ -380,6 +380,42 @@ fn enum_and_set_columns_store_the_members_a_value_names_or_numbers() -> turso_co
 }
 
 #[test]
+fn json_aggregates_collect_the_rows_of_each_group() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE c (id BIGINT PRIMARY KEY, p INT, lbl VARCHAR(5))")?;
+    connection
+        .execute("INSERT INTO c VALUES (10, 1, 'x'), (11, 1, 'y'), (12, 2, 'z'), (13, 2, 'x')")?;
+    let texts = |sql: &str| -> turso_core::Result<Vec<Vec<String>>> {
+        Ok(query(&connection, sql)?
+            .into_iter()
+            .map(|row| row.iter().map(ToString::to_string).collect())
+            .collect())
+    };
+    assert_eq!(
+        texts("SELECT p, JSON_ARRAYAGG(id) FROM c GROUP BY p ORDER BY p")?,
+        vec![vec!["1", "[10, 11]"], vec!["2", "[12, 13]"]]
+    );
+    assert_eq!(
+        texts("SELECT JSON_OBJECTAGG(lbl, id), JSON_ARRAYAGG(lbl = 'x') FROM c")?,
+        vec![vec![
+            r#"{"x": 13, "y": 11, "z": 12}"#,
+            "[true, false, false, true]"
+        ]]
+    );
+    assert_eq!(
+        texts("SELECT JSON_ARRAYAGG(id), JSON_OBJECTAGG(lbl, id) FROM c WHERE id > 99")?,
+        vec![vec!["", ""]]
+    );
+    assert_eq!(
+        texts("SELECT JSON_ARRAY(JSON_ARRAYAGG(JSON_OBJECT('i', id))) FROM c WHERE p = 1")?,
+        vec![vec![r#"[[{"i": 10}, {"i": 11}]]"#]]
+    );
+    let error = query(&connection, "SELECT JSON_OBJECTAGG(NULL, id) FROM c").expect_err("NULL key");
+    assert!(error.to_string().contains("ERROR 3158"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn dates_compare_with_strings_and_other_dates_as_datetimes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (id INT, d DATE, dt DATETIME(3), tm TIME)")?;

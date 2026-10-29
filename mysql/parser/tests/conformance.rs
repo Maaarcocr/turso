@@ -801,6 +801,10 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT users.* FROM users", "SELECT users.* FROM users"),
         ("SELECT 1 FROM dual", "SELECT 1"),
         (
+            "SELECT JSON_ARRAYAGG(a), JSON_OBJECTAGG(b, a) FROM t",
+            "SELECT __mysql_json_arrayagg (json_group_array (JSON_ARRAY (a))), __mysql_json_objectagg (json_group_array (JSON_OBJECT (b, a))) FROM t",
+        ),
+        (
             "SELECT /*+ MAX_EXECUTION_TIME(2000) SET_VAR(sort_buffer_size=262144) */ id FROM t",
             "SELECT id FROM t",
         ),
@@ -1208,6 +1212,10 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "system variable",
             sql: "SELECT @@version",
+        },
+        SqlCase {
+            name: "json aggregate as a window function",
+            sql: "SELECT JSON_ARRAYAGG(a) OVER () FROM t",
         },
         SqlCase {
             name: "setting hint",

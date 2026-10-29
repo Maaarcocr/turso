@@ -42,7 +42,9 @@ fn json_function_name(function: &Function) -> Option<String> {
     let returns_json = matches!(
         upper_name.as_str(),
         "JSON_ARRAY"
+            | "JSON_ARRAYAGG"
             | "JSON_OBJECT"
+            | "JSON_OBJECTAGG"
             | "JSON_EXTRACT"
             | "JSON_SET"
             | "JSON_INSERT"

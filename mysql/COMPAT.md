@@ -352,7 +352,8 @@ MySQL dialect, replacing SQLite's functions of the same name: `JSON_ARRAY`,
 `JSON_DEPTH`, `JSON_PRETTY`, `JSON_CONTAINS`, `JSON_CONTAINS_PATH`,
 `JSON_OVERLAPS`, `JSON_SEARCH`, `JSON_SET`, `JSON_INSERT`, `JSON_REPLACE`,
 `JSON_REMOVE`, `JSON_ARRAY_APPEND`, `JSON_ARRAY_INSERT`, `JSON_MERGE`,
-`JSON_MERGE_PRESERVE` and `JSON_MERGE_PATCH`. They follow MySQL 8.4.10:
+`JSON_MERGE_PRESERVE` and `JSON_MERGE_PATCH`, and the aggregates
+`JSON_ARRAYAGG` and `JSON_OBJECTAGG`. They follow MySQL 8.4.10:
 
 - JSON text is parsed like MySQL's RapidJSON parser, including its error
   positions, the nesting limit of 100, the last duplicate key winning, and its
@@ -394,9 +395,11 @@ these internal functions, which MySQL does not have:
 | `x MEMBER OF (y)` | `__mysql_member_of(x, y)` |
 | `doc -> path` | `JSON_EXTRACT(doc, path)` |
 | `doc ->> path` | `JSON_UNQUOTE(JSON_EXTRACT(doc, path))` |
+| `JSON_ARRAYAGG(x)` | `__mysql_json_arrayagg(json_group_array(JSON_ARRAY(x)))`: each row converts as a `JSON_ARRAY` value; no rows give NULL |
+| `JSON_OBJECTAGG(k, v)` | `__mysql_json_objectagg(json_group_array(JSON_OBJECT(k, v)))`: keys as in `JSON_OBJECT` (a NULL key fails with 3158), the last value of a repeated key wins; no rows give NULL |
 
-Not implemented: the aggregates `JSON_ARRAYAGG` and `JSON_OBJECTAGG` (a
-dialect cannot define aggregate functions yet), `JSON_TABLE`,
+Not implemented: `JSON_ARRAYAGG` and `JSON_OBJECTAGG` as window functions,
+`JSON_TABLE`,
 `JSON_SCHEMA_VALID`, `JSON_SCHEMA_VALIDATION_REPORT`, `JSON_STORAGE_SIZE`,
 `JSON_STORAGE_FREE` and the `RETURNING`/`ON EMPTY`/`ON ERROR` clauses of
 `JSON_VALUE`.

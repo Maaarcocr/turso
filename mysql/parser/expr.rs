@@ -3828,6 +3828,11 @@ fn translate_function(
             return Err(binary_cast_outside_a_value_position(cast));
         }
     }
+    if identifier.quote_style.is_none()
+        && matches!(upper_name.as_str(), "JSON_ARRAYAGG" | "JSON_OBJECTAGG")
+    {
+        return translate_json_aggregate(function, &upper_name, context);
+    }
     if identifier.quote_style.is_none() && over.is_none() {
         if let Some(expr) = translate_greatest_of_dates(&upper_name, list)? {
             return Ok(expr);
@@ -4664,6 +4669,47 @@ fn added_seconds_digits(seconds: &Expr, date: &Expr) -> Option<u64> {
         _ => return None,
     };
     Some(seconds_digits.max(date_digits))
+}
+
+/// `JSON_ARRAYAGG(x)` and `JSON_OBJECTAGG(k, v)`: each row becomes
+/// `JSON_ARRAY(x)` or `JSON_OBJECT(k, v)`, so its value converts as in those
+/// functions, `json_group_array` collects the rows, and the dialect function
+/// around it unwraps them (NULL for a group without rows, the last value of
+/// a repeated key).
+fn translate_json_aggregate(
+    function: &Function,
+    upper_name: &str,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let (row_function, finish, arity) = match upper_name {
+        "JSON_ARRAYAGG" => ("JSON_ARRAY", "__mysql_json_arrayagg", 1),
+        _ => ("JSON_OBJECT", "__mysql_json_objectagg", 2),
+    };
+    let FunctionArguments::List(list) = &function.args else {
+        return Err(unsupported_function(function));
+    };
+    if function.over.is_some() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} as a window function is not lowered yet"
+        )));
+    }
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Err(MysqlParserError::Rejected(format!(
+            "{upper_name} takes no DISTINCT, ORDER BY or other clause"
+        )));
+    }
+    if unnamed_arguments(list)?.len() != arity {
+        return Err(MysqlParserError::Rejected(format!(
+            "incorrect parameter count in the call to {upper_name}"
+        )));
+    }
+    let mut row = function.clone();
+    row.name = ObjectName(vec![ObjectNamePart::Identifier(Ident::new(row_function))]);
+    let row = translate_in(&Expr::Function(row), Context::Value, context)?;
+    Ok(function_call(
+        finish,
+        vec![function_call("json_group_array", vec![row])],
+    ))
 }
 
 fn translate_special_function(
