@@ -1369,8 +1369,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "VALUES (1)",
         },
         SqlCase {
-            name: "derived column list",
-            sql: "SELECT * FROM (SELECT 1) AS x(a)",
+            name: "lateral derived column list",
+            sql: "SELECT * FROM t, LATERAL (SELECT t.a) AS x(a)",
         },
         SqlCase {
             name: "full join",

@@ -1768,7 +1768,27 @@ fn translate_table_factor(
             sample: None,
         } => {
             let select = translate_subquery(subquery, context)?;
-            let alias = alias.as_ref().map(translate_table_alias).transpose()?;
+            let (select, alias) = match alias {
+                Some(alias) if !alias.columns.is_empty() => {
+                    if *lateral {
+                        return Err(unsupported(format!(
+                            "LATERAL derived table with a column list `{alias}`"
+                        )));
+                    }
+                    let unnamed = TableAlias {
+                        columns: Vec::new(),
+                        ..alias.clone()
+                    };
+                    (
+                        with_column_names(select, &alias.columns)?,
+                        Some(translate_table_alias(&unnamed)?),
+                    )
+                }
+                other => (
+                    select,
+                    other.as_ref().map(translate_table_alias).transpose()?,
+                ),
+            };
             Ok(ast::SelectTable::Select {
                 select,
                 alias,
@@ -1803,6 +1823,60 @@ pub(crate) fn translate_table_name(
         }
         _ => Err(unsupported(format!("table name `{name}`"))),
     }
+}
+
+/// Names the columns of a derived table, `(select) AS t (a, b)`, as
+/// `(WITH d (a, b) AS (select) SELECT * FROM d) AS t`; a different number
+/// of columns fails, as in MySQL.
+fn with_column_names(
+    select: ast::Select,
+    columns: &[sqlparser::ast::TableAliasColumnDef],
+) -> Result<ast::Select, MysqlParserError> {
+    let columns = columns
+        .iter()
+        .map(|column| {
+            if column.data_type.is_some() {
+                return Err(unsupported(format!("typed column alias `{}`", column.name)));
+            }
+            Ok(ast::IndexedColumn {
+                col_name: translate_identifier(&column.name)?,
+                collation_name: None,
+                order: None,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let name = ast::Name::exact("__mysql_derived_columns".to_string());
+    Ok(ast::Select {
+        with: Some(ast::With {
+            recursive: false,
+            ctes: vec![ast::CommonTableExpr {
+                tbl_name: name.clone(),
+                columns,
+                materialized: ast::Materialized::Any,
+                select,
+            }],
+        }),
+        body: ast::SelectBody {
+            select: ast::OneSelect::Select {
+                distinctness: None,
+                columns: vec![ast::ResultColumn::Star],
+                from: Some(ast::FromClause {
+                    select: Box::new(ast::SelectTable::Table(
+                        ast::QualifiedName::single(name),
+                        None,
+                        None,
+                    )),
+                    joins: Vec::new(),
+                }),
+                where_clause: None,
+                group_by: None,
+                window_clause: Vec::new(),
+            },
+            compounds: Vec::new(),
+        },
+        order_by: Vec::new(),
+        limit: None,
+    })
 }
 
 fn translate_table_alias(alias: &TableAlias) -> Result<ast::As, MysqlParserError> {
