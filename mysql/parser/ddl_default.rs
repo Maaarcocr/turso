@@ -109,30 +109,15 @@ fn text_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserErr
         Family::Set(members) => set_default(members, text)
             .map(|value| string(&value))
             .ok_or_else(rejected),
-        Family::Date => {
-            let (date, time) = parse_datetime(text)?;
-            if time.is_some() {
-                return Err(unsupported());
-            }
-            Ok(string(&date.to_text()))
-        }
+        Family::Date => temporal_text(TemporalColumn::Date, text).map(|text| string(&text)),
         Family::Datetime { precision } => {
-            let (date, time) = parse_datetime(text)?;
-            let time = time.unwrap_or_default().to_text(*precision)?;
-            Ok(string(&format!("{} {time}", date.to_text())))
+            temporal_text(TemporalColumn::Datetime(*precision), text).map(|text| string(&text))
         }
         Family::Timestamp { precision } => {
-            let (date, time) = parse_datetime(text)?;
-            let time = time.unwrap_or_default().to_text(*precision)?;
-            let value = format!("{} {time}", date.to_text());
-            accept_if(
-                (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value.as_str()),
-                || string(&value),
-            )
+            temporal_text(TemporalColumn::Timestamp(*precision), text).map(|text| string(&text))
         }
         Family::Time { precision } => {
-            let time = parse_time(text, MAX_TIME_HOURS)?;
-            Ok(string(&time.to_text(*precision)?))
+            temporal_text(TemporalColumn::Time(*precision), text).map(|text| string(&text))
         }
         Family::Year => match text.parse::<i128>() {
             Ok(value) if text.len() == 4 => year(value),
@@ -140,6 +125,52 @@ fn text_default(family: &Family, text: &str) -> Result<ast::Expr, MysqlParserErr
         },
         Family::Bit { .. } => Err(unsupported()),
         Family::Text | Family::Blob | Family::Json | Family::Spatial => Err(rejected()),
+    }
+}
+
+/// A column type whose values MySQL stores as canonical date and time text,
+/// with its fractional digits.
+#[derive(Clone, Copy, Debug)]
+pub enum TemporalColumn {
+    Date,
+    Datetime(u64),
+    Timestamp(u64),
+    Time(u64),
+}
+
+/// The text MySQL stores for the string `text` in a column of type `column`
+/// under the target profile's strict SQL mode: `YYYY-MM-DD`,
+/// `YYYY-MM-DD HH:MM:SS[.fraction]` or `[-]HH:MM:SS[.fraction]`, with the
+/// column's fractional digits. A value MySQL rejects (an invalid or zero
+/// date, a time out of range, a `TIMESTAMP` outside 1970-2038) is
+/// [`MysqlParserError::Rejected`]; one whose conversion is not available
+/// (fractional digits to round, a time in a `DATE`, a form other than
+/// numbers separated by `-`, `:`, a space or `T`) is
+/// [`MysqlParserError::Unsupported`].
+pub fn temporal_text(column: TemporalColumn, text: &str) -> Result<String, MysqlParserError> {
+    match column {
+        TemporalColumn::Date => {
+            let (date, time) = parse_datetime(text)?;
+            if time.is_some_and(|time| !time.is_zero()) {
+                return Err(unsupported());
+            }
+            Ok(date.to_text())
+        }
+        TemporalColumn::Datetime(precision) => {
+            let (date, time) = parse_datetime(text)?;
+            let time = time.unwrap_or_default().to_text(precision)?;
+            Ok(format!("{} {time}", date.to_text()))
+        }
+        TemporalColumn::Timestamp(precision) => {
+            let (date, time) = parse_datetime(text)?;
+            let time = time.unwrap_or_default().to_text(precision)?;
+            let value = format!("{} {time}", date.to_text());
+            if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value.as_str()) {
+                return Err(rejected());
+            }
+            Ok(value)
+        }
+        TemporalColumn::Time(precision) => parse_time(text, MAX_TIME_HOURS)?.to_text(precision),
     }
 }
 
@@ -380,6 +411,13 @@ impl Date {
 }
 
 impl Time {
+    fn is_zero(&self) -> bool {
+        self.hours == 0
+            && self.minutes == 0
+            && self.seconds == 0
+            && self.fraction.bytes().all(|digit| digit == b'0')
+    }
+
     fn to_text(&self, precision: u64) -> Result<String, MysqlParserError> {
         let precision = usize::try_from(precision).map_err(|_| unsupported())?;
         if self.fraction.len() > precision {

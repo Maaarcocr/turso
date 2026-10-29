@@ -27,6 +27,7 @@ mod query;
 mod session;
 mod split;
 
+pub use ddl_default::{temporal_text, TemporalColumn};
 pub use function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 pub use session::keeps_target_profile;
 pub use split::{first_statement, split_statements, StatementSpan};

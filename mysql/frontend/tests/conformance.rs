@@ -418,6 +418,42 @@ fn user_variables_keep_their_values_for_the_session() -> turso_core::Result<()> 
 }
 
 #[test]
+fn temporal_columns_store_the_text_mysql_stores() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id INT PRIMARY KEY, a DATETIME(6), b DATETIME, c DATE, d TIME(2), e TIMESTAMP)",
+    )?;
+    connection.execute(
+        "INSERT INTO t VALUES (1, '2024-3-5 9:4:5.25', '2024-03-05T10:00:00', '2024-3-5 00:00:00', '1:2:3.4', '1970-01-01 00:00:01')",
+    )?;
+    connection.execute("UPDATE t SET b = '2024-1-2 3:4:5'")?;
+    assert_eq!(
+        query(&connection, "SELECT a, b, c, d, e FROM t")?,
+        vec![vec![
+            Value::build_text("2024-03-05 09:04:05.250000"),
+            Value::build_text("2024-01-02 03:04:05"),
+            Value::build_text("2024-03-05"),
+            Value::build_text("01:02:03.40"),
+            Value::build_text("1970-01-01 00:00:01"),
+        ]]
+    );
+    for (rejected, column, value) in [
+        ("Incorrect datetime value", "b", "'2024-02-30 00:00:00'"),
+        ("Incorrect datetime value", "e", "'1970-01-01 00:00:00'"),
+        ("Incorrect date value", "c", "'2024-00-05'"),
+        ("Incorrect time value", "d", "'839:00:00'"),
+        ("not supported yet", "b", "'2024-02-01 00:00:00.5'"),
+        ("not supported yet", "c", "'2024-02-01 10:00:00'"),
+        ("not supported yet", "b", "20240201"),
+    ] {
+        let sql = format!("UPDATE t SET {column} = {value}");
+        let error = connection.execute(&sql).expect_err(&sql);
+        assert!(error.to_string().contains(rejected), "{sql}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE a (id INT PRIMARY KEY, v INT)")?;
