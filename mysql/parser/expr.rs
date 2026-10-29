@@ -1078,13 +1078,44 @@ fn arithmetic(
     }
     let lhs = match exact_unsigned_bigint(left, right, operator) {
         Some(lhs) => lhs,
-        None => arithmetic_operand(left, right, context)?,
+        None => match unsigned_bigint_beside_null(left, right)? {
+            Some(lhs) => lhs,
+            None => arithmetic_operand(left, right, context)?,
+        },
     };
     let rhs = match exact_unsigned_bigint(right, left, operator) {
         Some(rhs) => rhs,
-        None => arithmetic_operand(right, left, context)?,
+        None => match unsigned_bigint_beside_null(right, left)? {
+            Some(rhs) => rhs,
+            None => arithmetic_operand(right, left, context)?,
+        },
     };
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+/// `a + b`, `a - b` or `a * b` of BIGINT UNSIGNED literals beside a NULL
+/// literal, whose value cannot change the NULL result: MySQL still rejects it
+/// outside the BIGINT UNSIGNED range.
+fn unsigned_bigint_beside_null(
+    expr: &Expr,
+    other: &Expr,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let Expr::BinaryOp { left, op, right } = expr else {
+        return Ok(None);
+    };
+    let operator = match op {
+        BinaryOperator::Plus => ast::Operator::Add,
+        BinaryOperator::Minus => ast::Operator::Subtract,
+        BinaryOperator::Multiply => ast::Operator::Multiply,
+        _ => return Ok(None),
+    };
+    let unsigned = |expr: &Expr| number_literal(expr).is_some_and(exceeds_signed_bigint);
+    if !matches!(other, Expr::Value(value) if value.value == Value::Null)
+        || !(unsigned(left) || unsigned(right))
+    {
+        return Ok(None);
+    }
+    folded_unsigned_bigint(left, operator, right, Context::Value)
 }
 
 /// An integer literal between the BIGINT and BIGINT UNSIGNED limits as the
