@@ -973,13 +973,18 @@ fn translate_integer_division(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
         ));
     }
-    let quotient = operation(
-        left,
+    let operand = |expr: &Expr, context: &mut TranslationContext| {
+        if json::is_json_value(expr) {
+            json::translate_numeric_coercion(expr, "__mysql_json_decimal", context)
+        } else {
+            translate_in(expr, Context::Arithmetic, context)
+        }
+    };
+    let quotient = ast::Expr::binary(
+        operand(left, context)?,
         ast::Operator::Divide,
-        right,
-        Context::Arithmetic,
-        context,
-    )?;
+        operand(right, context)?,
+    );
     Ok(ast::Expr::cast(quotient, Some(type_name("INTEGER"))))
 }
 
@@ -1224,10 +1229,29 @@ fn comparison(
     if json::is_json_value(left) || json::is_json_value(right) {
         return json::translate_comparison(left, operator, right, context);
     }
+    if let Some((lhs, rhs)) = compared_bytes(left, right) {
+        return Ok(ast::Expr::binary(
+            blob_literal(&lhs),
+            operator,
+            blob_literal(&rhs),
+        ));
+    }
     let lhs = translate_compared(left, right, context)?;
     let rhs = translate_compared(right, left, context)?;
     let lhs = default_collated(lhs, explicit, &[left, right]);
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+fn compared_bytes(left: &Expr, right: &Expr) -> Option<(Vec<u8>, Vec<u8>)> {
+    let bytes = |expr: &Expr| {
+        binary_literal_bytes(expr)
+            .or_else(|| string_literal(expr).map(|text| text.as_bytes().to_vec()))
+    };
+    let is_plain_text = |bytes: &[u8]| !bytes.contains(&0) && std::str::from_utf8(bytes).is_ok();
+    let (lhs, rhs) = (bytes(left)?, bytes(right)?);
+    let non_text_binary = (binary_literal_bytes(left).is_some() && !is_plain_text(&lhs))
+        || (binary_literal_bytes(right).is_some() && !is_plain_text(&rhs));
+    non_text_binary.then_some((lhs, rhs))
 }
 
 fn default_collated(lhs: ast::Expr, explicit: Option<String>, operands: &[&Expr]) -> ast::Expr {
@@ -1953,6 +1977,11 @@ fn translate_cast(
         DataType::Custom(name, _) => is_nchar(name),
         _ => false,
     };
+    if shows_text
+        && binary_literal_bytes(expr).is_some_and(|bytes| std::str::from_utf8(&bytes).is_err())
+    {
+        return Ok(ast::Expr::Literal(ast::Literal::Null));
+    }
     if let Some(text) = json::temporal_json_text(expr).filter(|_| shows_text) {
         return Ok(match data_type {
             DataType::Char(Some(length)) | DataType::Character(Some(length)) => function_call(
@@ -2081,7 +2110,13 @@ fn translate_cast_as_json(
     if has_a_temporal_type(expr) {
         return Err(temporal_outside_a_value_position(expr));
     }
-    let value = if is_binary_literal(expr) {
+    let value = if let Some(digits) = number_literal(expr).filter(|digits| {
+        digits
+            .parse::<u64>()
+            .is_ok_and(|number| number > i64::MAX as u64)
+    }) {
+        string_expr(digits)
+    } else if is_binary_literal(expr) {
         translate_bytes(expr, context)?
     } else {
         translate_expr(expr, context)?
@@ -2129,7 +2164,11 @@ fn translate_temporal_cast(
             "a temporal CAST of `{expr}`, which may have a DATE or TIME type MySQL converts differently from its text, is not lowered yet"
         )));
     }
-    let value = translate_expr(expr, context)?;
+    let value = if is_binary_literal(expr) {
+        translate_bytes(expr, context)?
+    } else {
+        translate_expr(expr, context)?
+    };
     Ok(match target {
         TemporalCast::Date => function_call("__mysql_cast_as_date", vec![value]),
         TemporalCast::DateTime(precision) => function_call(
@@ -2984,6 +3023,17 @@ fn function_arguments(
             )));
         }
     }
+    if matches!(upper_name, "CONCAT" | "CONCAT_WS" | "STRCMP")
+        && args.iter().any(|arg| json::is_json_value(arg))
+    {
+        if let Some(arg) = args.iter().find(|arg| {
+            binary_literal_bytes(arg).is_some_and(|bytes| std::str::from_utf8(&bytes).is_err())
+        }) {
+            return Err(MysqlParserError::Rejected(format!(
+                "cannot convert the binary string `{arg}` of {upper_name} to utf8mb4 next to a JSON value"
+            )));
+        }
+    }
     let positions = result_positions(upper_name, args.len());
     let result_args: Vec<&Expr> = positions.clone().map(|position| args[position]).collect();
     let results = Results::new(&result_args, literal_context);
@@ -3004,9 +3054,7 @@ fn function_arguments(
             }
             if is_json_cast(arg)
                 && !upper_name.starts_with("JSON_")
-                && (!json::is_json_value_that_succeeds(arg)
-                    || compares_by_collation(upper_name)
-                    || args.iter().any(|other| is_binary_string(other)))
+                && (!json::is_json_value_that_succeeds(arg) || compares_by_collation(upper_name))
                 && (evaluates_arguments_lazily(upper_name)
                     || !other_arguments_are_present_values(&args, position))
             {
@@ -3105,6 +3153,12 @@ fn latin1_matched_with_binary(
                     && is_binary_literal(arg)
             })
         };
+    if matched && args.iter().any(|arg| json::is_json_value(arg)) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "`{}` next to a binary string and a JSON value in {upper_name}, whose result MySQL converts to utf8mb4, is not lowered yet",
+            args[position]
+        )));
+    }
     Ok(matched.then_some(bytes))
 }
 
@@ -3293,7 +3347,13 @@ fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Contex
             Context::Number
         }
         "IF" if position == 0 => Context::Number,
-        "CONCAT_WS" if position == 0 => Context::Text,
+        "CONCAT_WS"
+            if position == 0
+                && !json::is_json_value(args[0])
+                && (!is_binary_literal(args[0]) || is_utf8_binary_literal(args[0])) =>
+        {
+            Context::Text
+        }
         "CONCAT" | "CONCAT_WS" | "STRCMP"
             if args
                 .iter()

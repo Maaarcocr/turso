@@ -76,13 +76,31 @@ fn json_cast_operand(expr: &Expr) -> Option<&Expr> {
     }
 }
 
+fn is_null_arithmetic(expr: &Expr) -> bool {
+    match unnested(expr) {
+        Expr::Value(value) => matches!(value.value, Value::Null),
+        Expr::BinaryOp { left, op, right } => {
+            matches!(
+                op,
+                BinaryOperator::Plus
+                    | BinaryOperator::Minus
+                    | BinaryOperator::Multiply
+                    | BinaryOperator::Divide
+            ) && (is_null_arithmetic(left) || is_null_arithmetic(right))
+                && is_number(left)
+                && is_number(right)
+        }
+        _ => false,
+    }
+}
+
 fn cast_succeeds(operand: &Expr) -> bool {
     match operand {
         Expr::Value(value) => match &value.value {
             Value::SingleQuotedString(text)
             | Value::DoubleQuotedString(text)
             | Value::NationalStringLiteral(text) => !mysql_rejects_json_text(text),
-            Value::Number(digits, _) => fits_bigint(digits),
+            Value::Number(digits, _) => fits_bigint(digits) || digits.parse::<u64>().is_ok(),
             Value::Null
             | Value::Boolean(_)
             | Value::HexStringLiteral(_)
@@ -100,7 +118,7 @@ fn cast_succeeds(operand: &Expr) -> bool {
             expr,
         } => number_literal(expr).is_some_and(fits_bigint),
         _ if is_json_value(operand) => json_value_succeeds(operand),
-        _ => is_boolean(operand),
+        _ => is_boolean(operand) || is_null_arithmetic(operand),
     }
 }
 
@@ -284,6 +302,9 @@ fn compared_operand(
             "comparison of `{expr}` with the JSON value `{other_side}` is not lowered yet"
         )));
     }
+    if is_binary_literal(expr) {
+        return translate_bytes(expr, context);
+    }
     match temporal_operand(expr) {
         Some(temporal) => Ok(temporal),
         None => translate_json_value(expr, context),
@@ -459,29 +480,34 @@ pub(crate) fn translate_numeric_coercion(
     coercion: &str,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let coerced = match json_cast_operand(expr) {
-        Some(operand) => match unnested(operand) {
-            Expr::Value(value) => match &value.value {
-                Value::SingleQuotedString(text)
-                | Value::DoubleQuotedString(text)
-                | Value::NationalStringLiteral(text) => !is_numeric_json_string(text),
-                Value::Number(digits, _) => fits_bigint(digits),
-                _ => true,
+    fn coerced(expr: &Expr) -> bool {
+        match json_cast_operand(expr) {
+            Some(operand) => match unnested(operand) {
+                Expr::Value(value) => match &value.value {
+                    Value::SingleQuotedString(text)
+                    | Value::DoubleQuotedString(text)
+                    | Value::NationalStringLiteral(text) => !is_numeric_json_string(text),
+                    Value::Number(digits, _) => {
+                        fits_bigint(digits) || digits.parse::<u64>().is_ok()
+                    }
+                    _ => true,
+                },
+                Expr::Prefixed { prefix, value } => {
+                    prefix.value.eq_ignore_ascii_case("_binary")
+                        || string_literal(value).is_some_and(|text| !is_numeric_json_string(text))
+                }
+                Expr::TypedString(_) | Expr::UnaryOp { .. } => true,
+                other if is_json_value(other) => json_value_succeeds(other) && coerced(other),
+                other => is_boolean(other) || is_null_arithmetic(other),
             },
-            Expr::Prefixed { prefix, value } => {
-                prefix.value.eq_ignore_ascii_case("_binary")
-                    || string_literal(value).is_some_and(|text| !is_numeric_json_string(text))
-            }
-            Expr::TypedString(_) | Expr::UnaryOp { .. } => true,
-            other => is_boolean(other),
-        },
-        None => matches!(
-            unnested(expr),
-            Expr::Function(function)
-                if matches!(json_function_name(function).as_deref(), Some("JSON_ARRAY" | "JSON_OBJECT"))
-        ),
-    };
-    if !coerced {
+            None => matches!(
+                unnested(expr),
+                Expr::Function(function)
+                    if matches!(json_function_name(function).as_deref(), Some("JSON_ARRAY" | "JSON_OBJECT"))
+            ),
+        }
+    }
+    if !coerced(expr) {
         return Err(json_outside_a_value_position(expr));
     }
     Ok(function_call(coercion, vec![json_operand(expr, context)?]))
@@ -537,6 +563,9 @@ fn like_operand(
         return Err(MysqlParserError::Rejected(format!(
             "cannot convert the binary string `{expr}` of LIKE to utf8mb4"
         )));
+    }
+    if is_binary_literal(expr) {
+        return translate_bytes(expr, context);
     }
     if !is_json_value(expr) {
         return translate_in(expr, Context::Text, context);
