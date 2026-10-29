@@ -6,7 +6,7 @@ use crate::ddl_type::ensure_key_length;
 use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
 use crate::query::{translate_subquery, TranslationContext};
-use crate::MysqlParserError;
+use crate::{foreign_key, Environment, MysqlParserError};
 use sqlparser::ast::{
     ColumnDef, CreateTable, CreateTableOptions, Expr, ForeignKeyConstraint, HiveDistributionStyle,
     Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, NamedParenthesizedList,
@@ -19,6 +19,7 @@ const STORAGE_ROW_FORMATS: [&str; 4] = ["DEFAULT", "DYNAMIC", "COMPACT", "REDUND
 
 pub(crate) fn translate_create_table(
     create_table: &CreateTable,
+    environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     let CreateTable {
         or_replace,
@@ -159,6 +160,9 @@ pub(crate) fn translate_create_table(
             ));
         }
     };
+    if !*if_not_exists || environment.table_sql(table_name.as_str())?.is_none() {
+        foreign_key::check_foreign_keys(&table_name, &body, environment)?;
+    }
     Ok(ast::Stmt::CreateTable {
         temporary: *temporary,
         if_not_exists: *if_not_exists,

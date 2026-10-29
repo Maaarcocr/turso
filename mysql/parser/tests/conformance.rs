@@ -1681,6 +1681,22 @@ impl Environment for IndexOfT {
     fn columns_of(&self, _table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError> {
         Ok(None)
     }
+
+    fn table_sql(&self, _table: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn unique_keys_of(&self, _table: &str) -> Result<Vec<Vec<String>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        true
+    }
 }
 
 /// A session outside a transaction on tables `a (id AUTO_INCREMENT, x, g
@@ -1742,6 +1758,22 @@ impl Environment for TriggerSchema {
             "b" | "c" | "log" => Some(vec![column("y", false, false)]),
             _ => None,
         })
+    }
+
+    fn table_sql(&self, _table: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn unique_keys_of(&self, _table: &str) -> Result<Vec<Vec<String>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        true
     }
 }
 

@@ -213,6 +213,63 @@ impl turso_mysql_parser::Environment for Session<'_> {
             })
         }))
     }
+
+    fn table_sql(&self, table: &str) -> LoweringResult<Option<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema.get_btree_table(table).map(|table| table.to_sql())
+        }))
+    }
+
+    fn unique_keys_of(&self, table: &str) -> LoweringResult<Vec<Vec<String>>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            let primary_key = schema.get_btree_table(table).and_then(|table| {
+                (!table.primary_key_columns.is_empty()).then(|| {
+                    table
+                        .primary_key_columns
+                        .iter()
+                        .map(|(name, _)| name.clone())
+                        .collect::<Vec<_>>()
+                })
+            });
+            let unique_indexes = schema
+                .get_indices(table)
+                .filter(|index| {
+                    index.unique
+                        && index.where_clause.is_none()
+                        && index.columns.iter().all(|column| column.expr.is_none())
+                })
+                .map(|index| {
+                    index
+                        .columns
+                        .iter()
+                        .map(|column| column.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            primary_key.into_iter().chain(unique_indexes).collect()
+        }))
+    }
+
+    fn foreign_key_names(&self) -> LoweringResult<Vec<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .tables
+                .values()
+                .filter_map(|table| table.btree())
+                .flat_map(|table| {
+                    table
+                        .foreign_keys
+                        .iter()
+                        .filter_map(|foreign_key| foreign_key.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        }))
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        self.0.foreign_keys_enabled()
+    }
 }
 
 type LoweringResult<T> = std::result::Result<T, turso_mysql_parser::MysqlParserError>;

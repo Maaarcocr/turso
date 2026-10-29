@@ -17,6 +17,7 @@ mod ddl_view;
 mod dialect;
 mod dml;
 mod expr;
+mod foreign_key;
 mod function_names;
 mod insert;
 mod invalid_json;
@@ -88,6 +89,19 @@ pub trait Environment {
 
     /// The columns of `table`, or `None` when there is no such table.
     fn columns_of(&self, table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError>;
+
+    /// The stored `CREATE TABLE` of `table`, or `None` when there is no such
+    /// table.
+    fn table_sql(&self, table: &str) -> Result<Option<String>, MysqlParserError>;
+
+    /// The columns of the primary key and of each unique index of `table`.
+    fn unique_keys_of(&self, table: &str) -> Result<Vec<Vec<String>>, MysqlParserError>;
+
+    /// The names of the foreign keys of every table.
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError>;
+
+    /// Whether `FOREIGN_KEY_CHECKS` is 1.
+    fn foreign_key_checks(&self) -> bool;
 }
 
 /// A foreign key of `table` that references the table asked about.
@@ -131,6 +145,22 @@ impl Environment for Autocommit {
 
     fn columns_of(&self, _table: &str) -> Result<Option<Vec<ColumnFacts>>, MysqlParserError> {
         Ok(None)
+    }
+
+    fn table_sql(&self, _table: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(None)
+    }
+
+    fn unique_keys_of(&self, _table: &str) -> Result<Vec<Vec<String>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_names(&self) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn foreign_key_checks(&self) -> bool {
+        true
     }
 }
 
@@ -234,7 +264,9 @@ fn translate_other(
             let mut context = query::TranslationContext::default();
             query::translate_query(query, &mut context)
         }
-        Statement::CreateTable(create_table) => ddl::translate_create_table(create_table),
+        Statement::CreateTable(create_table) => {
+            ddl::translate_create_table(create_table, environment)
+        }
         Statement::CreateIndex(create_index) => ddl_index::translate_create_index(create_index),
         Statement::AlterTable(alter_table) => {
             ddl_alter::translate_alter_table(alter_table, environment)

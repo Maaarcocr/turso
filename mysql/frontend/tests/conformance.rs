@@ -342,6 +342,42 @@ fn drop_index_names_the_table_of_the_index() -> turso_core::Result<()> {
 }
 
 #[test]
+fn foreign_keys_are_checked_when_created_as_mysql_checks_them() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for statement in [
+        "CREATE TABLE p (id INT(11) UNSIGNED PRIMARY KEY, x INT, s VARCHAR(10) COLLATE utf8mb4_bin, t TEXT, UNIQUE KEY (x))",
+        "CREATE TABLE c (pid INT UNSIGNED, px INT, CONSTRAINT f FOREIGN KEY (pid) REFERENCES p (id) ON DELETE SET NULL, FOREIGN KEY (px) REFERENCES p (x))",
+        "CREATE TABLE tree (id INT PRIMARY KEY, parent INT, FOREIGN KEY (parent) REFERENCES tree (id))",
+    ] {
+        connection.execute(statement)?;
+    }
+    let rejected = [
+        "CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES nope (id))",
+        "CREATE TABLE d (a INT UNSIGNED, FOREIGN KEY (a) REFERENCES p (nope))",
+        "CREATE TABLE d (a VARCHAR(10), FOREIGN KEY (a) REFERENCES p (s))",
+        "CREATE TABLE d (a TEXT, FOREIGN KEY (a) REFERENCES p (t))",
+        "CREATE TABLE d (a BIGINT, FOREIGN KEY (a) REFERENCES p (x))",
+        "CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES p (id))",
+        "CREATE TABLE d (a INT UNSIGNED NOT NULL, FOREIGN KEY (a) REFERENCES p (id) ON UPDATE SET NULL)",
+        "CREATE TABLE d (a INT UNSIGNED, CONSTRAINT F FOREIGN KEY (a) REFERENCES p (id))",
+    ];
+    for statement in rejected {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("MySQL rejects"),
+            "{statement}: {error}"
+        );
+    }
+    let refused = connection
+        .execute("CREATE TABLE d (a DECIMAL(4,1), FOREIGN KEY (a) REFERENCES p (x))")
+        .expect_err("MySQL compares keys of different types as stored");
+    assert!(refused.to_string().contains("unsupported"), "{refused}");
+    connection.execute("SET FOREIGN_KEY_CHECKS = 0")?;
+    connection.execute("CREATE TABLE d (a INT, FOREIGN KEY (a) REFERENCES later (id))")?;
+    Ok(())
+}
+
+#[test]
 fn triggers_fire_as_mysql_s_or_are_refused() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for statement in [
