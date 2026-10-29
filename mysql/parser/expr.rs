@@ -974,22 +974,45 @@ fn translate_integer_division(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
         ));
     }
-    let operand = |expr: &Expr, context: &mut TranslationContext| {
+    let operand = |expr: &Expr, other: &Expr, context: &mut TranslationContext| {
         if json::is_json_value(expr) {
-            json::translate_numeric_coercion(expr, "__mysql_json_decimal", context)
-        } else {
-            translate_in(expr, Context::Arithmetic, context)
+            return json::translate_numeric_coercion(expr, "__mysql_json_decimal", context);
         }
+        if let Some(value) = hex_or_bit_literal(expr)
+            .and_then(|literal| binary_literal_value(literal).ok())
+            .and_then(|value| i64::try_from(value).ok())
+            .filter(|_| cannot_be_negative(other))
+        {
+            return Ok(ast::Expr::Literal(ast::Literal::Numeric(value.to_string())));
+        }
+        translate_in(expr, Context::Arithmetic, context)
     };
     let quotient = ast::Expr::binary(
-        operand(left, context)?,
+        operand(left, right, context)?,
         ast::Operator::Divide,
-        operand(right, context)?,
+        operand(right, left, context)?,
     );
     Ok(ast::Expr::cast(quotient, Some(type_name("INTEGER"))))
 }
 
 const BIGINT_LIMIT: f64 = 9_223_372_036_854_775_808.0;
+
+fn cannot_be_negative(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => cannot_be_negative(inner),
+        Expr::Value(value) => match &value.value {
+            Value::Number(..) | Value::Null => true,
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                text_double(text) >= 0.0
+            }
+            Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_) => {
+                binary_literal_value(&value.value).is_ok_and(|value| i64::try_from(value).is_ok())
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
 
 fn exceeds_bigint(expr: &Expr) -> bool {
     match expr {

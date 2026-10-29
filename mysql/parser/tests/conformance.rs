@@ -795,6 +795,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT '-65535.0', '-0', '-18446744073709552000', CASE WHEN TRUE THEN 0e0 WHEN FALSE THEN 9e0 ELSE -1e0 END",
         ),
         (
+            "SELECT 0xFF DIV 13, '64' DIV 0x1",
+            "SELECT CAST (255 / 13 AS INTEGER), CAST ('64' / 1 AS INTEGER)",
+        ),
+        (
             "SELECT 64 = '64', 1e0 <=> ' 1.5e1x', -1 < _utf8mb4 '-0.5', '1e999' > 0",
             "SELECT 6.4e1 = 6.4e1, 1e0 IS 1.5e1, - 1e0 < - 5e-1, 1.7976931348623157e308 > 0e0",
         ),
