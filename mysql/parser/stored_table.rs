@@ -26,16 +26,18 @@ pub(crate) struct ColumnDefinition {
     pub(crate) not_null: bool,
     pub(crate) default: Option<ast::Expr>,
     pub(crate) generated: bool,
+    /// The members of an `ENUM` or `SET` column, as declared.
+    pub(crate) members: Option<Vec<String>>,
 }
 
 impl ColumnDefinition {
     fn new(definition: &ast::ColumnDefinition) -> Self {
-        let written = definition
+        let declared = definition
             .col_type
             .as_ref()
             .map(|col_type| col_type.to_string())
-            .unwrap_or_default()
-            .to_ascii_uppercase();
+            .unwrap_or_default();
+        let written = declared.to_ascii_uppercase();
         let base = written
             .split(|c: char| c == '(' || c.is_whitespace())
             .next()
@@ -83,6 +85,9 @@ impl ColumnDefinition {
             not_null,
             default,
             generated,
+            members: matches!(base, "ENUM" | "SET" | "\"SET\"")
+                .then(|| members(&declared))
+                .flatten(),
         }
     }
 
@@ -109,6 +114,59 @@ impl ColumnDefinition {
             _ => Family::Other,
         }
     }
+}
+
+/// The members of a stored `ENUM ('''a'',''b''')` or `"SET" (...)` type,
+/// whose parameter is one string literal holding the quoted members.
+fn members(declared: &str) -> Option<Vec<String>> {
+    let parameter = declared[declared.find('(')? + 1..declared.rfind(')')?].trim();
+    let list = unquote(parameter)?;
+    let mut members = Vec::new();
+    let mut rest = list.as_str();
+    loop {
+        let rest_trimmed = rest.trim_start();
+        let (member, after) = quoted_prefix(rest_trimmed)?;
+        members.push(member);
+        let after = after.trim_start();
+        if after.is_empty() {
+            return Some(members);
+        }
+        rest = after.strip_prefix(',')?;
+    }
+}
+
+/// The text of a lowered string literal.
+pub(crate) fn string_text(literal: &str) -> Option<String> {
+    unquote(literal)
+}
+
+/// The text of a whole SQL string literal.
+fn unquote(literal: &str) -> Option<String> {
+    let (text, rest) = quoted_prefix(literal)?;
+    rest.is_empty().then_some(text)
+}
+
+/// The text of the SQL string literal at the start of `text`, and what
+/// follows it.
+fn quoted_prefix(text: &str) -> Option<(String, &str)> {
+    let mut chars = text.char_indices();
+    if chars.next()?.1 != '\'' {
+        return None;
+    }
+    let mut value = String::new();
+    while let Some((index, c)) = chars.next() {
+        if c != '\'' {
+            value.push(c);
+            continue;
+        }
+        if text[index + 1..].starts_with('\'') {
+            chars.next();
+            value.push('\'');
+        } else {
+            return Some((value, &text[index + 1..]));
+        }
+    }
+    None
 }
 
 fn is_integer(base: &str) -> bool {

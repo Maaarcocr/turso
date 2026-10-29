@@ -224,6 +224,10 @@ enum StoredMatch {
     /// A `CHAR` and a `VARCHAR` column of one collation: values that do not
     /// end in a space match as Turso matches them.
     UnlessTrailingSpaces,
+    /// `ENUM` or `SET` columns of different members, which MySQL matches by
+    /// their positions: a member declared at the same position by both
+    /// matches as Turso matches it.
+    ByPosition,
     /// Not modeled.
     Unknown,
 }
@@ -237,6 +241,13 @@ fn stored_match(child: &ColumnDefinition, parent: &ColumnDefinition) -> StoredMa
             StoredMatch::Values
         } else {
             StoredMatch::UnlessTrailingSpaces
+        };
+    }
+    if let (Some(_), Some(_)) = (&child.members, &parent.members) {
+        return if child.base_type() == parent.base_type() {
+            StoredMatch::ByPosition
+        } else {
+            StoredMatch::Unknown
         };
     }
     let is_binary =
@@ -340,11 +351,15 @@ pub(crate) fn check_writes(
                     "a write to `{table}`, whose foreign key names a column its table lacks, is not lowered yet"
                 )));
             };
-            columns.push((child_column, stored_match(child_column, parent_column)));
+            columns.push((
+                child_column,
+                parent_column,
+                stored_match(child_column, parent_column),
+            ));
         }
         if columns
             .iter()
-            .all(|(_, matched)| matches!(matched, StoredMatch::Values | StoredMatch::Unknown))
+            .all(|(_, _, matched)| matches!(matched, StoredMatch::Values | StoredMatch::Unknown))
         {
             continue;
         }
@@ -353,7 +368,7 @@ pub(crate) fn check_writes(
                 "a write to `{table}` of the key of a foreign key MySQL matches as stored ({}) is not lowered yet",
                 columns
                     .iter()
-                    .map(|(column, _)| column.name.as_str())
+                    .map(|(column, _, _)| column.name.as_str())
                     .collect::<Vec<_>>()
                     .join(", ")
             ))
@@ -387,7 +402,7 @@ pub(crate) fn check_writes(
                         }
                         let positions: Vec<Option<usize>> = columns
                             .iter()
-                            .map(|(column, _)| {
+                            .map(|(column, _, _)| {
                                 if listed.is_empty() {
                                     child.columns.iter().position(|other| {
                                         other.name.eq_ignore_ascii_case(&column.name)
@@ -411,11 +426,13 @@ pub(crate) fn check_writes(
                     ast::InsertBody::Select(_, Some(_)) => return Err(refused()),
                 };
                 for row in rows {
-                    let values: Vec<KeyValue> = row
+                    let row: Vec<Option<&ast::Expr>> = row
                         .iter()
                         .zip(&columns)
-                        .map(|(value, (column, _))| KeyValue::of(value.or(column.default.as_ref())))
+                        .map(|(value, (column, _, _))| value.or(column.default.as_ref()))
                         .collect();
+                    let values: Vec<KeyValue> =
+                        row.iter().map(|value| KeyValue::of(*value)).collect();
                     if values.contains(&KeyValue::Null) {
                         continue;
                     }
@@ -424,16 +441,18 @@ pub(crate) fn check_writes(
                     }
                     if columns
                         .iter()
-                        .any(|(_, matched)| *matched == StoredMatch::Never)
+                        .any(|(_, _, matched)| *matched == StoredMatch::Never)
                     {
                         return Err(MysqlParserError::Rejected(format!(
                             "Cannot add or update a child row: a foreign key constraint fails (`{table}`)"
                         )));
                     }
-                    if values.iter().zip(&columns).any(|(value, (_, matched))| {
-                        *value == KeyValue::TrailingSpaces
-                            && *matched == StoredMatch::UnlessTrailingSpaces
-                    }) {
+                    if !row
+                        .iter()
+                        .zip(&values)
+                        .zip(&columns)
+                        .all(|((value, kind), column)| matches_alike(*value, *kind, column))
+                    {
                         return Err(refused());
                     }
                 }
@@ -441,7 +460,7 @@ pub(crate) fn check_writes(
             ast::Stmt::Update(update) => {
                 let assigned: Vec<Option<&ast::Expr>> = columns
                     .iter()
-                    .map(|(column, _)| {
+                    .map(|(column, _, _)| {
                         update.sets.iter().find_map(|set| {
                             set.col_names
                                 .iter()
@@ -461,13 +480,12 @@ pub(crate) fn check_writes(
                     continue;
                 }
                 let alike =
-                    values
+                    assigned
                         .iter()
+                        .zip(&values)
                         .zip(&columns)
-                        .all(|(value, (_, matched))| match matched {
-                            StoredMatch::Values | StoredMatch::Unknown => true,
-                            StoredMatch::UnlessTrailingSpaces => *value == KeyValue::Plain,
-                            StoredMatch::Never => false,
+                        .all(|((value, kind), column)| {
+                            column.2 != StoredMatch::Never && matches_alike(*value, *kind, column)
                         });
                 if !alike {
                     return Err(refused());
@@ -477,6 +495,60 @@ pub(crate) fn check_writes(
         }
     }
     Ok(())
+}
+
+/// Whether a non-NULL literal key value matches the referenced values in
+/// MySQL as it does in Turso.
+fn matches_alike(
+    value: Option<&ast::Expr>,
+    kind: KeyValue,
+    (child, parent, matched): &(&ColumnDefinition, &ColumnDefinition, StoredMatch),
+) -> bool {
+    match matched {
+        StoredMatch::Values | StoredMatch::Unknown | StoredMatch::Never => true,
+        StoredMatch::UnlessTrailingSpaces => kind == KeyValue::Plain,
+        StoredMatch::ByPosition => {
+            let (Some(child_members), Some(parent_members)) = (&child.members, &parent.members)
+            else {
+                return false;
+            };
+            let same_at = |position: usize| {
+                child_members
+                    .get(position)
+                    .is_some_and(|member| parent_members.get(position) == Some(member))
+            };
+            let position_of = |text: &str| {
+                child_members
+                    .iter()
+                    .position(|member| member.eq_ignore_ascii_case(text))
+            };
+            match value {
+                Some(ast::Expr::Literal(ast::Literal::String(text))) => {
+                    let Some(text) = crate::stored_table::string_text(text) else {
+                        return false;
+                    };
+                    if child.base_type() == "ENUM" {
+                        position_of(&text).is_some_and(same_at)
+                    } else {
+                        text.is_empty()
+                            || text
+                                .split(',')
+                                .all(|member| position_of(member).is_some_and(same_at))
+                    }
+                }
+                Some(ast::Expr::Literal(ast::Literal::Numeric(number)))
+                    if child.base_type() == "ENUM" =>
+                {
+                    number
+                        .parse::<usize>()
+                        .ok()
+                        .and_then(|number| number.checked_sub(1))
+                        .is_some_and(same_at)
+                }
+                _ => false,
+            }
+        }
+    }
 }
 
 /// What lowering knows of a value written to a column of a foreign key.
