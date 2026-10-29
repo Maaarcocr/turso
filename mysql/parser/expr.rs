@@ -2030,12 +2030,135 @@ fn translate_null_test(
     })
 }
 
+/// How MySQL compares number literals with each other in `IN`, `CASE` and
+/// `FIELD`: as DOUBLE when one is a double, else as DECIMAL when one has
+/// decimals, is above the BIGINT UNSIGNED range or below the BIGINT range,
+/// else as BIGINT.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum NumberComparison {
+    Integer,
+    Decimal,
+    Double,
+}
+
+impl NumberComparison {
+    fn of(exprs: &[&Expr]) -> Option<Self> {
+        exprs.iter().try_fold(Self::Integer, |kind, expr| {
+            let digits = signed_number_literal(expr)?;
+            let own = if digits.contains(['e', 'E']) {
+                Self::Double
+            } else if is_decimal_literal(digits)
+                || exceeds_unsigned_bigint(digits)
+                || (is_negated(expr) && exceeds_negated_bigint(digits))
+            {
+                Self::Decimal
+            } else {
+                Self::Integer
+            };
+            Some(kind.max(own))
+        })
+    }
+
+    /// Whether two number literals are equal compared this way. As BIGINT, a
+    /// literal above the BIGINT range reads as its 64 bits, as MySQL reads it
+    /// in `FIELD` and `CASE` (`FIELD(18446744073709551615, -1)` is 1).
+    fn equal(self, left: &Expr, right: &Expr) -> bool {
+        fn digits(expr: &Expr) -> &str {
+            signed_number_literal(expr).expect("a number literal")
+        }
+        match self {
+            Self::Double => {
+                let value = |expr: &Expr| {
+                    let magnitude: f64 = digits(expr).parse().expect("a number literal parses");
+                    if is_negated(expr) {
+                        -magnitude
+                    } else {
+                        magnitude
+                    }
+                };
+                value(left) == value(right)
+            }
+            Self::Decimal => {
+                let value = |expr: &Expr| {
+                    let kept = kept_digits(digits(expr));
+                    let (whole, fraction) = kept.split_once('.').unwrap_or((&kept, ""));
+                    let whole = whole.trim_start_matches('0').to_string();
+                    let fraction = fraction.trim_end_matches('0').to_string();
+                    let zero = whole.is_empty() && fraction.is_empty();
+                    (is_negated(expr) && !zero, whole, fraction)
+                };
+                value(left) == value(right)
+            }
+            Self::Integer => {
+                let value = |expr: &Expr| {
+                    let magnitude: u64 = digits(expr).parse().expect("an integer literal parses");
+                    if is_negated(expr) {
+                        0i64.wrapping_sub_unsigned(magnitude)
+                    } else {
+                        magnitude as i64
+                    }
+                };
+                value(left) == value(right)
+            }
+        }
+    }
+
+    /// Whether comparing as BIGINT signed and as BIGINT UNSIGNED could
+    /// differ: a literal above the BIGINT range among negative ones.
+    fn sign_matters(self, exprs: &[&Expr]) -> bool {
+        let above = |expr: &&Expr| {
+            !is_negated(expr)
+                && signed_number_literal(expr)
+                    .and_then(|digits| digits.parse::<u64>().ok())
+                    .is_some_and(|value| value > i64::MAX as u64)
+        };
+        self == Self::Integer
+            && exprs.iter().any(above)
+            && exprs.iter().any(|expr| is_negated(expr))
+    }
+}
+
+/// `FIELD` of number literals only, whose position MySQL finds comparing
+/// them as `NumberComparison` says.
+fn folded_number_field(
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let args = unnamed_arguments(list)?;
+    let Some((first, rest)) = args.split_first() else {
+        return Ok(None);
+    };
+    let Some(kind) = NumberComparison::of(&args) else {
+        return Ok(None);
+    };
+    let position = rest
+        .iter()
+        .position(|arg| kind.equal(first, arg))
+        .map_or(0, |index| index + 1);
+    Ok(Some(number(position as u64)))
+}
+
+/// `IN` of number literals only, other than a BIGINT comparison where the
+/// sign of a literal above the BIGINT range matters, as the truth MySQL
+/// finds comparing them as `NumberComparison` says.
+fn folded_number_in(expr: &Expr, list: &[Expr], negated: bool) -> Option<ast::Expr> {
+    let operands = std::iter::once(expr).chain(list).collect::<Vec<_>>();
+    let kind = NumberComparison::of(&operands)?;
+    if kind.sign_matters(&operands) {
+        return None;
+    }
+    let found = list.iter().any(|item| kind.equal(expr, item));
+    Some(number(u64::from(found != negated)))
+}
+
 fn translate_in_list(
     expr: &Expr,
     list: &[Expr],
     negated: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(folded) = folded_number_in(expr, list, negated) {
+        return Ok(folded);
+    }
     let operands = std::iter::once(expr).chain(list).collect::<Vec<_>>();
     let explicit = single_explicit_collation(&operands)?;
     let mixed = list
@@ -2247,9 +2370,26 @@ fn translate_case(
     literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let doubles = operand.and_then(|operand| case_compared_as_doubles(operand, conditions));
+    let numbers = operand.and_then(|operand| {
+        let compared: Vec<&Expr> = std::iter::once(operand)
+            .chain(conditions.iter().map(|case| &case.condition))
+            .collect();
+        let kind = NumberComparison::of(&compared)?;
+        (!kind.sign_matters(&compared)).then(|| {
+            conditions
+                .iter()
+                .map(|case| number(u64::from(kind.equal(operand, &case.condition))))
+                .collect::<Vec<_>>()
+        })
+    });
+    let doubles = match numbers {
+        Some(conditions) => Some((None, conditions)),
+        None => operand
+            .and_then(|operand| case_compared_as_doubles(operand, conditions))
+            .map(|(base, conditions)| (Some(base), conditions)),
+    };
     let base = match (operand, &doubles, conditions.first()) {
-        (Some(_), Some((base, _)), _) => Some(Box::new(base.clone())),
+        (Some(_), Some((base, _)), _) => base.clone().map(Box::new),
         (Some(operand), None, Some(first)) => {
             let compared: Vec<&Expr> = std::iter::once(operand)
                 .chain(conditions.iter().map(|case| &case.condition))
@@ -3545,6 +3685,11 @@ fn translate_function(
     };
     if let Some(error) = latin1_subject_collation_error(&upper_name, list) {
         return Err(error);
+    }
+    if upper_name == "FIELD" && over.is_none() {
+        if let Some(folded) = folded_number_field(list)? {
+            return Ok(folded);
+        }
     }
     if matches!(
         upper_name.as_str(),
