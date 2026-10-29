@@ -9,9 +9,11 @@ mod datetime;
 mod decimal;
 mod json;
 mod string;
+mod variance;
 
 pub(crate) use json::assign_column as assign_json;
 pub(crate) use string::format_double;
+pub(crate) use variance::register as register_variances;
 
 pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
     let name = name.to_ascii_uppercase();

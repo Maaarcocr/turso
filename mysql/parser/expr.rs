@@ -3875,6 +3875,18 @@ fn translate_function(
             return Err(binary_cast_outside_a_value_position(cast));
         }
     }
+    if identifier.quote_style.is_none() {
+        let variance = match upper_name.as_str() {
+            "VARIANCE" | "VAR_POP" => Some("__mysql_var_pop"),
+            "VAR_SAMP" => Some("__mysql_var_samp"),
+            "STD" | "STDDEV" | "STDDEV_POP" => Some("__mysql_stddev_pop"),
+            "STDDEV_SAMP" => Some("__mysql_stddev_samp"),
+            _ => None,
+        };
+        if let Some(variance) = variance {
+            return translate_variance(function, &upper_name, variance, list, context);
+        }
+    }
     if identifier.quote_style.is_none()
         && matches!(upper_name.as_str(), "JSON_ARRAYAGG" | "JSON_OBJECTAGG")
     {
@@ -4757,6 +4769,50 @@ fn translate_json_aggregate(
         finish,
         vec![function_call("json_group_array", vec![row])],
     ))
+}
+
+/// `VARIANCE(x)`, `STD(x)` and their sample and population variants: MySQL
+/// reads `x` as a DOUBLE and runs Welford's recurrence over the rows, as the
+/// dialect's aggregates do. Turso runs no extension aggregate as a window
+/// function.
+fn translate_variance(
+    function: &Function,
+    upper_name: &str,
+    variance: &str,
+    list: &FunctionArgumentList,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    if matches!(list.duplicate_treatment, Some(DuplicateTreatment::Distinct))
+        || !list.clauses.is_empty()
+    {
+        return Err(MysqlParserError::Rejected(format!(
+            "{upper_name} takes no DISTINCT, ORDER BY or other clause"
+        )));
+    }
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(arg))] = list.args.as_slice() else {
+        return Err(MysqlParserError::Rejected(format!(
+            "incorrect parameter count in the call to {upper_name}"
+        )));
+    };
+    if function.over.is_some() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} as a window function is not lowered yet"
+        )));
+    }
+    let mut call = function.clone();
+    call.name = ObjectName(vec![ObjectNamePart::Identifier(Ident::new(variance))]);
+    call.args = FunctionArguments::List(FunctionArgumentList {
+        duplicate_treatment: None,
+        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Cast {
+            kind: CastKind::Cast,
+            expr: Box::new(arg.clone()),
+            data_type: DataType::Double(ExactNumberInfo::None),
+            array: false,
+            format: None,
+        }))],
+        clauses: Vec::new(),
+    });
+    translate_in(&Expr::Function(call), Context::Value, context)
 }
 
 fn translate_special_function(

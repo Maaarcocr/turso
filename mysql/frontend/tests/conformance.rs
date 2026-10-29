@@ -475,6 +475,46 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn variances_follow_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (i INT, j DECIMAL(5, 2))")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT VARIANCE(i), STD(i), VAR_SAMP(i) FROM t"
+        )?,
+        vec![vec![Value::Null, Value::Null, Value::Null]]
+    );
+    connection.execute("INSERT INTO t VALUES (1, 1.5)")?;
+    assert_eq!(
+        query(&connection, "SELECT VAR_POP(i), STDDEV_SAMP(i) FROM t")?,
+        vec![vec![Value::from_f64(0.0), Value::Null]]
+    );
+    connection.execute("INSERT INTO t VALUES (2, 2.25), (2, NULL), (3, NULL)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT STD(i), STDDEV_POP(i), STDDEV_SAMP(i), VARIANCE(i), VAR_SAMP(i), VARIANCE(j) FROM t",
+        )?,
+        vec![vec![
+            Value::from_f64(std::f64::consts::FRAC_1_SQRT_2),
+            Value::from_f64(std::f64::consts::FRAC_1_SQRT_2),
+            Value::from_f64(0.816496580927726),
+            Value::from_f64(0.5),
+            Value::from_f64(0.6666666666666666),
+            Value::from_f64(0.140625),
+        ]]
+    );
+    for refused in [
+        "SELECT STD(i) OVER () FROM t",
+        "SELECT VARIANCE(DISTINCT i) FROM t",
+    ] {
+        query(&connection, refused).expect_err(refused);
+    }
+    Ok(())
+}
+
+#[test]
 fn having_resolves_names_as_mysql_does() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (a INT, b INT)")?;

@@ -65,6 +65,13 @@ impl Dialect for MySqlDialect {
         SqliteDialect.register_catalog(schema, enable_custom_types)
     }
 
+    fn register_native_extensions(
+        &self,
+        options: turso_core::OpenOptions,
+    ) -> turso_core::OpenOptions {
+        functions::register_variances(options)
+    }
+
     fn resolve_function(&self, name: &str, arg_count: usize) -> Result<Option<Func>> {
         if let Some(function) = session::resolve(name, arg_count) {
             return Ok(Some(function));
