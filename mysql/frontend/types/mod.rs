@@ -100,6 +100,11 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,
         ("__MYSQL_ASSIGN_ENUM", 3) => labels::assign_enum,
         ("__MYSQL_LABELS_NUMBER_UNSUPPORTED", 1 | 2) => labels::number_unsupported,
+        ("__MYSQL_DATED_LESS", 2) => temporal::dated_less,
+        ("__MYSQL_DATED_EQUAL", 2) => temporal::dated_equal,
+        ("__MYSQL_DATED_TIME_LESS" | "__MYSQL_DATED_TIME_EQUAL", 2) => {
+            temporal::dated_time_comparison
+        }
         ("__MYSQL_LABELS_LESS", 2) => labels::less,
         ("__MYSQL_LABELS_EQUAL", 2) => labels::equal,
         ("__MYSQL_ASSIGN_SET", 3) => labels::assign_set,
