@@ -945,6 +945,10 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT MAKEDATE (0e0, 2), WEEK (__mysql_cast_as_datetime ('2000-01-01 10:00:00.000000', 6), 0e0), HOUR (__mysql_cast_as_time ('00:00:00.000000', 6)), DATE (NULL), TIME (NULL)",
         ),
         (
+            "SELECT CAST(18446744073709551615 AS JSON) = 1, 7 DIV CAST(1.5 AS JSON), CONCAT_WS(CAST(0 AS JSON), 'a', _binary 'b'), CAST(CAST(NULL - 1 AS JSON) AS SIGNED)",
+            "SELECT (__mysql_json_compare (__mysql_cast_as_json ('18446744073709551615'), 1) = 0), CAST (7 / __mysql_json_decimal (__mysql_cast_as_json (1.5)) AS INTEGER), CONCAT_WS (__mysql_cast_as_json (0), 'a', x'62'), __mysql_cast_as_signed (__mysql_json_integer (__mysql_cast_as_json (NULL - 1)))",
+        ),
+        (
             "SELECT CAST('[1]' AS JSON) LIKE '[1]', CONCAT(CAST(TIME '12:34:56' AS JSON)), MD5(CAST(DATE '2000-01-01' AS JSON))",
             "SELECT __mysql_like_bin (__mysql_cast_as_json ('[1]'), '[1]', '\\'), CONCAT (__mysql_cast_as_json ('\"12:34:56.000000\"')), MD5 (__mysql_cast_as_json ('\"2000-01-01\"'))",
         ),
@@ -1258,7 +1262,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "json of an integer above the signed range in a comparison",
-            sql: "SELECT CAST(18446744073709551615 AS JSON) = 1",
+            sql: "SELECT CAST(18446744073709551616 AS JSON) = 1",
         },
         SqlCase {
             name: "json time read as a datetime where a failed read is not NULL",

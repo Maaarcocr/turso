@@ -231,9 +231,7 @@ fn to_decimal(operand: &Operand) -> Decimal {
         Operand::Temporal(_) => Decimal::zero(),
         Operand::Json(json) => match json {
             Json::Integer(integer) => Decimal::from_i64(*integer),
-            Json::Unsigned(unsigned) => {
-                Decimal::parse(&unsigned.to_string()).expect("an unsigned integer is a decimal")
-            }
+            Json::Unsigned(unsigned) => Decimal::from_i64(*unsigned as i64),
             Json::Double(double) => Decimal::from_double(*double).expect("JSON doubles are finite"),
             Json::String(text) => {
                 let text = text.trim_start();

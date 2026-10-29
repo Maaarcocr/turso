@@ -973,13 +973,18 @@ fn translate_integer_division(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
         ));
     }
-    let quotient = operation(
-        left,
+    let operand = |expr: &Expr, context: &mut TranslationContext| {
+        if json::is_json_value(expr) {
+            json::translate_numeric_coercion(expr, "__mysql_json_decimal", context)
+        } else {
+            translate_in(expr, Context::Arithmetic, context)
+        }
+    };
+    let quotient = ast::Expr::binary(
+        operand(left, context)?,
         ast::Operator::Divide,
-        right,
-        Context::Arithmetic,
-        context,
-    )?;
+        operand(right, context)?,
+    );
     Ok(ast::Expr::cast(quotient, Some(type_name("INTEGER"))))
 }
 
@@ -2081,7 +2086,13 @@ fn translate_cast_as_json(
     if has_a_temporal_type(expr) {
         return Err(temporal_outside_a_value_position(expr));
     }
-    let value = if is_binary_literal(expr) {
+    let value = if let Some(digits) = number_literal(expr).filter(|digits| {
+        digits
+            .parse::<u64>()
+            .is_ok_and(|number| number > i64::MAX as u64)
+    }) {
+        string_expr(digits)
+    } else if is_binary_literal(expr) {
         translate_bytes(expr, context)?
     } else {
         translate_expr(expr, context)?
@@ -3004,9 +3015,7 @@ fn function_arguments(
             }
             if is_json_cast(arg)
                 && !upper_name.starts_with("JSON_")
-                && (!json::is_json_value_that_succeeds(arg)
-                    || compares_by_collation(upper_name)
-                    || args.iter().any(|other| is_binary_string(other)))
+                && (!json::is_json_value_that_succeeds(arg) || compares_by_collation(upper_name))
                 && (evaluates_arguments_lazily(upper_name)
                     || !other_arguments_are_present_values(&args, position))
             {
@@ -3105,6 +3114,12 @@ fn latin1_matched_with_binary(
                     && is_binary_literal(arg)
             })
         };
+    if matched && args.iter().any(|arg| json::is_json_value(arg)) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "`{}` next to a binary string and a JSON value in {upper_name}, whose result MySQL converts to utf8mb4, is not lowered yet",
+            args[position]
+        )));
+    }
     Ok(matched.then_some(bytes))
 }
 
@@ -3293,7 +3308,7 @@ fn argument_context(upper_name: &str, position: usize, args: &[&Expr]) -> Contex
             Context::Number
         }
         "IF" if position == 0 => Context::Number,
-        "CONCAT_WS" if position == 0 => Context::Text,
+        "CONCAT_WS" if position == 0 && !json::is_json_value(args[0]) => Context::Text,
         "CONCAT" | "CONCAT_WS" | "STRCMP"
             if args
                 .iter()

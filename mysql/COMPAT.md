@@ -124,7 +124,8 @@ Lowered:
 | `UNION [ALL \| DISTINCT]`, `INTERSECT`, `EXCEPT`, parenthesized members with their own `ORDER BY`/`LIMIT`, `WITH` with column lists, `VALUES ROW(...)` | Same; a member that has its own `ORDER BY`/`LIMIT`, or a right operand that is itself a set operation (`INTERSECT` binds tighter), becomes `SELECT * FROM (...)` |
 | Window functions with `PARTITION BY`, `ORDER BY`, `ROWS`/`RANGE` frames and named windows | Same |
 | Column references, `?` parameters (numbered in text order), `CASE`, `IN` lists and subqueries, `BETWEEN`, `EXISTS`, scalar subqueries, row values, `IS [NOT] NULL/TRUE/FALSE/UNKNOWN`, `= ANY (subquery)`, `<> ALL (subquery)` | Same expressions; `IS UNKNOWN` is `IS NULL`; `= ANY` is `IN`, `<> ALL` is `NOT IN` |
-| `a DIV b` | `CAST(a / b AS INTEGER)`: truncates toward zero, `NULL` for a zero divisor |
+| `a DIV b` | `CAST(a / b AS INTEGER)`: truncates toward zero, `NULL` for a zero divisor. A JSON operand is `__mysql_json_decimal(x)`, the DECIMAL MySQL divides with |
+| `CAST(n AS JSON)` of an integer literal between 9223372036854775808 and 18446744073709551615 | `__mysql_cast_as_json('n')`: MySQL's unsigned JSON integer. Read as a DECIMAL (`DIV`, `CAST(.. AS DECIMAL)`) or a BIGINT it is its signed 64 bits, as in MySQL (`CAST(CAST(18446744073709551615 AS JSON) AS DECIMAL)` is -1), and as a DOUBLE its value |
 | `MOD`, `%`, `XOR`, `&&`, `\|\|`, `!`, `<=>` | `%`; `(NOT a) <> (NOT b)`; `AND`; `OR`; `NOT`; `IS` |
 | `a \| b`, `a & b`, `a ^ b`, `~a`, `a << b`, `a >> b` | `__mysql_bit_or`, `__mysql_bit_and`, `__mysql_bit_xor`, `__mysql_bit_not`, `__mysql_shift_left`, `__mysql_shift_right` over the 64 bits of each operand read as MySQL's BIGINT UNSIGNED: an integer literal up to 18446744073709551615 as its bits, a DECIMAL rounded half away from zero and a DOUBLE rounded half to even, each saturating at the BIGINT range, a string literal, bare or after a `_utf8mb4`, `_utf8mb3` or `_utf8` introducer or an `_ascii` or `_latin1` one on ASCII text, as the integer at its start (`'1.5'` is 1), a hex or bit literal as its value, a `DATE`, `TIME` or `TIMESTAMP` literal as its number rounded half up to whole seconds, with the carry MySQL makes into minutes and hours (`TIME '00:59:59.5'` is 10000, `TIME '-10:04:58'` is the bits of -100458), refusing a `TIME` that rounds past 838 hours and a `TIMESTAMP` that rounds into the next day, a JSON value as MySQL's integer of it, and any other operand through `__mysql_bit_operand(x)`, which takes an integer, a DECIMAL and a whole DOUBLE in the BIGINT range. A shift by 64 or more is 0. The result is `__mysql_unsigned_shown(bits)` when the operation is a whole select item of a `SELECT` that reads one row or the operand of `IS NULL` or `IS NOT NULL`, which shows a result above 9223372036854775807 as its digits (`~0` is 18446744073709551615), and `__mysql_unsigned_value(bits)` elsewhere, which fails on such a result as not supported |
 | `a LIKE p [ESCAPE c]`, `REGEXP`, `RLIKE` | `LIKE` with `ESCAPE '\'` unless the pattern is a string without backslashes (MySQL's default escape character); a dangling escape at the end of a literal pattern matches itself, as in MySQL; when either operand is a binary literal (`0x..`, `X'..'`, `b'..'`, `_binary '..'`), `__mysql_like_bin(s, p, escape)` matches the bytes case-sensitively, `_` matching one byte, as MySQL's `binary` collation does (`0x61 LIKE 'A'` is 0); `REGEXP` operator, whose operands may be `CAST(x AS JSON)` (MySQL matches the JSON text) |
@@ -204,17 +205,17 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
 - A JSON value in a comparison, arithmetic or a condition, except the
   failing select items above and the JSON comparisons, conditions and
   arithmetic above, when it is a cast that may fail (of a column, a function
-  result or an integer literal above the signed BIGINT range) or contains
+  result or an integer literal above the BIGINT UNSIGNED range) or contains
   one: MySQL may never evaluate it. Other `JSON_*` calls and `->` are lowered
   like JSON functions elsewhere, so an error they raise is reported even
   where MySQL would not evaluate them.
   Also a JSON value compared with a column or a function result, or used with
-  `IN`, `BETWEEN`, `DIV` or a bit operator: MySQL converts the other operand
-  by its type.
+  `IN`, `BETWEEN` or a bit operator: MySQL converts the other operand by its
+  type.
 - `CAST(x AS JSON)` as an argument of a function other than `JSON_*` when the
   function is `CONCAT_WS`, `ELT` or `MAKE_SET`, or when another argument is
-  not a non-NULL literal, unless the cast cannot fail and no argument is a
-  `_binary` string: MySQL stops evaluating arguments at the first NULL
+  not a non-NULL literal, unless the cast cannot fail (the separator of
+  `CONCAT_WS` may be such a cast): MySQL stops evaluating arguments at the first NULL
   (`MAKEDATE(CAST('x' AS JSON), NULL)` is NULL) or never evaluates unused
   ones, while Turso evaluates every argument and reports the invalid JSON.
   `FIELD`, `GREATEST`, `LEAST`, `LOCATE`, `INSTR`, `POSITION` and
