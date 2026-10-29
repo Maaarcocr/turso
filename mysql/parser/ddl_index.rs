@@ -1,5 +1,5 @@
 use crate::names::{translate_ddl_identifier, translate_ddl_name};
-use crate::MysqlParserError;
+use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTableOperation, BinaryOperator, CreateIndex, Expr, Function, FunctionArg, FunctionArgExpr,
     FunctionArguments, IndexColumn, IndexOption, IndexType, ObjectName, ObjectNamePart,
@@ -240,20 +240,38 @@ pub(crate) fn translate_key_parts(
         .collect()
 }
 
-pub(crate) fn translate_drop_index(names: &[ObjectName]) -> Result<ast::Stmt, MysqlParserError> {
+pub(crate) fn translate_drop_index(
+    names: &[ObjectName],
+    table: &ast::Name,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
     let [name] = names else {
         return Err(MysqlParserError::Unsupported(
             "DROP INDEX is available for one index at a time".to_string(),
         ));
     };
-    drop_index_statement(translate_ddl_name(name)?)
+    drop_index_statement(translate_ddl_name(name)?, table, environment)
 }
 
-pub(crate) fn drop_index_statement(name: ast::Name) -> Result<ast::Stmt, MysqlParserError> {
+/// `DROP INDEX name ON table`. Turso's index names belong to the database,
+/// MySQL's to a table, so an index of another table is not dropped: MySQL
+/// fails (1091) as it has no such key.
+pub(crate) fn drop_index_statement(
+    name: ast::Name,
+    table: &ast::Name,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
     if name.as_str().eq_ignore_ascii_case("PRIMARY") {
         return Err(MysqlParserError::Unsupported(
             "dropping the PRIMARY KEY is not available".to_string(),
         ));
+    }
+    let owner = environment.index_table(name.as_str())?;
+    if !owner.is_some_and(|owner| owner.eq_ignore_ascii_case(table.as_str())) {
+        return Err(MysqlParserError::Rejected(format!(
+            "Can't DROP '{}'; check that column/key exists",
+            name.as_str()
+        )));
     }
     Ok(ast::Stmt::DropIndex {
         if_exists: false,

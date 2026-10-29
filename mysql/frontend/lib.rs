@@ -140,6 +140,20 @@ impl turso_mysql_parser::Environment for Session<'_> {
     fn in_transaction(&self) -> bool {
         !self.0.get_auto_commit()
     }
+
+    fn index_table(
+        &self,
+        name: &str,
+    ) -> std::result::Result<Option<String>, turso_mysql_parser::MysqlParserError> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema.indexes.iter().find_map(|(table, indexes)| {
+                indexes
+                    .iter()
+                    .any(|index| index.name.eq_ignore_ascii_case(name))
+                    .then(|| table.clone())
+            })
+        }))
+    }
 }
 
 /// Opens the database at `path` on `io` with the MySQL dialect and returns a

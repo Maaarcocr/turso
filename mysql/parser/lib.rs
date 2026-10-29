@@ -70,14 +70,24 @@ pub trait Environment {
     /// Whether a transaction started with `BEGIN` or `START TRANSACTION` is
     /// open.
     fn in_transaction(&self) -> bool;
+
+    /// The table that the index `name` (compared without case) belongs to,
+    /// or `None` when no table has it.
+    fn index_table(&self, name: &str) -> Result<Option<String>, MysqlParserError>;
 }
 
-/// A session outside any transaction, about which nothing else is known.
+/// A session outside any transaction whose schema is not known.
 pub struct Autocommit;
 
 impl Environment for Autocommit {
     fn in_transaction(&self) -> bool {
         false
+    }
+
+    fn index_table(&self, name: &str) -> Result<Option<String>, MysqlParserError> {
+        Err(MysqlParserError::Unsupported(format!(
+            "index `{name}` of a statement lowered without the schema of a session"
+        )))
     }
 }
 
@@ -153,9 +163,11 @@ pub fn translate_in(
         }
         Statement::CreateTable(create_table) => ddl::translate_create_table(create_table),
         Statement::CreateIndex(create_index) => ddl_index::translate_create_index(create_index),
-        Statement::AlterTable(alter_table) => ddl_alter::translate_alter_table(alter_table),
+        Statement::AlterTable(alter_table) => {
+            ddl_alter::translate_alter_table(alter_table, environment)
+        }
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
-        Statement::Drop { .. } => ddl_alter::translate_drop(statement),
+        Statement::Drop { .. } => ddl_alter::translate_drop(statement, environment),
         Statement::CreateView(create_view) => ddl_view::translate_create_view(create_view),
         Statement::Set(set) => session::translate_set(set, in_transaction),
         Statement::Insert(insert) => insert::translate_insert(insert),

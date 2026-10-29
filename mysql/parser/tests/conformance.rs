@@ -1,4 +1,7 @@
-use turso_mysql_parser::{parse, parse_and_translate, parse_one, translate, MysqlParserError};
+use turso_mysql_parser::{
+    parse, parse_and_translate, parse_and_translate_in, parse_one, translate, Environment,
+    MysqlParserError,
+};
 use turso_parser::ast;
 
 struct SqlCase {
@@ -253,14 +256,6 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         (
             "CREATE UNIQUE INDEX idx ON t ((C1*10), c2, ((c1+c2)*-2) DESC)",
             "CREATE UNIQUE INDEX idx ON t (C1 * 10, c2, (c1 + c2) * - 2 DESC)",
-        ),
-        (
-            "DROP INDEX idx ON t",
-            "DROP INDEX idx",
-        ),
-        (
-            "ALTER TABLE t DROP INDEX idx",
-            "DROP INDEX idx",
         ),
         (
             "ALTER TABLE t ADD COLUMN c INT UNSIGNED DEFAULT 0 COMMENT 'x'",
@@ -1657,6 +1652,48 @@ fn lowering_rejects_unsupported_statement_families() {
             "SQL: {sql}\nerror: {error}"
         );
     }
+}
+
+/// A session outside a transaction whose only index is `idx` of table `t`.
+struct IndexOfT;
+
+impl Environment for IndexOfT {
+    fn in_transaction(&self) -> bool {
+        false
+    }
+
+    fn index_table(&self, name: &str) -> Result<Option<String>, MysqlParserError> {
+        Ok(name.eq_ignore_ascii_case("idx").then(|| "t".to_string()))
+    }
+}
+
+#[test]
+fn drops_an_index_of_the_named_table_only() {
+    for sql in [
+        "DROP INDEX idx ON t",
+        "DROP INDEX IDX ON T",
+        "ALTER TABLE t DROP INDEX idx",
+    ] {
+        let statement = parse_and_translate_in(sql, &IndexOfT)
+            .unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
+        assert!(
+            statement.to_string().eq_ignore_ascii_case("DROP INDEX idx"),
+            "SQL: {sql}"
+        );
+    }
+    for sql in [
+        "DROP INDEX idx ON u",
+        "ALTER TABLE u DROP INDEX idx",
+        "DROP INDEX other ON t",
+    ] {
+        let error = parse_and_translate_in(sql, &IndexOfT).expect_err(sql);
+        assert!(
+            matches!(error, MysqlParserError::Rejected(_)),
+            "SQL: {sql}\nerror: {error}"
+        );
+    }
+    let error = parse_and_translate("DROP INDEX idx ON t").expect_err("the schema is not known");
+    assert!(matches!(error, MysqlParserError::Unsupported(_)), "{error}");
 }
 
 #[test]

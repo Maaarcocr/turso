@@ -310,6 +310,38 @@ fn transactions_keep_mysql_semantics() -> turso_core::Result<()> {
 }
 
 #[test]
+fn drop_index_names_the_table_of_the_index() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t1 (a INT)")?;
+    connection.execute("CREATE TABLE t2 (a INT)")?;
+    connection.execute("CREATE INDEX idx ON t1 (a)")?;
+    let mut drop_from_t2 = connection.prepare("DROP INDEX idx ON t2");
+    let error = drop_from_t2
+        .as_mut()
+        .map(|_| ())
+        .expect_err("idx is not an index of t2");
+    assert!(
+        error.to_string().contains("check that column/key exists"),
+        "{error}"
+    );
+    let index_count = "SELECT count(*) FROM sqlite_schema WHERE type = 'index'";
+    assert_eq!(
+        query(&connection, index_count)?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    let mut drop_from_t1 = connection.prepare("ALTER TABLE t1 DROP INDEX IDX")?;
+    drop_from_t1.run_collect_rows()?;
+    assert_eq!(
+        query(&connection, index_count)?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    connection
+        .execute("DROP INDEX idx ON t1")
+        .expect_err("idx was dropped");
+    Ok(())
+}
+
+#[test]
 fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<()> {
     let first = open_memory()?;
     let second = open_memory()?;
