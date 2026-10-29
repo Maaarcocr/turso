@@ -475,6 +475,40 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn random_bytes_reads_its_length_as_mysql_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT LENGTH(RANDOM_BYTES(1.5)), LENGTH(RANDOM_BYTES('1.5')), LENGTH(RANDOM_BYTES(X'40')), RANDOM_BYTES(NULL)",
+        )?,
+        vec![vec![
+            Value::from_i64(2),
+            Value::from_i64(1),
+            Value::from_i64(64),
+            Value::Null,
+        ]]
+    );
+    connection.execute("CREATE TABLE t (i INT)")?;
+    connection.execute("INSERT INTO t VALUES (1), (2), (3)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(DISTINCT RANDOM_BYTES(16)) FROM t"
+        )?,
+        vec![vec![Value::from_i64(3)]]
+    );
+    for out_of_range in ["SELECT RANDOM_BYTES(0)", "SELECT RANDOM_BYTES(1025)"] {
+        let error = query(&connection, out_of_range).expect_err(out_of_range);
+        assert!(
+            error.to_string().contains("ERROR 1690"),
+            "{out_of_range}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn variances_follow_mysql() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (i INT, j DECIMAL(5, 2))")?;
@@ -562,6 +596,18 @@ fn format_rounds_and_groups_digits_as_mysql_does() -> turso_core::Result<()> {
             Value::build_text("12"),
             Value::build_text("-1.234,5"),
             Value::Null,
+        ]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT FORMAT(1.25, 1.5), FORMAT(1.25, 2.5), FORMAT(1.25, '1.5'), FORMAT(1, X'02')",
+        )?,
+        vec![vec![
+            Value::build_text("1.25"),
+            Value::build_text("1.250"),
+            Value::build_text("1.3"),
+            Value::build_text("1.00"),
         ]]
     );
     for refused in ["SELECT FORMAT(-0.001, 2)", "SELECT FORMAT(1, 2, 'fr_FR')"] {

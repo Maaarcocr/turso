@@ -227,6 +227,26 @@ pub(super) fn repeat(args: &[Value]) -> Result<Value> {
     bytes_value(text.as_bytes().repeat(count as usize), text.is_binary())
 }
 
+/// `RANDOM_BYTES(n)`, lowered with 1024 random bytes from `randomblob` as
+/// its second argument, so that every call draws new ones.
+pub(super) fn random_bytes(args: &[Value]) -> Result<Value> {
+    let Some(length) = integer(&args[0]) else {
+        return Ok(Value::Null);
+    };
+    if !(1..=1024).contains(&length.value) {
+        return Err(LimboError::SqlError(
+            "ERROR 1690 (22003): length value is out of range in 'random_bytes'".to_string(),
+        ));
+    }
+    let Value::Blob(bytes) = &args[1] else {
+        return Err(LimboError::InternalError(format!(
+            "RANDOM_BYTES draws from {}, not 1024 random bytes",
+            args[1]
+        )));
+    };
+    Ok(Value::from_slice(&bytes[..length.value as usize])?)
+}
+
 pub(super) fn lpad(args: &[Value]) -> Result<Value> {
     pad(args, Side::Left)
 }

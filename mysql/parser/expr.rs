@@ -4827,6 +4827,13 @@ fn translate_special_function(
         return Ok(None);
     };
     match (upper_name, args.as_slice()) {
+        ("RANDOM_BYTES", [length]) => {
+            let length = translate_in(length, argument_context(upper_name, 0, &args), context)?;
+            Ok(Some(function_call(
+                "__mysql_random_bytes",
+                vec![length, function_call("randomblob", vec![number(1024)])],
+            )))
+        }
         ("DATE_ADD" | "ADDDATE", [date, Expr::Interval(interval)]) => Ok(Some(
             translate_date_arithmetic("DATE_ADD", date, interval, context)?,
         )),
@@ -5673,8 +5680,8 @@ pub(crate) fn reads_temporal_as_number(upper_name: &str, position: usize) -> boo
 
 fn reads_number(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
     match upper_name {
-        "ELT" | "MAKE_SET" | "SPACE" => position == 0,
-        "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
+        "ELT" | "MAKE_SET" | "SPACE" | "RANDOM_BYTES" => position == 0,
+        "FORMAT" | "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
         "CONV" | "INSERT" | "MID" | "SUBSTR" | "SUBSTRING" => matches!(position, 1 | 2),
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => matches!(position, 2 | 3),
         "REGEXP_INSTR" => matches!(position, 2..=4),

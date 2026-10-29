@@ -40,8 +40,8 @@ pub(super) fn decimal_argument(name: &str, position: usize) -> DecimalArgument {
         return DecimalArgument::Count;
     }
     let counts: &[usize] = match name {
-        "LEFT" | "RIGHT" | "LPAD" | "RPAD" | "REPEAT" | "SHA2" => &[1],
-        "__MYSQL_BIT_OPERAND" => &[0],
+        "FORMAT" | "LEFT" | "RIGHT" | "LPAD" | "RPAD" | "REPEAT" | "SHA2" => &[1],
+        "__MYSQL_BIT_OPERAND" | "__MYSQL_RANDOM_BYTES" => &[0],
         "SUBSTR" | "SUBSTRING" | "MID" | "INSERT" => &[1, 2],
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => &[2, 3],
         "REGEXP_INSTR" => &[2, 3, 4],
@@ -164,6 +164,7 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("ORD", 1) => text::ord,
         ("POSITION", 2) => text::locate,
         ("REPEAT", 2) => text::repeat,
+        ("__MYSQL_RANDOM_BYTES", 2) => text::random_bytes,
         ("REPLACE", 3) => text::replace,
         ("RIGHT", 2) => text::right,
         ("RPAD", 3) => text::rpad,
