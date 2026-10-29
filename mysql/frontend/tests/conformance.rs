@@ -342,6 +342,56 @@ fn drop_index_names_the_table_of_the_index() -> turso_core::Result<()> {
 }
 
 #[test]
+fn triggers_fire_as_mysql_s_or_are_refused() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for statement in [
+        "CREATE TABLE a (id INT AUTO_INCREMENT PRIMARY KEY, x INT)",
+        "CREATE TABLE b (y INT PRIMARY KEY)",
+        "CREATE TABLE c (pid INT, FOREIGN KEY (pid) REFERENCES b (y) ON DELETE CASCADE)",
+        "CREATE TABLE log (z INT)",
+        "CREATE TRIGGER a1 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (NEW.x * 7)",
+        "CREATE TRIGGER a2 BEFORE INSERT ON a FOR EACH ROW INSERT INTO log VALUES (NEW.x)",
+        "INSERT INTO a (x) VALUES (1), (2)",
+    ] {
+        connection.execute(statement)?;
+    }
+    assert_eq!(
+        query(&connection, "SELECT y FROM b ORDER BY y")?,
+        vec![vec![Value::from_i64(7)], vec![Value::from_i64(14)]]
+    );
+    connection
+        .execute("INSERT INTO a (x) VALUES (3), (1)")
+        .expect_err("the trigger's duplicate key fails the statement");
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM a")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    for refused in [
+        "CREATE TRIGGER a3 AFTER INSERT ON a FOR EACH ROW INSERT INTO log VALUES (1)",
+        "CREATE TRIGGER a3 BEFORE INSERT ON a FOR EACH ROW FOLLOWS a2 INSERT INTO log VALUES (1)",
+        "INSERT INTO a (x) SELECT y FROM b",
+        "ALTER TABLE log ADD COLUMN w INT",
+    ] {
+        connection.execute(refused).expect_err(refused);
+    }
+    connection.execute(
+        "CREATE TRIGGER c1 AFTER DELETE ON c FOR EACH ROW INSERT INTO log VALUES (OLD.pid)",
+    )?;
+    connection.execute("INSERT INTO c VALUES (7)")?;
+    let error = connection
+        .execute("DELETE FROM b WHERE y = 7")
+        .expect_err("MySQL does not fire c1 for the cascade");
+    assert!(error.to_string().contains("foreign key action"), "{error}");
+    connection.execute("DROP TRIGGER c1")?;
+    connection.execute("DELETE FROM b WHERE y = 7")?;
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM c")?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn user_level_locks_belong_to_a_session_until_it_closes() -> turso_core::Result<()> {
     let first = open_memory()?;
     let second = open_memory()?;

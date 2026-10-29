@@ -141,10 +141,7 @@ impl turso_mysql_parser::Environment for Session<'_> {
         !self.0.get_auto_commit()
     }
 
-    fn index_table(
-        &self,
-        name: &str,
-    ) -> std::result::Result<Option<String>, turso_mysql_parser::MysqlParserError> {
+    fn index_table(&self, name: &str) -> LoweringResult<Option<String>> {
         Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
             schema.indexes.iter().find_map(|(table, indexes)| {
                 indexes
@@ -154,7 +151,71 @@ impl turso_mysql_parser::Environment for Session<'_> {
             })
         }))
     }
+
+    fn has_triggers(&self) -> bool {
+        self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .triggers
+                .values()
+                .any(|triggers| !triggers.is_empty())
+        })
+    }
+
+    fn triggers_on(&self, table: &str) -> LoweringResult<Vec<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_triggers_for_table(table)
+                .map(|trigger| trigger.sql.clone())
+                .collect()
+        }))
+    }
+
+    fn foreign_keys_to(
+        &self,
+        table: &str,
+    ) -> LoweringResult<Vec<turso_mysql_parser::ForeignKeyTo>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .tables
+                .values()
+                .filter_map(|child| child.btree())
+                .flat_map(|child| {
+                    child
+                        .foreign_keys
+                        .iter()
+                        .filter(|foreign_key| foreign_key.parent_table.eq_ignore_ascii_case(table))
+                        .map(|foreign_key| turso_mysql_parser::ForeignKeyTo {
+                            table: child.name.clone(),
+                            on_delete: foreign_key.on_delete,
+                            on_update: foreign_key.on_update,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        }))
+    }
+
+    fn columns_of(
+        &self,
+        table: &str,
+    ) -> LoweringResult<Option<Vec<turso_mysql_parser::ColumnFacts>>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema.get_btree_table(table).map(|table| {
+                table
+                    .columns()
+                    .iter()
+                    .map(|column| turso_mysql_parser::ColumnFacts {
+                        name: column.name.clone().unwrap_or_default(),
+                        auto_increment: table.has_autoincrement && column.is_rowid_alias(),
+                        generated: column.is_generated(),
+                    })
+                    .collect()
+            })
+        }))
+    }
 }
+
+type LoweringResult<T> = std::result::Result<T, turso_mysql_parser::MysqlParserError>;
 
 /// Opens the database at `path` on `io` with the MySQL dialect and returns a
 /// connection to it that checks foreign keys, as a MySQL session starts with

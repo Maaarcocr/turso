@@ -85,8 +85,8 @@ Known gaps:
 `REPLACE` in each of these forms lowers to `INSERT OR REPLACE`: like MySQL,
 it deletes every row that conflicts with the new row on the primary key or a
 unique key, then inserts. Known differences: a `NULL` for a `NOT NULL` column
-that has a default stores the default where MySQL fails (1048), and the
-deleted rows fire no `DELETE` triggers.
+that has a default stores the default where MySQL fails (1048). `REPLACE`
+into a table with triggers is refused (see Triggers).
 
 ## Views
 
@@ -99,6 +99,45 @@ Refused: `CREATE OR REPLACE VIEW`, `DROP VIEW` of several views, and view
 columns with types or options. Known differences: Turso views are read-only,
 so `INSERT`, `UPDATE` and `DELETE` through a view fail where MySQL changes
 the base table, and `WITH CHECK OPTION` does not parse.
+
+## Triggers
+
+`mysql/parser/trigger.rs` lowers `CREATE TRIGGER name {BEFORE|AFTER}
+{INSERT|UPDATE|DELETE} ON table FOR EACH ROW statement` (or `BEGIN ... END`
+around statements) to a Turso trigger whose statements are the body's
+`INSERT`, `REPLACE`, `UPDATE` and `DELETE`, each lowered as outside a
+trigger, and `DROP TRIGGER [IF EXISTS] name`. As in MySQL, a failing
+statement of a trigger fails the statement that fired it, and `NEW` in a
+`BEFORE INSERT` trigger has the defaults of columns the `INSERT` leaves out.
+
+These fail as in MySQL when the trigger is created: `OLD` in an `INSERT`
+trigger (1363), `NEW` in a `DELETE` trigger (1363), `SET OLD.column` (1362),
+`SET NEW.column` in an `AFTER` trigger (1362), and a `SELECT` (1415).
+
+Refused where Turso would run triggers differently from MySQL (the lowering
+reads the triggers, foreign keys and columns of the session's schema):
+
+- a second trigger with the timing and event of one the table has, since
+  MySQL fires them in the order they were created and Turso in the opposite
+  order; `FOLLOWS` and `PRECEDES` do not parse;
+- in a `BEFORE` trigger, `NEW` of a generated column, or (`BEFORE INSERT`)
+  of the `AUTO_INCREMENT` key, which MySQL has as 0 before it is generated;
+- a statement whose triggers (also through other triggers) write a table
+  that the statement, or a trigger that fired them, names: MySQL fails with
+  1442 when such a trigger runs. A table counts as named when its name
+  appears anywhere in the statement or trigger, so a column with a table's
+  name is refused too, and so is a statement that would fire such a trigger
+  on no row;
+- a statement whose foreign key actions (`CASCADE`, `SET NULL`, `SET
+  DEFAULT`) change a table with triggers for that change: MySQL does not fire
+  triggers for foreign key actions, Turso does;
+- `REPLACE`, `INSERT IGNORE` and `ON DUPLICATE KEY UPDATE` on a table with
+  triggers, whose firing is not verified against MySQL's;
+- `ALTER TABLE` and `RENAME TABLE` while the database has triggers, since
+  Turso rewrites the stored triggers through the MySQL lowering;
+- `SET NEW.column = ...` in a `BEFORE` trigger (Turso triggers cannot change
+  the row being written), other statements in a body, `DEFINER`, and
+  triggers inside a transaction (MySQL commits it first).
 
 ## SELECT statements and expressions
 

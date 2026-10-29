@@ -1073,7 +1073,9 @@ fn emit_deferred_notnull_checks<'a>(
 ) -> crate::Result<()> {
     let or_conflict = program.resolve_type;
     for (idx, table_column) in target_table.table.columns().iter().enumerate() {
-        if !table_column.notnull() {
+        // A row id alias keeps its new value in the row id register, which
+        // MustBeInt already checked; its record register is always NULL.
+        if !table_column.notnull() || table_column.is_rowid_alias() {
             continue;
         }
         // Only check columns that are in SET clauses

@@ -1,0 +1,27 @@
+@database :memory:
+
+test before-update-trigger-not-null-rowid-alias {
+    CREATE TABLE a(i INTEGER PRIMARY KEY NOT NULL, v INT);
+    CREATE TABLE b(x INT);
+    INSERT INTO a VALUES (0, 7);
+    CREATE TRIGGER tr BEFORE UPDATE ON a BEGIN INSERT INTO b VALUES (new.i); END;
+    UPDATE a SET i = 1;
+    SELECT i, v FROM a;
+    SELECT x FROM b;
+}
+
+expect {
+    1|7
+    1
+}
+
+test before-update-trigger-not-null-rowid-alias-set-null {
+    CREATE TABLE a(i INTEGER PRIMARY KEY NOT NULL);
+    INSERT INTO a VALUES (0);
+    CREATE TRIGGER tr BEFORE UPDATE ON a BEGIN SELECT 1; END;
+    UPDATE a SET i = NULL;
+}
+
+expect error {
+    datatype mismatch
+}
