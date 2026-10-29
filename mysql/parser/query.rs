@@ -119,6 +119,13 @@ pub(crate) fn translate_subquery(
         .as_ref()
         .map(|with| translate_with(with, context))
         .transpose()?;
+    if let (SetExpr::Select(select), Some(order_by)) = (body.as_ref(), order_by) {
+        if let Some(term) = order_by_outside_the_rows(select, order_by) {
+            return Err(unsupported(format!(
+                "ORDER BY `{term}` of a grouped or DISTINCT SELECT, which may use a column outside the selected rows that MySQL rejects and Turso allows, in `{query}`"
+            )));
+        }
+    }
     let body = translate_body(body, context)?;
     let order_by = order_by
         .as_ref()
@@ -473,6 +480,63 @@ fn may_break_only_full_group_by(select: &Select) -> bool {
         .is_some_and(|having| uses_ungrouped_column(having, &having_groups))
 }
 
+fn order_by_outside_the_rows<'a>(select: &Select, order_by: &'a OrderBy) -> Option<&'a Expr> {
+    let OrderByKind::Expressions(terms) = &order_by.kind else {
+        return None;
+    };
+    let GroupByExpr::Expressions(group_by, _) = &select.group_by else {
+        return None;
+    };
+    let projections = select
+        .projection
+        .iter()
+        .map(projected_expr)
+        .collect::<Vec<_>>();
+    let grouped = !group_by.is_empty()
+        || projections
+            .iter()
+            .flatten()
+            .any(|expr| contains_aggregate(expr))
+        || select.having.as_ref().is_some_and(contains_aggregate)
+        || terms.iter().any(|term| contains_aggregate(&term.expr));
+    let mut exprs = if grouped {
+        let mut grouping = group_by.iter().collect::<Vec<_>>();
+        for term in group_by {
+            grouping.extend(selected_by_group_term(term, select));
+        }
+        grouping
+    } else if matches!(select.distinct, Some(Distinct::Distinct)) {
+        if projections.iter().any(Option::is_none) {
+            return None;
+        }
+        projections.iter().flatten().copied().collect()
+    } else {
+        return None;
+    };
+    let aliases = select
+        .projection
+        .iter()
+        .filter_map(|item| match item {
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let ordinal = |term: &Expr| matches!(term, Expr::Value(value) if matches!(value.value, Value::Number(_, false)));
+    exprs.extend(terms.iter().filter_map(|term| {
+        ordinal(&term.expr)
+            .then(|| selected_by_group_term(&term.expr, select))
+            .flatten()
+    }));
+    let groups = Grouping {
+        exprs,
+        aliases: &aliases,
+    };
+    terms
+        .iter()
+        .map(|term| &term.expr)
+        .find(|term| !ordinal(term) && uses_ungrouped_column(term, &groups))
+}
+
 fn projected_expr(item: &SelectItem) -> Option<&Expr> {
     match item {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
@@ -514,10 +578,12 @@ impl Grouping<'_> {
             .any(|grouped| without_parentheses(grouped) == without_parentheses(expr))
     }
 
-    fn contains_column(&self, name: &str) -> bool {
-        self.aliases
-            .iter()
-            .any(|alias| alias.eq_ignore_ascii_case(name))
+    fn contains_column(&self, name: &str, qualified: bool) -> bool {
+        (!qualified
+            && self
+                .aliases
+                .iter()
+                .any(|alias| alias.eq_ignore_ascii_case(name)))
             || self.exprs.iter().any(|grouped| {
                 column_name_of(without_parentheses(grouped))
                     .is_some_and(|column| column.eq_ignore_ascii_case(name))
@@ -546,7 +612,9 @@ fn uses_ungrouped_column(expr: &Expr, groups: &Grouping) -> bool {
     }
     match expr {
         Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
-            !column_name_of(expr).is_some_and(|name| groups.contains_column(name))
+            !column_name_of(expr).is_some_and(|name| {
+                groups.contains_column(name, matches!(expr, Expr::CompoundIdentifier(_)))
+            })
         }
         Expr::Value(_) | Expr::TypedString(_) | Expr::Prefixed { .. } | Expr::Interval(_) => false,
         Expr::Subquery(_) | Expr::Exists { .. } => false,

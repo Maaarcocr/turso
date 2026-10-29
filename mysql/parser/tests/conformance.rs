@@ -804,7 +804,15 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT BINARY s, CAST(X'FF' AS BINARY(2)), CONVERT(-1.5, BINARY(1)), CAST(CAST('[1]' AS JSON) AS BINARY), CAST(1e0 AS CHAR), STRCMP(BINARY 'a', s) FROM t ORDER BY BINARY s",
-            "SELECT CAST (s AS BLOB), __mysql_cast_as_binary (x'FF', 2), __mysql_cast_as_binary (CAST (CAST ('-1.5' AS DECIMAL (2, 1)) AS BLOB), 1), CAST (CAST (__mysql_cast_as_json ('[1]') AS TEXT) AS BLOB), CAST (1e0 AS TEXT), STRCMP (CAST ('a' AS BLOB), s) FROM t ORDER BY CAST (s AS BLOB)",
+            "SELECT CAST (CONCAT (s) AS BLOB), __mysql_cast_as_binary (x'FF', 2), __mysql_cast_as_binary (CAST (CONCAT (CAST ('-1.5' AS DECIMAL (2, 1))) AS BLOB), 1), CAST (CAST (CONCAT (__mysql_cast_as_json ('[1]')) AS TEXT) AS BLOB), CAST (CONCAT (1e0) AS TEXT), STRCMP (CAST (CONCAT ('a') AS BLOB), s) FROM t ORDER BY CAST (CONCAT (s) AS BLOB)",
+        ),
+        (
+            "SELECT DATE_SUB(TIMESTAMP'2025-01-01 00:00:00', INTERVAL '1.0x' HOUR_MICROSECOND), DATE_ADD(20250101, INTERVAL 6/4 DAY_HOUR), TIMESTAMP '2025-01-01 00:00:00.1' + INTERVAL 1.5000 SECOND, DATE_ADD(DATE '2020-01-01', INTERVAL 1 DAY), DATE '2020-01-01' - INTERVAL 1 HOUR",
+            "SELECT __mysql_cast_as_datetime (DATE_SUB ('2025-01-01 00:00:00', '1.0x', 'HOUR_MICROSECOND'), 6), DATE_ADD (20250101, CONCAT (6 / 4), 'DAY_HOUR'), __mysql_cast_as_datetime (DATE_ADD ('2025-01-01 00:00:00.1', 1.5000, 'SECOND'), 4), DATE_ADD ('2020-01-01', 1, 'DAY'), __mysql_cast_as_datetime (DATE_SUB ('2020-01-01', 1, 'HOUR'), 0)",
+        ),
+        (
+            "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
+            "SELECT DISTINCT a AS x FROM t ORDER BY x, 1, a",
         ),
         (
             "SELECT 'FOO' IN ('foo', 1), 64 NOT IN ('64', 'bar'), CASE 'abc' WHEN 'xyz' THEN 1 WHEN 0 THEN 2 END, GREATEST(-1, 0x1, TIMESTAMP '2020-12-31 23:59:59')",
@@ -910,7 +918,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT CAST('2000-01-01' AS DATE), CONVERT(1.5, DATETIME(3)), CAST('1:2' AS TIME), CAST(s AS CHAR(2)), CONVERT(s, NCHAR(1)), CAST(s AS NCHAR)",
-            "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (s, 2), __mysql_cast_as_nchar (s, 1), CAST (s AS NCHAR)",
+            "SELECT __mysql_cast_as_date ('2000-01-01'), __mysql_cast_as_datetime (1.5, 3), __mysql_cast_as_time ('1:2', 0), __mysql_cast_as_char (CONCAT (s), 2), __mysql_cast_as_nchar (CONCAT (s), 1), __mysql_cast_as_nchar (CONCAT (s), 16777216)",
         ),
         (
             "SELECT REPLACE(0xC3BF, _latin1 0xFF, 'z'), LPAD(_binary 'ab', 3, _latin1 0xFF), LOCATE(_latin1 0xFF, 0xAAFF, 1) FROM t",
@@ -1243,6 +1251,30 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "uneven values rows",
             sql: "VALUES ROW(1), ROW(1, 2)",
+        },
+        SqlCase {
+            name: "a DATE_ADD of a TIME literal",
+            sql: "SELECT DATE_ADD(TIME '10:00:00', INTERVAL 1 HOUR)",
+        },
+        SqlCase {
+            name: "a DATE_ADD whose interval decimals are not known",
+            sql: "SELECT DATE_ADD(TIMESTAMP '2020-01-01 00:00:00', INTERVAL c SECOND) FROM t",
+        },
+        SqlCase {
+            name: "a decimal a JSON double cannot show",
+            sql: "SELECT CAST(1.50 AS JSON)",
+        },
+        SqlCase {
+            name: "a binary string cast to JSON",
+            sql: "SELECT CAST(BINARY 'a' AS JSON)",
+        },
+        SqlCase {
+            name: "ORDER BY a column outside GROUP BY",
+            sql: "SELECT BINARY s FROM t GROUP BY BINARY s ORDER BY s",
+        },
+        SqlCase {
+            name: "ORDER BY a column outside a DISTINCT select list",
+            sql: "SELECT DISTINCT BINARY t1.id AS id FROM t AS t1 ORDER BY t1.id",
         },
         SqlCase {
             name: "a binary string cast in a comparison",
