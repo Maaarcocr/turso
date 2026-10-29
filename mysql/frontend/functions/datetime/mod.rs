@@ -3,19 +3,17 @@ use turso_core::{Result, Value};
 mod arg;
 mod arith;
 mod build;
-mod calendar;
 mod decimal;
 mod epoch;
 mod format;
-mod parse;
 mod parts;
 mod str_to_date;
-mod temporal;
 #[cfg(test)]
 mod tests;
 mod zone;
 
 use arg::Arg;
+use turso_mysql_parser::datetime::{calendar, parse, temporal};
 
 pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
     find(name, arg_count).is_some()

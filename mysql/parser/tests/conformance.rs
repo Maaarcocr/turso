@@ -859,6 +859,14 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT PERIOD_ADD (9223372036854775807, 1), PERIOD_DIFF (1, (-9223372036854775807 - 1)), PERIOD_ADD (9223372036854775808, 1)",
         ),
         (
+            "SELECT UNIX_TIMESTAMP(CAST(TIME '12:00:00' AS JSON)), UNIX_TIMESTAMP(1.10) + 1, UNIX_TIMESTAMP(-1.5e0), UNIX_TIMESTAMP(20000101103458.1234), UNIX_TIMESTAMP('foo'), UNIX_TIMESTAMP(_binary '2000-01-01 00:00:00.12'), UNIX_TIMESTAMP('2000-01-01'), UNIX_TIMESTAMP(1)",
+            "SELECT CAST (UNIX_TIMESTAMP (0e0) AS DECIMAL (65, 6)), CAST (UNIX_TIMESTAMP (1.10) AS DECIMAL (13, 2)) + 1, CAST (UNIX_TIMESTAMP (-1.5e0) AS DECIMAL (17, 6)), CAST (UNIX_TIMESTAMP ('20000101103458.1234') AS DECIMAL (15, 4)), CAST (UNIX_TIMESTAMP ('foo') AS DECIMAL (17, 6)), CAST (UNIX_TIMESTAMP ('2000-01-01 00:00:00.12') AS DECIMAL (13, 2)), UNIX_TIMESTAMP ('2000-01-01'), UNIX_TIMESTAMP (1)",
+        ),
+        (
+            "SELECT -'foobar', - _utf8 '0000-01-03', -('1')",
+            "SELECT (('foobar') * -1e0), (('0000-01-03') * -1e0), ((('1')) * -1e0)",
+        ),
+        (
             "SELECT 18446744073709551615 * 1 - NULL",
             "SELECT CAST ('18446744073709551615' AS DECIMAL (20, 0)) - NULL",
         ),
@@ -1419,10 +1427,6 @@ fn lowering_rejects_each_unsupported_query_shape() {
         SqlCase {
             name: "json of an integer above the signed range in a comparison",
             sql: "SELECT CAST(18446744073709551616 AS JSON) = 1",
-        },
-        SqlCase {
-            name: "json time read as a datetime where a failed read is not NULL",
-            sql: "SELECT UNIX_TIMESTAMP(CAST(TIME '12:00:00' AS JSON))",
         },
         SqlCase {
             name: "json date as the hour of MAKETIME with DECIMAL seconds",

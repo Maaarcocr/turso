@@ -855,6 +855,23 @@ fn translate_unary(
             if json::is_json_value(expr) {
                 return json::translate_negation(expr, context);
             }
+            let utf8_text = match unnested(expr) {
+                Expr::Prefixed { prefix, value } => {
+                    matches!(
+                        prefix.value.to_ascii_lowercase().as_str(),
+                        "_utf8mb4" | "_utf8mb3" | "_utf8"
+                    ) && is_text_literal(value)
+                }
+                other => is_text_literal(other),
+            };
+            if utf8_text {
+                let negated = translate_in(expr, sign_context, context)?;
+                return Ok(parenthesized(ast::Expr::binary(
+                    parenthesized(negated),
+                    ast::Operator::Multiply,
+                    ast::Expr::Literal(ast::Literal::Numeric("-1e0".to_string())),
+                )));
+            }
             if number_literal(expr).is_none() {
                 let negated = translate_in(expr, sign_context, context)?;
                 return Ok(times_minus_one(negated));
@@ -3569,6 +3586,10 @@ fn translate_function(
     if let Some(LiteralResult::TextArgument(position, text)) = &digits {
         args[*position] = string_expr(text);
     }
+    let timestamp_decimals = match upper_name.as_str() {
+        "UNIX_TIMESTAMP" if over.is_none() => unix_timestamp_decimals(list, &mut args)?,
+        _ => None,
+    };
     let mut order_by = Vec::new();
     let mut separator = None;
     for clause in &list.clauses {
@@ -3600,6 +3621,12 @@ fn translate_function(
             ..filter_over
         },
     };
+    if let Some(decimals) = timestamp_decimals {
+        return Ok(ast::Expr::cast(
+            call,
+            Some(sized_decimal_type(11 + decimals, decimals)),
+        ));
+    }
     let json_timestamp = upper_name == "UNIX_TIMESTAMP"
         && matches!(unnamed_arguments(list)?.as_slice(), [arg] if json::is_json_value(arg));
     Ok(match digits {
@@ -3618,6 +3645,66 @@ fn translate_function(
         Some(LiteralResult::Text(_)) => unreachable!("a text result returns early"),
         None => call,
     })
+}
+
+/// The decimals of `UNIX_TIMESTAMP` of a literal, which MySQL types as a
+/// DECIMAL with the fractional digits its argument reads with: those of a
+/// DECIMAL literal, six for a DOUBLE, and for a string those it reads as a
+/// datetime with, or six when it does not read as one. A DECIMAL literal a
+/// DOUBLE cannot hold exactly is passed as its text where both read alike,
+/// as a 14-digit date and time.
+fn unix_timestamp_decimals(
+    list: &FunctionArgumentList,
+    args: &mut [ast::Expr],
+) -> Result<Option<u64>, MysqlParserError> {
+    use crate::datetime::parse::{parse_datetime, DateFlags};
+    let arguments = unnamed_arguments(list)?;
+    let [arg] = arguments.as_slice() else {
+        return Ok(None);
+    };
+    if let Some(digits) = signed_number_literal(arg) {
+        if digits.contains(['e', 'E']) {
+            return Ok(Some(6));
+        }
+        let Some((whole, fraction)) = digits.split_once('.') else {
+            return Ok(None);
+        };
+        if fraction.len() > 6 {
+            return Err(MysqlParserError::Unsupported(format!(
+                "UNIX_TIMESTAMP of `{arg}`, with more than six decimals, is not lowered yet"
+            )));
+        }
+        if !is_exact_as_a_double(digits) {
+            if is_negated(arg) || whole.len() != 14 {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "UNIX_TIMESTAMP of `{arg}`, which a DOUBLE cannot hold exactly, is not lowered yet"
+                )));
+            }
+            args[0] = string_expr(digits);
+        }
+        return Ok(Some(fraction.len() as u64));
+    }
+    let text = match unnested(arg) {
+        Expr::Value(value) => match &value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text,
+            _ => return Ok(None),
+        },
+        Expr::Prefixed { prefix, value } => {
+            match (prefix.value.to_ascii_lowercase().as_str(), value.as_ref()) {
+                ("_utf8mb4" | "_utf8mb3" | "_utf8" | "_binary", Expr::Value(value)) => {
+                    match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text,
+                        _ => return Ok(None),
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
+        _ => return Ok(None),
+    };
+    let decimals = parse_datetime(text.as_bytes(), DateFlags::FUZZY)
+        .map_or(6, |parsed| u64::from(parsed.fraction_digits));
+    Ok((decimals > 0).then_some(decimals))
 }
 
 enum LiteralResult {

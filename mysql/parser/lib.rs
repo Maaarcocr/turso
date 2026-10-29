@@ -5,6 +5,7 @@ use thiserror::Error;
 use turso_parser::ast;
 
 mod bitwise;
+pub mod datetime;
 mod ddl;
 mod ddl_alter;
 mod ddl_column;
