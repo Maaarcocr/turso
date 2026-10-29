@@ -281,7 +281,7 @@ fn translate_other(
             transaction::translate_transaction(statement, in_transaction)
         }
         Statement::Query(query) => {
-            let mut context = query::TranslationContext::default();
+            let mut context = query::TranslationContext::for_session(environment);
             query::translate_query(query, &mut context)
         }
         Statement::CreateTable(create_table) => {

@@ -147,6 +147,16 @@ structure), `expr.rs` (expressions) and `literal.rs` (literals) into the shared
 Turso AST. Anything listed under "Refused" fails with an unsupported-syntax
 error.
 
+A grouped `SELECT` is checked as MySQL's `ONLY_FULL_GROUP_BY` checks it: an
+expression of the select list or `HAVING` may use a column outside `GROUP BY`
+when the grouped columns hold its table's primary key or a unique key of
+`NOT NULL` columns, or the `WHERE` clause equates the column with a constant
+or (with an inner join's `ON`) with a column that is grouped or dependent;
+another column fails with MySQL's error (1055, or 1140 without `GROUP BY`).
+The check reads the session's tables, so a grouped `SELECT` over a view, a
+derived table, an outer join or columns it cannot resolve is refused when it
+may use a column outside `GROUP BY`.
+
 Statements MySQL rejects when it resolves names fail with MySQL's error: two
 tables of one `FROM` with the same name or alias (1066; a derived table's
 alias is apart from the names of tables, and a table named with its database

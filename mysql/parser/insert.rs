@@ -31,7 +31,7 @@ pub(crate) fn translate_insert(
     };
     let table = single_identifier(table)?;
     let tbl_name = ast::QualifiedName::single(translate_identifier(table)?);
-    let mut context = TranslationContext::default();
+    let mut context = TranslationContext::for_session(environment);
     let mut defaults = Defaults::new(&table.value, environment, !insert.ignore);
     let (columns, select) = match (&insert.source, insert.assignments.as_slice()) {
         (Some(source), []) => {

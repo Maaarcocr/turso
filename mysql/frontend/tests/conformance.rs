@@ -475,6 +475,47 @@ fn default_writes_the_default_of_the_column() -> turso_core::Result<()> {
 }
 
 #[test]
+fn grouped_selects_use_columns_as_only_full_group_by_allows() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE p (id INT PRIMARY KEY, nm VARCHAR(10), r INT)")?;
+    connection.execute("CREATE TABLE c (id INT PRIMARY KEY, p_id INT)")?;
+    connection.execute("INSERT INTO p VALUES (1, 'a', 5), (2, 'b', 6)")?;
+    connection.execute("INSERT INTO c VALUES (1, 1), (2, 1), (3, 2)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT p.nm, COUNT(c.id) FROM p JOIN c ON c.p_id = p.id GROUP BY p.id ORDER BY p.id",
+        )?,
+        vec![
+            vec![Value::build_text("a"), Value::from_i64(2)],
+            vec![Value::build_text("b"), Value::from_i64(1)],
+        ]
+    );
+    assert_eq!(
+        query(&connection, "SELECT nm, COUNT(*) FROM p WHERE id = 2")?,
+        vec![vec![Value::build_text("b"), Value::from_i64(1)]]
+    );
+    for statement in [
+        "SELECT nm, COUNT(*) FROM p GROUP BY r",
+        "SELECT * FROM c GROUP BY p_id",
+        "SELECT nm, SUM(r) FROM p",
+    ] {
+        let error = query(&connection, statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("MySQL rejects"),
+            "{statement}: {error}"
+        );
+    }
+    let error = query(
+        &connection,
+        "SELECT nm FROM p, (SELECT 1 AS x) AS d GROUP BY x",
+    )
+    .expect_err("a derived table's columns are not resolved");
+    assert!(error.to_string().contains("unsupported"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn create_index_checks_the_types_of_the_columns() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (i INT, s TEXT, j JSON, v VARCHAR(10))")?;

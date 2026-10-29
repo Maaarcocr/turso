@@ -55,7 +55,7 @@ pub(crate) fn translate_update(
         return translate_multi_table_update(table, assignments, selection.as_ref(), environment);
     }
     let target = Target::from_table(table, "UPDATE", UPDATE_MODIFIERS)?;
-    let mut context = TranslationContext::default();
+    let mut context = TranslationContext::for_session(environment);
     let sets = translate_assignments(&target, assignments, environment, &mut context)?;
     let condition = translate_selection(selection.as_ref(), &mut context)?;
     let where_clause = if order_by.is_empty() && limit.is_none() {
