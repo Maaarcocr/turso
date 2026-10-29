@@ -55,6 +55,13 @@ pub(crate) fn translate_default(expr: &Expr) -> Result<DefaultValue, MysqlParser
 
 pub(crate) fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError> {
     match expr {
+        Expr::Identifier(identifier)
+            if identifier.quote_style.is_none() && identifier.value.starts_with('@') =>
+        {
+            Err(MysqlParserError::Rejected(format!(
+                "`{identifier}`: column defaults, generated columns and CHECK constraints cannot read user or system variables"
+            )))
+        }
         Expr::Identifier(identifier) => Ok(ast::Expr::Id(translate_identifier(identifier)?)),
         Expr::Value(value) => translate_value(&value.value),
         Expr::Nested(inner) => Ok(ast::Expr::Parenthesized(vec![Box::new(translate_expr(

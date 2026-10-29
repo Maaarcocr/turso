@@ -477,6 +477,14 @@ fn reports_ddl_that_mysql_rejects() {
             sql: "CREATE TABLE users(created DATETIME(6) DEFAULT CURRENT_TIMESTAMP(7))",
         },
         SqlCase {
+            name: "default reading a user variable",
+            sql: "ALTER TABLE users ADD COLUMN i INT DEFAULT (@a)",
+        },
+        SqlCase {
+            name: "generated column reading a system variable",
+            sql: "CREATE TABLE users(i INT AS (@@version))",
+        },
+        SqlCase {
             name: "non-numeric integer default",
             sql: "CREATE TABLE users(id INT DEFAULT 'abc')",
         },
