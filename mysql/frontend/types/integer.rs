@@ -206,6 +206,23 @@ pub(super) fn cast_as_integer_unsupported(_args: &[Value]) -> Result<Value> {
     ))
 }
 
+/// The operand of a `CAST` to `DOUBLE`, `FLOAT`, `REAL` or `DECIMAL`, which
+/// the temporal types, `ENUM` and `SET` overload to refuse, as MySQL reads
+/// them as numbers Turso does not have.
+pub(super) fn numeric_cast_operand(args: &[Value]) -> Result<Value> {
+    let [operand] = args else {
+        unreachable!("a cast has one operand");
+    };
+    Ok(operand.clone())
+}
+
+pub(super) fn cast_as_number_unsupported(_args: &[Value]) -> Result<Value> {
+    Err(unsupported_value(
+        "CAST of a DATE, DATETIME, TIMESTAMP, TIME, ENUM or SET value to DECIMAL, DOUBLE, FLOAT or REAL"
+            .to_string(),
+    ))
+}
+
 pub(super) fn signed_result(bits: Option<u64>) -> Result<Value> {
     Ok(bits.map_or(Value::Null, |bits| Value::from_i64(bits as i64)))
 }

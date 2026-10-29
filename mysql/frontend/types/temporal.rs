@@ -43,7 +43,10 @@ macro_rules! temporal {
                 "\") RETURNS integer __mysql_cast_as_integer_unsupported ",
                 "FUNCTION __mysql_cast_as_unsigned(\"",
                 $name,
-                "\") RETURNS integer __mysql_cast_as_integer_unsupported"
+                "\") RETURNS integer __mysql_cast_as_integer_unsupported ",
+                "FUNCTION __mysql_numeric_cast_operand(\"",
+                $name,
+                "\") RETURNS integer __mysql_cast_as_number_unsupported"
             ),
         }
     };

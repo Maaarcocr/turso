@@ -733,6 +733,37 @@ fn enum_and_set_columns_store_the_members_a_value_names_or_numbers() -> turso_co
             "{rejected}"
         );
     }
+    assert_eq!(
+        query(&connection, "SELECT id FROM t WHERE id < 4 ORDER BY e, id")?,
+        vec![
+            vec![Value::from_i64(1)],
+            vec![Value::from_i64(3)],
+            vec![Value::from_i64(2)],
+        ]
+    );
+    assert_eq!(
+        query(&connection, "SELECT id FROM t ORDER BY s DESC, id")?,
+        [2, 1, 3, 5, 4].map(|id| vec![Value::from_i64(id)])
+    );
+    for refused in [
+        "SELECT CAST(e AS DECIMAL) FROM t",
+        "SELECT CAST(s AS DOUBLE) FROM t",
+    ] {
+        let error = query(&connection, refused).expect_err(refused);
+        assert!(
+            error.to_string().contains("not supported"),
+            "{refused}: {error}"
+        );
+    }
+    connection.execute("CREATE TABLE animals (e ENUM('rat', 'ox', 'dog') PRIMARY KEY)")?;
+    connection.execute(
+        "CREATE TABLE pets (e ENUM('cat', 'dog', 'rat'), FOREIGN KEY (e) REFERENCES animals (e))",
+    )?;
+    connection.execute("INSERT INTO animals VALUES ('rat')")?;
+    connection.execute("INSERT INTO pets VALUES ('cat')")?;
+    connection
+        .execute("INSERT INTO pets VALUES ('rat')")
+        .expect_err("MySQL matches ENUM keys by member position");
     connection.execute("CREATE TABLE b (s SET('x', 'y') COLLATE utf8mb4_0900_bin)")?;
     connection.execute("INSERT INTO b VALUES ('y,x')")?;
     connection

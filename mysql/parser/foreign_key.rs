@@ -224,10 +224,6 @@ enum StoredMatch {
     /// A `CHAR` and a `VARCHAR` column of one collation: values that do not
     /// end in a space match as Turso matches them.
     UnlessTrailingSpaces,
-    /// `ENUM` or `SET` columns of different members, which MySQL matches by
-    /// their positions: a member declared at the same position by both
-    /// matches as Turso matches it.
-    ByPosition,
     /// Not modeled.
     Unknown,
 }
@@ -245,7 +241,7 @@ fn stored_match(child: &ColumnDefinition, parent: &ColumnDefinition) -> StoredMa
     }
     if let (Some(_), Some(_)) = (&child.members, &parent.members) {
         return if child.base_type() == parent.base_type() {
-            StoredMatch::ByPosition
+            StoredMatch::Values
         } else {
             StoredMatch::Unknown
         };
@@ -447,11 +443,10 @@ pub(crate) fn check_writes(
                             "Cannot add or update a child row: a foreign key constraint fails (`{table}`)"
                         )));
                     }
-                    if !row
+                    if !values
                         .iter()
-                        .zip(&values)
                         .zip(&columns)
-                        .all(|((value, kind), column)| matches_alike(*value, *kind, column))
+                        .all(|(kind, (_, _, matched))| matches_alike(*kind, *matched))
                     {
                         return Err(refused());
                     }
@@ -479,14 +474,9 @@ pub(crate) fn check_writes(
                 if values.contains(&KeyValue::Null) {
                     continue;
                 }
-                let alike =
-                    assigned
-                        .iter()
-                        .zip(&values)
-                        .zip(&columns)
-                        .all(|((value, kind), column)| {
-                            column.2 != StoredMatch::Never && matches_alike(*value, *kind, column)
-                        });
+                let alike = values.iter().zip(&columns).all(|(kind, (_, _, matched))| {
+                    *matched != StoredMatch::Never && matches_alike(*kind, *matched)
+                });
                 if !alike {
                     return Err(refused());
                 }
@@ -499,55 +489,10 @@ pub(crate) fn check_writes(
 
 /// Whether a non-NULL literal key value matches the referenced values in
 /// MySQL as it does in Turso.
-fn matches_alike(
-    value: Option<&ast::Expr>,
-    kind: KeyValue,
-    (child, parent, matched): &(&ColumnDefinition, &ColumnDefinition, StoredMatch),
-) -> bool {
+fn matches_alike(kind: KeyValue, matched: StoredMatch) -> bool {
     match matched {
         StoredMatch::Values | StoredMatch::Unknown | StoredMatch::Never => true,
         StoredMatch::UnlessTrailingSpaces => kind == KeyValue::Plain,
-        StoredMatch::ByPosition => {
-            let (Some(child_members), Some(parent_members)) = (&child.members, &parent.members)
-            else {
-                return false;
-            };
-            let same_at = |position: usize| {
-                child_members
-                    .get(position)
-                    .is_some_and(|member| parent_members.get(position) == Some(member))
-            };
-            let position_of = |text: &str| {
-                child_members
-                    .iter()
-                    .position(|member| member.eq_ignore_ascii_case(text))
-            };
-            match value {
-                Some(ast::Expr::Literal(ast::Literal::String(text))) => {
-                    let Some(text) = crate::stored_table::string_text(text) else {
-                        return false;
-                    };
-                    if child.base_type() == "ENUM" {
-                        position_of(&text).is_some_and(same_at)
-                    } else {
-                        text.is_empty()
-                            || text
-                                .split(',')
-                                .all(|member| position_of(member).is_some_and(same_at))
-                    }
-                }
-                Some(ast::Expr::Literal(ast::Literal::Numeric(number)))
-                    if child.base_type() == "ENUM" =>
-                {
-                    number
-                        .parse::<usize>()
-                        .ok()
-                        .and_then(|number| number.checked_sub(1))
-                        .is_some_and(same_at)
-                }
-                _ => false,
-            }
-        }
     }
 }
 

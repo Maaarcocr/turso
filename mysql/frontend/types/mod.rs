@@ -98,7 +98,8 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_DOUBLE", 4) => float::assign_double,
         ("__MYSQL_ASSIGN_BIT", 2) => bit::assign_bit,
         ("__MYSQL_ASSIGN_GEOMETRY", 1) => spatial::assign_geometry,
-        ("__MYSQL_ASSIGN_ENUM", 3) => labels::assign_enum,
+        ("__MYSQL_ASSIGN_ENUM", 2) => labels::assign_enum,
+        ("__MYSQL_ASSIGN_ENUM_EXACT", 2) => labels::assign_enum_exact,
         ("__MYSQL_ASSIGN_JSON", 1) => crate::functions::assign_json,
         ("__MYSQL_ASSIGN_DATE", 1) => temporal::assign_date,
         ("__MYSQL_ASSIGN_DATETIME", 2) => temporal::assign_datetime,
@@ -111,8 +112,11 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
             temporal::dated_time_comparison
         }
         ("__MYSQL_LABELS_LESS", 2) => labels::less,
+        ("__MYSQL_NUMERIC_CAST_OPERAND", 1) => integer::numeric_cast_operand,
+        ("__MYSQL_CAST_AS_NUMBER_UNSUPPORTED", 1) => integer::cast_as_number_unsupported,
         ("__MYSQL_LABELS_EQUAL", 2) => labels::equal,
-        ("__MYSQL_ASSIGN_SET", 3) => labels::assign_set,
+        ("__MYSQL_ASSIGN_SET", 2) => labels::assign_set,
+        ("__MYSQL_ASSIGN_SET_EXACT", 2) => labels::assign_set_exact,
         _ => return decimal::function(name, arg_count),
     };
     Some(conversion)

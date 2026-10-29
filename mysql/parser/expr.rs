@@ -3168,7 +3168,10 @@ fn translate_cast(
         other => return Err(unsupported_cast(other)),
     };
     Ok(ast::Expr::cast(
-        translate_in(expr, operand_context, context)?,
+        function_call(
+            "__mysql_numeric_cast_operand",
+            vec![translate_in(expr, operand_context, context)?],
+        ),
         Some(target),
     ))
 }
