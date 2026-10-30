@@ -1756,6 +1756,13 @@ fn translate_selected(
                 ast::Expr::Literal(ast::Literal::Numeric(u8::from(unsigned).to_string())),
             ],
         )),
+        Some(Failure::IncorrectTemporal { type_name, text }) => Ok(crate::expr::function_call(
+            "__mysql_incorrect_temporal",
+            vec![
+                crate::expr::string_expr(type_name),
+                crate::expr::string_expr(text),
+            ],
+        )),
         Some(Failure::EmptyRegexp) => Ok(crate::expr::function_call(
             "__mysql_empty_regexp",
             vec![crate::expr::string_expr("")],

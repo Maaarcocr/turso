@@ -1850,6 +1850,64 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn strings_compare_with_dates_and_timestamps_as_datetimes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        ("SELECT '0000-01-03' != TIMESTAMP '2024-12-30 10:34:58'", 1),
+        ("SELECT '3001-02-19 00:00:00' <= DATE '2000-01-01'", 0),
+        ("SELECT DATE '2000-01-01' < '2000-01-01 00:00:01'", 1),
+        (
+            "SELECT '20000101103458' = TIMESTAMP '2024-12-30 10:34:58'",
+            0,
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58.978654' > '20000101103458.123456'",
+            1,
+        ),
+        (
+            "SELECT TIMESTAMP '2020-01-02 03:04:05.5' = '2020-01-02 03:04:05.50'",
+            1,
+        ),
+        ("SELECT 0 AND DATE '2000-01-01' = 'foo'", 0),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::from_i64(expected)]],
+            "{sql}"
+        );
+    }
+    for (sql, message) in [
+        (
+            "SELECT DATE '2000-01-01' <=> _utf8 'foobar'",
+            "ERROR 1525 (HY000): Incorrect DATE value: 'foobar'",
+        ),
+        (
+            "SELECT '20000101foo' <=> DATE '2000-01-01'",
+            "ERROR 1525 (HY000): Incorrect DATE value: '20000101foo'",
+        ),
+        (
+            "SELECT '-1.5' <= TIMESTAMP '2000-01-01 10:34:58.123456'",
+            "ERROR 1525 (HY000): Incorrect DATETIME value: '-1.5'",
+        ),
+        (
+            "SELECT '0000-02-29' >= TIMESTAMP '2024-12-30 10:34:58'",
+            "ERROR 1525 (HY000): Incorrect DATETIME value: '0000-02-29'",
+        ),
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains(message), "{sql}: {error}");
+    }
+    for refused in [
+        "SELECT ' 0 ' = TIMESTAMP '2000-01-01 10:34:58'",
+        "SELECT '2000-00-01' = DATE '2000-01-01'",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn temporal_literals_of_different_types_compare_as_datetimes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [

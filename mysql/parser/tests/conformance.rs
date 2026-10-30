@@ -1548,7 +1548,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "temporal compared with an invalid string",
-            sql: "SELECT DATE '2020-01-01' = 'x'",
+            sql: "SELECT DATE '2020-01-01' = 'x' FROM t",
         },
         SqlCase {
             name: "collations of a function result and a string",

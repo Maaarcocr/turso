@@ -2104,6 +2104,15 @@ fn comparison(
             double_literal(rhs),
         ));
     }
+    if explicit.is_none() {
+        if let Some((lhs, rhs)) = compared_datetime_texts(left, right) {
+            return Ok(ast::Expr::binary(
+                string_expr(&lhs),
+                operator,
+                string_expr(&rhs),
+            ));
+        }
+    }
     let lhs = translate_compared(left, right, context)?;
     let rhs = translate_compared(right, left, context)?;
     let time_with_text = |time: &Expr, text: &Expr| {
@@ -2403,6 +2412,34 @@ fn translate_compared_value(
         }
     }
     translate_in(expr, comparison_context(other_side), context)
+}
+
+/// The DATETIME texts MySQL compares a `DATE` or `TIMESTAMP` literal and a
+/// string literal it converts as, `YYYY-MM-DD HH:MM:SS.ffffff`, in operand
+/// order (`DATE '2000-01-01' < '2000-01-01 00:00:01'`).
+fn compared_datetime_texts(left: &Expr, right: &Expr) -> Option<(String, String)> {
+    let datetime = |temporal: &Expr, string: &Expr| -> Option<(String, String)> {
+        let Expr::TypedString(typed) = unnested(temporal) else {
+            return None;
+        };
+        if !matches!(
+            typed.data_type,
+            DataType::Date | DataType::Timestamp(None, TimezoneInfo::None)
+        ) {
+            return None;
+        }
+        let crate::literal::ComparedDatetime::Fixed(own) =
+            crate::literal::compared_datetime(typed)?
+        else {
+            return None;
+        };
+        let text = crate::invalid_json::temporal_compared_text(string)?;
+        match crate::literal::compared_string_datetime(text)? {
+            crate::literal::ComparedString::Datetime(other) => Some((own, other)),
+            crate::literal::ComparedString::Rejected => None,
+        }
+    };
+    datetime(left, right).or_else(|| datetime(right, left).map(|(own, other)| (other, own)))
 }
 
 /// A string literal after a `_utf8`, `_utf8mb3` or `_utf8mb4` introducer.
