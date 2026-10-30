@@ -6,6 +6,7 @@ use turso_parser::ast;
 
 pub(crate) fn translate_create_view(
     create_view: &CreateView,
+    environment: &dyn crate::Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     let CreateView {
         or_alter,
@@ -42,6 +43,16 @@ pub(crate) fn translate_create_view(
         || to.is_some()
     {
         return Err(unsupported(&format!("view clause in `{create_view}`")));
+    }
+    if columns.is_empty() {
+        crate::column_names::check_query(query, Some(environment), &[])?;
+    } else {
+        crate::column_names::check_names(
+            &columns
+                .iter()
+                .map(|column| &column.name)
+                .collect::<Vec<_>>(),
+        )?;
     }
     let columns = columns
         .iter()

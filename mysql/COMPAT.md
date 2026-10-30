@@ -162,7 +162,10 @@ or (with an inner join's `ON`) with a column that is grouped or dependent;
 another column fails with MySQL's error (1055, or 1140 without `GROUP BY`).
 The check reads the session's tables, so a grouped `SELECT` over a view, a
 derived table, an outer join or columns it cannot resolve is refused when it
-may use a column outside `GROUP BY`.
+may use a column outside `GROUP BY`. A `GROUP BY` name that is both a select
+alias and a column of the `FROM` groups by the column, as in MySQL (`SELECT b
+- 1 AS a FROM t GROUP BY a` fails with 1055 when `t` has a column `a`); when the
+check cannot read the tables and the alias decides it, it is refused.
 
 A name in `HAVING` resolves as in MySQL: inside an aggregate it names a column
 of the `FROM` before a select alias, and outside one a grouped column before
@@ -184,6 +187,16 @@ list has `*` or the `SELECT` is a subquery with no `FROM` (where it names an
 outer column), an alias of a window function, a subquery in `HAVING` that
 names an alias, and expressions other than operators, `IN`, `BETWEEN`, `LIKE`,
 `CASE`, casts and plain function calls.
+
+A derived table, common table expression or view that names a column twice
+fails with MySQL's error 1060: in its column list, or, without one, in the
+select list of its query (of the first `SELECT` of a set operation), where `*`
+names the columns of the `FROM` tables in order and names compare without
+case. An unnamed expression is named by its text as written, which lowering
+does not keep, so one that prints like another name is refused. A `*` whose
+columns lowering cannot know (over a view, a common table expression, a
+`USING` or `NATURAL` join or a table function) is not checked, and may give
+rows where MySQL fails with 1060.
 
 Statements MySQL rejects when it resolves names fail with MySQL's error: two
 tables of one `FROM` with the same name or alias (1066; a derived table's

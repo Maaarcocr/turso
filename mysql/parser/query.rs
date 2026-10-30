@@ -256,6 +256,11 @@ pub(crate) fn translate_cte(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    if alias.columns.is_empty() {
+        crate::column_names::check_query(query, context.environment, &context.common_tables)?;
+    } else {
+        crate::column_names::check_column_list(&alias.columns)?;
+    }
     Ok(ast::CommonTableExpr {
         tbl_name: translate_identifier(name)?,
         columns,
@@ -659,8 +664,38 @@ fn check_only_full_group_by(
         })
         .collect::<Vec<_>>();
     let mut grouping = group_by.iter().collect::<Vec<_>>();
+    let mut unverified_aliases = Vec::new();
     for term in group_by {
-        grouping.extend(selected_by_group_term(term, select));
+        let Some(selected) = selected_by_group_term(term, select) else {
+            continue;
+        };
+        let Some(name) = group_term_name(term) else {
+            grouping.push(selected);
+            continue;
+        };
+        match from_has_column(select, environment, &name.value)? {
+            Some(true) => {}
+            Some(false) => grouping.push(selected),
+            None => unverified_aliases.push(selected),
+        }
+    }
+    if !unverified_aliases.is_empty() {
+        let without = Grouping {
+            exprs: grouping.clone(),
+            aliases: &[],
+            table_names: &[],
+        };
+        let mut with = without.clone();
+        with.exprs.extend(unverified_aliases.iter().copied());
+        let differs = projections.iter().flatten().any(|expr| {
+            uses_ungrouped_column(expr, &without) != uses_ungrouped_column(expr, &with)
+        });
+        if differs {
+            return Err(unsupported(format!(
+                "GROUP BY naming a select alias that may also name a column, which MySQL groups by the column, `{select}`"
+            )));
+        }
+        grouping.extend(unverified_aliases);
     }
     let groups = Grouping {
         exprs: grouping,
@@ -1251,6 +1286,89 @@ fn fixed_by_the_where_clause<'a>(condition: &'a Expr, fixed: &mut Vec<&'a Expr>)
 fn projected_expr(item: &SelectItem) -> Option<&Expr> {
     match item {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
+        _ => None,
+    }
+}
+
+/// Whether a table of the `FROM` of `select` has a column `name`: a base
+/// table of the session, or a derived table whose select list names its
+/// columns. `None` when the columns of a table are not known.
+fn from_has_column(
+    select: &Select,
+    environment: Option<&dyn Environment>,
+    name: &str,
+) -> Result<Option<bool>, MysqlParserError> {
+    let named = |column: &str| column.eq_ignore_ascii_case(name);
+    let mut found = false;
+    for table in &select.from {
+        for relation in
+            std::iter::once(&table.relation).chain(table.joins.iter().map(|join| &join.relation))
+        {
+            let (alias, has) = match relation {
+                TableFactor::Table {
+                    name: table_name,
+                    alias,
+                    args: None,
+                    ..
+                } => {
+                    let has = match (table_name.0.as_slice(), environment) {
+                        ([ObjectNamePart::Identifier(table_name)], Some(environment)) => {
+                            environment
+                                .columns_of(&table_name.value)?
+                                .map(|columns| columns.iter().any(|facts| named(&facts.name)))
+                        }
+                        _ => None,
+                    };
+                    (alias, has)
+                }
+                TableFactor::Derived {
+                    subquery, alias, ..
+                } => {
+                    let has = match subquery.body.as_ref() {
+                        SetExpr::Select(inner) => inner
+                            .projection
+                            .iter()
+                            .map(|item| match item {
+                                SelectItem::ExprWithAlias { alias, .. } => {
+                                    Some(named(&alias.value))
+                                }
+                                SelectItem::UnnamedExpr(Expr::Identifier(column)) => {
+                                    Some(named(&column.value))
+                                }
+                                SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts)) => {
+                                    parts.last().map(|column| named(&column.value))
+                                }
+                                SelectItem::UnnamedExpr(expr) => Some(named(&expr.to_string())),
+                                _ => None,
+                            })
+                            .try_fold(false, |found, has| has.map(|has| found || has)),
+                        _ => None,
+                    };
+                    (alias, has)
+                }
+                _ => return Ok(None),
+            };
+            let has = match alias {
+                Some(alias) if !alias.columns.is_empty() => {
+                    alias.columns.iter().any(|column| named(&column.name.value))
+                }
+                _ => match has {
+                    Some(has) => has,
+                    None => return Ok(None),
+                },
+            };
+            found |= has;
+        }
+    }
+    Ok(Some(found))
+}
+
+/// The name of a `GROUP BY` term that is a bare (perhaps parenthesized)
+/// identifier, which MySQL resolves to a column of the `FROM` before a select
+/// alias.
+fn group_term_name(term: &Expr) -> Option<&sqlparser::ast::Ident> {
+    match without_parentheses(term) {
+        Expr::Identifier(name) => Some(name),
         _ => None,
     }
 }
@@ -1924,6 +2042,16 @@ fn translate_table_factor(
             alias,
             sample: None,
         } => {
+            match alias {
+                Some(alias) if !alias.columns.is_empty() => {
+                    crate::column_names::check_column_list(&alias.columns)?;
+                }
+                _ => crate::column_names::check_query(
+                    subquery,
+                    context.environment,
+                    &context.common_tables,
+                )?,
+            }
             context.lateral_depth += usize::from(*lateral);
             let select = translate_subquery(subquery, context);
             context.lateral_depth -= usize::from(*lateral);
