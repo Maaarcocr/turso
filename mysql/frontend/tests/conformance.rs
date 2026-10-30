@@ -1349,6 +1349,28 @@ fn group_by_a_name_of_a_column_and_an_alias_groups_by_the_column() -> turso_core
 }
 
 #[test]
+fn derived_tables_reject_a_repeated_column_name() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE m (i INT, s TEXT)")?;
+    for sql in [
+        "SELECT i FROM (SELECT * FROM m a JOIN m b ON a.i = b.i) dt",
+        "SELECT * FROM (SELECT 1 AS a, 2 AS A) t",
+        "SELECT * FROM (SELECT 1, 2) t (x, x)",
+        "WITH c AS (SELECT a.i, b.i FROM m a JOIN m b) SELECT * FROM c",
+        "CREATE VIEW v AS SELECT * FROM m a JOIN m b",
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains("ERROR 1060 "), "{sql}: {error}");
+    }
+    assert!(query(
+        &connection,
+        "SELECT * FROM (SELECT a.i, b.s FROM m a JOIN m b) t"
+    )?
+    .is_empty());
+    Ok(())
+}
+
+#[test]
 fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [

@@ -831,8 +831,8 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT DISTINCT 1", "SELECT DISTINCT 1"),
         ("SELECT 1 GROUP BY 1", "SELECT 1 GROUP BY 1"),
         (
-            "SELECT a DIV 2 AS x, COUNT(*) FROM t GROUP BY x HAVING COUNT(*) > 1",
-            "SELECT CAST (a / 2 AS INTEGER) AS x, COUNT (*) FROM t GROUP BY x HAVING COUNT (*) > 1",
+            "SELECT a DIV 2 AS x, COUNT(*) FROM t GROUP BY 1 HAVING COUNT(*) > 1",
+            "SELECT CAST (a / 2 AS INTEGER) AS x, COUNT (*) FROM t GROUP BY 1 HAVING COUNT (*) > 1",
         ),
         ("SELECT 1 HAVING TRUE", "SELECT 1 WHERE TRUE"),
         ("SELECT 1 REGEXP NULL", "SELECT 1 REGEXP (NULL)"),

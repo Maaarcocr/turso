@@ -188,6 +188,16 @@ outer column), an alias of a window function, a subquery in `HAVING` that
 names an alias, and expressions other than operators, `IN`, `BETWEEN`, `LIKE`,
 `CASE`, casts and plain function calls.
 
+A derived table, common table expression or view that names a column twice
+fails with MySQL's error 1060: in its column list, or, without one, in the
+select list of its query (of the first `SELECT` of a set operation), where `*`
+names the columns of the `FROM` tables in order and names compare without
+case. An unnamed expression is named by its text as written, which lowering
+does not keep, so one that prints like another name is refused. A `*` whose
+columns lowering cannot know (over a view, a common table expression, a
+`USING` or `NATURAL` join or a table function) is not checked, and may give
+rows where MySQL fails with 1060.
+
 Statements MySQL rejects when it resolves names fail with MySQL's error: two
 tables of one `FROM` with the same name or alias (1066; a derived table's
 alias is apart from the names of tables, and a table named with its database

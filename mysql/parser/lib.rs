@@ -5,6 +5,7 @@ use thiserror::Error;
 use turso_parser::ast;
 
 mod bitwise;
+mod column_names;
 pub mod datetime;
 mod ddl;
 mod ddl_alter;
@@ -334,7 +335,9 @@ fn translate_other(
         }
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement, environment),
-        Statement::CreateView(create_view) => ddl_view::translate_create_view(create_view),
+        Statement::CreateView(create_view) => {
+            ddl_view::translate_create_view(create_view, environment)
+        }
         Statement::Set(set) => session::translate_set(set, in_transaction),
         Statement::ShowTables {
             terse: false,

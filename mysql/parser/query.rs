@@ -256,6 +256,11 @@ pub(crate) fn translate_cte(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    if alias.columns.is_empty() {
+        crate::column_names::check_query(query, context.environment, &context.common_tables)?;
+    } else {
+        crate::column_names::check_column_list(&alias.columns)?;
+    }
     Ok(ast::CommonTableExpr {
         tbl_name: translate_identifier(name)?,
         columns,
@@ -2037,6 +2042,16 @@ fn translate_table_factor(
             alias,
             sample: None,
         } => {
+            match alias {
+                Some(alias) if !alias.columns.is_empty() => {
+                    crate::column_names::check_column_list(&alias.columns)?;
+                }
+                _ => crate::column_names::check_query(
+                    subquery,
+                    context.environment,
+                    &context.common_tables,
+                )?,
+            }
             context.lateral_depth += usize::from(*lateral);
             let select = translate_subquery(subquery, context);
             context.lateral_depth -= usize::from(*lateral);
