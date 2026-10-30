@@ -658,10 +658,6 @@ fn check_only_full_group_by(
             _ => None,
         })
         .collect::<Vec<_>>();
-    let sources = match environment {
-        Some(environment) if !select.from.is_empty() => Sources::of(select, environment)?,
-        _ => None,
-    };
     let mut grouping = group_by.iter().collect::<Vec<_>>();
     let mut unverified_aliases = Vec::new();
     for term in group_by {
@@ -672,22 +668,9 @@ fn check_only_full_group_by(
             grouping.push(selected);
             continue;
         };
-        if select.from.is_empty() {
-            grouping.push(selected);
-            continue;
-        }
-        match &sources {
-            Some(sources) => {
-                let shadowed = sources.tables.iter().any(|source| {
-                    source
-                        .columns
-                        .iter()
-                        .any(|facts| facts.name.eq_ignore_ascii_case(&name.value))
-                });
-                if !shadowed {
-                    grouping.push(selected);
-                }
-            }
+        match from_has_column(select, environment, &name.value)? {
+            Some(true) => {}
+            Some(false) => grouping.push(selected),
             None => unverified_aliases.push(selected),
         }
     }
@@ -1300,6 +1283,79 @@ fn projected_expr(item: &SelectItem) -> Option<&Expr> {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
         _ => None,
     }
+}
+
+/// Whether a table of the `FROM` of `select` has a column `name`: a base
+/// table of the session, or a derived table whose select list names its
+/// columns. `None` when the columns of a table are not known.
+fn from_has_column(
+    select: &Select,
+    environment: Option<&dyn Environment>,
+    name: &str,
+) -> Result<Option<bool>, MysqlParserError> {
+    let named = |column: &str| column.eq_ignore_ascii_case(name);
+    let mut found = false;
+    for table in &select.from {
+        for relation in
+            std::iter::once(&table.relation).chain(table.joins.iter().map(|join| &join.relation))
+        {
+            let (alias, has) = match relation {
+                TableFactor::Table {
+                    name: table_name,
+                    alias,
+                    args: None,
+                    ..
+                } => {
+                    let has = match (table_name.0.as_slice(), environment) {
+                        ([ObjectNamePart::Identifier(table_name)], Some(environment)) => {
+                            environment
+                                .columns_of(&table_name.value)?
+                                .map(|columns| columns.iter().any(|facts| named(&facts.name)))
+                        }
+                        _ => None,
+                    };
+                    (alias, has)
+                }
+                TableFactor::Derived {
+                    subquery, alias, ..
+                } => {
+                    let has = match subquery.body.as_ref() {
+                        SetExpr::Select(inner) => inner
+                            .projection
+                            .iter()
+                            .map(|item| match item {
+                                SelectItem::ExprWithAlias { alias, .. } => {
+                                    Some(named(&alias.value))
+                                }
+                                SelectItem::UnnamedExpr(Expr::Identifier(column)) => {
+                                    Some(named(&column.value))
+                                }
+                                SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts)) => {
+                                    parts.last().map(|column| named(&column.value))
+                                }
+                                SelectItem::UnnamedExpr(expr) => Some(named(&expr.to_string())),
+                                _ => None,
+                            })
+                            .try_fold(false, |found, has| has.map(|has| found || has)),
+                        _ => None,
+                    };
+                    (alias, has)
+                }
+                _ => return Ok(None),
+            };
+            let has = match alias {
+                Some(alias) if !alias.columns.is_empty() => {
+                    alias.columns.iter().any(|column| named(&column.name.value))
+                }
+                _ => match has {
+                    Some(has) => has,
+                    None => return Ok(None),
+                },
+            };
+            found |= has;
+        }
+    }
+    Ok(Some(found))
 }
 
 /// The name of a `GROUP BY` term that is a bare (perhaps parenthesized)
