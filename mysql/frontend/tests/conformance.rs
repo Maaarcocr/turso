@@ -1371,6 +1371,49 @@ fn derived_tables_reject_a_repeated_column_name() -> turso_core::Result<()> {
 }
 
 #[test]
+fn weight_strings_of_literals_are_their_sort_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        (
+            "SELECT HEX(WEIGHT_STRING(1))",
+            Value::build_text("8000000000000001"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(-1))",
+            Value::build_text("7FFFFFFFFFFFFFFF"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(18446744073709551615 AS CHAR(3)))",
+            Value::build_text("FFFFFFFFFFFFFFFF"),
+        ),
+        ("SELECT WEIGHT_STRING(1.5)", Value::Null),
+        (
+            "SELECT HEX(WEIGHT_STRING(_latin1 'ab1'))",
+            Value::build_text("414231"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(-12 AS BINARY(2)))",
+            Value::build_text("2D31"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(DATE '2000-01-01' AS BINARY(4)))",
+            Value::build_text("32303030"),
+        ),
+    ] {
+        assert_eq!(query(&connection, sql)?, vec![vec![expected]], "{sql}");
+    }
+    for refused in [
+        "SELECT WEIGHT_STRING('a')",
+        "SELECT WEIGHT_STRING('ab' AS BINARY(4))",
+        "SELECT WEIGHT_STRING(DATE '2000-1-1' AS BINARY(2))",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [
