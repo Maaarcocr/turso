@@ -1414,6 +1414,25 @@ fn weight_strings_of_literals_are_their_sort_bytes() -> turso_core::Result<()> {
 }
 
 #[test]
+fn counts_compare_with_strings_as_numbers() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE c (s TEXT)")?;
+    connection.execute("INSERT INTO c VALUES ('1'), ('22')")?;
+    assert_eq!(
+        query(&connection, "SELECT COUNT(*) AS a FROM c HAVING a = '2'")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(*) < '10abc', LENGTH(MAX(s)) = '2' FROM c"
+        )?,
+        vec![vec![Value::from_i64(1), Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [

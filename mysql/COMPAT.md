@@ -175,6 +175,14 @@ select alias that may also name a column is refused over a view, a derived
 table, a common table expression or columns of several tables, and when it
 holds a subquery.
 
+A string literal compared with a `COUNT`, a length function (`LENGTH`,
+`CHAR_LENGTH`, `OCTET_LENGTH`, `BIT_LENGTH`), a ranking window function or a
+`HAVING` alias of one becomes MySQL's DOUBLE of the string, as MySQL compares
+a number with a string (`COUNT(*) = '2'` is true for two rows). Beside a
+column, a string literal stays a string, which the column's type converts;
+beside another computed number, Turso compares a number with a string as
+SQLite does (every number below every string), unlike MySQL.
+
 `x REGEXP ''` and `x NOT REGEXP ''` are `__mysql_empty_regexp(x)`, which
 fails with MySQL's error 3685 when it is evaluated, as MySQL rejects the empty
 pattern then (not on an empty table). A `NULL` or binary subject is refused.

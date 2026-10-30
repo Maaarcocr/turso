@@ -1974,11 +1974,46 @@ fn translate_compared(
     translated
 }
 
+/// Whether `expr` always has an integer value (or `NULL`) in Turso as in
+/// MySQL: a `COUNT`, a length or a ranking window function, or one of
+/// `aliases`, which name such expressions.
+pub(crate) fn is_integer_valued(expr: &Expr, aliases: &[String]) -> bool {
+    match unnested(expr) {
+        Expr::Function(function) => {
+            let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+                return false;
+            };
+            name.quote_style.is_none()
+                && matches!(
+                    name.value.to_ascii_uppercase().as_str(),
+                    "COUNT"
+                        | "LENGTH"
+                        | "OCTET_LENGTH"
+                        | "CHAR_LENGTH"
+                        | "CHARACTER_LENGTH"
+                        | "BIT_LENGTH"
+                        | "ROW_NUMBER"
+                        | "RANK"
+                        | "DENSE_RANK"
+                )
+        }
+        Expr::Identifier(name) => aliases
+            .iter()
+            .any(|alias| alias.eq_ignore_ascii_case(&name.value)),
+        _ => false,
+    }
+}
+
 fn translate_compared_value(
     expr: &Expr,
     other_side: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(value) = arithmetic_text_double(expr) {
+        if is_integer_valued(other_side, &context.integer_aliases) {
+            return Ok(double_literal(value));
+        }
+    }
     if let (Some(own), Some(other)) = (temporal_type(expr), temporal_type(other_side)) {
         let literal_context = match (own, other) {
             (DataType::Time(..), DataType::Time(..)) => Context::Number,
