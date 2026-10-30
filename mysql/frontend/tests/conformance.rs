@@ -1850,6 +1850,48 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn casts_of_temporal_json_values_convert_as_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, shown) in [
+        (
+            "SELECT CAST(CAST(TIME '-101:34:58' AS JSON) AS TIME(4))",
+            "-05:34:58.0000",
+        ),
+        (
+            "SELECT CAST(CAST(TIME '32:34:58.5' AS JSON) AS TIME)",
+            "00:34:59",
+        ),
+        (
+            "SELECT CAST(CAST(DATE '2000-01-01' AS JSON) AS DATETIME(4))",
+            "2000-01-01 00:00:00.0000",
+        ),
+        (
+            "SELECT CONVERT(CAST(TIME '5 12:34:58' AS JSON), TIME(4))",
+            "04:34:58.0000",
+        ),
+        (
+            "SELECT CAST(CAST(CAST(DATE '2000-01-02' AS JSON) AS JSON) AS CHAR(16))",
+            "\"2000-01-02\"",
+        ),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::build_text(shown)]],
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(CAST(TIMESTAMP '2024-12-30 10:34:58' AS JSON) AS TIME), \
+             CAST(CAST(CAST(TIME '12:34:58' AS JSON) AS JSON) AS SIGNED)"
+        )?,
+        vec![vec![Value::Null, Value::from_i64(0)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn comparisons_read_nul_binary_literals_as_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

@@ -314,10 +314,17 @@ fn compared_operand(
     }
 }
 
+/// The temporal literal whose JSON value `expr` is, through any number of
+/// casts to JSON (`CAST(CAST(TIME '12:34:56' AS JSON) AS JSON)`).
+pub(crate) fn json_temporal_literal(expr: &Expr) -> Option<&sqlparser::ast::TypedString> {
+    match unnested(json_cast_operand(expr)?) {
+        Expr::TypedString(typed) => Some(typed),
+        other => json_temporal_literal(other),
+    }
+}
+
 pub(crate) fn temporal_json_text(expr: &Expr) -> Option<ast::Expr> {
-    let Expr::TypedString(typed) = unnested(json_cast_operand(expr)?) else {
-        return None;
-    };
+    let typed = json_temporal_literal(expr)?;
     let json = format!("\"{}\"", temporal_literal(typed)?.json_text?);
     Some(function_call(
         "__mysql_cast_as_json",
