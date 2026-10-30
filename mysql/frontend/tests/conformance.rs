@@ -1902,6 +1902,72 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn truncate_deletes_every_row_where_it_does_what_delete_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE p (id INT PRIMARY KEY)")?;
+    connection
+        .execute("CREATE TABLE c (id INT PRIMARY KEY, p INT, FOREIGN KEY (p) REFERENCES p (id))")?;
+    connection.execute("CREATE TABLE a (id INT AUTO_INCREMENT PRIMARY KEY)")?;
+    connection.execute("INSERT INTO p VALUES (1), (2)")?;
+    connection.execute("INSERT INTO c VALUES (1, 1), (2, 2)")?;
+    connection.execute("TRUNCATE TABLE c")?;
+    assert_eq!(
+        query(&connection, "SELECT COUNT(*) FROM c")?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    for refused in ["TRUNCATE p", "TRUNCATE a"] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("is not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn show_variables_shows_one_known_system_variable() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(&connection, "SHOW SESSION VARIABLES LIKE 'SQL_MODE'")?,
+        vec![vec![
+            Value::build_text("sql_mode"),
+            Value::build_text(
+                "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,\
+                 ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+            ),
+        ]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SHOW VARIABLES WHERE Variable_name = 'character_set_connection'"
+        )?,
+        vec![vec![
+            Value::build_text("character_set_connection"),
+            Value::build_text("utf8mb4"),
+        ]]
+    );
+    assert_eq!(
+        query(&connection, "SHOW VARIABLES LIKE 'autocommit'")?,
+        vec![vec![
+            Value::build_text("autocommit"),
+            Value::build_text("ON")
+        ]]
+    );
+    for refused in [
+        "SHOW VARIABLES LIKE 'char%'",
+        "SHOW GLOBAL VARIABLES LIKE 'sql_mode'",
+        "SHOW VARIABLES LIKE 'innodb_page_size'",
+        "SHOW VARIABLES",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(
+            error.contains("unsupported MySQL syntax"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn uuids_are_new_version_1_uuids_also_as_defaults() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

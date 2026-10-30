@@ -1589,7 +1589,7 @@ fn known_parser_gaps_return_errors() {
 #[test]
 fn lowering_rejects_unsupported_statement_families() {
     let cases = [
-        "TRUNCATE TABLE users",
+        "TRUNCATE TABLE users, orders",
         "CREATE OR REPLACE VIEW v AS SELECT 1",
         "DROP VIEW a, b",
         "ALTER TABLE users ADD PRIMARY KEY (name)",

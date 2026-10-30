@@ -347,7 +347,13 @@ fn translate_other(
             external: false,
             show_options,
         } => show::translate_show_tables(*full, show_options),
+        Statement::ShowVariables {
+            filter,
+            global: false,
+            session: _,
+        } => show::translate_show_variables(filter.as_ref()),
         Statement::Call(procedure) => Err(call_of_missing_procedure(&procedure.name)),
+        Statement::Truncate(truncate) => ddl_alter::translate_truncate(truncate, environment),
         _ => {
             let text = statement.to_string();
             let keyword = text.split_whitespace().next().unwrap_or_default();

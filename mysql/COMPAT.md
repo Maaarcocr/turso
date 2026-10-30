@@ -554,6 +554,12 @@ that reads the target table (MySQL's error 1093); and the `LOW_PRIORITY`,
 their rows, `CREATE TABLE` and `ALTER TABLE ... RENAME COLUMN` refuse a column
 named `rowid`, which MySQL allows.
 
+`TRUNCATE [TABLE] t` lowers to `DELETE FROM t`. It is refused where the two
+differ: inside a transaction (which `TRUNCATE` commits), for a table with an
+`AUTO_INCREMENT` column (whose counter `TRUNCATE` resets), with triggers
+(which `TRUNCATE` does not fire), or referenced by a foreign key (which MySQL
+refuses with 1701, or ignores for one of the table itself).
+
 ## `SHOW TABLES`
 
 `SHOW [FULL] TABLES [LIKE 'pattern']` lists the tables and views of the
@@ -564,6 +570,19 @@ default `lower_case_table_names = 0`. `FULL` adds `Table_type` (`BASE TABLE`
 or `VIEW`). The column is named `Tables_in_main`, after Turso's name for the
 database. A pattern with a `\` escape, `WHERE`, `FROM`/`IN` and the other
 `SHOW` statements are refused.
+
+## `SHOW VARIABLES`
+
+`SHOW [SESSION] VARIABLES LIKE 'name'` and `SHOW [SESSION] VARIABLES WHERE
+Variable_name = 'name'` of a system variable that `@@name` reads (see Session
+settings) give one row of `Variable_name` and `Value`, the value as MySQL
+shows it there (`ON` or `OFF` for `autocommit`, `unique_checks`,
+`explicit_defaults_for_timestamp`, `sql_auto_is_null`, `transaction_read_only`
+and `sql_safe_updates`). The name compares without case, and a `_` in the
+pattern matches itself, as no other MySQL variable differs from a known one
+only there. Refused: `GLOBAL`, a pattern with `%` or an escape, another
+`WHERE`, no filter, and other variables, since those may match variables the
+frontend does not know.
 
 ## Transactions
 

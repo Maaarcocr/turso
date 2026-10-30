@@ -173,6 +173,65 @@ pub(crate) fn translate_rename_table(
     }))
 }
 
+/// `TRUNCATE [TABLE] t` as `DELETE FROM t`, which leaves the table as
+/// MySQL's does when it has no `AUTO_INCREMENT` counter to reset, no
+/// triggers (which `TRUNCATE` does not fire) and no foreign key that
+/// references it (MySQL refuses those, or ignores them for one of the table
+/// itself, where `DELETE` checks them). Inside a transaction, which `TRUNCATE`
+/// commits first, it is refused before this.
+pub(crate) fn translate_truncate(
+    truncate: &sqlparser::ast::Truncate,
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
+    let sqlparser::ast::Truncate {
+        table_names,
+        partitions,
+        table: _,
+        if_exists,
+        identity,
+        cascade,
+        on_cluster,
+    } = truncate;
+    let refused = |reason: &str| {
+        MysqlParserError::Unsupported(format!("`{truncate}`, {reason}, is not lowered yet"))
+    };
+    let [target] = table_names.as_slice() else {
+        return Err(refused("which names several tables"));
+    };
+    if partitions.is_some()
+        || *if_exists
+        || identity.is_some()
+        || cascade.is_some()
+        || on_cluster.is_some()
+        || target.only
+        || target.has_asterisk
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "`{truncate}` is not MySQL syntax"
+        )));
+    }
+    let name = translate_ddl_name(&target.name)?;
+    let table = name.as_str();
+    if let Some(columns) = environment.columns_of(table)? {
+        if columns.iter().any(|column| column.auto_increment) {
+            return Err(refused("which resets the AUTO_INCREMENT counter"));
+        }
+        if !environment.triggers_on(table)?.is_empty() {
+            return Err(refused("of a table with triggers"));
+        }
+        if !environment.foreign_keys_to(table)?.is_empty() {
+            return Err(refused("of a table a foreign key references"));
+        }
+    }
+    Ok(ast::Stmt::Delete {
+        with: None,
+        tbl_name: ast::QualifiedName::single(name),
+        indexed: None,
+        where_clause: None,
+        returning: Vec::new(),
+    })
+}
+
 pub(crate) fn translate_drop(
     statement: &Statement,
     environment: &dyn Environment,
