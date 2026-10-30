@@ -786,6 +786,121 @@ pub(crate) fn compared_datetime(typed: &TypedString) -> Option<ComparedDatetime>
     })
 }
 
+/// How MySQL reads a string compared with a `DATE` or `TIMESTAMP` literal.
+pub(crate) enum ComparedString {
+    /// The DATETIME it converts the string to, `YYYY-MM-DD HH:MM:SS.ffffff`.
+    Datetime(String),
+    /// A string MySQL rejects there (1525): one that does not start with a
+    /// digit after spaces, has letters after its date or datetime, or names
+    /// a day, month or time that does not exist.
+    Rejected,
+}
+
+/// The DATETIME MySQL compares `text` as beside a `DATE` or `TIMESTAMP`:
+/// `YYYY-M-D`, `YYYY-M-D H:M:S[.fraction]` (or with `T`), `YYYYMMDD` or
+/// `YYYYMMDDHHMMSS[.fraction]` after spaces. `None` for other forms, and for
+/// a zero month or day, which MySQL may accept.
+pub(crate) fn compared_string_datetime(text: &str) -> Option<ComparedString> {
+    fn number(cursor: &mut &str, max_digits: usize) -> Option<u32> {
+        let digits = cursor
+            .bytes()
+            .take_while(u8::is_ascii_digit)
+            .count()
+            .min(max_digits);
+        if digits == 0 {
+            return None;
+        }
+        let value = cursor[..digits].parse().ok()?;
+        *cursor = &cursor[digits..];
+        Some(value)
+    }
+    fn separator(cursor: &mut &str, expected: char) -> Option<()> {
+        *cursor = cursor.strip_prefix(expected)?;
+        Some(())
+    }
+    fn fraction<'a>(cursor: &mut &'a str) -> &'a str {
+        let Some(rest) = cursor.strip_prefix('.') else {
+            return "";
+        };
+        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+        if digits == 0 {
+            return "";
+        }
+        *cursor = &rest[digits..];
+        &rest[..digits]
+    }
+    let text = text.trim_start_matches([' ', '\t', '\n', '\r', '\u{b}', '\u{c}']);
+    if !text.starts_with(|character: char| character.is_ascii_digit()) {
+        return Some(ComparedString::Rejected);
+    }
+    let digits = text.bytes().take_while(u8::is_ascii_digit).count();
+    let mut cursor = &text[digits..];
+    let mut fields = [0u32; 6];
+    let mut fractional = "";
+    if digits == 8 || digits == 14 {
+        let run = &text[..digits];
+        let at = |start: usize, end: usize| run[start..end].parse::<u32>().ok();
+        fields[..3].copy_from_slice(&[at(0, 4)?, at(4, 6)?, at(6, 8)?]);
+        if digits == 14 {
+            fields[3..].copy_from_slice(&[at(8, 10)?, at(10, 12)?, at(12, 14)?]);
+            fractional = fraction(&mut cursor);
+        }
+    } else if digits == 4 && cursor.starts_with('-') {
+        fields[0] = text[..4].parse().ok()?;
+        separator(&mut cursor, '-')?;
+        fields[1] = number(&mut cursor, 2)?;
+        separator(&mut cursor, '-')?;
+        fields[2] = number(&mut cursor, 2)?;
+        if let Some(clock) = cursor.strip_prefix([' ', 'T']) {
+            if clock.starts_with(|character: char| character.is_ascii_digit()) {
+                cursor = clock;
+                fields[3] = number(&mut cursor, 2)?;
+                separator(&mut cursor, ':')?;
+                fields[4] = number(&mut cursor, 2)?;
+                separator(&mut cursor, ':')?;
+                fields[5] = number(&mut cursor, 2)?;
+                fractional = fraction(&mut cursor);
+            }
+        }
+    } else {
+        return None;
+    }
+    if !cursor.is_empty() {
+        return cursor
+            .starts_with(|character: char| {
+                character.is_ascii_alphabetic() && !character.eq_ignore_ascii_case(&'t')
+            })
+            .then_some(ComparedString::Rejected);
+    }
+    let [year, month, day, hours, minutes, seconds] = fields;
+    if month == 0 || day == 0 {
+        return None;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || (year % 400 == 0 && year != 0));
+    let days = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if month > 12 || day > days || hours > 23 || minutes > 59 || seconds > 59 {
+        return Some(ComparedString::Rejected);
+    }
+    let micros = if fractional.len() <= 6 {
+        format!("{fractional:0<6}")
+    } else {
+        let kept: u32 = fractional[..6].parse().ok()?;
+        let rounded = kept + u32::from(fractional.as_bytes()[6] >= b'5');
+        if rounded > 999_999 {
+            return None;
+        }
+        format!("{rounded:06}")
+    };
+    Some(ComparedString::Datetime(format!(
+        "{year:04}-{month:02}-{day:02} {hours:02}:{minutes:02}:{seconds:02}.{micros}"
+    )))
+}
+
 fn json_time_text(time: &Time) -> Option<String> {
     let hours = time.hours % 32;
     let fraction = format!("{:0<6}", time.fraction);

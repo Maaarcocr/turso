@@ -1850,6 +1850,112 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn json_values_compare_exactly_with_integers_beyond_bigint() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(18446744073709551614 AS JSON) < 18446744073709551615, \
+             18446744073709551615 > CAST('18446744073709551615' AS JSON), \
+             -9223372036854775808 <= CAST(9223372036854775807 AS JSON), \
+             -9223372036854775809 < CAST(1 AS JSON), \
+             CAST('[\"a\"]' AS JSON) < 18446744073709551615"
+        )?,
+        vec![vec![
+            Value::from_i64(1),
+            Value::from_i64(0),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(0),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
+fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 18446744073709551615 = 18446744073709551614, \
+             18446744073709551615 > 18446744073709551614.5, \
+             -9223372036854775809 < -9223372036854775808, \
+             18446744073709551615 <=> 18446744073709551615.000, \
+             18446744073709551614 BETWEEN 18446744073709551615 AND 18446744073709551615, \
+             18446744073709551614 NOT BETWEEN 1 AND 18446744073709551615"
+        )?,
+        vec![vec![
+            Value::from_i64(0),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(0),
+            Value::from_i64(0),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
+fn strings_compare_with_dates_and_timestamps_as_datetimes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        ("SELECT '0000-01-03' != TIMESTAMP '2024-12-30 10:34:58'", 1),
+        ("SELECT '3001-02-19 00:00:00' <= DATE '2000-01-01'", 0),
+        ("SELECT DATE '2000-01-01' < '2000-01-01 00:00:01'", 1),
+        (
+            "SELECT '20000101103458' = TIMESTAMP '2024-12-30 10:34:58'",
+            0,
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58.978654' > '20000101103458.123456'",
+            1,
+        ),
+        (
+            "SELECT TIMESTAMP '2020-01-02 03:04:05.5' = '2020-01-02 03:04:05.50'",
+            1,
+        ),
+        ("SELECT 0 AND DATE '2000-01-01' = 'foo'", 0),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::from_i64(expected)]],
+            "{sql}"
+        );
+    }
+    for (sql, message) in [
+        (
+            "SELECT DATE '2000-01-01' <=> _utf8 'foobar'",
+            "ERROR 1525 (HY000): Incorrect DATE value: 'foobar'",
+        ),
+        (
+            "SELECT '20000101foo' <=> DATE '2000-01-01'",
+            "ERROR 1525 (HY000): Incorrect DATE value: '20000101foo'",
+        ),
+        (
+            "SELECT '-1.5' <= TIMESTAMP '2000-01-01 10:34:58.123456'",
+            "ERROR 1525 (HY000): Incorrect DATETIME value: '-1.5'",
+        ),
+        (
+            "SELECT '0000-02-29' >= TIMESTAMP '2024-12-30 10:34:58'",
+            "ERROR 1525 (HY000): Incorrect DATETIME value: '0000-02-29'",
+        ),
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains(message), "{sql}: {error}");
+    }
+    for refused in [
+        "SELECT ' 0 ' = TIMESTAMP '2000-01-01 10:34:58'",
+        "SELECT '2000-00-01' = DATE '2000-01-01'",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn temporal_literals_of_different_types_compare_as_datetimes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [

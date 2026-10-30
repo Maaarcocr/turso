@@ -22,6 +22,76 @@ pub(crate) enum Failure<'a> {
         operator: &'static str,
         right: &'a Expr,
     },
+    /// A comparison of a `DATE` (`type_name` `DATE`) or `TIMESTAMP`
+    /// (`DATETIME`) literal with a string `text` MySQL cannot convert (1525).
+    IncorrectTemporal {
+        type_name: &'static str,
+        text: &'a str,
+    },
+}
+
+/// The printable ASCII text of a string literal, bare or after a `_utf8`,
+/// `_utf8mb3`, `_utf8mb4`, `_latin1`, `_ascii` or `_binary` introducer, that
+/// MySQL converts beside a `DATE` or `TIMESTAMP` literal.
+pub(crate) fn temporal_compared_text(expr: &Expr) -> Option<&str> {
+    let text = match expr {
+        Expr::Nested(inner) => return temporal_compared_text(inner),
+        Expr::Value(_) => string_literal(expr)?,
+        Expr::Prefixed { prefix, value } => {
+            let introduced = prefix.quote_style.is_none()
+                && matches!(
+                    prefix.value.to_ascii_lowercase().as_str(),
+                    "_utf8" | "_utf8mb3" | "_utf8mb4" | "_latin1" | "_ascii" | "_binary"
+                );
+            if !introduced {
+                return None;
+            }
+            string_literal(value)?
+        }
+        _ => return None,
+    };
+    text.bytes()
+        .all(|byte| (b' '..=b'~').contains(&byte))
+        .then_some(text)
+}
+
+/// The error MySQL raises for a comparison of a `DATE` or `TIMESTAMP`
+/// literal with a string it cannot convert to a DATETIME.
+fn incorrect_temporal<'a>(
+    left: &'a Expr,
+    op: &BinaryOperator,
+    right: &'a Expr,
+) -> Option<Failure<'a>> {
+    if !matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+            | BinaryOperator::Spaceship
+    ) {
+        return None;
+    }
+    let rejected = |temporal: &'a Expr, string: &'a Expr| -> Option<Failure<'a>> {
+        let Expr::TypedString(typed) = crate::expr::unnested(temporal) else {
+            return None;
+        };
+        let type_name = match typed.data_type {
+            DataType::Date => "DATE",
+            DataType::Timestamp(None, sqlparser::ast::TimezoneInfo::None) => "DATETIME",
+            _ => return None,
+        };
+        crate::literal::temporal_literal(typed)?;
+        let text = temporal_compared_text(string)?;
+        matches!(
+            crate::literal::compared_string_datetime(text)?,
+            crate::literal::ComparedString::Rejected
+        )
+        .then_some(Failure::IncorrectTemporal { type_name, text })
+    };
+    rejected(left, right).or_else(|| rejected(right, left))
 }
 
 /// Whether `expr` is `x [NOT] REGEXP ''`.
@@ -248,6 +318,9 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
         (outcome(left)?, outcome(right)?)
     };
     if let Some(failure) = integer_out_of_range(left, op, right) {
+        return Some(Outcome::Fails(failure));
+    }
+    if let Some(failure) = incorrect_temporal(left, op, right) {
         return Some(Outcome::Fails(failure));
     }
     let right_is_evaluated = match op {

@@ -78,6 +78,7 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         | EMPTY_REGEXP
         | TEMPORAL_NUMBER => arg_count == 1,
         BIGINT_OUT_OF_RANGE => matches!(arg_count, 1 | 2),
+        INCORRECT_TEMPORAL => arg_count == 2,
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -199,6 +200,16 @@ pub(crate) fn execute(
                 "__mysql_bigint_out_of_range takes the text of a literal and whether it is unsigned, not `{other}`"
             ))),
         },
+        INCORRECT_TEMPORAL => match (&args[0], &args[1]) {
+            (Value::Text(type_name), Value::Text(text)) => Err(LimboError::SqlError(format!(
+                "ERROR 1525 (HY000): Incorrect {} value: '{}'",
+                type_name.as_str(),
+                text.as_str()
+            ))),
+            (type_name, text) => Err(LimboError::InternalError(format!(
+                "__mysql_incorrect_temporal takes a type name and a text, not `{type_name}` and `{text}`"
+            ))),
+        },
         RECURSIVE_INTEGER => match &args[0] {
             Value::Null => Ok(Value::Null),
             Value::Numeric(Numeric::Integer(value)) if i32::try_from(*value).is_ok() => {
@@ -311,6 +322,11 @@ const TEMPORAL_NUMBER: &str = "__MYSQL_TEMPORAL_NUMBER";
 /// for the value printed as `text`, which it rejects where it reads it as a
 /// BIGINT, or as a BIGINT UNSIGNED when `unsigned` is 1.
 const BIGINT_OUT_OF_RANGE: &str = "__MYSQL_BIGINT_OUT_OF_RANGE";
+
+/// `__mysql_incorrect_temporal(type_name, text)`: MySQL's error (1525) for a
+/// string `text` it cannot convert to the `DATE` or `DATETIME` it compares
+/// it with.
+const INCORRECT_TEMPORAL: &str = "__MYSQL_INCORRECT_TEMPORAL";
 
 /// `__mysql_recursive_integer(value)`: a recursive value of a column whose
 /// anchor is an `INT` literal, refused outside `INT` or when not an integer.
