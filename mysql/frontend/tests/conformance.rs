@@ -1448,6 +1448,19 @@ fn counts_compare_with_strings_as_numbers() -> turso_core::Result<()> {
 }
 
 #[test]
+fn time_literals_compare_with_binary_strings_as_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT TIME '-31:34:58' > X'00', TIME '-31:34:58' > 0xFF, X'FF' <= TIME '10:04:58',              TIME '32:34:58.5' <= _binary 'foobar', _utf8 'foobar' > TIME '-10:04:58',              TIME '-101:34:58' <= b'1001', TIME '10:04:58' = 0x31303A30343A3538"
+        )?,
+        vec![[1, 0, 0, 1, 1, 0, 1].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
 fn literal_calls_take_mysql_values() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
