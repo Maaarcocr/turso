@@ -183,9 +183,31 @@ column, a string literal stays a string, which the column's type converts;
 beside another computed number, Turso compares a number with a string as
 SQLite does (every number below every string), unlike MySQL.
 
-`x REGEXP ''` and `x NOT REGEXP ''` are `__mysql_empty_regexp(x)`, which
-fails with MySQL's error 3685 when it is evaluated, as MySQL rejects the empty
-pattern then (not on an empty table). A `NULL` or binary subject is refused.
+An operand of `LIKE` that is not a string or an integer literal is matched as
+the text `CONCAT` gives it, MySQL's text of the value (`1e0 LIKE '1'` and a
+`DOUBLE` column holding 1 `LIKE '1'` are true, where SQLite's text is
+`'1.0'`). A `BLOB` or `VARBINARY` column still matches ASCII letters without
+case, where MySQL compares its bytes.
+
+A call whose result MySQL types as a `DATE` (`DATE`, `CURDATE`, `FROM_DAYS`,
+`LAST_DAY`, `MAKEDATE`), a `TIME` (`TIME`, `SEC_TO_TIME`, `MAKETIME`,
+`TIMEDIFF`, `CURTIME`) or a `DATETIME` (`NOW`, `FROM_UNIXTIME` of one
+argument, `TIMESTAMP`, `CONVERT_TZ`) is `__mysql_temporal_number(x)` in
+arithmetic, a bit operation, a comparison with a number and a numeric function
+argument: the number MySQL reads it as (`SEC_TO_TIME(2378) + 0` is 3938,
+`DATE(dt) + 0` is 20000102). One with a fraction, which MySQL reads as a
+DECIMAL, is refused, and so is `DATE_ADD` of such a `TIME`. A `DATE`,
+`DATETIME`, `TIMESTAMP` or `TIME` column in arithmetic is refused, as MySQL
+reads it as such a number. `SUM` and `AVG` of such a column add the start of
+its text (the year), unlike MySQL.
+
+`x REGEXP ''` and `x NOT REGEXP ''` as a whole select item are
+`__mysql_empty_regexp(x)`, which fails with MySQL's error 3685 when it is
+evaluated, as MySQL rejects the empty pattern then (not on an empty table). A
+select item of a `SELECT` that reads one row where MySQL always reaches such a
+test of a literal fails the same way. Elsewhere it is refused, as MySQL skips
+it after a decided `AND` or `OR` or a `NULL` operand, and so is a `NULL` or
+binary subject.
 
 `HAVING` in a `SELECT` without `GROUP BY` or aggregates, which MySQL applies to
 each row, joins the `WHERE` condition with each select alias it names replaced

@@ -57,9 +57,58 @@ pub(crate) fn translate_in(
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     context.enter_expression()?;
-    let translated = translate_node(expr, literal_context, context);
+    let translated = if matches!(
+        literal_context,
+        Context::Number | Context::Arithmetic | Context::Bitwise
+    ) && temporal_function_kind(expr).is_some()
+    {
+        translate_node(expr, Context::Value, context)
+            .map(|call| function_call("__mysql_temporal_number", vec![call]))
+    } else {
+        translate_node(expr, literal_context, context)
+    };
     context.leave_expression();
     translated
+}
+
+/// The MySQL type of a call whose result is a `DATE`, `TIME` or `DATETIME`
+/// whatever its arguments, which MySQL reads as a number (`20000102`,
+/// `100001`, `20000102030405`) where it needs one.
+fn temporal_function_kind(expr: &Expr) -> Option<TemporalKind> {
+    let Expr::Function(function) = unnested(expr) else {
+        return None;
+    };
+    let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+        return None;
+    };
+    if name.quote_style.is_some() {
+        return None;
+    }
+    let arg_count = match &function.args {
+        FunctionArguments::None => 0,
+        FunctionArguments::List(list) => list.args.len(),
+        FunctionArguments::Subquery(_) => return None,
+    };
+    Some(
+        match (name.value.to_ascii_uppercase().as_str(), arg_count) {
+            ("SEC_TO_TIME" | "TIME", 1)
+            | ("MAKETIME", 3)
+            | ("TIMEDIFF", 2)
+            | ("CURTIME" | "CURRENT_TIME" | "UTC_TIME", 0 | 1) => TemporalKind::Time,
+            ("DATE" | "FROM_DAYS" | "LAST_DAY", 1)
+            | ("MAKEDATE", 2)
+            | ("CURDATE" | "CURRENT_DATE" | "UTC_DATE", 0) => TemporalKind::Date,
+            ("FROM_UNIXTIME", 1)
+            | ("TIMESTAMP", 1 | 2)
+            | ("CONVERT_TZ", 3)
+            | (
+                "NOW" | "CURRENT_TIMESTAMP" | "LOCALTIME" | "LOCALTIMESTAMP" | "SYSDATE"
+                | "UTC_TIMESTAMP",
+                0 | 1,
+            ) => TemporalKind::DateTime,
+            _ => return None,
+        },
+    )
 }
 
 fn translate_node(
@@ -2843,6 +2892,12 @@ fn translate_regexp(
                     .to_string(),
             ));
         }
+        if !std::mem::take(&mut context.empty_regexp_is_evaluated) {
+            return Err(MysqlParserError::Unsupported(
+                "an empty regular expression inside an expression, which MySQL rejects only where it evaluates it, is not lowered yet"
+                    .to_string(),
+            ));
+        }
         return Ok(function_call(
             "__mysql_empty_regexp",
             vec![translate_expr(expr, context)?],
@@ -3276,6 +3331,25 @@ pub(crate) fn parenthesized(expr: ast::Expr) -> ast::Expr {
     ast::Expr::Parenthesized(vec![Box::new(expr)])
 }
 
+/// An operand of `LIKE` as MySQL's text of it: a number other than an
+/// integer literal is the text `CONCAT` gives it (`1e0` is `'1'`, a DOUBLE
+/// column holding 1 is `'1'`), where Turso would match SQLite's (`'1.0'`).
+fn like_operand(
+    operand: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let translated = translate_in(operand, Context::Text, context)?;
+    let is_text = string_literal(operand).is_some()
+        || matches!(unnested(operand), Expr::Prefixed { .. })
+        || number_literal(operand)
+            .is_some_and(|digits| digits.bytes().all(|byte| byte.is_ascii_digit()));
+    Ok(if is_text {
+        translated
+    } else {
+        function_call("CONCAT", vec![translated])
+    })
+}
+
 fn translate_like(
     expr: &Expr,
     negated: bool,
@@ -3333,14 +3407,14 @@ fn translate_like(
             matched
         });
     }
-    let lhs = translate_in(expr, Context::Text, context)?;
+    let lhs = like_operand(expr, context)?;
     let (rhs, escape) = match (string_literal(pattern), escape) {
         (Some(text), Some(escape)) if !text.contains(escape) => (string_expr(text), None),
         (Some(text), Some(escape)) => (
             string_expr(&with_dangling_escape_doubled(text, escape)),
             Some(escape),
         ),
-        (_, escape) => (translate_in(pattern, Context::Text, context)?, escape),
+        (_, escape) => (like_operand(pattern, context)?, escape),
     };
     let escape = escape.map(|escape| string_expr(&escape.to_string()));
     Ok(ast::Expr::like(
@@ -5485,6 +5559,11 @@ fn translate_date_arithmetic(
         ast::Expr::Literal(ast::Literal::String(quoted)) => quoted.trim_matches('\'').to_string(),
         other => unreachable!("a temporal unit lowers to a string literal, not `{other}`"),
     };
+    if temporal_function_kind(date) == Some(TemporalKind::Time) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{name} of `{date}`, a TIME whose result MySQL types as TIME, is not lowered yet"
+        )));
+    }
     let call = function_call(name, vec![translate_expr(date, context)?, amount, unit]);
     let Some(kind) = dated_literal_kind(date) else {
         return Ok(call);

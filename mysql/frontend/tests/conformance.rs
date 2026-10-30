@@ -1337,7 +1337,16 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
         let error = query(&connection, sql).expect_err(sql).to_string();
         assert!(error.contains("ERROR 3685 "), "{sql}: {error}");
     }
-    for refused in ["SELECT NULL REGEXP ''", "SELECT 0xFF REGEXP ''"] {
+    let error = query(&connection, "SELECT 1 + ('a' REGEXP '')")
+        .expect_err("REGEXP '' in arithmetic")
+        .to_string();
+    assert!(error.contains("ERROR 3685 "), "{error}");
+    for refused in [
+        "SELECT NULL REGEXP ''",
+        "SELECT 0xFF REGEXP ''",
+        "SELECT 0 AND ('a' REGEXP '')",
+        "SELECT NULL = ('a' REGEXP '')",
+    ] {
         let error = query(&connection, refused).expect_err(refused).to_string();
         assert!(error.contains("not"), "{refused}: {error}");
         assert!(!error.contains("ERROR "), "{refused}: {error}");
@@ -1488,6 +1497,58 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
     let failing = "SELECT NULL + 1 - CAST('invalid' AS JSON)";
     let error = query(&connection, failing).expect_err(failing).to_string();
     assert!(error.contains("ERROR 3141"), "{failing}: {error}");
+    Ok(())
+}
+
+#[test]
+fn temporal_results_are_numbers_in_arithmetic() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE tt (d DATE, dt DATETIME)")?;
+    connection.execute("INSERT INTO tt VALUES ('2000-01-02', '2000-01-02 03:04:05')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT SEC_TO_TIME(2378) + 0, MAKETIME(1, 2, 3) + 0, SEC_TO_TIME(-3600) * 1, \
+             DATE(dt) + 0, TIME(dt) + 0, FROM_UNIXTIME(0) + 0 > 19700000000000, \
+             SEC_TO_TIME(1) < 2, DATE(dt) < 20000103 FROM tt"
+        )?,
+        vec![vec![
+            Value::from_i64(3938),
+            Value::from_i64(10203),
+            Value::from_i64(-10000),
+            Value::from_i64(20000102),
+            Value::from_i64(30405),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(1),
+        ]]
+    );
+    for refused in [
+        "SELECT d + 0 FROM tt",
+        "SELECT -dt FROM tt",
+        "SELECT SEC_TO_TIME(1.5) + 0",
+        "SELECT DATE_ADD(SEC_TO_TIME(1), INTERVAL 1 SECOND)",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not"), "{refused}: {error}");
+        assert!(!error.contains("ERROR "), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE ln (g DOUBLE, x DECIMAL(5, 2))")?;
+    connection.execute("INSERT INTO ln VALUES (1, 1.5)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0.0 NOT LIKE 0.0e0, 1e0 LIKE '1', 100e0 LIKE '100', 0.0 LIKE 0, \
+             1.50 LIKE '1.50', g LIKE '1', x LIKE '1.50' FROM ln"
+        )?,
+        vec![[1, 1, 1, 0, 1, 1, 1].map(Value::from_i64).to_vec()]
+    );
     Ok(())
 }
 

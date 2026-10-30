@@ -11,6 +11,17 @@ pub(crate) enum Failure<'a> {
     /// A negated DOUBLE literal `-digits` below the BIGINT range, read as a
     /// BIGINT by a bit operation or `CHAR` (1690).
     BigintOutOfRange(&'a str),
+    /// `x REGEXP ''` of a text subject that is not `NULL` (3685).
+    EmptyRegexp,
+}
+
+/// Whether `expr` is `x [NOT] REGEXP ''`.
+pub(crate) fn is_empty_regexp(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_empty_regexp(inner),
+        Expr::RLike { pattern, .. } => string_literal(pattern).is_some_and(str::is_empty),
+        _ => false,
+    }
 }
 
 /// The failure that MySQL meets whenever it evaluates `expr`, reading
@@ -111,7 +122,17 @@ fn outcome(expr: &Expr) -> Option<Outcome<'_>> {
         {
             in_order(outcome(expr)?, outcome(pattern)?)
         }
-        Expr::RLike { expr, pattern, .. } => in_order(outcome(pattern)?, outcome(expr)?),
+        Expr::RLike { expr, pattern, .. } => {
+            let subject = outcome(expr)?;
+            if string_literal(pattern).is_some_and(str::is_empty)
+                && matches!(subject, Outcome::NotNull)
+                && !is_binary_literal(expr)
+            {
+                Outcome::Fails(Failure::EmptyRegexp)
+            } else {
+                in_order(outcome(pattern)?, subject)
+            }
+        }
         Expr::InList { expr, list, .. } => {
             let tested = outcome(expr)?;
             for item in list {
@@ -326,6 +347,18 @@ fn function_outcome(function: &Function) -> Option<Outcome<'_>> {
     } else {
         Outcome::MaybeNull
     })
+}
+
+fn is_binary_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_)
+        ),
+        Expr::Prefixed { prefix, .. } => prefix.value.eq_ignore_ascii_case("_binary"),
+        Expr::Nested(inner) => is_binary_literal(inner),
+        _ => false,
+    }
 }
 
 fn string_literal(expr: &Expr) -> Option<&str> {
