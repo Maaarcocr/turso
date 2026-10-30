@@ -43,6 +43,13 @@ pub(crate) fn failure_evaluated(expr: &Expr) -> Option<Failure<'_>> {
     }
 }
 
+/// Whether MySQL evaluates `expr` to `NULL` without reaching an operand it
+/// fails on: a `NULL` operand ends an operator that propagates it, or a
+/// function that reads its arguments in order.
+pub(crate) fn is_null_before_failure(expr: &Expr) -> bool {
+    matches!(outcome(expr), Some(Outcome::Null))
+}
+
 #[derive(Clone, Copy)]
 enum Outcome<'a> {
     Null,
@@ -221,6 +228,7 @@ fn in_order<'a>(first: Outcome<'a>, second: Outcome<'a>) -> Outcome<'a> {
     match (first, second) {
         (Outcome::Fails(failure), _) => Outcome::Fails(failure),
         (Outcome::NotNull, Outcome::Fails(failure)) => Outcome::Fails(failure),
+        (Outcome::Null, _) | (Outcome::NotNull, Outcome::Null) => Outcome::Null,
         _ => Outcome::MaybeNull,
     }
 }
@@ -254,6 +262,7 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
         | BinaryOperator::Modulo => {
             lhs.is_not_null() || matches!(rhs.failure(), Some(Failure::Json(_)))
         }
+        BinaryOperator::Spaceship => true,
         BinaryOperator::MyIntegerDivide
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseAnd
@@ -266,13 +275,21 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
         | BinaryOperator::LtEq
         | BinaryOperator::Gt
         | BinaryOperator::GtEq
-        | BinaryOperator::Spaceship
         | BinaryOperator::Xor => lhs.is_not_null(),
         _ => return None,
     };
+    let propagates_null = !matches!(
+        op,
+        BinaryOperator::And
+            | BinaryOperator::Or
+            | BinaryOperator::StringConcat
+            | BinaryOperator::Spaceship
+    );
     Some(match (lhs.failure(), rhs.failure()) {
         (Some(failure), _) => Outcome::Fails(failure),
         (None, Some(failure)) if right_is_evaluated => Outcome::Fails(failure),
+        (None, _) if propagates_null && matches!(lhs, Outcome::Null) => Outcome::Null,
+        (None, None) if propagates_null && matches!(rhs, Outcome::Null) => Outcome::Null,
         (None, Some(_)) => Outcome::MaybeNull,
         (None, None) if never_null(op, lhs, rhs) => Outcome::NotNull,
         (None, None) => Outcome::MaybeNull,
@@ -519,12 +536,34 @@ fn function_outcome(function: &Function) -> Option<Outcome<'_>> {
             _ => None,
         })
         .collect::<Option<Vec<_>>>()?;
+    let reading_order: Option<Vec<usize>> = match upper_name.as_str() {
+        "CONCAT" | "STRCMP" | "MAKETIME" => Some((0..args.len()).collect()),
+        "MAKEDATE" if args.len() == 2 => Some(vec![1, 0]),
+        _ => None,
+    };
+    if let Some(order) = reading_order {
+        for position in order {
+            match args[position] {
+                Outcome::NotNull => {}
+                Outcome::Null => return Some(Outcome::Null),
+                Outcome::Fails(failure) => return Some(Outcome::Fails(failure)),
+                Outcome::MaybeNull => return Some(Outcome::MaybeNull),
+            }
+        }
+        return Some(Outcome::MaybeNull);
+    }
     let Some((position, failure)) = args
         .iter()
         .enumerate()
         .find_map(|(position, arg)| arg.failure().map(|failure| (position, failure)))
     else {
-        return Some(Outcome::MaybeNull);
+        let never_null =
+            args.is_empty() && matches!(upper_name.as_str(), "JSON_ARRAY" | "JSON_OBJECT");
+        return Some(if never_null {
+            Outcome::NotNull
+        } else {
+            Outcome::MaybeNull
+        });
     };
     let evaluated = match upper_name.as_str() {
         "CHAR" | "INTERVAL" => true,

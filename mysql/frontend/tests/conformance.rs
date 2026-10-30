@@ -1345,11 +1345,7 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
         .expect_err("REGEXP '' in arithmetic")
         .to_string();
     assert!(error.contains("ERROR 3685 "), "{error}");
-    for refused in [
-        "SELECT NULL REGEXP ''",
-        "SELECT 0xFF REGEXP ''",
-        "SELECT NULL = ('a' REGEXP '')",
-    ] {
+    for refused in ["SELECT NULL REGEXP ''", "SELECT 0xFF REGEXP ''"] {
         let error = query(&connection, refused).expect_err(refused).to_string();
         assert!(error.contains("not"), "{refused}: {error}");
         assert!(!error.contains("ERROR "), "{refused}: {error}");
@@ -1489,12 +1485,16 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
             "{failing}: {error}"
         );
     }
-    for refused in [
+    for skipped in [
         "SELECT NULL | -18446744073709540000e0",
         "SELECT NULL = (1 | -18446744073709540000e0)",
+        "SELECT NULL = ('a' REGEXP '')",
     ] {
-        let error = query(&connection, refused).expect_err(refused).to_string();
-        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+        assert_eq!(
+            query(&connection, skipped)?,
+            vec![vec![Value::Null]],
+            "{skipped}"
+        );
     }
     let failing = "SELECT NULL + 1 - CAST('invalid' AS JSON)";
     let error = query(&connection, failing).expect_err(failing).to_string();
@@ -1845,6 +1845,33 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
             vec![vec![Value::build_text(shown)]],
             "{sql}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn null_operands_skip_invalid_json_as_in_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for sql in [
+        "SELECT NULL - 1 <= CAST('\"a\": 1' AS JSON)",
+        "SELECT NULL = CAST('x' AS JSON)",
+        "SELECT NULL NOT LIKE CAST('x' AS JSON)",
+        "SELECT CONCAT(NULL * NULL, CAST('x' AS JSON))",
+        "SELECT STRCMP(NULL * 1, CAST('x' AS JSON))",
+        "SELECT MAKETIME(NULL * NULL, 0, CAST('x' AS JSON))",
+        "SELECT MAKEDATE(CAST('x' AS JSON), NULL)",
+    ] {
+        assert_eq!(query(&connection, sql)?, vec![vec![Value::Null]], "{sql}");
+    }
+    for sql in [
+        "SELECT NULL - NULL <=> CAST('x' AS JSON)",
+        "SELECT NULL * 1 || CAST('x' AS JSON)",
+        "SELECT JSON_ARRAY() > CAST('x' AS JSON)",
+        "SELECT CONCAT(CAST('x' AS JSON), NULL * NULL)",
+        "SELECT MAKEDATE(1 + NULL, CAST('x' AS JSON))",
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains("3141"), "{sql}: {error}");
     }
     Ok(())
 }

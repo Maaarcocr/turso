@@ -1404,7 +1404,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "invalid JSON cast MySQL does not evaluate",
-            sql: "SELECT CONCAT(NULL, CAST('x' AS JSON))",
+            sql: "SELECT REPEAT(NULL, CAST('x' AS JSON))",
         },
         SqlCase {
             name: "invalid JSON cast evaluated once per row",
@@ -1504,7 +1504,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "bit operation on a DOUBLE below the BIGINT range after a NULL",
-            sql: "SELECT NULL & -18446744073709540000e0",
+            sql: "SELECT NULL & -18446744073709540000e0 FROM t",
         },
         SqlCase {
             name: "bit operation on a string with an exponent",
