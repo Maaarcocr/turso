@@ -8,7 +8,7 @@ use sqlparser::ast::{
 use sqlparser::dialect::{Dialect, MySqlDialect, Precedence};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::{Parser, ParserError};
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Word};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace, Word};
 use std::any::TypeId;
 use std::cell::RefCell;
 
@@ -97,6 +97,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserE
     parenthesize_null_patterns(&mut tokens);
     unparenthesize_single_tables(&mut tokens);
     mark_weight_string_casts(&mut tokens);
+    convert_charset_casts(&mut tokens);
     let statements = Parser::new(&dialect)
         .with_recursion_limit(RECURSION_LIMIT)
         .with_tokens_with_locations(tokens)
@@ -273,6 +274,87 @@ fn mark_weight_string_casts(tokens: &mut [TokenWithSpan]) {
                 _ => {}
             }
             at += 1;
+        }
+    }
+}
+
+/// Writes `CAST(x AS type CHARACTER SET cs)` as `CONVERT(x, type CHARACTER
+/// SET cs)`, which the parser reads, and `CHARSET` in either as `CHARACTER
+/// SET`.
+fn convert_charset_casts(tokens: &mut Vec<TokenWithSpan>) {
+    let is_word = |token: &Token, keyword: Keyword| matches!(token, Token::Word(word) if word.quote_style.is_none() && word.keyword == keyword);
+    let significant = |tokens: &[TokenWithSpan], from: usize| {
+        (from..tokens.len()).find(|&index| !matches!(tokens[index].token, Token::Whitespace(_)))
+    };
+    let mut index = 0;
+    while index < tokens.len() {
+        let function = index;
+        let is_cast = is_word(&tokens[function].token, Keyword::CAST);
+        let is_convert = is_word(&tokens[function].token, Keyword::CONVERT);
+        index += 1;
+        if !is_cast && !is_convert {
+            continue;
+        }
+        let Some(open) = significant(tokens, index).filter(|&at| tokens[at].token == Token::LParen)
+        else {
+            continue;
+        };
+        let mut depth = 0usize;
+        let mut separator = None;
+        let mut charset = None;
+        let mut at = open;
+        while at < tokens.len() {
+            let token = &tokens[at].token;
+            match token {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ if depth != 1 => {}
+                _ if separator.is_none() => {
+                    let separates = if is_cast {
+                        is_word(token, Keyword::AS)
+                    } else {
+                        *token == Token::Comma
+                    };
+                    if separates {
+                        separator = Some(at);
+                    }
+                }
+                _ if charset.is_none() => {
+                    let names_charset = is_word(token, Keyword::CHARSET)
+                        || (is_word(token, Keyword::CHARACTER)
+                            && significant(tokens, at + 1)
+                                .is_some_and(|next| is_word(&tokens[next].token, Keyword::SET)));
+                    if names_charset {
+                        charset = Some(at);
+                    }
+                }
+                _ => {}
+            }
+            at += 1;
+        }
+        let (Some(separator), Some(charset)) = (separator, charset) else {
+            continue;
+        };
+        if is_word(&tokens[charset].token, Keyword::CHARSET) {
+            let span = tokens[charset].span;
+            tokens[charset].token = Token::make_keyword("CHARACTER");
+            tokens.insert(
+                charset + 1,
+                TokenWithSpan::new(Token::Whitespace(Whitespace::Space), span),
+            );
+            tokens.insert(
+                charset + 2,
+                TokenWithSpan::new(Token::make_keyword("SET"), span),
+            );
+        }
+        if is_cast {
+            tokens[function].token = Token::make_keyword("CONVERT");
+            tokens[separator].token = Token::Comma;
         }
     }
 }

@@ -288,6 +288,8 @@ Lowered:
 | `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(CONCAT(x), n)`, `__mysql_cast_as_nchar(CONCAT(x), n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(CONCAT(x) AS TEXT)`, `CAST(CONCAT(x) AS BLOB)`: MySQL's text of `x` |
+| `CAST(x AS CHAR[(n)] CHARACTER SET utf8mb4)` (or `CHARSET`), `CONVERT(x, CHAR CHARACTER SET utf8mb4)` | The same as `CAST(x AS CHAR[(n)])` |
+| `CONVERT(x USING ascii)`, `CAST(x AS CHAR[(n)] CHARACTER SET ascii)`, as a select item of a `SELECT` that shows its values without `ORDER BY`, `DISTINCT`, `GROUP BY` or `HAVING` (where the ASCII collation does not matter) | `__mysql_convert_to_ascii(x)`: each character outside ASCII becomes `?`. A binary string with bytes outside ASCII raises an error |
 | `WEIGHT_STRING(literal)`, `WEIGHT_STRING(literal AS BINARY(n))` | The bytes MySQL sorts the literal by, computed when the statement is lowered: of an integer, its 8 big-endian bytes with the sign bit flipped for a signed value (also with `AS CHAR(n)`); of a `DECIMAL` or `DOUBLE`, `NULL`; of a `_latin1` text of ASCII letters, digits and spaces, the text in uppercase; with `AS BINARY(n)`, the first `n` bytes of the literal's text when it has at least `n`. Other arguments (a `utf8mb4` text, whose weights are its collation's, a column, a shorter text that MySQL pads) are refused |
 | `HOUR`, `MINUTE`, `SECOND`, `MICROSECOND`, `TIME_TO_SEC` of a `DATE` literal; `UNHEX` of a `DECIMAL` literal; `REVERSE` of a binary string literal; `CAST` of an integer literal beyond BIGINT `AS DECIMAL` | 0 (MySQL reads the date as midnight); `NULL` (the text has a `.`); the reversed bytes; the exact digits, which a DOUBLE would round |
 | `HEX(CONVERT(literal USING utf16/ucs2/utf32/latin1/ascii))` | The hex of the literal's bytes in that character set, computed when the statement is lowered: a text's characters encoded (big-endian for the wide sets), and a binary string read as the set's bytes, padded on the left with zero bytes to a whole character (`NULL` when it is not valid `utf32`) |
@@ -436,9 +438,9 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables outside the cases under Session settings, `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `COLLATE` with any other
-  collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set,
+  collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set other than the cases above,
   `CONVERT(... USING ...)` with any other character set (except in `HEX` of a
-  literal, above), and `^` over
+  literal, above) or to ASCII anywhere else, and `^` over
   function calls or subqueries.
 - `CAST` to `DATE`, `DATETIME` or `TIME` in a comparison, arithmetic, a
   condition, a numeric function argument or a JSON cast, where MySQL uses the
