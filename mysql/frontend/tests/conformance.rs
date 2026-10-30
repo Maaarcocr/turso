@@ -1237,6 +1237,72 @@ fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
 }
 
 #[test]
+fn json_table_lists_the_rows_of_a_document() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            r#"SELECT * FROM JSON_TABLE('[{"a":1,"b":[5,6]},{"a":"x","b":[]}]', '$[*]' COLUMNS(
+                id FOR ORDINALITY,
+                a INT PATH '$.a' DEFAULT '7' ON ERROR,
+                NESTED PATH '$.b[*]' COLUMNS (b VARCHAR(4) PATH '$'),
+                has_b INT EXISTS PATH '$.b[0]')) AS jt"#
+        )?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::build_text("5"),
+                Value::from_i64(1),
+            ],
+            vec![
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::build_text("6"),
+                Value::from_i64(1),
+            ],
+            vec![
+                Value::from_i64(2),
+                Value::from_i64(7),
+                Value::Null,
+                Value::from_i64(0),
+            ],
+        ]
+    );
+    connection.execute("CREATE TABLE t (id INT PRIMARY KEY, j JSON)")?;
+    connection.execute(r#"INSERT INTO t VALUES (1, '["p","q"]'), (2, '["r"]')"#)?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT t.id, jt.v FROM t, JSON_TABLE(t.j, '$[*]' COLUMNS (v CHAR(1) PATH '$')) jt \
+             WHERE jt.v <> 'Q' ORDER BY t.id, jt.v"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::build_text("p")],
+            vec![Value::from_i64(2), Value::build_text("r")],
+        ]
+    );
+    for (sql, code) in [
+        (
+            "SELECT * FROM JSON_TABLE('{}', '$' COLUMNS (c INT PATH '$.c' ERROR ON EMPTY)) jt",
+            3665,
+        ),
+        (
+            r#"SELECT * FROM JSON_TABLE('{"c":"x"}', '$' COLUMNS (c INT PATH '$.c' ERROR ON ERROR)) jt"#,
+            3156,
+        ),
+        (
+            "SELECT * FROM JSON_TABLE((SELECT j FROM t LIMIT 1), '$[*]' COLUMNS (v INT PATH '$')) jt",
+            1210,
+        ),
+    ] {
+        let error = connection.execute(sql).expect_err(sql).to_string();
+        assert!(error.contains(&format!("ERROR {code} ")), "{sql}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn json_aggregates_collect_the_rows_of_each_group() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE c (id BIGINT PRIMARY KEY, p INT, lbl VARCHAR(5))")?;

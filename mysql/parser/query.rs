@@ -40,6 +40,9 @@ pub(crate) struct TranslationContext<'a> {
     /// take a select alias, with the table that qualifies them.
     having_columns: Vec<(String, String)>,
     tables_read: Vec<ast::Name>,
+    /// Names of the common table expressions and derived tables met so far.
+    pub(crate) common_tables: Vec<String>,
+    pub(crate) derived_tables: Vec<String>,
 }
 
 impl<'a> TranslationContext<'a> {
@@ -198,7 +201,11 @@ fn translate_with(
     let ctes = with
         .cte_tables
         .iter()
-        .map(|cte| translate_cte(cte, context))
+        .map(|cte| {
+            let translated = translate_cte(cte, context);
+            context.common_tables.push(cte.alias.name.value.clone());
+            translated
+        })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::With {
         recursive: false,
@@ -1906,6 +1913,9 @@ fn translate_table_factor(
             sample: None,
         } => {
             let select = translate_subquery(subquery, context)?;
+            if let Some(alias) = alias {
+                context.derived_tables.push(alias.name.value.clone());
+            }
             let (select, alias) = match alias {
                 Some(alias) if !alias.columns.is_empty() => {
                     if *lateral {
@@ -1942,6 +1952,18 @@ fn translate_table_factor(
             let alias = alias.as_ref().map(translate_table_alias).transpose()?;
             Ok(ast::SelectTable::Sub(from, alias))
         }
+        TableFactor::JsonTable {
+            json_expr,
+            json_path,
+            columns,
+            alias,
+        } => crate::json_table::translate_json_table(
+            json_expr,
+            json_path,
+            columns,
+            alias.as_ref(),
+            context,
+        ),
         other => Err(unsupported(format!("table `{other}`"))),
     }
 }

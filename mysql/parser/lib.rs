@@ -22,6 +22,7 @@ mod function_names;
 mod insert;
 mod invalid_json;
 mod json;
+mod json_table;
 mod literal;
 mod names;
 mod prepared;

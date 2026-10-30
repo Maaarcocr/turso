@@ -340,7 +340,7 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`, `INTERSECT
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables outside the cases under Session settings, `:name` and `?N` parameters,
-  `MATCH ... AGAINST`, `SOUNDS LIKE`, `JSON_TABLE`, `COLLATE` with any other
+  `MATCH ... AGAINST`, `SOUNDS LIKE`, `COLLATE` with any other
   collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set,
   `CONVERT(... USING ...)` with any other character set, and `^` over
   function calls or subqueries.
@@ -625,9 +625,20 @@ these internal functions, which MySQL does not have:
 | `doc ->> path` | `JSON_UNQUOTE(JSON_EXTRACT(doc, path))` |
 | `JSON_ARRAYAGG(x)` | `__mysql_json_arrayagg(json_group_array(JSON_ARRAY(x)))`: each row converts as a `JSON_ARRAY` value; no rows give NULL |
 | `JSON_OBJECTAGG(k, v)` | `__mysql_json_objectagg(json_group_array(JSON_OBJECT(k, v)))`: keys as in `JSON_OBJECT` (a NULL key fails with 3158), the last value of a repeated key wins; no rows give NULL |
+| `JSON_TABLE(doc, path COLUMNS (...)) AS t` | `(SELECT __mysql_json_table_cell(r.value, 0) AS c1, ... FROM json_each(__mysql_json_table(doc, spec)) AS r) AS t`, `LATERAL` when `doc` reads a column: `__mysql_json_table` computes MySQL's rows (`FOR ORDINALITY`, `PATH`, `EXISTS PATH`, `NESTED PATH`, `ON EMPTY`/`ON ERROR` with `NULL`, `ERROR` (3665, 3156) or `DEFAULT`) as a JSON array, and `__mysql_json_table_cell` reads one column of a row |
+
+`JSON_TABLE` columns may be integer types up to `BIGINT`, `FLOAT`, `DOUBLE`,
+`CHAR`, `VARCHAR` (comparing with the default collation) and `JSON`. A
+document that is a subquery or reads a common table expression fails with
+1210, as in MySQL. Refused: other column types, an alias with a column list,
+a document holding a subquery elsewhere or reading a derived table, a
+conversion whose MySQL result is not certain (a double or a string with a
+leading number into an integer, a string longer than its column, a `FLOAT`
+that is not exact, a JSON `null` into a `JSON` column, JSON booleans), a
+`DEFAULT` that does not convert, and the error of a column that is not an
+integer or not on the first row.
 
 Not implemented: `JSON_ARRAYAGG` and `JSON_OBJECTAGG` as window functions,
-`JSON_TABLE`,
 `JSON_SCHEMA_VALID`, `JSON_SCHEMA_VALIDATION_REPORT`, `JSON_STORAGE_SIZE`,
 `JSON_STORAGE_FREE` and the `RETURNING`/`ON EMPTY`/`ON ERROR` clauses of
 `JSON_VALUE`.
