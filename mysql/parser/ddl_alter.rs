@@ -1,10 +1,12 @@
 use crate::ddl_column::Column;
-use crate::ddl_index::{drop_index_statement, translate_drop_index};
+use crate::ddl_index::{drop_index_statement, translate_create_index, translate_drop_index};
 use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_column_name, translate_ddl_identifier, translate_ddl_name};
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
-    AlterTable, AlterTableOperation, ObjectType, RenameTable, RenameTableNameKind, Statement,
+    AlterTable, AlterTableOperation, CreateIndex, Expr, Ident, IndexColumn, IndexConstraint,
+    IndexOption, IndexType, NullsDistinctOption, ObjectName, ObjectNamePart, ObjectType,
+    RenameTable, RenameTableNameKind, Statement, TableConstraint, UniqueConstraint,
 };
 use turso_parser::ast;
 
@@ -65,6 +67,60 @@ pub(crate) fn translate_alter_table(
         } => ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
         AlterTableOperation::DropIndex { name } => {
             return drop_index_statement(translate_ddl_identifier(name)?, &table_name, environment);
+        }
+        AlterTableOperation::AddConstraint {
+            constraint:
+                TableConstraint::Index(IndexConstraint {
+                    display_as_key: _,
+                    name: index_name,
+                    index_type,
+                    columns,
+                    index_options,
+                }),
+            not_valid: false,
+        } => {
+            let index_name = match index_name {
+                Some(index_name) => index_name.clone(),
+                None => generated_index_name(operation, columns, environment)?,
+            };
+            return add_index(
+                name,
+                false,
+                index_name,
+                index_type,
+                columns,
+                index_options,
+                environment,
+            );
+        }
+        AlterTableOperation::AddConstraint {
+            constraint:
+                TableConstraint::Unique(UniqueConstraint {
+                    name: constraint_name,
+                    index_name,
+                    index_type_display: _,
+                    index_type,
+                    columns,
+                    index_options,
+                    characteristics: None,
+                    nulls_distinct: NullsDistinctOption::None,
+                }),
+            not_valid: false,
+        } => {
+            let Some(index_name) = index_name.as_ref().or(constraint_name.as_ref()) else {
+                return Err(MysqlParserError::Unsupported(format!(
+                    "ALTER TABLE operation `{operation}`, a unique key without a name, whose name MySQL generates from the keys of the table, is not available"
+                )));
+            };
+            return add_index(
+                name,
+                true,
+                index_name.clone(),
+                index_type,
+                columns,
+                index_options,
+                environment,
+            );
         }
         _ => return Err(unsupported_operation(operation)),
     };
@@ -132,6 +188,56 @@ pub(crate) fn translate_drop(
             "`{statement}` is not available"
         ))),
     }
+}
+
+/// `ADD [UNIQUE] INDEX name (...)`, as `CREATE [UNIQUE] INDEX name ON table (...)`.
+fn add_index(
+    table_name: &ObjectName,
+    unique: bool,
+    index_name: Ident,
+    index_type: &Option<IndexType>,
+    columns: &[IndexColumn],
+    index_options: &[IndexOption],
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
+    let create_index = CreateIndex {
+        name: Some(ObjectName(vec![ObjectNamePart::Identifier(index_name)])),
+        table_name: table_name.clone(),
+        using: index_type.clone(),
+        columns: columns.to_vec(),
+        unique,
+        concurrently: false,
+        if_not_exists: false,
+        include: Vec::new(),
+        nulls_distinct: None,
+        with: Vec::new(),
+        predicate: None,
+        index_options: index_options.to_vec(),
+        alter_options: Vec::new(),
+    };
+    translate_create_index(&create_index, environment)
+}
+
+/// The name MySQL gives an index added without one: its first column's,
+/// when no index has it yet (MySQL adds a suffix otherwise).
+fn generated_index_name(
+    operation: &AlterTableOperation,
+    columns: &[IndexColumn],
+    environment: &dyn Environment,
+) -> Result<Ident, MysqlParserError> {
+    let unavailable = || {
+        MysqlParserError::Unsupported(format!(
+            "ALTER TABLE operation `{operation}`, an index without a name, whose name MySQL generates from the keys of the table, is not available"
+        ))
+    };
+    let Some(Expr::Identifier(column)) = columns.first().map(|column| &column.column.expr) else {
+        return Err(unavailable());
+    };
+    let name = translate_ddl_identifier(column)?;
+    if environment.index_table(name.as_str())?.is_some() {
+        return Err(unavailable());
+    }
+    Ok(Ident::new(name.as_str()))
 }
 
 fn unsupported_operation(operation: &AlterTableOperation) -> MysqlParserError {

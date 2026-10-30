@@ -1596,7 +1596,7 @@ fn lowering_rejects_unsupported_statement_families() {
         "TRUNCATE TABLE users",
         "CREATE OR REPLACE VIEW v AS SELECT 1",
         "DROP VIEW a, b",
-        "ALTER TABLE users ADD INDEX name_key (name)",
+        "ALTER TABLE users ADD PRIMARY KEY (name)",
         "CREATE INDEX k ON users ((name))",
         "CREATE INDEX k ON users ((LOWER(name)))",
         "CREATE INDEX k ON users ((a / 2))",

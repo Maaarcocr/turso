@@ -1585,6 +1585,31 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
 }
 
 #[test]
+fn alter_table_adds_indexes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE ai (a INT, b INT, t TEXT)")?;
+    connection.execute("CREATE TABLE aj (a INT)")?;
+    connection.execute("ALTER TABLE ai ADD INDEX ia (a)")?;
+    connection.execute("ALTER TABLE ai ADD UNIQUE KEY ub (b)")?;
+    connection.execute("ALTER TABLE ai ADD INDEX (a, b)")?;
+    connection.execute("INSERT INTO ai VALUES (1, 1, 'x')")?;
+    assert!(connection
+        .execute("INSERT INTO ai VALUES (2, 1, 'y')")
+        .is_err());
+    connection.execute("ALTER TABLE ai DROP INDEX ub")?;
+    connection.execute("INSERT INTO ai VALUES (2, 1, 'y')")?;
+    for refused in [
+        "ALTER TABLE ai ADD INDEX it (t)",
+        "ALTER TABLE ai ADD UNIQUE (a)",
+        "ALTER TABLE ai ADD INDEX (a)",
+        "ALTER TABLE aj ADD INDEX ia (a)",
+    ] {
+        assert!(connection.execute(refused).is_err(), "{refused}");
+    }
+    Ok(())
+}
+
+#[test]
 fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE sn (i INT, f DOUBLE, s VARCHAR(10))")?;
