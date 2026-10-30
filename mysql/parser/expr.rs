@@ -1128,17 +1128,26 @@ fn translate_integer_division(
     right: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    if hex_or_bit_literal(left).is_some() || hex_or_bit_literal(right).is_some() {
+    if hex_or_bit_literal(left).is_some()
+        || hex_or_bit_literal(right).is_some()
+        || exceeds_bigint(left)
+        || exceeds_bigint(right)
+    {
         if let Some(quotient) = folded_integer_division(left, right) {
             return Ok(quotient);
         }
     }
     let json_beside_binary = |json_side: &Expr, other: &Expr| {
-        json::is_json_value(json_side) && hex_or_bit_literal(other).is_some()
+        json::is_json_value(json_side)
+            && (hex_or_bit_literal(other).is_some() || wide_number_text(other).is_some())
     };
     if json_beside_binary(left, right) || json_beside_binary(right, left) {
         let mut unsigned = false;
         let mut operand = |expr: &Expr, context: &mut TranslationContext| {
+            if let Some((text, wide_unsigned)) = wide_number_text(expr) {
+                unsigned |= wide_unsigned;
+                return Ok(string_expr(&text));
+            }
             let Some(literal) = hex_or_bit_literal(expr) else {
                 return json::translate_numeric_coercion(expr, "__mysql_json_decimal", context);
             };
@@ -1366,6 +1375,47 @@ fn cannot_be_negative(expr: &Expr) -> bool {
         },
         _ => false,
     }
+}
+
+/// The exact decimal text of a number literal at or beyond the BIGINT
+/// range, optionally negated (a double as its shortest digits), and whether
+/// MySQL reads it as a BIGINT UNSIGNED.
+fn wide_number_text(expr: &Expr) -> Option<(String, bool)> {
+    if !exceeds_bigint(expr) {
+        return None;
+    }
+    let (negative, inner) = match unnested(expr) {
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => (true, unnested(inner)),
+        other => (false, other),
+    };
+    let Expr::Value(value) = inner else {
+        return None;
+    };
+    let Value::Number(digits, _) = &value.value else {
+        return None;
+    };
+    let sign = if negative { "-" } else { "" };
+    if digits.contains(['e', 'E']) {
+        let double = digits.parse::<f64>().ok()?;
+        if !double.is_finite() || double.abs() >= 1e30 {
+            return None;
+        }
+        return Some((format!("{sign}{double}"), false));
+    }
+    let all_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    if !all_digits(whole) || !all_digits(fraction) || whole.len() + fraction.len() > 65 {
+        return None;
+    }
+    let unsigned = !negative
+        && fraction.is_empty()
+        && digits
+            .parse::<u64>()
+            .is_ok_and(|value| i64::try_from(value).is_err());
+    Some((format!("{sign}{digits}"), unsigned))
 }
 
 fn exceeds_bigint(expr: &Expr) -> bool {
@@ -2135,16 +2185,22 @@ fn comparison(
     Ok(ast::Expr::binary(lhs, operator, rhs))
 }
 
-/// The exact order of two integer or decimal literals (optionally negated)
-/// when one lies outside BIGINT, where Turso would read both as DOUBLE
-/// values (`18446744073709551615 = 18446744073709551614` is 0 in MySQL).
+/// The order MySQL gives two number literals (optionally negated) when one
+/// is an integer or decimal outside BIGINT or a hex literal above it, where
+/// Turso would read both as DOUBLE values: exact for integers, decimals and
+/// hex literals (`18446744073709551615 = 18446744073709551614` is 0), as
+/// DOUBLE values beside a double literal.
 fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
     struct Exact {
         negative: bool,
         whole: String,
         fraction: String,
     }
-    fn exact(expr: &Expr) -> Option<Exact> {
+    enum Number {
+        Exact(Exact),
+        Double(f64),
+    }
+    fn number(expr: &Expr) -> Option<Number> {
         let (negative, inner) = match unnested(expr) {
             Expr::UnaryOp {
                 op: UnaryOperator::Minus,
@@ -2152,7 +2208,31 @@ fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
             } => (true, inner.as_ref()),
             other => (false, other),
         };
+        if let Expr::Value(value) = unnested(inner) {
+            if let Value::HexStringLiteral(_) = value.value {
+                if negative {
+                    return None;
+                }
+                let value = binary_literal_value(&value.value).ok()?;
+                return Some(Number::Exact(Exact {
+                    negative: false,
+                    whole: if value == 0 {
+                        String::new()
+                    } else {
+                        value.to_string()
+                    },
+                    fraction: String::new(),
+                }));
+            }
+        }
         let digits = number_literal(inner)?;
+        if digits.contains(['e', 'E']) {
+            let double = digits
+                .parse::<f64>()
+                .ok()
+                .filter(|double| double.is_finite())?;
+            return Some(Number::Double(if negative { -double } else { double }));
+        }
         let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
         let all_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
         if !all_digits(whole) || !all_digits(fraction) || whole.len() + fraction.len() > 65 {
@@ -2161,13 +2241,16 @@ fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
         let whole = whole.trim_start_matches('0').to_string();
         let fraction = fraction.trim_end_matches('0').to_string();
         let negative = negative && !(whole.is_empty() && fraction.is_empty());
-        Some(Exact {
+        Some(Number::Exact(Exact {
             negative,
             whole,
             fraction,
-        })
+        }))
     }
-    fn beyond_bigint(number: &Exact) -> bool {
+    fn beyond_bigint(number: &Number) -> bool {
+        let Number::Exact(number) = number else {
+            return false;
+        };
         let limit = if number.negative {
             "9223372036854775808"
         } else {
@@ -2176,10 +2259,28 @@ fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
         number.whole.len() > limit.len()
             || (number.whole.len() == limit.len() && number.whole.as_str() > limit)
     }
-    let (lhs, rhs) = (exact(left)?, exact(right)?);
+    fn double(number: &Number) -> f64 {
+        match number {
+            Number::Double(double) => *double,
+            Number::Exact(exact) => {
+                let magnitude = format!("0{}.{}0", exact.whole, exact.fraction)
+                    .parse::<f64>()
+                    .expect("digits parse as a double");
+                if exact.negative {
+                    -magnitude
+                } else {
+                    magnitude
+                }
+            }
+        }
+    }
+    let (lhs, rhs) = (number(left)?, number(right)?);
     if !beyond_bigint(&lhs) && !beyond_bigint(&rhs) {
         return None;
     }
+    let (Number::Exact(lhs), Number::Exact(rhs)) = (&lhs, &rhs) else {
+        return double(&lhs).partial_cmp(&double(&rhs));
+    };
     Some(match (lhs.negative, rhs.negative) {
         (false, true) => std::cmp::Ordering::Greater,
         (true, false) => std::cmp::Ordering::Less,
@@ -4155,10 +4256,10 @@ fn translate_json_numeric_cast(
             "__mysql_cast_as_signed",
             vec![coerced("__mysql_json_integer", context)?],
         ),
-        DataType::Unsigned | DataType::UnsignedInteger => function_call(
-            "__mysql_cast_as_unsigned",
-            vec![coerced("__mysql_json_integer", context)?],
-        ),
+        DataType::Unsigned | DataType::UnsignedInteger => {
+            let shown = std::mem::take(&mut context.unsigned_cast_as_text);
+            unsigned_cast(coerced("__mysql_json_integer", context)?, shown)
+        }
         DataType::Decimal(precision) => ast::Expr::cast(
             coerced("__mysql_json_decimal", context)?,
             Some(decimal_type(precision)),
@@ -4179,11 +4280,50 @@ fn translate_json_numeric_cast(
     })
 }
 
+/// Whether `expr` is `CAST(x AS UNSIGNED)` or `CONVERT(x, UNSIGNED)`.
+pub(crate) fn is_unsigned_cast(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_unsigned_cast(inner),
+        Expr::Cast {
+            kind: CastKind::Cast,
+            data_type: DataType::Unsigned | DataType::UnsignedInteger,
+            array: false,
+            format: None,
+            ..
+        }
+        | Expr::Convert {
+            is_try: false,
+            data_type: Some(DataType::Unsigned | DataType::UnsignedInteger),
+            charset: None,
+            ..
+        } => true,
+        _ => false,
+    }
+}
+
+/// `CAST(operand AS UNSIGNED)`: shown as MySQL's BIGINT UNSIGNED, as text
+/// above BIGINT, when `shown`.
+fn unsigned_cast(operand: ast::Expr, shown: bool) -> ast::Expr {
+    if shown {
+        function_call(
+            "__mysql_unsigned_shown",
+            vec![function_call(
+                "__mysql_cast_as_unsigned_bits",
+                vec![operand],
+            )],
+        )
+    } else {
+        function_call("__mysql_cast_as_unsigned", vec![operand])
+    }
+}
+
 fn translate_integer_cast(
     expr: &Expr,
     name: &str,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let shown =
+        name == "__mysql_cast_as_unsigned" && std::mem::take(&mut context.unsigned_cast_as_text);
     let operand = match number_literal(expr) {
         Some(digits) if exceeds_unsigned_bigint(digits) => exact_decimal(digits, false),
         Some(digits)
@@ -4195,7 +4335,11 @@ fn translate_integer_cast(
         }
         _ => translate_in(expr, Context::Number, context)?,
     };
-    Ok(function_call(name, vec![operand]))
+    Ok(if shown {
+        unsigned_cast(operand, true)
+    } else {
+        function_call(name, vec![operand])
+    })
 }
 
 fn translate_cast_as_json(

@@ -1850,6 +1850,58 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn selected_unsigned_casts_show_values_above_bigint() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(-3 AS UNSIGNED), CONVERT(TIME '-31:34:58', UNSIGNED),              CAST(-1.5e0 AS UNSIGNED INTEGER), CONVERT(-1.7, UNSIGNED),              CAST(CAST(18446744073709551615 AS JSON) AS UNSIGNED), CAST(5 AS UNSIGNED)"
+        )?,
+        vec![vec![
+            Value::build_text("18446744073709551613"),
+            Value::build_text("18446744073709238158"),
+            Value::build_text("18446744073709551614"),
+            Value::build_text("18446744073709551614"),
+            Value::build_text("18446744073709551615"),
+            Value::from_i64(5),
+        ]]
+    );
+    let failing = "SELECT CAST(-3 AS UNSIGNED) + 1";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(error.contains("not supported yet"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 18446744073709551615 DIV '103458.123456', \
+             18446744073709540000e0 DIV -18446744073709540000e0, \
+             -9223372036854775808 DIV CAST(2 AS JSON), \
+             CAST('1' AS JSON) DIV 18446744073709551615, \
+             18446744073709551615 DIV 0.0"
+        )?,
+        vec![vec![
+            Value::from_i64(178301552913385),
+            Value::from_i64(-1),
+            Value::from_i64(-4611686018427387904),
+            Value::from_i64(0),
+            Value::Null,
+        ]]
+    );
+    let failing = "SELECT 18446744073709551615 DIV CAST(-1 AS JSON)";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(
+        error.contains("ERROR 1690 (22003): BIGINT UNSIGNED value is out of range"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn json_values_compare_exactly_with_integers_beyond_bigint() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
@@ -1883,7 +1935,7 @@ fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
              -9223372036854775809 < -9223372036854775808, \
              18446744073709551615 <=> 18446744073709551615.000, \
              18446744073709551614 BETWEEN 18446744073709551615 AND 18446744073709551615, \
-             18446744073709551614 NOT BETWEEN 1 AND 18446744073709551615"
+             18446744073709551614 NOT BETWEEN 1 AND 18446744073709551615,              0xFF666F6F626172FF <= 9223372036854775807,              20000101103458.123456 < 0xFF666F6F626172FF,              0xFF666F6F626172FF > -1.1e0"
         )?,
         vec![vec![
             Value::from_i64(0),
@@ -1892,6 +1944,9 @@ fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
             Value::from_i64(1),
             Value::from_i64(0),
             Value::from_i64(0),
+            Value::from_i64(0),
+            Value::from_i64(1),
+            Value::from_i64(1),
         ]]
     );
     Ok(())

@@ -30,6 +30,9 @@ pub(crate) struct TranslationContext<'a> {
     select_list_is_shown: bool,
     pub(crate) latin1_as_text: bool,
     pub(crate) unsigned_as_text: bool,
+    /// The select item is a shown `CAST(.. AS UNSIGNED)` of a `SELECT` that
+    /// reads one row, whose value above BIGINT is shown as text.
+    pub(crate) unsigned_cast_as_text: bool,
     /// Inside an operand compared with a column or another non-literal,
     /// where Turso compares a text column with a DOUBLE as text (`v IN
     /// (0e0)` is false for `v = '0'`). String literals in arithmetic keep
@@ -1737,6 +1740,7 @@ fn translate_selected(
     let failure = runs_once.then(|| failure_evaluated(expr)).flatten();
     context.latin1_as_text = runs_once && shown && shows_latin1_as_text(expr);
     context.unsigned_as_text = runs_once && shown && is_bit_operation(expr);
+    context.unsigned_cast_as_text = runs_once && shown && crate::expr::is_unsigned_cast(expr);
     context.empty_regexp_is_evaluated = crate::invalid_json::is_empty_regexp(expr);
     let translated = match failure {
         Some(Failure::Json(text)) => Ok(failing_json_cast(text)),
@@ -1776,6 +1780,7 @@ fn translate_selected(
     };
     context.latin1_as_text = false;
     context.unsigned_as_text = false;
+    context.unsigned_cast_as_text = false;
     context.empty_regexp_is_evaluated = false;
     match translated {
         Err(MysqlParserError::Unsupported(_))

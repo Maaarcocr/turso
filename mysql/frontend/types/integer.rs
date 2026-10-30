@@ -199,6 +199,12 @@ pub(super) fn cast_as_unsigned(args: &[Value]) -> Result<Value> {
     unsigned_result(integer_bits(&args[0]))
 }
 
+/// `__mysql_cast_as_unsigned_bits(x)`: the 64 bits of `CAST(x AS UNSIGNED)`
+/// as a BIGINT, for `__mysql_unsigned_shown` to show above BIGINT.
+pub(super) fn cast_as_unsigned_bits(args: &[Value]) -> Result<Value> {
+    signed_result(integer_bits(&args[0]))
+}
+
 pub(super) fn cast_as_integer_unsupported(_args: &[Value]) -> Result<Value> {
     Err(unsupported_value(
         "CAST of a DATE, DATETIME, TIMESTAMP, TIME, ENUM or SET value to SIGNED or UNSIGNED"
