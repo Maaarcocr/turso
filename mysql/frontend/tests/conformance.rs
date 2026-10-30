@@ -1850,6 +1850,53 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn temporal_literals_of_different_types_compare_as_datetimes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        (
+            "SELECT TIME '31:34:58' <= TIMESTAMP '2000-01-01 10:34:58.978654'",
+            0,
+        ),
+        (
+            "SELECT TIME '-5 10:34:58' > TIMESTAMP '2000-01-01 10:34:58.123456'",
+            1,
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58' = DATE '2000-01-01'",
+            0,
+        ),
+        (
+            "SELECT DATE '2000-01-01' <=> TIMESTAMP '2000-01-01 00:00:00.000'",
+            1,
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58.5' < TIMESTAMP '2000-01-01 10:34:58.50001'",
+            1,
+        ),
+        ("SELECT TIME '-10:04:58' < DATE '2000-01-01'", 0),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::from_i64(expected)]],
+            "{sql}"
+        );
+    }
+    let today = match query(&connection, "SELECT CURRENT_DATE")?.as_slice() {
+        [row] => row[0].to_string(),
+        rows => panic!("CURRENT_DATE gave {rows:?}"),
+    };
+    let sql = format!(
+        "SELECT TIME '00:00:00' = TIMESTAMP '{today} 00:00:00', \
+         TIME '24:00:00.5' > TIMESTAMP '{today} 23:59:59.999999'"
+    );
+    assert_eq!(
+        query(&connection, &sql)?,
+        vec![vec![Value::from_i64(1), Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn null_operands_skip_invalid_json_as_in_mysql() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for sql in [

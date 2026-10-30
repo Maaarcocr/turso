@@ -2343,9 +2343,30 @@ fn translate_compared_value(
                 Context::Value
             }
             _ => {
-                return Err(MysqlParserError::Unsupported(format!(
-                    "comparison of `{expr}` with `{other_side}`, which MySQL compares as DATETIME values, is not lowered yet"
-                )))
+                let Expr::TypedString(typed) = unnested(expr) else {
+                    unreachable!("a temporal type comes from a temporal literal");
+                };
+                return match crate::literal::compared_datetime(typed) {
+                    Some(crate::literal::ComparedDatetime::Fixed(text)) => Ok(string_expr(&text)),
+                    Some(crate::literal::ComparedDatetime::SinceToday(micros)) => {
+                        let seconds = micros.div_euclid(1_000_000);
+                        let fraction = micros.rem_euclid(1_000_000);
+                        Ok(ast::Expr::binary(
+                            function_call(
+                                "datetime",
+                                vec![
+                                    ast::Expr::Literal(ast::Literal::CurrentDate),
+                                    string_expr(&format!("{seconds} seconds")),
+                                ],
+                            ),
+                            ast::Operator::Concat,
+                            string_expr(&format!(".{fraction:06}")),
+                        ))
+                    }
+                    None => Err(MysqlParserError::Unsupported(format!(
+                        "comparison of `{expr}` with `{other_side}`, which MySQL compares as DATETIME values, is not lowered yet"
+                    ))),
+                };
             }
         };
         return translate_in(expr, literal_context, context);

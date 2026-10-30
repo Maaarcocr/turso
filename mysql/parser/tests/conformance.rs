@@ -1348,11 +1348,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "time compared with a timestamp",
-            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58' <= TIME '00:00:59'",
-        },
-        SqlCase {
-            name: "timestamps with different fractions compared",
-            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
+            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58' <= TIME '900:00:59'",
         },
         SqlCase {
             name: "negated temporal literal with a fraction",
