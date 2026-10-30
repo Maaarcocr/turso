@@ -19,6 +19,7 @@ mod dml;
 mod expr;
 mod foreign_key;
 mod function_names;
+mod having;
 mod insert;
 mod invalid_json;
 mod json;

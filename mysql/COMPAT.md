@@ -172,6 +172,15 @@ select alias that may also name a column is refused over a view, a derived
 table, a common table expression or columns of several tables, and when it
 holds a subquery.
 
+`HAVING` in a `SELECT` without `GROUP BY` or aggregates, which MySQL applies to
+each row, joins the `WHERE` condition with each select alias it names replaced
+by the alias's expression (`SELECT a + 1 AS b FROM t HAVING b > 2`). Refused:
+a name that is neither a select alias nor a selected column, unless the select
+list has `*` or the `SELECT` is a subquery with no `FROM` (where it names an
+outer column), an alias of a window function, a subquery in `HAVING` that
+names an alias, and expressions other than operators, `IN`, `BETWEEN`, `LIKE`,
+`CASE`, casts and plain function calls.
+
 Statements MySQL rejects when it resolves names fail with MySQL's error: two
 tables of one `FROM` with the same name or alias (1066; a derived table's
 alias is apart from the names of tables, and a table named with its database

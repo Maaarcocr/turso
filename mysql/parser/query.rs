@@ -463,11 +463,18 @@ fn translate_select(
         .map(|item| translate_projection(item, runs_once, shown, context))
         .collect::<Result<Vec<_>, _>>()?;
     let from = translate_from(from, context)?;
+    let filter = crate::having::ungrouped_filter(select, context.may_read_outer_rows())?;
+    let (selection, having) = match &filter {
+        Some(filter) => (Some(filter), &None),
+        None => (selection.as_ref(), having),
+    };
     let where_clause = selection
-        .as_ref()
         .map(|condition| translate_condition(condition, context).map(Box::new))
         .transpose()?;
-    context.having_columns = having_columns(select, context.environment)?;
+    context.having_columns = match filter {
+        Some(_) => Vec::new(),
+        None => having_columns(select, context.environment)?,
+    };
     let group_by = translate_group_by(group_by, having.as_ref(), context);
     context.having_columns.clear();
     let group_by = group_by?;
@@ -1380,7 +1387,7 @@ fn uses_ungrouped_column(expr: &Expr, groups: &Grouping) -> bool {
     }
 }
 
-fn contains_aggregate(expr: &Expr) -> bool {
+pub(crate) fn contains_aggregate(expr: &Expr) -> bool {
     match expr {
         Expr::Function(function) if is_aggregate(function) => true,
         Expr::Function(function) => function_arguments(function)

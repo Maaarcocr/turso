@@ -170,7 +170,7 @@ pub(crate) fn translate_recursive_cte(
         })));
     step.projection
         .push(SelectItem::UnnamedExpr(Expr::CompoundIdentifier(vec![
-            reference.clone(),
+            reference,
             Ident::new(DEPTH),
         ])));
     let mut columns = names

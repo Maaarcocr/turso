@@ -1280,6 +1280,40 @@ fn recursive_common_table_expressions_stop_before_mysql_limit() -> turso_core::R
 }
 
 #[test]
+fn having_without_grouping_filters_rows_by_alias() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE uv (u INT, v INT)")?;
+    connection.execute("INSERT INTO uv VALUES (1, 2), (0, 3), (5, 1)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT u + 1 AS w FROM uv WHERE v > 1 HAVING w > 1 ORDER BY w"
+        )?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT u, (SELECT v HAVING u > 3) FROM uv ORDER BY u"
+        )?,
+        vec![
+            vec![Value::from_i64(0), Value::Null],
+            vec![Value::from_i64(1), Value::Null],
+            vec![Value::from_i64(5), Value::from_i64(1)],
+        ]
+    );
+    assert!(query(&connection, "SELECT 1 HAVING FALSE")?.is_empty());
+    for refused in [
+        "SELECT u FROM uv HAVING v = 1",
+        "SELECT u, ROW_NUMBER() OVER () AS r FROM uv HAVING r = 1",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn table_statements_read_whole_tables() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t1 (i INT)")?;
