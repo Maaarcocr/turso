@@ -1606,6 +1606,33 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
 }
 
 #[test]
+fn bit_operations_read_binary_strings_as_numbers_next_to_numbers() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT _binary 'foobar' ^ 1.5, '1.5' >> _binary 'foobar', _binary '12' & 7, \
+             -1.5 | _binary 'foobar1234'"
+        )?,
+        vec![vec![
+            Value::from_i64(2),
+            Value::from_i64(1),
+            Value::from_i64(4),
+            Value::build_text("18446744073709551614"),
+        ]]
+    );
+    for refused in [
+        "SELECT x'09' ^ _binary 'foobar'",
+        "SELECT ~_binary 'ab'",
+        "SELECT _binary 'a' << 1",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn alter_table_changes_columns() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE ac (a DOUBLE, b VARCHAR(10), k INT PRIMARY KEY)")?;

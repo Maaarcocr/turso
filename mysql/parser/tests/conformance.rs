@@ -1500,7 +1500,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "binary string in a bit operation",
-            sql: "SELECT _binary '3' | 1",
+            sql: "SELECT _binary '3' | _binary '1'",
         },
         SqlCase {
             name: "bit operation on a DOUBLE below the BIGINT range after a NULL",

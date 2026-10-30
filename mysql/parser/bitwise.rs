@@ -57,9 +57,19 @@ fn operand_bits(
         return operand_bits(inner, context);
     }
     if let Some((function, operands)) = bit_operation(expr) {
+        let numeric = match function {
+            "__mysql_bit_not" => false,
+            "__mysql_shift_left" | "__mysql_shift_right" => {
+                introduced_binary_text(operands[0]).is_none()
+            }
+            _ => operands.iter().any(|operand| is_known_non_binary(operand)),
+        };
         let args = operands
             .into_iter()
-            .map(|operand| operand_bits(operand, context))
+            .map(|operand| match introduced_binary_text(operand) {
+                Some(text) if numeric => Ok(bits_literal(string_bits(&text)?)),
+                _ => operand_bits(operand, context),
+            })
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(function_call(function, args));
     }
@@ -111,6 +121,62 @@ fn literal_bits(expr: &Expr) -> Result<Option<ast::Expr>, MysqlParserError> {
         _ => return Ok(None),
     };
     Ok(Some(bits_literal(bits)))
+}
+
+/// The text MySQL reads a `_binary` literal as when a bit operation is
+/// numeric, up to its first byte that is not ASCII.
+fn introduced_binary_text(expr: &Expr) -> Option<String> {
+    let Expr::Prefixed { prefix, value } = unnested(expr) else {
+        return None;
+    };
+    if prefix.quote_style.is_some() || !prefix.value.eq_ignore_ascii_case("_binary") {
+        return None;
+    }
+    let bytes = match unnested(value) {
+        Expr::Value(value) => match &value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                text.as_bytes().to_vec()
+            }
+            Value::HexStringLiteral(digits) => crate::literal::hex_bytes(digits).ok()?,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let end = bytes
+        .iter()
+        .position(|byte| !byte.is_ascii())
+        .unwrap_or(bytes.len());
+    Some(String::from_utf8(bytes[..end].to_vec()).expect("ASCII bytes are UTF-8"))
+}
+
+/// Whether MySQL types `expr` as something other than a binary string, so a
+/// bit operation with it is numeric.
+fn is_known_non_binary(expr: &Expr) -> bool {
+    match unnested(expr) {
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::Number(..)
+                | Value::SingleQuotedString(_)
+                | Value::DoubleQuotedString(_)
+                | Value::NationalStringLiteral(_)
+                | Value::Boolean(_)
+        ),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus | UnaryOperator::Plus,
+            expr,
+        } => {
+            matches!(unnested(expr), Expr::Value(value) if matches!(value.value, Value::Number(..)))
+        }
+        Expr::TypedString(_) => true,
+        Expr::Prefixed { prefix, .. } => {
+            prefix.quote_style.is_none()
+                && matches!(
+                    prefix.value.to_ascii_lowercase().as_str(),
+                    "_utf8mb4" | "_utf8mb3" | "_utf8"
+                )
+        }
+        other => json::is_json_value(other),
+    }
 }
 
 fn reads_as_text(charset: &str, text: &str) -> bool {
