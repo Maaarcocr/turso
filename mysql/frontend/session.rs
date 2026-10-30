@@ -76,8 +76,8 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         | RECURSIVE_INTEGER
         | VALIDATE_PASSWORD_STRENGTH
         | EMPTY_REGEXP
-        | BIGINT_OUT_OF_RANGE
         | TEMPORAL_NUMBER => arg_count == 1,
+        BIGINT_OUT_OF_RANGE => matches!(arg_count, 1 | 2),
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -182,13 +182,21 @@ pub(crate) fn execute(
                 "`{other}` as the number of a DATE, TIME or DATETIME,"
             ))),
         },
-        BIGINT_OUT_OF_RANGE => match &args[0] {
-            Value::Text(text) => Err(LimboError::SqlError(format!(
-                "ERROR 1690 (22003): BIGINT value is out of range in '{}'",
-                text.as_str()
-            ))),
-            other => Err(LimboError::InternalError(format!(
-                "__mysql_bigint_out_of_range takes the text of a literal, not `{other}`"
+        BIGINT_OUT_OF_RANGE => match (&args[0], args.get(1)) {
+            (Value::Text(text), None | Some(Value::Numeric(Numeric::Integer(0)))) => {
+                Err(LimboError::SqlError(format!(
+                    "ERROR 1690 (22003): BIGINT value is out of range in '{}'",
+                    text.as_str()
+                )))
+            }
+            (Value::Text(text), Some(Value::Numeric(Numeric::Integer(1)))) => {
+                Err(LimboError::SqlError(format!(
+                    "ERROR 1690 (22003): BIGINT UNSIGNED value is out of range in '{}'",
+                    text.as_str()
+                )))
+            }
+            (other, _) => Err(LimboError::InternalError(format!(
+                "__mysql_bigint_out_of_range takes the text of a literal and whether it is unsigned, not `{other}`"
             ))),
         },
         RECURSIVE_INTEGER => match &args[0] {
@@ -299,8 +307,9 @@ const EMPTY_REGEXP: &str = "__MYSQL_EMPTY_REGEXP";
 /// of its fractional digits, is refused.
 const TEMPORAL_NUMBER: &str = "__MYSQL_TEMPORAL_NUMBER";
 
-/// `__mysql_bigint_out_of_range(text)`: MySQL's error (1690) for the
-/// literal printed as `text`, which it rejects where it reads it as a BIGINT.
+/// `__mysql_bigint_out_of_range(text[, unsigned])`: MySQL's error (1690)
+/// for the value printed as `text`, which it rejects where it reads it as a
+/// BIGINT, or as a BIGINT UNSIGNED when `unsigned` is 1.
 const BIGINT_OUT_OF_RANGE: &str = "__MYSQL_BIGINT_OUT_OF_RANGE";
 
 /// `__mysql_recursive_integer(value)`: a recursive value of a column whose

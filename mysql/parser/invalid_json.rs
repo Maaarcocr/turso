@@ -13,6 +13,15 @@ pub(crate) enum Failure<'a> {
     BigintOutOfRange(&'a str),
     /// `x REGEXP ''` of a text subject that is not `NULL` (3685).
     EmptyRegexp,
+    /// `left operator right` of integer literals whose exact result lies
+    /// outside BIGINT, or outside BIGINT UNSIGNED when an operand is unsigned
+    /// (1690).
+    IntegerOutOfRange {
+        unsigned: bool,
+        left: &'a Expr,
+        operator: &'static str,
+        right: &'a Expr,
+    },
 }
 
 /// Whether `expr` is `x [NOT] REGEXP ''`.
@@ -230,6 +239,9 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
     } else {
         (outcome(left)?, outcome(right)?)
     };
+    if let Some(failure) = integer_out_of_range(left, op, right) {
+        return Some(Outcome::Fails(failure));
+    }
     let right_is_evaluated = match op {
         BinaryOperator::And => matches!(lhs, Outcome::Null) || literal_truth(left) == Some(true),
         BinaryOperator::Or | BinaryOperator::StringConcat => {
@@ -264,6 +276,101 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
         (None, Some(_)) => Outcome::MaybeNull,
         (None, None) if never_null(op, lhs, rhs) => Outcome::NotNull,
         (None, None) => Outcome::MaybeNull,
+    })
+}
+
+/// `left op right` for `+`, `-` and `*` of integer literals whose exact
+/// result MySQL rejects: outside BIGINT UNSIGNED when an operand is a hex
+/// literal or a number above BIGINT, which MySQL types as unsigned, and
+/// outside BIGINT otherwise. Bit literals are signed, as in MySQL.
+fn integer_out_of_range<'a>(
+    left: &'a Expr,
+    op: &BinaryOperator,
+    right: &'a Expr,
+) -> Option<Failure<'a>> {
+    fn integer(expr: &Expr) -> Option<(i128, bool)> {
+        let digits_value = |digits: &str| {
+            if digits.contains(['.', 'e', 'E']) {
+                return None;
+            }
+            digits
+                .parse::<u64>()
+                .ok()
+                .map(|value| (i128::from(value), i64::try_from(value).is_err()))
+        };
+        match expr {
+            Expr::Nested(inner) => integer(inner),
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: inner,
+            } => match inner.as_ref() {
+                Expr::Value(value) => match &value.value {
+                    Value::Number(digits, _) => digits_value(digits)
+                        .map(|(value, _)| -value)
+                        .filter(|value| *value >= i128::from(i64::MIN))
+                        .map(|value| (value, false)),
+                    _ => None,
+                },
+                _ => None,
+            },
+            Expr::Value(value) => match &value.value {
+                Value::Number(digits, _) => digits_value(digits),
+                Value::Boolean(truth) => Some((i128::from(*truth), false)),
+                Value::HexStringLiteral(_) => {
+                    let value = crate::literal::binary_literal_value(&value.value).ok()?;
+                    Some((i128::from(value), true))
+                }
+                Value::SingleQuotedByteStringLiteral(_) => {
+                    let value = crate::literal::binary_literal_value(&value.value).ok()?;
+                    i64::try_from(value)
+                        .ok()
+                        .map(|value| (i128::from(value), false))
+                }
+                _ => None,
+            },
+            Expr::TypedString(typed) => {
+                let temporal = crate::literal::temporal_literal(typed)?;
+                if temporal.text.contains('.') {
+                    return None;
+                }
+                let digits: String = temporal.text.chars().filter(char::is_ascii_digit).collect();
+                let magnitude = digits.parse::<i128>().ok()?;
+                Some((
+                    if temporal.text.starts_with('-') {
+                        -magnitude
+                    } else {
+                        magnitude
+                    },
+                    false,
+                ))
+            }
+            _ => None,
+        }
+    }
+    let operator = match op {
+        BinaryOperator::Plus => "+",
+        BinaryOperator::Minus => "-",
+        BinaryOperator::Multiply => "*",
+        _ => return None,
+    };
+    let (lhs, left_unsigned) = integer(left)?;
+    let (rhs, right_unsigned) = integer(right)?;
+    let result = match op {
+        BinaryOperator::Plus => lhs + rhs,
+        BinaryOperator::Minus => lhs - rhs,
+        _ => lhs.checked_mul(rhs)?,
+    };
+    let unsigned = left_unsigned || right_unsigned;
+    let in_range = if unsigned {
+        (0..=i128::from(u64::MAX)).contains(&result)
+    } else {
+        (i128::from(i64::MIN)..=i128::from(i64::MAX)).contains(&result)
+    };
+    (!in_range).then_some(Failure::IntegerOutOfRange {
+        unsigned,
+        left,
+        operator,
+        right,
     })
 }
 

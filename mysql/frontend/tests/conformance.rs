@@ -1688,6 +1688,22 @@ fn alter_table_adds_indexes() -> turso_core::Result<()> {
     ] {
         assert!(connection.execute(refused).is_err(), "{refused}");
     }
+    connection.execute("CREATE TABLE ak (c INT, d INT UNIQUE)")?;
+    connection.execute("ALTER TABLE ak ADD UNIQUE (c)")?;
+    assert!(connection
+        .execute("INSERT INTO ak VALUES (1, 1), (1, 2)")
+        .is_err());
+    for refused in [
+        "ALTER TABLE ak ADD INDEX (d)",
+        "ALTER TABLE ak ADD UNIQUE (c)",
+        "CREATE INDEX d ON ak (c)",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(
+            error.contains("unsupported MySQL syntax"),
+            "{refused}: {error}"
+        );
+    }
     Ok(())
 }
 
@@ -1757,10 +1773,53 @@ fn integer_division_of_hex_literals_folds_exact_decimals() -> turso_core::Result
             Value::Null,
         ]]
     );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0xff DIV CAST(true AS JSON), X'01' DIV CAST('1.1' AS JSON), \
+             CAST(-20 AS JSON) DIV 0b11, CAST(-2 AS JSON) DIV 0x3, x'09' DIV CAST('{}' AS JSON)"
+        )?,
+        vec![vec![
+            Value::from_i64(255),
+            Value::from_i64(0),
+            Value::from_i64(-6),
+            Value::from_i64(0),
+            Value::Null,
+        ]]
+    );
+    let failing = "SELECT CAST(-20 AS JSON) DIV 0x3";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(error.contains("ERROR 1690"), "{failing}: {error}");
     for refused in ["SELECT -1.5e0 DIV 0x1", "SELECT TIME '-5 10:34:58' DIV 0x1"] {
         let error = query(&connection, refused).expect_err(refused).to_string();
         assert!(error.contains("BIGINT UNSIGNED"), "{refused}: {error}");
     }
+    Ok(())
+}
+
+#[test]
+fn integer_arithmetic_of_literals_outside_its_range_fails_as_in_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, kind) in [
+        ("SELECT 0x0 - 0x1", "BIGINT UNSIGNED"),
+        ("SELECT 0xffffffffffffffff + 1", "BIGINT UNSIGNED"),
+        ("SELECT TIME '-101:34:58' * X'01'", "BIGINT UNSIGNED"),
+        ("SELECT 9223372036854775807 + 1", "BIGINT value"),
+        ("SELECT CONCAT(-9223372036854775808 - 1)", "BIGINT value"),
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(
+            error.contains("ERROR 1690") && error.contains(kind),
+            "{sql}: {error}"
+        );
+    }
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT TIME '-101:34:58' - b'1001', 0b1001 * -3, 0 AND (0x0 - 0x1), 0x10 - 0x1"
+        )?,
+        vec![[-1013467, -27, 0, 15].map(Value::from_i64).to_vec()]
+    );
     Ok(())
 }
 

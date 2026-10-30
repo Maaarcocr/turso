@@ -111,7 +111,7 @@ pub(crate) fn translate_alter_table(
         } => {
             let index_name = match index_name {
                 Some(index_name) => index_name.clone(),
-                None => generated_index_name(operation, columns, environment)?,
+                None => generated_index_name(operation, &table_name, columns, environment)?,
             };
             return add_index(
                 name,
@@ -137,15 +137,14 @@ pub(crate) fn translate_alter_table(
                 }),
             not_valid: false,
         } => {
-            let Some(index_name) = index_name.as_ref().or(constraint_name.as_ref()) else {
-                return Err(MysqlParserError::Unsupported(format!(
-                    "ALTER TABLE operation `{operation}`, a unique key without a name, whose name MySQL generates from the keys of the table, is not available"
-                )));
+            let index_name = match index_name.as_ref().or(constraint_name.as_ref()) {
+                Some(index_name) => index_name.clone(),
+                None => generated_index_name(operation, &table_name, columns, environment)?,
             };
             return add_index(
                 name,
                 true,
-                index_name.clone(),
+                index_name,
                 index_type,
                 columns,
                 index_options,
@@ -357,6 +356,7 @@ fn add_index(
 /// when no index has it yet (MySQL adds a suffix otherwise).
 fn generated_index_name(
     operation: &AlterTableOperation,
+    table_name: &ast::Name,
     columns: &[IndexColumn],
     environment: &dyn Environment,
 ) -> Result<Ident, MysqlParserError> {
@@ -369,7 +369,11 @@ fn generated_index_name(
         return Err(unavailable());
     };
     let name = translate_ddl_identifier(column)?;
-    if environment.index_table(name.as_str())?.is_some() {
+    if environment.index_table(name.as_str())?.is_some()
+        || environment
+            .table_sql(table_name.as_str())?
+            .is_some_and(|sql| crate::ddl_index::may_have_unique_key_named(&sql, name.as_str()))
+    {
         return Err(unavailable());
     }
     Ok(Ident::new(name.as_str()))

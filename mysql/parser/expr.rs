@@ -1133,6 +1133,34 @@ fn translate_integer_division(
             return Ok(quotient);
         }
     }
+    let json_beside_binary = |json_side: &Expr, other: &Expr| {
+        json::is_json_value(json_side) && hex_or_bit_literal(other).is_some()
+    };
+    if json_beside_binary(left, right) || json_beside_binary(right, left) {
+        let mut unsigned = false;
+        let mut operand = |expr: &Expr, context: &mut TranslationContext| {
+            let Some(literal) = hex_or_bit_literal(expr) else {
+                return json::translate_numeric_coercion(expr, "__mysql_json_decimal", context);
+            };
+            unsigned |= matches!(literal, Value::HexStringLiteral(_));
+            let value = binary_literal_value(literal)?;
+            Ok(match i64::try_from(value) {
+                Ok(_) => ast::Expr::Literal(ast::Literal::Numeric(value.to_string())),
+                Err(_) => string_expr(&value.to_string()),
+            })
+        };
+        let dividend = operand(left, context)?;
+        let divisor = operand(right, context)?;
+        return Ok(function_call(
+            "__mysql_json_quotient",
+            vec![
+                dividend,
+                divisor,
+                ast::Expr::Literal(ast::Literal::Numeric(u8::from(unsigned).to_string())),
+                string_expr(&format!("{left} DIV {right}")),
+            ],
+        ));
+    }
     if exceeds_bigint(left) || exceeds_bigint(right) {
         return Err(MysqlParserError::Unsupported(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
@@ -1531,10 +1559,21 @@ fn unsigned_arithmetic(
                 "`{left} {operator} {right}` inside arithmetic, where its BIGINT UNSIGNED type changes the result, is not lowered yet"
             )));
         }
+        let unsigned = [left, right].into_iter().any(|operand| {
+            matches!(
+                hex_or_bit_literal(operand),
+                Some(Value::HexStringLiteral(_))
+            ) || number_literal(operand).is_some_and(exceeds_signed_bigint)
+        });
+        let integer_range = if unsigned {
+            0..=i128::from(u64::MAX)
+        } else {
+            i128::from(i64::MIN)..=i128::from(i64::MAX)
+        };
         let (result, range) = match operator {
-            ast::Operator::Add => (lhs.checked_add(rhs), 0..=i128::from(u64::MAX)),
-            ast::Operator::Subtract => (lhs.checked_sub(rhs), 0..=i128::from(u64::MAX)),
-            ast::Operator::Multiply => (lhs.checked_mul(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Add => (lhs.checked_add(rhs), integer_range),
+            ast::Operator::Subtract => (lhs.checked_sub(rhs), integer_range),
+            ast::Operator::Multiply => (lhs.checked_mul(rhs), integer_range),
             ast::Operator::Modulus if rhs == 0 => {
                 return Ok(Some(ast::Expr::Literal(ast::Literal::Null)));
             }

@@ -1744,6 +1744,18 @@ fn translate_selected(
             "__mysql_bigint_out_of_range",
             vec![crate::expr::string_expr(&format!("-({digits})"))],
         )),
+        Some(Failure::IntegerOutOfRange {
+            unsigned,
+            left,
+            operator,
+            right,
+        }) => Ok(crate::expr::function_call(
+            "__mysql_bigint_out_of_range",
+            vec![
+                crate::expr::string_expr(&format!("({left} {operator} {right})")),
+                ast::Expr::Literal(ast::Literal::Numeric(u8::from(unsigned).to_string())),
+            ],
+        )),
         Some(Failure::EmptyRegexp) => Ok(crate::expr::function_call(
             "__mysql_empty_regexp",
             vec![crate::expr::string_expr("")],
