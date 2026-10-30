@@ -201,6 +201,7 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("IS_IPV6", 1) => network::is_ipv6,
         ("IS_UUID", 1) => network::is_uuid,
         ("UUID_TO_BIN", 1 | 2) => network::uuid_to_bin,
+        ("__MYSQL_UUID", 1) => network::uuid,
 
         ("__MYSQL_LIKE_BIN", 3) => like::like_bin,
 

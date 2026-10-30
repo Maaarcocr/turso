@@ -896,7 +896,10 @@ back to SQLite parsing. Owned specs: `conformance/my-sqltests/functions-string.s
   `FROM_BASE64`.
 - Network and UUID: `INET_ATON`, `INET_NTOA`, `INET6_ATON`, `INET6_NTOA`,
   `IS_IPV4`, `IS_IPV6`, `IS_IPV4_COMPAT`, `IS_IPV4_MAPPED`, `IS_UUID`,
-  `UUID_TO_BIN`, `BIN_TO_UUID`.
+  `UUID_TO_BIN`, `BIN_TO_UUID`, and `UUID()` (also in a column default),
+  `__mysql_uuid(randomblob(8))`: a version 1 UUID of the current time, like
+  MySQL's, whose clock sequence and node are random per process where MySQL
+  uses the server's.
 - Regular expressions: `REGEXP_LIKE`, `REGEXP_INSTR`, `REGEXP_SUBSTR`,
   `REGEXP_REPLACE` and the `REGEXP` operator.
 

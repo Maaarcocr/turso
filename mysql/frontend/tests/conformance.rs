@@ -1902,6 +1902,33 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn uuids_are_new_version_1_uuids_also_as_defaults() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT IS_UUID(UUID()), LENGTH(UUID()), SUBSTRING(UUID(), 15, 1), UUID() = UUID()"
+        )?,
+        vec![vec![
+            Value::from_i64(1),
+            Value::from_i64(36),
+            Value::build_text("1"),
+            Value::from_i64(0),
+        ]]
+    );
+    connection.execute("CREATE TABLE t (pk VARCHAR(36) DEFAULT (UUID()) PRIMARY KEY, v INT)")?;
+    connection.execute("INSERT INTO t (v) VALUES (1), (2), (3)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(DISTINCT pk), MIN(IS_UUID(pk)) FROM t"
+        )?,
+        vec![vec![Value::from_i64(3), Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn calls_fail_as_calls_of_missing_procedures() -> turso_core::Result<()> {
     let connection = open_memory()?;
     let error = query(&connection, "CALL p(1, 2)")

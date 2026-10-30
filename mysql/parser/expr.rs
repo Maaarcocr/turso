@@ -6130,6 +6130,10 @@ fn translate_special_function(
                 vec![length, function_call("randomblob", vec![number(1024)])],
             )))
         }
+        ("UUID", []) => Ok(Some(function_call(
+            "__mysql_uuid",
+            vec![function_call("randomblob", vec![number(8)])],
+        ))),
         ("DATE_ADD" | "ADDDATE", [date, Expr::Interval(interval)]) => Ok(Some(
             translate_date_arithmetic("DATE_ADD", date, interval, context)?,
         )),
