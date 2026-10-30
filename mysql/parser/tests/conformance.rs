@@ -798,7 +798,7 @@ fn lowers_select_statements_to_shared_ast() {
         ("SELECT CAST(1 AS SIGNED)", "SELECT __mysql_cast_as_signed (1)"),
         (
             "SELECT CONVERT(18446744073709551615, UNSIGNED)",
-            "SELECT __mysql_cast_as_unsigned ('18446744073709551615')",
+            "SELECT __mysql_unsigned_shown (__mysql_cast_as_unsigned_bits ('18446744073709551615'))",
         ),
         (
             "SELECT CAST(99999999999999999999 AS SIGNED)",

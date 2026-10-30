@@ -86,6 +86,9 @@ macro_rules! functions {
             "FUNCTION __mysql_cast_as_unsigned(",
             $quoted,
             ") RETURNS integer __mysql_decimal_cast_as_unsigned ",
+            "FUNCTION __mysql_cast_as_unsigned_bits(",
+            $quoted,
+            ") RETURNS integer __mysql_decimal_cast_as_unsigned_bits ",
             "FUNCTION round(",
             $quoted,
             ") RETURNS decimal __mysql_decimal_round ",
@@ -357,6 +360,10 @@ pub(super) fn decimal_cast_as_signed(args: &[Value]) -> Result<Value> {
 
 pub(super) fn decimal_cast_as_unsigned(args: &[Value]) -> Result<Value> {
     integer::unsigned_result(decimal_bits(&args[0], true))
+}
+
+pub(super) fn decimal_cast_as_unsigned_bits(args: &[Value]) -> Result<Value> {
+    integer::signed_result(decimal_bits(&args[0], true))
 }
 
 fn decimal_bits(value: &Value, unsigned: bool) -> Option<u64> {

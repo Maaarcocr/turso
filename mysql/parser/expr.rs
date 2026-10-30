@@ -4256,10 +4256,10 @@ fn translate_json_numeric_cast(
             "__mysql_cast_as_signed",
             vec![coerced("__mysql_json_integer", context)?],
         ),
-        DataType::Unsigned | DataType::UnsignedInteger => function_call(
-            "__mysql_cast_as_unsigned",
-            vec![coerced("__mysql_json_integer", context)?],
-        ),
+        DataType::Unsigned | DataType::UnsignedInteger => {
+            let shown = std::mem::take(&mut context.unsigned_cast_as_text);
+            unsigned_cast(coerced("__mysql_json_integer", context)?, shown)
+        }
         DataType::Decimal(precision) => ast::Expr::cast(
             coerced("__mysql_json_decimal", context)?,
             Some(decimal_type(precision)),
@@ -4280,11 +4280,50 @@ fn translate_json_numeric_cast(
     })
 }
 
+/// Whether `expr` is `CAST(x AS UNSIGNED)` or `CONVERT(x, UNSIGNED)`.
+pub(crate) fn is_unsigned_cast(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_unsigned_cast(inner),
+        Expr::Cast {
+            kind: CastKind::Cast,
+            data_type: DataType::Unsigned | DataType::UnsignedInteger,
+            array: false,
+            format: None,
+            ..
+        }
+        | Expr::Convert {
+            is_try: false,
+            data_type: Some(DataType::Unsigned | DataType::UnsignedInteger),
+            charset: None,
+            ..
+        } => true,
+        _ => false,
+    }
+}
+
+/// `CAST(operand AS UNSIGNED)`: shown as MySQL's BIGINT UNSIGNED, as text
+/// above BIGINT, when `shown`.
+fn unsigned_cast(operand: ast::Expr, shown: bool) -> ast::Expr {
+    if shown {
+        function_call(
+            "__mysql_unsigned_shown",
+            vec![function_call(
+                "__mysql_cast_as_unsigned_bits",
+                vec![operand],
+            )],
+        )
+    } else {
+        function_call("__mysql_cast_as_unsigned", vec![operand])
+    }
+}
+
 fn translate_integer_cast(
     expr: &Expr,
     name: &str,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let shown =
+        name == "__mysql_cast_as_unsigned" && std::mem::take(&mut context.unsigned_cast_as_text);
     let operand = match number_literal(expr) {
         Some(digits) if exceeds_unsigned_bigint(digits) => exact_decimal(digits, false),
         Some(digits)
@@ -4296,7 +4335,11 @@ fn translate_integer_cast(
         }
         _ => translate_in(expr, Context::Number, context)?,
     };
-    Ok(function_call(name, vec![operand]))
+    Ok(if shown {
+        unsigned_cast(operand, true)
+    } else {
+        function_call(name, vec![operand])
+    })
 }
 
 fn translate_cast_as_json(

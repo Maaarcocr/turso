@@ -1850,6 +1850,29 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn selected_unsigned_casts_show_values_above_bigint() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(-3 AS UNSIGNED), CONVERT(TIME '-31:34:58', UNSIGNED),              CAST(-1.5e0 AS UNSIGNED INTEGER), CONVERT(-1.7, UNSIGNED),              CAST(CAST(18446744073709551615 AS JSON) AS UNSIGNED), CAST(5 AS UNSIGNED)"
+        )?,
+        vec![vec![
+            Value::build_text("18446744073709551613"),
+            Value::build_text("18446744073709238158"),
+            Value::build_text("18446744073709551614"),
+            Value::build_text("18446744073709551614"),
+            Value::build_text("18446744073709551615"),
+            Value::from_i64(5),
+        ]]
+    );
+    let failing = "SELECT CAST(-3 AS UNSIGNED) + 1";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(error.contains("not supported yet"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
