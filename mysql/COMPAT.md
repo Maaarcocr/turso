@@ -249,10 +249,28 @@ Lowered:
 | `/*+ ... */` optimizer hints | Ignored: they choose a plan or bound the run time (`MAX_EXECUTION_TIME`), which leaves the result of a statement that finishes unchanged. `SET_VAR` is accepted for variables that only size buffers or steer the optimizer (`sort_buffer_size`, `optimizer_switch`, ...) and refused for any other |
 | Index hints (`USE`, `FORCE`, `IGNORE` `INDEX`/`KEY`) | Ignored, in `SELECT` and `UPDATE`. An index name the table does not have is not rejected (MySQL's error 1176), since the frontend does not see the schema |
 
+`WITH RECURSIVE` lowers a common table expression that reads itself, an
+anchor `SELECT` `UNION ALL` a recursive `SELECT` that reads it once (as the
+first table of a join or an inner-joined one), to an inner expression
+`__mysql_recursive_<name>` with a hidden column holding the iteration of each
+row, which `__mysql_recursion_depth(depth)` computes and refuses from the
+1000th iteration, and the expression itself, which selects the other columns.
+MySQL gives the columns the types of the anchor: a column whose anchor is an
+integer literal has its recursive values checked by
+`__mysql_recursive_integer(value)`, which refuses a value outside `INT` or not
+an integer, and a column with another anchor is accepted only when the
+recursive `SELECT` passes it on unchanged. Refused: a recursive `SELECT` with
+`DISTINCT`, grouping, a window or a subquery, `UNION DISTINCT`, an outer join
+of the expression, and a recursive expression in a subquery of an expression or
+in a `LATERAL` table, which may read an outer row (MySQL may evaluate it once).
+A common table expression of `WITH RECURSIVE` that does not read itself is an
+ordinary one.
+
 Refused, because Turso cannot run it with MySQL's meaning yet:
 
-- `WITH RECURSIVE`: MySQL stops after `cte_max_recursion_depth` (1000)
-  iterations; Turso does not.
+- `WITH RECURSIVE` beyond one anchor `SELECT` `UNION ALL` one recursive
+  `SELECT` (see below), and a recursive query that reaches its 1000th
+  iteration, where MySQL's `cte_max_recursion_depth` stops it.
 - `BINARY x` and `CAST(x AS BINARY)` in a comparison, `IN`, `BETWEEN`, a
   `CASE` operand, arithmetic, a condition, or an argument of `GREATEST`,
   `LEAST`, `FIELD`, `NULLIF` or `INTERVAL`: MySQL compares a binary string with

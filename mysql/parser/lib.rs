@@ -27,6 +27,7 @@ mod literal;
 mod names;
 mod prepared;
 mod query;
+mod recursive;
 mod session;
 mod show;
 mod split;

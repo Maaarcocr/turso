@@ -71,7 +71,7 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         "RELEASE_ALL_LOCKS" | "CONNECTION_ID" | TRANSACTION_ISOLATION => arg_count == 0,
         SET_TRANSACTION_ISOLATION => arg_count == 1,
         PREPARE => arg_count == 2,
-        LIMIT_PARAMETER => arg_count == 1,
+        LIMIT_PARAMETER | RECURSION_DEPTH | RECURSIVE_INTEGER => arg_count == 1,
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -139,6 +139,28 @@ pub(crate) fn execute(
         DEALLOCATE_PREPARE => {
             session(connection).and_then(|session| session.deallocate_prepare(connection, args))
         }
+        RECURSION_DEPTH => match &args[0] {
+            Value::Numeric(Numeric::Integer(depth)) if (0..MAX_RECURSION_DEPTH - 1).contains(depth) => {
+                Ok(Value::from_i64(depth + 1))
+            }
+            Value::Numeric(Numeric::Integer(depth)) if *depth >= MAX_RECURSION_DEPTH - 1 => {
+                Err(unsupported_value(format!(
+                    "a recursive common table expression that runs {MAX_RECURSION_DEPTH} iterations, near MySQL's cte_max_recursion_depth,"
+                )))
+            }
+            other => Err(LimboError::InternalError(format!(
+                "a recursion depth is a count, not {other}"
+            ))),
+        },
+        RECURSIVE_INTEGER => match &args[0] {
+            Value::Null => Ok(Value::Null),
+            Value::Numeric(Numeric::Integer(value)) if i32::try_from(*value).is_ok() => {
+                Ok(args[0].clone())
+            }
+            other => Err(unsupported_value(format!(
+                "`{other}` in a column of a recursive common table expression whose anchor makes it an INT,"
+            ))),
+        },
         _ => return None,
     };
     Some(result)
@@ -215,6 +237,17 @@ const DEALLOCATE_PREPARE: &str = "__MYSQL_DEALLOCATE_PREPARE";
 /// `OFFSET` of an `EXECUTE`d statement, which must hold a count; other
 /// values are refused.
 const LIMIT_PARAMETER: &str = "__MYSQL_LIMIT_PARAMETER";
+
+/// `__mysql_recursion_depth(depth)`: the iteration of a recursive row whose
+/// source row is of iteration `depth`, refused from the iteration where
+/// MySQL's `cte_max_recursion_depth` (1000) may stop the query.
+const RECURSION_DEPTH: &str = "__MYSQL_RECURSION_DEPTH";
+
+const MAX_RECURSION_DEPTH: i64 = 1000;
+
+/// `__mysql_recursive_integer(value)`: a recursive value of a column whose
+/// anchor is an `INT` literal, refused outside `INT` or when not an integer.
+const RECURSIVE_INTEGER: &str = "__MYSQL_RECURSIVE_INTEGER";
 
 /// The key of a user-level lock: MySQL compares lock names without case and
 /// rejects a `NULL`, empty or longer than 64 characters name (3057). A

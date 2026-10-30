@@ -43,6 +43,8 @@ pub(crate) struct TranslationContext<'a> {
     /// Names of the common table expressions and derived tables met so far.
     pub(crate) common_tables: Vec<String>,
     pub(crate) derived_tables: Vec<String>,
+    /// How many `LATERAL` derived tables the translation is inside.
+    lateral_depth: usize,
 }
 
 impl<'a> TranslationContext<'a> {
@@ -78,6 +80,12 @@ impl<'a> TranslationContext<'a> {
         }
         self.expression_depth += 1;
         Ok(())
+    }
+
+    /// Whether the translation is inside an expression (a subquery in it may
+    /// read a row of the query around it) or a `LATERAL` derived table.
+    pub(crate) fn may_read_outer_rows(&self) -> bool {
+        self.expression_depth > 0 || self.lateral_depth > 0
     }
 
     pub(crate) fn leave_expression(&mut self) {
@@ -195,28 +203,22 @@ fn translate_with(
     with: &With,
     context: &mut TranslationContext,
 ) -> Result<ast::With, MysqlParserError> {
-    if with.recursive {
-        return Err(unsupported(
-            "WITH RECURSIVE, whose cte_max_recursion_depth limit Turso does not enforce,"
-                .to_string(),
-        ));
+    let mut ctes = Vec::with_capacity(with.cte_tables.len());
+    for cte in &with.cte_tables {
+        if with.recursive && crate::recursive::reads_itself(cte)? {
+            ctes.extend(crate::recursive::translate_recursive_cte(cte, context)?);
+        } else {
+            ctes.push(translate_cte(cte, context)?);
+        }
+        context.common_tables.push(cte.alias.name.value.clone());
     }
-    let ctes = with
-        .cte_tables
-        .iter()
-        .map(|cte| {
-            let translated = translate_cte(cte, context);
-            context.common_tables.push(cte.alias.name.value.clone());
-            translated
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::With {
-        recursive: false,
+        recursive: with.recursive,
         ctes,
     })
 }
 
-fn translate_cte(
+pub(crate) fn translate_cte(
     cte: &Cte,
     context: &mut TranslationContext,
 ) -> Result<ast::CommonTableExpr, MysqlParserError> {
@@ -1915,7 +1917,10 @@ fn translate_table_factor(
             alias,
             sample: None,
         } => {
-            let select = translate_subquery(subquery, context)?;
+            context.lateral_depth += usize::from(*lateral);
+            let select = translate_subquery(subquery, context);
+            context.lateral_depth -= usize::from(*lateral);
+            let select = select?;
             if let Some(alias) = alias {
                 context.derived_tables.push(alias.name.value.clone());
             }

@@ -1237,6 +1237,49 @@ fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
 }
 
 #[test]
+fn recursive_common_table_expressions_stop_before_mysql_limit() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "WITH RECURSIVE c (n, p) AS (SELECT 1, 1 UNION ALL SELECT n + 1, p * 10 FROM c WHERE n < 3) \
+             SELECT * FROM c"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::from_i64(1)],
+            vec![Value::from_i64(2), Value::from_i64(10)],
+            vec![Value::from_i64(3), Value::from_i64(100)],
+        ]
+    );
+    connection.execute("CREATE TABLE e (id INT PRIMARY KEY, boss INT)")?;
+    connection.execute("INSERT INTO e VALUES (1, NULL), (2, 1), (3, 2)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "WITH RECURSIVE chain AS (SELECT 1 AS id, 0 AS lvl UNION ALL \
+             SELECT e.id, chain.lvl + 1 FROM e JOIN chain ON e.boss = chain.id) \
+             SELECT id, lvl FROM chain ORDER BY id"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::from_i64(0)],
+            vec![Value::from_i64(2), Value::from_i64(1)],
+            vec![Value::from_i64(3), Value::from_i64(2)],
+        ]
+    );
+    for refused in [
+        "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 2000) SELECT COUNT(*) FROM c",
+        "WITH RECURSIVE c (s) AS (SELECT 'a' UNION ALL SELECT CONCAT(s, 'a') FROM c WHERE LENGTH(s) < 3) SELECT * FROM c",
+        "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n * 100000 FROM c WHERE n < 1000000000) SELECT * FROM c",
+        "SELECT (WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < e.id) SELECT MAX(n) FROM c) FROM e",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not"), "{refused}: {error}");
+        assert!(!error.contains("ERROR "), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn table_statements_read_whole_tables() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t1 (i INT)")?;
