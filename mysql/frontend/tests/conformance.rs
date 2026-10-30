@@ -1850,6 +1850,29 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn json_values_compare_exactly_with_integers_beyond_bigint() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(18446744073709551614 AS JSON) < 18446744073709551615, \
+             18446744073709551615 > CAST('18446744073709551615' AS JSON), \
+             -9223372036854775808 <= CAST(9223372036854775807 AS JSON), \
+             -9223372036854775809 < CAST(1 AS JSON), \
+             CAST('[\"a\"]' AS JSON) < 18446744073709551615"
+        )?,
+        vec![vec![
+            Value::from_i64(1),
+            Value::from_i64(0),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(0),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

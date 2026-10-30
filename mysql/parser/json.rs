@@ -245,6 +245,26 @@ fn comparable_scalar(expr: &Expr) -> bool {
     }
 }
 
+/// An integer literal beyond the BIGINT range, optionally negated, which
+/// MySQL compares with a JSON number exactly, as a BIGINT UNSIGNED or a
+/// DECIMAL value.
+fn is_wide_integer(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => match &value.value {
+            Value::Number(digits, _) => {
+                digits.len() <= 65 && digits.bytes().all(|byte| byte.is_ascii_digit())
+            }
+            _ => false,
+        },
+        Expr::Nested(inner)
+        | Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => matches!(inner.as_ref(), Expr::Value(_) | Expr::Nested(_)) && is_wide_integer(inner),
+        _ => false,
+    }
+}
+
 fn is_number(expr: &Expr) -> bool {
     match expr {
         Expr::Value(value) => match &value.value {
@@ -300,7 +320,7 @@ fn compared_operand(
     if is_json_value(expr) {
         return json_operand(expr, context);
     }
-    if !comparable_scalar(expr) {
+    if !comparable_scalar(expr) && !is_wide_integer(expr) {
         return Err(MysqlParserError::Unsupported(format!(
             "comparison of `{expr}` with the JSON value `{other_side}` is not lowered yet"
         )));
