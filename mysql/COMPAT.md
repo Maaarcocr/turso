@@ -565,6 +565,19 @@ or `VIEW`). The column is named `Tables_in_main`, after Turso's name for the
 database. A pattern with a `\` escape, `WHERE`, `FROM`/`IN` and the other
 `SHOW` statements are refused.
 
+## `SHOW VARIABLES`
+
+`SHOW [SESSION] VARIABLES LIKE 'name'` and `SHOW [SESSION] VARIABLES WHERE
+Variable_name = 'name'` of a system variable that `@@name` reads (see Session
+settings) give one row of `Variable_name` and `Value`, the value as MySQL
+shows it there (`ON` or `OFF` for `autocommit`, `unique_checks`,
+`explicit_defaults_for_timestamp`, `sql_auto_is_null`, `transaction_read_only`
+and `sql_safe_updates`). The name compares without case, and a `_` in the
+pattern matches itself, as no other MySQL variable differs from a known one
+only there. Refused: `GLOBAL`, a pattern with `%` or an escape, another
+`WHERE`, no filter, and other variables, since those may match variables the
+frontend does not know.
+
 ## Transactions
 
 The lowering of a statement depends on whether the session is inside a

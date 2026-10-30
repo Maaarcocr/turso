@@ -1902,6 +1902,51 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn show_variables_shows_one_known_system_variable() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(&connection, "SHOW SESSION VARIABLES LIKE 'SQL_MODE'")?,
+        vec![vec![
+            Value::build_text("sql_mode"),
+            Value::build_text(
+                "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,\
+                 ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+            ),
+        ]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SHOW VARIABLES WHERE Variable_name = 'character_set_connection'"
+        )?,
+        vec![vec![
+            Value::build_text("character_set_connection"),
+            Value::build_text("utf8mb4"),
+        ]]
+    );
+    assert_eq!(
+        query(&connection, "SHOW VARIABLES LIKE 'autocommit'")?,
+        vec![vec![
+            Value::build_text("autocommit"),
+            Value::build_text("ON")
+        ]]
+    );
+    for refused in [
+        "SHOW VARIABLES LIKE 'char%'",
+        "SHOW GLOBAL VARIABLES LIKE 'sql_mode'",
+        "SHOW VARIABLES LIKE 'innodb_page_size'",
+        "SHOW VARIABLES",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(
+            error.contains("unsupported MySQL syntax"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn uuids_are_new_version_1_uuids_also_as_defaults() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

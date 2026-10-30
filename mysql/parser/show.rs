@@ -1,5 +1,8 @@
 use crate::MysqlParserError;
-use sqlparser::ast::{ShowStatementFilter, ShowStatementFilterPosition, ShowStatementOptions};
+use sqlparser::ast::{
+    BinaryOperator, Expr, Ident, ShowStatementFilter, ShowStatementFilterPosition,
+    ShowStatementOptions, Value,
+};
 use turso_parser::ast;
 
 /// `SHOW [FULL] TABLES [LIKE 'pattern']`: the names of the database's
@@ -69,6 +72,76 @@ fn glob_pattern(like: &str) -> Result<String, MysqlParserError> {
         }
     }
     Ok(glob)
+}
+
+/// `SHOW [SESSION] VARIABLES LIKE 'name'` or `WHERE Variable_name = 'name'`
+/// of one system variable that `@@name` reads: its name and its value as
+/// MySQL shows it (`ON` or `OFF` for a switch). The name compares without
+/// case. A `LIKE` pattern with `%` or an escape, which may match variables
+/// the frontend does not know, is refused; `_` matches itself, as no other
+/// MySQL variable differs from a known one only where that has `_`.
+pub(crate) fn translate_show_variables(
+    filter: Option<&ShowStatementFilter>,
+) -> Result<ast::Stmt, MysqlParserError> {
+    let refused = || match filter {
+        Some(filter) => unsupported(&format!("SHOW VARIABLES {filter}")),
+        None => unsupported("SHOW VARIABLES without a filter"),
+    };
+    let name = match filter {
+        Some(ShowStatementFilter::Like(pattern)) if !pattern.contains(['%', '\\']) => pattern,
+        Some(ShowStatementFilter::Where(Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        })) => match (left.as_ref(), right.as_ref()) {
+            (Expr::Identifier(column), Expr::Value(value))
+                if column.value.eq_ignore_ascii_case("Variable_name") =>
+            {
+                match &value.value {
+                    Value::SingleQuotedString(name) | Value::DoubleQuotedString(name) => name,
+                    _ => return Err(refused()),
+                }
+            }
+            _ => return Err(refused()),
+        },
+        _ => return Err(refused()),
+    };
+    let name = name.to_ascii_lowercase();
+    let value = match name.as_str() {
+        "autocommit" | "unique_checks" | "explicit_defaults_for_timestamp" => {
+            crate::expr::string_expr("ON")
+        }
+        "sql_auto_is_null" | "transaction_read_only" | "sql_safe_updates" => {
+            crate::expr::string_expr("OFF")
+        }
+        _ => crate::session::system_variable("@@", &Ident::new(name.as_str()))
+            .map_err(|_| refused())?,
+    };
+    let column = |expr: ast::Expr, alias: &str| {
+        ast::ResultColumn::Expr(
+            Box::new(expr),
+            Some(ast::As::As(ast::Name::exact(alias.to_string()))),
+        )
+    };
+    Ok(ast::Stmt::Select(ast::Select {
+        with: None,
+        body: ast::SelectBody {
+            select: ast::OneSelect::Select {
+                distinctness: None,
+                columns: vec![
+                    column(crate::expr::string_expr(&name), "Variable_name"),
+                    column(value, "Value"),
+                ],
+                from: None,
+                where_clause: None,
+                group_by: None,
+                window_clause: Vec::new(),
+            },
+            compounds: Vec::new(),
+        },
+        order_by: Vec::new(),
+        limit: None,
+    }))
 }
 
 fn sqlite_statement(sql: &str) -> Result<ast::Stmt, MysqlParserError> {
