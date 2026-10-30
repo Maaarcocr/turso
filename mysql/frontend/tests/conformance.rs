@@ -1590,7 +1590,8 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
         query(
             &connection,
             "SELECT HEX(FROM_BASE64(18446744073709551615)), TO_BASE64(10000000000000000000), \
-             HEX(18446744073709551615), INET_NTOA(0x0A000509), INET_NTOA(b'1010')"
+             HEX(18446744073709551615), INET_NTOA(0x0A000509), INET_NTOA(b'1010'), \
+             HEX(CHAR(-1, '64', CAST('18446744073709551615' AS JSON), CAST(-1.1 AS JSON)))"
         )?,
         vec![vec![
             Value::build_text("D7CE38EBBE38D3BDFBD3DE79D7AD79"),
@@ -1598,6 +1599,7 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
             Value::build_text("FFFFFFFFFFFFFFFF"),
             Value::build_text("10.0.5.9"),
             Value::build_text("0.0.0.10"),
+            Value::build_text("FFFFFFFF40FFFFFFFFFFFFFFFF"),
         ]]
     );
     Ok(())

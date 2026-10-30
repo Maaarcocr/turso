@@ -6026,6 +6026,9 @@ fn function_arguments(
             if upper_name == "IF" && position == 0 {
                 return translate_condition(arg, context);
             }
+            if upper_name == "CHAR" && json::is_json_value(arg) {
+                return json::translate_numeric_coercion(arg, "__mysql_json_integer", context);
+            }
             if is_json_value_position(upper_name, position) {
                 return translate_json_value(arg, context);
             }
