@@ -1116,7 +1116,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT CAST(CAST('[]' AS JSON) AS SIGNED), CONVERT(CAST(true AS JSON), DECIMAL(3, 1)), CAST(CAST(1.5 AS JSON) AS UNSIGNED), CAST(JSON_ARRAY() AS DOUBLE)",
-            "SELECT __mysql_cast_as_signed (__mysql_json_integer (__mysql_cast_as_json ('[]'))), CAST (__mysql_json_decimal (__mysql_cast_boolean_as_json (TRUE)) AS DECIMAL (3, 1)), __mysql_cast_as_unsigned (1.5), CAST (__mysql_json_double (JSON_ARRAY ()) AS DOUBLE)",
+            "SELECT __mysql_cast_as_signed (__mysql_json_integer (__mysql_cast_as_json ('[]'))), CAST (__mysql_json_decimal (__mysql_cast_boolean_as_json (TRUE)) AS DECIMAL (3, 1)), __mysql_unsigned_shown (__mysql_cast_as_unsigned_bits (1.5)), CAST (__mysql_json_double (JSON_ARRAY ()) AS DOUBLE)",
         ),
         (
             "SELECT CAST(0xFF00 AS JSON), CAST(CAST(_binary 'a' AS JSON) AS SIGNED), UNIX_TIMESTAMP(CAST('[]' AS JSON)) + 1",
