@@ -1902,6 +1902,27 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn truncate_deletes_every_row_where_it_does_what_delete_does() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE p (id INT PRIMARY KEY)")?;
+    connection
+        .execute("CREATE TABLE c (id INT PRIMARY KEY, p INT, FOREIGN KEY (p) REFERENCES p (id))")?;
+    connection.execute("CREATE TABLE a (id INT AUTO_INCREMENT PRIMARY KEY)")?;
+    connection.execute("INSERT INTO p VALUES (1), (2)")?;
+    connection.execute("INSERT INTO c VALUES (1, 1), (2, 2)")?;
+    connection.execute("TRUNCATE TABLE c")?;
+    assert_eq!(
+        query(&connection, "SELECT COUNT(*) FROM c")?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    for refused in ["TRUNCATE p", "TRUNCATE a"] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("is not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn show_variables_shows_one_known_system_variable() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

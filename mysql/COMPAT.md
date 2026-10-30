@@ -554,6 +554,12 @@ that reads the target table (MySQL's error 1093); and the `LOW_PRIORITY`,
 their rows, `CREATE TABLE` and `ALTER TABLE ... RENAME COLUMN` refuse a column
 named `rowid`, which MySQL allows.
 
+`TRUNCATE [TABLE] t` lowers to `DELETE FROM t`. It is refused where the two
+differ: inside a transaction (which `TRUNCATE` commits), for a table with an
+`AUTO_INCREMENT` column (whose counter `TRUNCATE` resets), with triggers
+(which `TRUNCATE` does not fire), or referenced by a foreign key (which MySQL
+refuses with 1701, or ignores for one of the table itself).
+
 ## `SHOW TABLES`
 
 `SHOW [FULL] TABLES [LIKE 'pattern']` lists the tables and views of the
