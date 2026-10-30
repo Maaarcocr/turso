@@ -293,10 +293,13 @@ first table of a join or an inner-joined one), to an inner expression
 row, which `__mysql_recursion_depth(depth)` computes and refuses from the
 1000th iteration, and the expression itself, which selects the other columns.
 MySQL gives the columns the types of the anchor: a column whose anchor is an
-integer literal has its recursive values checked by
+integer literal or an `INT` column has its recursive values checked by
 `__mysql_recursive_integer(value)`, which refuses a value outside `INT` or not
-an integer, and a column with another anchor is accepted only when the
-recursive `SELECT` passes it on unchanged. Refused: a recursive `SELECT` with
+an integer; a column whose anchor and recursive values are both base table
+columns of the same declared type and collation (of the same table, for a text
+type, whose character set the table may set) keeps its values; and a column
+with another anchor is accepted only when the recursive `SELECT` passes it on
+unchanged. Refused: a recursive `SELECT` with
 `DISTINCT`, grouping, a window or a subquery, `UNION DISTINCT`, an outer join
 of the expression, and a recursive expression in a subquery of an expression or
 in a `LATERAL` table, which may read an outer row (MySQL may evaluate it once).

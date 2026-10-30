@@ -1266,7 +1266,22 @@ fn recursive_common_table_expressions_stop_before_mysql_limit() -> turso_core::R
             vec![Value::from_i64(3), Value::from_i64(2)],
         ]
     );
+    connection.execute("CREATE TABLE named (id INT PRIMARY KEY, boss INT, name VARCHAR(10))")?;
+    connection.execute("INSERT INTO named VALUES (1, NULL, 'a'), (2, 1, 'b'), (3, 2, 'c')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "WITH RECURSIVE chain AS (SELECT id, name FROM named WHERE boss IS NULL UNION ALL              SELECT n.id + 0, n.name FROM named n JOIN chain ON n.boss = chain.id)              SELECT * FROM chain ORDER BY id"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::build_text("a")],
+            vec![Value::from_i64(2), Value::build_text("b")],
+            vec![Value::from_i64(3), Value::build_text("c")],
+        ]
+    );
     for refused in [
+        "WITH RECURSIVE c (s) AS (SELECT name FROM named WHERE id = 1 UNION ALL          SELECT CONCAT(s, 'a') FROM c WHERE LENGTH(s) < 3) SELECT * FROM c",
+        "WITH RECURSIVE c (s) AS (SELECT name FROM named WHERE id = 1 UNION ALL          SELECT e.boss FROM c JOIN e ON e.id = 2 WHERE s = 'a') SELECT * FROM c",
         "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 2000) SELECT COUNT(*) FROM c",
         "WITH RECURSIVE c (s) AS (SELECT 'a' UNION ALL SELECT CONCAT(s, 'a') FROM c WHERE LENGTH(s) < 3) SELECT * FROM c",
         "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n * 100000 FROM c WHERE n < 1000000000) SELECT * FROM c",
