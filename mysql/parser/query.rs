@@ -3,7 +3,7 @@ use crate::expr::{
     failing_json_cast, shows_latin1_as_text, translate_bytes, translate_condition, translate_expr,
     translate_window,
 };
-use crate::invalid_json::invalid_json_text_evaluated;
+use crate::invalid_json::{failure_evaluated, Failure};
 use crate::names::translate_identifier;
 use crate::MysqlParserError;
 use crate::{ColumnFacts, Environment};
@@ -1731,13 +1731,15 @@ fn translate_selected(
     shown: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    let failing_text = runs_once
-        .then(|| invalid_json_text_evaluated(expr))
-        .flatten();
+    let failure = runs_once.then(|| failure_evaluated(expr)).flatten();
     context.latin1_as_text = runs_once && shown && shows_latin1_as_text(expr);
     context.unsigned_as_text = runs_once && shown && is_bit_operation(expr);
-    let translated = match failing_text {
-        Some(text) => Ok(failing_json_cast(text)),
+    let translated = match failure {
+        Some(Failure::Json(text)) => Ok(failing_json_cast(text)),
+        Some(Failure::BigintOutOfRange(digits)) => Ok(crate::expr::function_call(
+            "__mysql_bigint_out_of_range",
+            vec![crate::expr::string_expr(&format!("-({digits})"))],
+        )),
         None => match crate::json::temporal_json_text(expr).filter(|_| shown) {
             Some(text) => Ok(text),
             None if shown => crate::expr::shown_negated_binary(expr, context)

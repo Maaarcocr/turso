@@ -3,9 +3,22 @@ use sqlparser::ast::{
     FunctionArguments, ObjectNamePart, UnaryOperator, Value,
 };
 
-pub(crate) fn invalid_json_text_evaluated(expr: &Expr) -> Option<&str> {
+/// A literal MySQL rejects when it evaluates it.
+#[derive(Clone, Copy)]
+pub(crate) enum Failure<'a> {
+    /// `CAST(text AS JSON)` of a string that is not JSON (3141).
+    Json(&'a str),
+    /// A negated DOUBLE literal `-digits` below the BIGINT range, read as a
+    /// BIGINT by a bit operation or `CHAR` (1690).
+    BigintOutOfRange(&'a str),
+}
+
+/// The failure that MySQL meets whenever it evaluates `expr`, reading
+/// operands in its order and skipping those it does not read (after a
+/// `NULL` operand of most operators, or a decided `AND` or `OR`).
+pub(crate) fn failure_evaluated(expr: &Expr) -> Option<Failure<'_>> {
     match outcome(expr)? {
-        Outcome::Fails(text) => Some(text),
+        Outcome::Fails(failure) => Some(failure),
         Outcome::Null | Outcome::NotNull | Outcome::MaybeNull => None,
     }
 }
@@ -15,11 +28,11 @@ enum Outcome<'a> {
     Null,
     NotNull,
     MaybeNull,
-    Fails(&'a str),
+    Fails(Failure<'a>),
 }
 
 impl<'a> Outcome<'a> {
-    fn failure(self) -> Option<&'a str> {
+    fn failure(self) -> Option<Failure<'a>> {
         match self {
             Outcome::Fails(text) => Some(text),
             Outcome::Null | Outcome::NotNull | Outcome::MaybeNull => None,
@@ -66,12 +79,12 @@ fn outcome(expr: &Expr) -> Option<Outcome<'_>> {
             styles,
         } if styles.is_empty() => cast_outcome(expr, data_type)?,
         Expr::UnaryOp {
+            op: UnaryOperator::BitwiseNot,
+            expr,
+        } => bit_operand_outcome(expr)?,
+        Expr::UnaryOp {
             op:
-                UnaryOperator::Minus
-                | UnaryOperator::Plus
-                | UnaryOperator::Not
-                | UnaryOperator::BangNot
-                | UnaryOperator::BitwiseNot,
+                UnaryOperator::Minus | UnaryOperator::Plus | UnaryOperator::Not | UnaryOperator::BangNot,
             expr,
         } => outcome(expr)?,
         Expr::IsNull(inner)
@@ -125,29 +138,77 @@ fn cast_outcome<'a>(operand: &'a Expr, data_type: &DataType) -> Option<Outcome<'
         return Some(first_failure_or(value, Outcome::MaybeNull));
     }
     Some(match string_literal(operand) {
-        Some(text) if mysql_rejects_json_text(text) => Outcome::Fails(text),
+        Some(text) if mysql_rejects_json_text(text) => Outcome::Fails(Failure::Json(text)),
         _ => value,
     })
 }
 
+/// The outcome of `expr` read as a BIGINT by a bit operation or `CHAR`.
+fn bit_operand_outcome(expr: &Expr) -> Option<Outcome<'_>> {
+    match negated_double_beyond_bigint(expr) {
+        Some(digits) => Some(Outcome::Fails(Failure::BigintOutOfRange(digits))),
+        None => outcome(expr),
+    }
+}
+
+/// The digits of a negated DOUBLE literal below the BIGINT range.
+fn negated_double_beyond_bigint(expr: &Expr) -> Option<&str> {
+    let Expr::UnaryOp {
+        op: UnaryOperator::Minus,
+        expr: operand,
+    } = expr
+    else {
+        return match expr {
+            Expr::Nested(inner) => negated_double_beyond_bigint(inner),
+            _ => None,
+        };
+    };
+    let mut operand = operand.as_ref();
+    while let Expr::Nested(inner) = operand {
+        operand = inner;
+    }
+    let Expr::Value(value) = operand else {
+        return None;
+    };
+    let Value::Number(digits, false) = &value.value else {
+        return None;
+    };
+    (digits.contains(['e', 'E'])
+        && digits
+            .parse::<f64>()
+            .is_ok_and(|magnitude| magnitude > 9_223_372_036_854_775_808f64))
+    .then_some(digits.as_str())
+}
+
 fn first_failure_or<'a>(value: Outcome<'a>, otherwise: Outcome<'a>) -> Outcome<'a> {
     match value {
-        Outcome::Fails(text) => Outcome::Fails(text),
+        Outcome::Fails(failure) => Outcome::Fails(failure),
         Outcome::Null | Outcome::NotNull | Outcome::MaybeNull => otherwise,
     }
 }
 
 fn in_order<'a>(first: Outcome<'a>, second: Outcome<'a>) -> Outcome<'a> {
     match (first, second) {
-        (Outcome::Fails(text), _) => Outcome::Fails(text),
-        (Outcome::NotNull, Outcome::Fails(text)) => Outcome::Fails(text),
+        (Outcome::Fails(failure), _) => Outcome::Fails(failure),
+        (Outcome::NotNull, Outcome::Fails(failure)) => Outcome::Fails(failure),
         _ => Outcome::MaybeNull,
     }
 }
 
 fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> Option<Outcome<'a>> {
-    let lhs = outcome(left)?;
-    let rhs = outcome(right)?;
+    let bitwise = matches!(
+        op,
+        BinaryOperator::BitwiseOr
+            | BinaryOperator::BitwiseAnd
+            | BinaryOperator::BitwiseXor
+            | BinaryOperator::PGBitwiseShiftLeft
+            | BinaryOperator::PGBitwiseShiftRight
+    );
+    let (lhs, rhs) = if bitwise {
+        (bit_operand_outcome(left)?, bit_operand_outcome(right)?)
+    } else {
+        (outcome(left)?, outcome(right)?)
+    };
     let right_is_evaluated = match op {
         BinaryOperator::And => matches!(lhs, Outcome::Null) || literal_truth(left) == Some(true),
         BinaryOperator::Or | BinaryOperator::StringConcat => {
@@ -157,8 +218,10 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
         | BinaryOperator::Minus
         | BinaryOperator::Multiply
         | BinaryOperator::Divide
-        | BinaryOperator::Modulo
-        | BinaryOperator::MyIntegerDivide
+        | BinaryOperator::Modulo => {
+            lhs.is_not_null() || matches!(rhs.failure(), Some(Failure::Json(_)))
+        }
+        BinaryOperator::MyIntegerDivide
         | BinaryOperator::BitwiseOr
         | BinaryOperator::BitwiseAnd
         | BinaryOperator::BitwiseXor
@@ -175,8 +238,8 @@ fn binary_outcome<'a>(left: &'a Expr, op: &BinaryOperator, right: &'a Expr) -> O
         _ => return None,
     };
     Some(match (lhs.failure(), rhs.failure()) {
-        (Some(text), _) => Outcome::Fails(text),
-        (None, Some(text)) if right_is_evaluated => Outcome::Fails(text),
+        (Some(failure), _) => Outcome::Fails(failure),
+        (None, Some(failure)) if right_is_evaluated => Outcome::Fails(failure),
         (None, Some(_)) => Outcome::MaybeNull,
         (None, None) if never_null(op, lhs, rhs) => Outcome::NotNull,
         (None, None) => Outcome::MaybeNull,
@@ -230,22 +293,26 @@ fn function_outcome(function: &Function) -> Option<Outcome<'_>> {
     if identifier.quote_style.is_some() {
         return None;
     }
+    let upper_name = identifier.value.to_ascii_uppercase();
     let args = list
         .args
         .iter()
         .map(|arg| match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) if upper_name == "CHAR" => {
+                bit_operand_outcome(expr)
+            }
             FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => outcome(expr),
             _ => None,
         })
         .collect::<Option<Vec<_>>>()?;
-    let Some((position, text)) = args
+    let Some((position, failure)) = args
         .iter()
         .enumerate()
-        .find_map(|(position, arg)| arg.failure().map(|text| (position, text)))
+        .find_map(|(position, arg)| arg.failure().map(|failure| (position, failure)))
     else {
         return Some(Outcome::MaybeNull);
     };
-    let evaluated = match identifier.value.to_ascii_uppercase().as_str() {
+    let evaluated = match upper_name.as_str() {
         "CHAR" | "INTERVAL" => true,
         "CONCAT_WS" => position == 0 || args[0].is_not_null(),
         "COALESCE" | "ELT" | "FIELD" | "IF" | "IFNULL" | "MAKE_SET" | "NULLIF" => false,
@@ -255,7 +322,7 @@ fn function_outcome(function: &Function) -> Option<Outcome<'_>> {
             .all(|(other, arg)| other == position || arg.is_not_null()),
     };
     Some(if evaluated {
-        Outcome::Fails(text)
+        Outcome::Fails(failure)
     } else {
         Outcome::MaybeNull
     })

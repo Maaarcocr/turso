@@ -1503,8 +1503,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT _binary '3' | 1",
         },
         SqlCase {
-            name: "bit operation on a DOUBLE below the BIGINT range",
-            sql: "SELECT -18446744073709540000e0 & 1",
+            name: "bit operation on a DOUBLE below the BIGINT range after a NULL",
+            sql: "SELECT NULL & -18446744073709540000e0",
         },
         SqlCase {
             name: "bit operation on a string with an exponent",
