@@ -2580,9 +2580,15 @@ fn translate_regexp(
 ) -> Result<ast::Expr, MysqlParserError> {
     ensure_default_collation(&[expr, pattern], "REGEXP")?;
     if string_literal(pattern).is_some_and(str::is_empty) {
-        return Err(MysqlParserError::Unsupported(
-            "an empty regular expression, which MySQL rejects at run time, is not lowered yet"
-                .to_string(),
+        if is_binary_literal(expr) {
+            return Err(MysqlParserError::Unsupported(
+                "an empty regular expression of a binary string, whose character set MySQL rejects, is not lowered yet"
+                    .to_string(),
+            ));
+        }
+        return Ok(function_call(
+            "__mysql_empty_regexp",
+            vec![translate_expr(expr, context)?],
         ));
     }
     let (lhs, rhs) = if is_binary_literal(expr) || is_binary_literal(pattern) {

@@ -172,6 +172,10 @@ select alias that may also name a column is refused over a view, a derived
 table, a common table expression or columns of several tables, and when it
 holds a subquery.
 
+`x REGEXP ''` and `x NOT REGEXP ''` are `__mysql_empty_regexp(x)`, which
+fails with MySQL's error 3685 when it is evaluated, as MySQL rejects the empty
+pattern then (not on an empty table). A `NULL` or binary subject is refused.
+
 `HAVING` in a `SELECT` without `GROUP BY` or aggregates, which MySQL applies to
 each row, joins the `WHERE` condition with each select alias it names replaced
 by the alias's expression (`SELECT a + 1 AS b FROM t HAVING b > 2`). Refused:

@@ -71,9 +71,11 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         "RELEASE_ALL_LOCKS" | "CONNECTION_ID" | TRANSACTION_ISOLATION => arg_count == 0,
         SET_TRANSACTION_ISOLATION => arg_count == 1,
         PREPARE => arg_count == 2,
-        LIMIT_PARAMETER | RECURSION_DEPTH | RECURSIVE_INTEGER | VALIDATE_PASSWORD_STRENGTH => {
-            arg_count == 1
-        }
+        LIMIT_PARAMETER
+        | RECURSION_DEPTH
+        | RECURSIVE_INTEGER
+        | VALIDATE_PASSWORD_STRENGTH
+        | EMPTY_REGEXP => arg_count == 1,
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -159,6 +161,17 @@ pub(crate) fn execute(
                 "VALIDATE_PASSWORD_STRENGTH(NULL)".to_string(),
             )),
             _ => Ok(Value::from_i64(0)),
+        },
+        EMPTY_REGEXP => match &args[0] {
+            Value::Null => Err(unsupported_value(
+                "NULL REGEXP '', an empty regular expression with a NULL subject,".to_string(),
+            )),
+            Value::Blob(_) => Err(unsupported_value(
+                "a binary string REGEXP '', where MySQL rejects the character set,".to_string(),
+            )),
+            _ => Err(LimboError::SqlError(
+                "ERROR 3685 (HY000): Illegal argument to a regular expression.".to_string(),
+            )),
         },
         RECURSIVE_INTEGER => match &args[0] {
             Value::Null => Ok(Value::Null),
@@ -257,6 +270,10 @@ const MAX_RECURSION_DEPTH: i64 = 1000;
 /// target profile, which does not install MySQL's `validate_password`
 /// component. A NULL argument is refused.
 const VALIDATE_PASSWORD_STRENGTH: &str = "VALIDATE_PASSWORD_STRENGTH";
+
+/// `__mysql_empty_regexp(subject)`: `subject REGEXP ''`, which MySQL rejects
+/// (3685) when it evaluates it. A `NULL` or binary subject is refused.
+const EMPTY_REGEXP: &str = "__MYSQL_EMPTY_REGEXP";
 
 /// `__mysql_recursive_integer(value)`: a recursive value of a column whose
 /// anchor is an `INT` literal, refused outside `INT` or when not an integer.

@@ -1314,6 +1314,23 @@ fn having_without_grouping_filters_rows_by_alias() -> turso_core::Result<()> {
 }
 
 #[test]
+fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE e (s TEXT)")?;
+    assert!(query(&connection, "SELECT s REGEXP '' FROM e")?.is_empty());
+    for sql in ["SELECT 'foo' REGEXP ''", "SELECT 1 NOT REGEXP ''"] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains("ERROR 3685 "), "{sql}: {error}");
+    }
+    for refused in ["SELECT NULL REGEXP ''", "SELECT 0xFF REGEXP ''"] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not"), "{refused}: {error}");
+        assert!(!error.contains("ERROR "), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [
