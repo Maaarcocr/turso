@@ -1,4 +1,4 @@
-use crate::bitwise::{is_bit_operation, translate_bit_operation};
+use crate::bitwise::{introduced_binary_text, is_bit_operation, translate_bit_operation};
 use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
@@ -1009,7 +1009,22 @@ fn translate_binary(
     if matches!(op, BinaryOperator::Modulo | BinaryOperator::MyIntegerDivide)
         && (is_binary_string(left) || is_binary_string(right))
     {
-        return Err(binary_string_outside_arithmetic(op));
+        let as_text = |expr: &Expr| {
+            if !is_binary_string(expr) {
+                return Some(expr.clone());
+            }
+            introduced_binary_text(expr)
+                .filter(|text| {
+                    !text.starts_with(|first: char| {
+                        first.is_ascii_whitespace() || first.is_ascii_control()
+                    })
+                })
+                .map(|text| Expr::Value(Value::SingleQuotedString(text).with_empty_span()))
+        };
+        let (Some(left), Some(right)) = (as_text(left), as_text(right)) else {
+            return Err(binary_string_outside_arithmetic(op));
+        };
+        return translate_binary(&left, op, &right, parent_context, context);
     }
     match op {
         BinaryOperator::Plus | BinaryOperator::Minus
@@ -1113,6 +1128,11 @@ fn translate_integer_division(
     right: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if hex_or_bit_literal(left).is_some() || hex_or_bit_literal(right).is_some() {
+        if let Some(quotient) = folded_integer_division(left, right) {
+            return Ok(quotient);
+        }
+    }
     if exceeds_bigint(left) || exceeds_bigint(right) {
         return Err(MysqlParserError::Unsupported(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
@@ -1140,6 +1160,168 @@ fn translate_integer_division(
 }
 
 const BIGINT_LIMIT: f64 = 9_223_372_036_854_775_808.0;
+
+/// `left DIV right` of literals as MySQL computes it: the DECIMAL quotient of
+/// the literals' DECIMAL values, truncated. `None` when an operand is not a
+/// literal whose DECIMAL is known here, or when MySQL rejects the result: a
+/// negative quotient next to an unsigned operand, or one outside BIGINT.
+fn folded_integer_division(left: &Expr, right: &Expr) -> Option<ast::Expr> {
+    struct Exact {
+        value: i128,
+        scale: u32,
+        unsigned: bool,
+    }
+
+    fn text_decimal(text: &str) -> Option<(i128, u32)> {
+        let bytes = text.as_bytes();
+        let (negative, rest) = match bytes.first() {
+            Some(b'-') => (true, &bytes[1..]),
+            Some(b'+') => (false, &bytes[1..]),
+            Some(byte) if byte.is_ascii_whitespace() => return None,
+            _ => (false, bytes),
+        };
+        let integer = rest.iter().take_while(|byte| byte.is_ascii_digit()).count();
+        let mut end = integer;
+        let mut fraction = 0;
+        if rest.get(end) == Some(&b'.') {
+            fraction = rest[end + 1..]
+                .iter()
+                .take_while(|byte| byte.is_ascii_digit())
+                .count();
+            end += 1 + fraction;
+        }
+        if matches!(rest.get(end), Some(b'e' | b'E')) || integer + fraction > 30 {
+            return None;
+        }
+        let digits = rest[..integer]
+            .iter()
+            .chain(rest[(integer + 1).min(end)..end].iter())
+            .try_fold(0i128, |value, digit| {
+                value.checked_mul(10)?.checked_add(i128::from(digit - b'0'))
+            })?;
+        let scale = u32::try_from(fraction).ok()?;
+        Some((if negative { -digits } else { digits }, scale))
+    }
+
+    fn exact(expr: &Expr) -> Option<Option<Exact>> {
+        let signed = |text: &str, unsigned: bool| {
+            text_decimal(text).map(|(value, scale)| {
+                Some(Exact {
+                    value,
+                    scale,
+                    unsigned,
+                })
+            })
+        };
+        let number = |digits: &str, negative: bool| {
+            if digits.contains(['e', 'E']) {
+                let double = digits.parse::<f64>().ok()?;
+                if !double.is_finite() || double.abs() >= 1e30 {
+                    return None;
+                }
+                let double = if negative { -double } else { double };
+                return signed(&double.to_string(), false);
+            }
+            let unsigned = !negative
+                && !digits.contains('.')
+                && digits
+                    .parse::<u64>()
+                    .is_ok_and(|value| i64::try_from(value).is_err());
+            signed(
+                &format!("{}{digits}", if negative { "-" } else { "" }),
+                unsigned,
+            )
+        };
+        match expr {
+            Expr::Nested(inner) => exact(inner),
+            Expr::UnaryOp {
+                op: op @ (UnaryOperator::Minus | UnaryOperator::Plus),
+                expr: inner,
+            } => match unnested(inner) {
+                Expr::Value(value) => match &value.value {
+                    Value::Number(digits, _) => number(digits, *op == UnaryOperator::Minus),
+                    _ => None,
+                },
+                _ => None,
+            },
+            Expr::Value(value) => match &value.value {
+                Value::Null => Some(None),
+                Value::Number(digits, _) => number(digits, false),
+                Value::Boolean(truth) => Some(Some(Exact {
+                    value: i128::from(*truth),
+                    scale: 0,
+                    unsigned: false,
+                })),
+                Value::HexStringLiteral(_) | Value::SingleQuotedByteStringLiteral(_) => {
+                    Some(Some(Exact {
+                        value: i128::from(binary_literal_value(&value.value).ok()?),
+                        scale: 0,
+                        unsigned: matches!(value.value, Value::HexStringLiteral(_)),
+                    }))
+                }
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                    signed(text, false)
+                }
+                _ => None,
+            },
+            Expr::Prefixed { prefix, value }
+                if prefix.quote_style.is_none()
+                    && matches!(
+                        prefix.value.to_ascii_lowercase().as_str(),
+                        "_utf8mb4" | "_utf8mb3" | "_utf8"
+                    ) =>
+            {
+                match unnested(value) {
+                    Expr::Value(value) => match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                            signed(text, false)
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+            Expr::TypedString(typed) => {
+                let temporal = temporal_literal(typed)?;
+                let negative = temporal.text.starts_with('-');
+                let digits: String = temporal
+                    .text
+                    .chars()
+                    .filter(|character| character.is_ascii_digit() || *character == '.')
+                    .collect();
+                signed(
+                    &format!("{}{digits}", if negative { "-" } else { "" }),
+                    false,
+                )
+            }
+            _ => None,
+        }
+    }
+
+    let (Some(dividend), Some(divisor)) = (exact(left)?, exact(right)?) else {
+        return Some(ast::Expr::Literal(ast::Literal::Null));
+    };
+    if divisor.value == 0 {
+        return Some(ast::Expr::Literal(ast::Literal::Null));
+    }
+    let numerator = dividend
+        .value
+        .checked_mul(10i128.checked_pow(divisor.scale)?)?;
+    let denominator = divisor
+        .value
+        .checked_mul(10i128.checked_pow(dividend.scale)?)?;
+    let quotient = numerator / denominator;
+    if quotient < 0 && (dividend.unsigned || divisor.unsigned) {
+        return None;
+    }
+    let quotient = i64::try_from(quotient).ok()?;
+    let literal = ast::Expr::Literal(ast::Literal::Numeric(quotient.unsigned_abs().to_string()));
+    Some(if quotient < 0 {
+        ast::Expr::unary(ast::UnaryOperator::Negative, literal)
+    } else {
+        literal
+    })
+}
 
 fn cannot_be_negative(expr: &Expr) -> bool {
     match expr {
@@ -6025,6 +6207,13 @@ fn function_arguments(
             }
             if upper_name == "IF" && position == 0 {
                 return translate_condition(arg, context);
+            }
+            if matches!(upper_name, "GREATEST" | "LEAST" | "STRCMP") {
+                if let Some(bytes) = binary_literal_bytes(arg)
+                    .filter(|bytes| bytes.contains(&0) || std::str::from_utf8(bytes).is_err())
+                {
+                    return Ok(blob_literal(&bytes));
+                }
             }
             if upper_name == "CHAR" && json::is_json_value(arg) {
                 return json::translate_numeric_coercion(arg, "__mysql_json_integer", context);

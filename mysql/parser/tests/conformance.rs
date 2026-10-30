@@ -894,7 +894,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         (
             "SELECT 0xFF DIV 13, '64' DIV 0x1",
-            "SELECT CAST (255 / 13 AS INTEGER), CAST ('64' / 1 AS INTEGER)",
+            "SELECT 19, 64",
         ),
         (
             "SELECT 64 = '64', 1e0 <=> ' 1.5e1x', -1 < _utf8mb4 '-0.5', '1e999' > 0",
