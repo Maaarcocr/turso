@@ -891,7 +891,12 @@ reads hex literals as numbers instead, so those must reach numeric arguments
 as integers). Numbers used as strings print as MySQL prints them. Strings
 compare with `utf8mb4_0900_ai_ci` (ICU root collation at primary strength: no
 case or accent differences, trailing spaces count). Binary strings compare
-byte by byte in `STRCMP`, `GREATEST`, `LEAST` and `FIND_IN_SET`; `LOCATE`,
+byte by byte in `STRCMP`, `GREATEST`, `LEAST` and `FIND_IN_SET`. `STRCMP`
+with a number argument (a number literal, or a value that is an integer or a
+DOUBLE when it is compared) compares the texts byte by byte, whatever the
+collation, as MySQL does when either argument is not a string
+(`STRCMP('10:04:58', 103458)` is 1). A `DECIMAL` column or a `DECIMAL`
+result of an expression still compares under the default collation. `LOCATE`,
 `INSTR`, `FIELD`, `REPLACE`, `INSERT`, `LPAD`, `RPAD`, `SUBSTRING_INDEX` and `TRIM`
 convert a binary argument used with a text string to `utf8mb4`, failing on
 invalid UTF-8 as MySQL does. The string or number that decides is the subject

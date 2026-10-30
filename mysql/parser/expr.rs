@@ -4934,6 +4934,16 @@ fn translate_collated_function(
         return Ok(None);
     }
     let args = unnamed_arguments(list)?;
+    if upper_name == "STRCMP" && args.iter().any(|arg| signed_number_literal(arg).is_some()) {
+        let mut translated = vec![string_expr("binary")];
+        translated.extend(function_arguments(
+            upper_name,
+            list,
+            literal_context,
+            context,
+        )?);
+        return Ok(Some(function_call("__mysql_collated_strcmp", translated)));
+    }
     let Some(collation) = single_explicit_collation(&args)? else {
         return Ok(None);
     };

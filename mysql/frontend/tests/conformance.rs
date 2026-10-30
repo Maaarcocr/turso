@@ -1537,6 +1537,24 @@ fn temporal_results_are_numbers_in_arithmetic() -> turso_core::Result<()> {
 }
 
 #[test]
+fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE sn (i INT, f DOUBLE, s VARCHAR(10))")?;
+    connection.execute("INSERT INTO sn VALUES (103, 103.5, '10:')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT STRCMP(TIME '10:04:58', 103458), STRCMP(103458, TIME '10:04:58'), \
+             STRCMP('10:04:58', 103458), STRCMP(103458.123456, TIME '10:04:58.1'), \
+             STRCMP('10:' COLLATE utf8mb4_0900_ai_ci, 103.5), STRCMP(s, i), STRCMP(s, f), \
+             STRCMP(s, '103'), STRCMP(1e0, '1') FROM sn"
+        )?,
+        vec![[1, -1, 1, -1, 1, 1, 1, -1, 0].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
 fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE ln (g DOUBLE, x DECIMAL(5, 2))")?;
