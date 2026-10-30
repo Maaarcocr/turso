@@ -1902,6 +1902,24 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn shown_negated_hex_literals_of_fixed_doubles_show_their_digits() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT -0xffffffffffffffff, - 0xFF666F6F626172FF, -0x666F6F626172FF, -0x1"
+        )?,
+        vec![vec![
+            Value::build_text("-18446744073709552000"),
+            Value::build_text("-18403519451478716000"),
+            Value::build_text("-28832971807093504"),
+            Value::from_i64(-1),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn truncate_deletes_every_row_where_it_does_what_delete_does() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE p (id INT PRIMARY KEY)")?;

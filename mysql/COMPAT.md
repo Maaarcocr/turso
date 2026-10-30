@@ -384,7 +384,10 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
 - A negated hex or bit literal where MySQL can show the decimals of its
   DOUBLE (`IF(c, -0x1, a)`, `MOD(-0x1, a)`, `-0x1 / 1.5`) and the result is not
   a shown select item of literals, or of 10^15 or more, which MySQL shows with
-  fixed digits rather than an exponent. A shown select item `a + b`, `a - b`,
+  fixed digits rather than an exponent. A shown select item that is such a
+  literal of 10^15 or more is the text MySQL shows, its DOUBLE's shortest
+  round-trip digits padded with zeros (`-0xffffffffffffffff` is
+  `'-18446744073709552000'`). A shown select item `a + b`, `a - b`,
   `a % b` or `MOD(a, b)` of such a literal and another one, a hex or bit
   literal (in `%` and `MOD`) or an exact number literal is lowered to the
   text MySQL shows, the DOUBLE with the most decimals of the operands rounded
