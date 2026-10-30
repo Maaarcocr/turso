@@ -270,7 +270,9 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   BIGINT range, or with a result above 9223372036854775807 outside a select
   item of a one-row `SELECT`.
 - Binary strings that are not NUL-free UTF-8 outside numeric contexts, select
-  items, binary-string function arguments and comparisons with literals, and `_binary` strings in bit
+  items, binary-string function arguments, comparisons with literals and a
+  hex, bit or `_binary` literal written by `INSERT`, `UPDATE` or `ON DUPLICATE
+  KEY UPDATE` to a `BINARY`, `VARBINARY` or `BLOB` column (its bytes), and `_binary` strings in bit
   operations, `%` and `DIV`, which MySQL computes on their bytes
   or as a DOUBLE that Turso's modulus and integer division would truncate.
 - A negated hex or bit literal where MySQL can show the decimals of its

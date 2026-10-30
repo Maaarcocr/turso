@@ -1322,6 +1322,56 @@ fn dates_compare_with_strings_and_other_dates_as_datetimes() -> turso_core::Resu
 }
 
 #[test]
+fn binary_literals_that_are_not_text_are_written_to_binary_columns() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id INT PRIMARY KEY, m MEDIUMBLOB, v VARBINARY(4), b BINARY(3), s TEXT)",
+    )?;
+    connection.execute("INSERT INTO t VALUES (1, X'00FF8A6A', 0x1F8B, b'11111111', 'a')")?;
+    connection.execute("INSERT INTO t (id, v) VALUES (2, X'FE')")?;
+    connection
+        .execute("INSERT INTO t (id, v) VALUES (2, X'01') ON DUPLICATE KEY UPDATE m = X'80'")?;
+    connection.execute("UPDATE t SET b = X'C0' WHERE id = 2")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT id, HEX(m), HEX(v), HEX(b), LENGTH(m) FROM t ORDER BY id"
+        )?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::build_text("00FF8A6A"),
+                Value::build_text("1F8B"),
+                Value::build_text("FF0000"),
+                Value::from_i64(4),
+            ],
+            vec![
+                Value::from_i64(2),
+                Value::build_text("80"),
+                Value::build_text("FE"),
+                Value::build_text("C00000"),
+                Value::from_i64(1),
+            ],
+        ]
+    );
+    for refused in [
+        "INSERT INTO t (id, s) VALUES (3, X'FF')",
+        "UPDATE t SET s = 0xFF",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    let error = connection
+        .execute("INSERT INTO t (id, v) VALUES (3, X'0102030405')")
+        .expect_err("too long");
+    assert_eq!(
+        turso_mysql::mysql_error(&error).map(|mysql| mysql.code),
+        Some(1406)
+    );
+    Ok(())
+}
+
+#[test]
 fn binary_strings_cannot_be_stored_in_number_columns_yet() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute(

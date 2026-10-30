@@ -794,7 +794,7 @@ fn translate_assignments(
         }
         sets.push(ast::Set {
             col_names: vec![translate_identifier(column)?],
-            expr: Box::new(translate_expr(value, context)?),
+            expr: Box::new(defaults.column_value(&column.value, value, context)?),
         });
         assigned.push(column);
     }

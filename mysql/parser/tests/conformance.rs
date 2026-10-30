@@ -1757,6 +1757,7 @@ impl Environment for TriggerSchema {
             generated,
             default: None,
             not_null: false,
+            binary: false,
         };
         Ok(match table {
             "a" => Some(vec![
