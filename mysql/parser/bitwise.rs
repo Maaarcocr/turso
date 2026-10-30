@@ -125,7 +125,7 @@ fn literal_bits(expr: &Expr) -> Result<Option<ast::Expr>, MysqlParserError> {
 
 /// The text MySQL reads a `_binary` literal as when a bit operation is
 /// numeric, up to its first byte that is not ASCII.
-fn introduced_binary_text(expr: &Expr) -> Option<String> {
+pub(crate) fn introduced_binary_text(expr: &Expr) -> Option<String> {
     let Expr::Prefixed { prefix, value } = unnested(expr) else {
         return None;
     };

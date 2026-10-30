@@ -1710,6 +1710,33 @@ fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
 }
 
 #[test]
+fn modulus_and_integer_division_read_binary_strings_as_numbers() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT _binary '7.5' DIV 2, _binary '64' DIV _binary 'foobar', _binary X'40' MOD 13e0, \
+             -1 MOD _binary '64', _binary '7.5' MOD 2"
+        )?,
+        vec![vec![
+            Value::from_i64(3),
+            Value::Null,
+            Value::from_f64(0.0),
+            Value::from_i64(-1),
+            Value::from_f64(1.5),
+        ]]
+    );
+    for refused in ["SELECT _binary ' 7' DIV 2", "SELECT _binary '\t7' MOD 2"] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(
+            error.contains("binary string as an operand"),
+            "{refused}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn comparisons_read_nul_binary_literals_as_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

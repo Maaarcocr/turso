@@ -362,8 +362,10 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   and `STRCMP` (their bytes), comparisons with literals and a
   hex, bit or `_binary` literal written by `INSERT`, `UPDATE` or `ON DUPLICATE
   KEY UPDATE` to a `BINARY`, `VARBINARY` or `BLOB` column (its bytes), and `_binary` strings in bit
-  operations, `%` and `DIV`, which MySQL computes on their bytes
-  or as a DOUBLE that Turso's modulus and integer division would truncate.
+  operations, which MySQL computes on their bytes. A `_binary` operand of `%`,
+  `MOD` or `DIV` is read as the string of its bytes up to the first that is not
+  ASCII, as MySQL reads its number; one that starts with whitespace or a control
+  character is refused.
 - A negated hex or bit literal where MySQL can show the decimals of its
   DOUBLE (`IF(c, -0x1, a)`, `MOD(-0x1, a)`, `-0x1 / 1.5`) and the result is not
   a shown select item of literals, or of 10^15 or more, which MySQL shows with

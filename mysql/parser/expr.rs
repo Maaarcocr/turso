@@ -1,4 +1,4 @@
-use crate::bitwise::{is_bit_operation, translate_bit_operation};
+use crate::bitwise::{introduced_binary_text, is_bit_operation, translate_bit_operation};
 use crate::dialect::{MAX_TEMPORAL_PRECISION, TEMPORAL_UNITS};
 use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
@@ -1009,7 +1009,22 @@ fn translate_binary(
     if matches!(op, BinaryOperator::Modulo | BinaryOperator::MyIntegerDivide)
         && (is_binary_string(left) || is_binary_string(right))
     {
-        return Err(binary_string_outside_arithmetic(op));
+        let as_text = |expr: &Expr| {
+            if !is_binary_string(expr) {
+                return Some(expr.clone());
+            }
+            introduced_binary_text(expr)
+                .filter(|text| {
+                    !text.starts_with(|first: char| {
+                        first.is_ascii_whitespace() || first.is_ascii_control()
+                    })
+                })
+                .map(|text| Expr::Value(Value::SingleQuotedString(text).with_empty_span()))
+        };
+        let (Some(left), Some(right)) = (as_text(left), as_text(right)) else {
+            return Err(binary_string_outside_arithmetic(op));
+        };
+        return translate_binary(&left, op, &right, parent_context, context);
     }
     match op {
         BinaryOperator::Plus | BinaryOperator::Minus
