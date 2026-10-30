@@ -31,6 +31,7 @@ mod session;
 mod show;
 mod split;
 mod stored_table;
+mod table_statement;
 mod transaction;
 mod trigger;
 
@@ -217,6 +218,9 @@ pub fn parse_and_translate_in(
         if let Some(command) = prepared::command(sql)? {
             return prepared::translate(command, environment);
         }
+    }
+    if first_word.eq_ignore_ascii_case("TABLE") {
+        return translate_text(&table_statement::as_select(sql)?, environment);
     }
     translate_text(sql, environment)
 }
