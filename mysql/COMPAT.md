@@ -101,6 +101,13 @@ columns with types or options. Known differences: Turso views are read-only,
 so `INSERT`, `UPDATE` and `DELETE` through a view fail where MySQL changes
 the base table, and `WITH CHECK OPTION` does not parse.
 
+## Stored procedures
+
+`CREATE PROCEDURE` is not available, so a session has no stored procedures:
+`CALL p(...)` fails as MySQL's call of a procedure that does not exist
+(1305). A `CALL` of a procedure of a MySQL system schema (`sys.p`, `mysql.p`)
+is refused.
+
 ## Triggers
 
 `mysql/parser/trigger.rs` lowers `CREATE TRIGGER name {BEFORE|AFTER}

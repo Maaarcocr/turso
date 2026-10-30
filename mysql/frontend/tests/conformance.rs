@@ -1902,6 +1902,20 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn calls_fail_as_calls_of_missing_procedures() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    let error = query(&connection, "CALL p(1, 2)")
+        .expect_err("CALL")
+        .to_string();
+    assert!(error.contains("PROCEDURE p does not exist"), "{error}");
+    let error = query(&connection, "CALL sys.ps_setup_show_enabled()")
+        .expect_err("CALL")
+        .to_string();
+    assert!(error.contains("unsupported MySQL syntax"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn decimal_literal_keys_of_json_objects_are_their_text() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

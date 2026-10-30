@@ -347,6 +347,7 @@ fn translate_other(
             external: false,
             show_options,
         } => show::translate_show_tables(*full, show_options),
+        Statement::Call(procedure) => Err(call_of_missing_procedure(&procedure.name)),
         _ => {
             let text = statement.to_string();
             let keyword = text.split_whitespace().next().unwrap_or_default();
@@ -355,6 +356,23 @@ fn translate_other(
                 keyword.to_ascii_uppercase()
             )))
         }
+    }
+}
+
+/// `CALL p(...)`: the session cannot create stored procedures, so MySQL's
+/// procedures are those of its system schemas, which Turso does not have.
+fn call_of_missing_procedure(name: &sqlparser::ast::ObjectName) -> MysqlParserError {
+    let system_schema = match name.0.as_slice() {
+        [sqlparser::ast::ObjectNamePart::Identifier(schema), _] => matches!(
+            schema.value.to_ascii_lowercase().as_str(),
+            "sys" | "mysql" | "information_schema" | "performance_schema"
+        ),
+        _ => false,
+    };
+    if system_schema {
+        MysqlParserError::Unsupported(format!("CALL of the system procedure `{name}`"))
+    } else {
+        MysqlParserError::Rejected(format!("PROCEDURE {name} does not exist"))
     }
 }
 
