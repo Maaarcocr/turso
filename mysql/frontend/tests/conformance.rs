@@ -1912,7 +1912,7 @@ fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
              -9223372036854775809 < -9223372036854775808, \
              18446744073709551615 <=> 18446744073709551615.000, \
              18446744073709551614 BETWEEN 18446744073709551615 AND 18446744073709551615, \
-             18446744073709551614 NOT BETWEEN 1 AND 18446744073709551615"
+             18446744073709551614 NOT BETWEEN 1 AND 18446744073709551615,              0xFF666F6F626172FF <= 9223372036854775807,              20000101103458.123456 < 0xFF666F6F626172FF,              0xFF666F6F626172FF > -1.1e0"
         )?,
         vec![vec![
             Value::from_i64(0),
@@ -1921,6 +1921,9 @@ fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
             Value::from_i64(1),
             Value::from_i64(0),
             Value::from_i64(0),
+            Value::from_i64(0),
+            Value::from_i64(1),
+            Value::from_i64(1),
         ]]
     );
     Ok(())

@@ -2185,16 +2185,22 @@ fn comparison(
     Ok(ast::Expr::binary(lhs, operator, rhs))
 }
 
-/// The exact order of two integer or decimal literals (optionally negated)
-/// when one lies outside BIGINT, where Turso would read both as DOUBLE
-/// values (`18446744073709551615 = 18446744073709551614` is 0 in MySQL).
+/// The order MySQL gives two number literals (optionally negated) when one
+/// is an integer or decimal outside BIGINT or a hex literal above it, where
+/// Turso would read both as DOUBLE values: exact for integers, decimals and
+/// hex literals (`18446744073709551615 = 18446744073709551614` is 0), as
+/// DOUBLE values beside a double literal.
 fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
     struct Exact {
         negative: bool,
         whole: String,
         fraction: String,
     }
-    fn exact(expr: &Expr) -> Option<Exact> {
+    enum Number {
+        Exact(Exact),
+        Double(f64),
+    }
+    fn number(expr: &Expr) -> Option<Number> {
         let (negative, inner) = match unnested(expr) {
             Expr::UnaryOp {
                 op: UnaryOperator::Minus,
@@ -2202,7 +2208,31 @@ fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
             } => (true, inner.as_ref()),
             other => (false, other),
         };
+        if let Expr::Value(value) = unnested(inner) {
+            if let Value::HexStringLiteral(_) = value.value {
+                if negative {
+                    return None;
+                }
+                let value = binary_literal_value(&value.value).ok()?;
+                return Some(Number::Exact(Exact {
+                    negative: false,
+                    whole: if value == 0 {
+                        String::new()
+                    } else {
+                        value.to_string()
+                    },
+                    fraction: String::new(),
+                }));
+            }
+        }
         let digits = number_literal(inner)?;
+        if digits.contains(['e', 'E']) {
+            let double = digits
+                .parse::<f64>()
+                .ok()
+                .filter(|double| double.is_finite())?;
+            return Some(Number::Double(if negative { -double } else { double }));
+        }
         let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
         let all_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
         if !all_digits(whole) || !all_digits(fraction) || whole.len() + fraction.len() > 65 {
@@ -2211,13 +2241,16 @@ fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
         let whole = whole.trim_start_matches('0').to_string();
         let fraction = fraction.trim_end_matches('0').to_string();
         let negative = negative && !(whole.is_empty() && fraction.is_empty());
-        Some(Exact {
+        Some(Number::Exact(Exact {
             negative,
             whole,
             fraction,
-        })
+        }))
     }
-    fn beyond_bigint(number: &Exact) -> bool {
+    fn beyond_bigint(number: &Number) -> bool {
+        let Number::Exact(number) = number else {
+            return false;
+        };
         let limit = if number.negative {
             "9223372036854775808"
         } else {
@@ -2226,10 +2259,28 @@ fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
         number.whole.len() > limit.len()
             || (number.whole.len() == limit.len() && number.whole.as_str() > limit)
     }
-    let (lhs, rhs) = (exact(left)?, exact(right)?);
+    fn double(number: &Number) -> f64 {
+        match number {
+            Number::Double(double) => *double,
+            Number::Exact(exact) => {
+                let magnitude = format!("0{}.{}0", exact.whole, exact.fraction)
+                    .parse::<f64>()
+                    .expect("digits parse as a double");
+                if exact.negative {
+                    -magnitude
+                } else {
+                    magnitude
+                }
+            }
+        }
+    }
+    let (lhs, rhs) = (number(left)?, number(right)?);
     if !beyond_bigint(&lhs) && !beyond_bigint(&rhs) {
         return None;
     }
+    let (Number::Exact(lhs), Number::Exact(rhs)) = (&lhs, &rhs) else {
+        return double(&lhs).partial_cmp(&double(&rhs));
+    };
     Some(match (lhs.negative, rhs.negative) {
         (false, true) => std::cmp::Ordering::Greater,
         (true, false) => std::cmp::Ordering::Less,
