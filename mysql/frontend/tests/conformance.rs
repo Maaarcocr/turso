@@ -1737,6 +1737,34 @@ fn modulus_and_integer_division_read_binary_strings_as_numbers() -> turso_core::
 }
 
 #[test]
+fn integer_division_of_hex_literals_folds_exact_decimals() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0xFF666F6F626172FF DIV TIMESTAMP '2024-12-30 10:34:58', \
+             0xFF666F6F626172FF DIV '20000101103458.123456', X'ff' DIV TIME '00:00:59.2132234', \
+             TIME '-5 10:34:58' DIV 0b1001, -1.1e0 DIV 0xFF666F6F626172, 0x10 DIV 0.1e0, \
+             TIME '10:04:58.1' DIV X'00'"
+        )?,
+        vec![vec![
+            Value::from_i64(909209),
+            Value::from_i64(920171),
+            Value::from_i64(4),
+            Value::from_i64(-144828),
+            Value::from_i64(0),
+            Value::from_i64(160),
+            Value::Null,
+        ]]
+    );
+    for refused in ["SELECT -1.5e0 DIV 0x1", "SELECT TIME '-5 10:34:58' DIV 0x1"] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("BIGINT UNSIGNED"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn comparisons_read_nul_binary_literals_as_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
