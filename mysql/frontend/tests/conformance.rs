@@ -1565,6 +1565,26 @@ fn greatest_and_least_of_temporal_literals_compare_as_mysql() -> turso_core::Res
 }
 
 #[test]
+fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT HEX(FROM_BASE64(18446744073709551615)), TO_BASE64(10000000000000000000), \
+             HEX(18446744073709551615), INET_NTOA(0x0A000509), INET_NTOA(b'1010')"
+        )?,
+        vec![vec![
+            Value::build_text("D7CE38EBBE38D3BDFBD3DE79D7AD79"),
+            Value::build_text("MTAwMDAwMDAwMDAwMDAwMDAwMDA="),
+            Value::build_text("FFFFFFFFFFFFFFFF"),
+            Value::build_text("10.0.5.9"),
+            Value::build_text("0.0.0.10"),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE sn (i INT, f DOUBLE, s VARCHAR(10))")?;

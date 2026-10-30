@@ -6000,6 +6000,12 @@ fn function_arguments(
                 if let Some(text) = json::temporal_json_text(arg) {
                     return Ok(text);
                 }
+                if let Some(value) = number_literal(arg)
+                    .filter(|digits| upper_name != "HEX" && exceeds_signed_bigint(digits))
+                    .and_then(|digits| digits.parse::<u64>().ok())
+                {
+                    return Ok(string_expr(&value.to_string()));
+                }
             }
             if let Some(read) = json::temporal_json_argument(upper_name, position, &args) {
                 return Ok(read);
