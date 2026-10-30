@@ -1433,6 +1433,26 @@ fn counts_compare_with_strings_as_numbers() -> turso_core::Result<()> {
 }
 
 #[test]
+fn literal_calls_take_mysql_values() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT MINUTE(DATE '2000-01-01'), TIME_TO_SEC(DATE '2000-01-01'), UNHEX(0.0), \
+             HEX(REVERSE(_binary 'ab\u{fc}')), CAST(CAST(18446744073709551615 AS DECIMAL(30, 2)) AS CHAR)"
+        )?,
+        vec![vec![
+            Value::from_i64(0),
+            Value::from_i64(0),
+            Value::Null,
+            Value::build_text("BCC36261"),
+            Value::build_text("18446744073709551615.00"),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [

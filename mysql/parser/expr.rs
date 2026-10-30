@@ -2450,6 +2450,47 @@ fn folded_hex_conversion(
     }))
 }
 
+/// Calls of one literal whose MySQL value lowering knows where Turso's
+/// differs: `HOUR`, `MINUTE`, `SECOND`, `MICROSECOND` and `TIME_TO_SEC` of a
+/// `DATE`, which MySQL reads as midnight (0); `UNHEX` of a `DECIMAL`, whose
+/// text has a `.` (`NULL`); and `REVERSE` of a binary string, whose bytes
+/// MySQL reverses.
+fn folded_literal_call(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    if !matches!(
+        upper_name,
+        "HOUR" | "MINUTE" | "SECOND" | "MICROSECOND" | "TIME_TO_SEC" | "UNHEX" | "REVERSE"
+    ) {
+        return Ok(None);
+    }
+    let Ok(args) = unnamed_arguments(list) else {
+        return Ok(None);
+    };
+    let [arg] = args.as_slice() else {
+        return Ok(None);
+    };
+    match upper_name {
+        "HOUR" | "MINUTE" | "SECOND" | "MICROSECOND" | "TIME_TO_SEC" => {
+            let Some(typed) = typed_string(arg).filter(|typed| typed.data_type == DataType::Date)
+            else {
+                return Ok(None);
+            };
+            translate_typed_string(typed, Context::Value)?;
+            Ok(Some(number(0)))
+        }
+        "UNHEX" => Ok(number_literal(arg)
+            .filter(|digits| is_decimal_literal(digits))
+            .map(|_| ast::Expr::Literal(ast::Literal::Null))),
+        "REVERSE" => Ok(binary_literal_bytes(arg).map(|mut bytes| {
+            bytes.reverse();
+            blob_literal(&bytes)
+        })),
+        _ => Ok(None),
+    }
+}
+
 /// `WEIGHT_STRING` of a literal, the bytes MySQL sorts it by: of an integer,
 /// its 8 big-endian bytes, with the sign bit flipped for a signed value
 /// (whatever `AS CHAR(n)`); of a `DECIMAL` or `DOUBLE`, `NULL`; of a
@@ -3481,7 +3522,26 @@ fn translate_cast(
         DataType::Double(ExactNumberInfo::None) => (type_name("DOUBLE"), Context::Number),
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
-        DataType::Decimal(precision) => (decimal_type(precision), Context::Number),
+        DataType::Decimal(precision) => {
+            let beyond_bigint = signed_number_literal(expr).filter(|digits| {
+                digits.bytes().all(|byte| byte.is_ascii_digit())
+                    && if is_negated(expr) {
+                        exceeds_negated_bigint(digits)
+                    } else {
+                        exceeds_unsigned_bigint(digits)
+                            || digits
+                                .parse::<u64>()
+                                .is_ok_and(|value| value > i64::MAX as u64)
+                    }
+            });
+            if let Some(digits) = beyond_bigint {
+                return Ok(ast::Expr::cast(
+                    exact_decimal(digits, is_negated(expr)),
+                    Some(decimal_type(precision)),
+                ));
+            }
+            (decimal_type(precision), Context::Number)
+        }
         DataType::Char(None) | DataType::Character(None) => {
             let text = mysql_text(translate_in(expr, Context::Value, context)?);
             return Ok(ast::Expr::cast(text, Some(type_name("TEXT"))));
@@ -4213,6 +4273,9 @@ fn translate_function(
     }
     if upper_name == "WEIGHT_STRING" {
         return folded_weight_string(list);
+    }
+    if let Some(folded) = folded_literal_call(&upper_name, list)? {
+        return Ok(folded);
     }
     if matches!(
         upper_name.as_str(),
