@@ -1770,15 +1770,14 @@ fn translate_selected(
     context.latin1_as_text = false;
     context.unsigned_as_text = false;
     context.empty_regexp_is_evaluated = false;
-    let translated = match translated {
+    match translated {
         Err(MysqlParserError::Unsupported(_))
             if runs_once && crate::invalid_json::is_null_before_failure(expr) =>
         {
             Ok(ast::Expr::Literal(ast::Literal::Null))
         }
         other => other,
-    };
-    translated
+    }
 }
 
 fn implicit_column_name(expr: &Expr) -> String {
