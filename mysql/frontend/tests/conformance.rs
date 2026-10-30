@@ -1710,6 +1710,25 @@ fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
 }
 
 #[test]
+fn comparisons_read_nul_binary_literals_as_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT HEX(LEAST(0x0, 1)), HEX(GREATEST(0x0, 'a', X'FF')), \
+             STRCMP(X'00', 'a'), STRCMP(X'0001', X'00')"
+        )?,
+        vec![vec![
+            Value::build_text("00"),
+            Value::build_text("FF"),
+            Value::from_i64(-1),
+            Value::from_i64(1),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE ln (g DOUBLE, x DECIMAL(5, 2))")?;

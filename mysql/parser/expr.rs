@@ -6026,6 +6026,13 @@ fn function_arguments(
             if upper_name == "IF" && position == 0 {
                 return translate_condition(arg, context);
             }
+            if matches!(upper_name, "GREATEST" | "LEAST" | "STRCMP") {
+                if let Some(bytes) = binary_literal_bytes(arg)
+                    .filter(|bytes| bytes.contains(&0) || std::str::from_utf8(bytes).is_err())
+                {
+                    return Ok(blob_literal(&bytes));
+                }
+            }
             if upper_name == "CHAR" && json::is_json_value(arg) {
                 return json::translate_numeric_coercion(arg, "__mysql_json_integer", context);
             }
