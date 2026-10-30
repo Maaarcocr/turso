@@ -1531,8 +1531,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT CONCAT_WS(NULL, CAST(a AS JSON))",
         },
         SqlCase {
-            name: "json compared with a column",
-            sql: "SELECT CAST(1 AS JSON) = a",
+            name: "json compared with a computed column value",
+            sql: "SELECT CAST(1 AS JSON) = a + b",
         },
         SqlCase {
             name: "json of an integer above the signed range in a comparison",

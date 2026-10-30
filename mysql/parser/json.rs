@@ -320,6 +320,12 @@ fn compared_operand(
     if is_json_value(expr) {
         return json_operand(expr, context);
     }
+    if matches!(
+        unnested(expr),
+        Expr::Identifier(_) | Expr::CompoundIdentifier(_)
+    ) {
+        return translate_expr(expr, context);
+    }
     if !comparable_scalar(expr) && !is_wide_integer(expr) {
         return Err(MysqlParserError::Unsupported(format!(
             "comparison of `{expr}` with the JSON value `{other_side}` is not lowered yet"

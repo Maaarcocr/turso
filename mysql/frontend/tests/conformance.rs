@@ -1902,6 +1902,48 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn columns_compare_with_json_values_as_json() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id BIGINT PRIMARY KEY, j JSON, s TEXT, i INT, f DOUBLE, v VARCHAR(5))",
+    )?;
+    connection.execute(
+        "INSERT INTO t VALUES (1, '{\"b\":2,  \"a\":[1,2]}', 'x', 3, 2.5, '3'), \
+         (2, NULL, NULL, NULL, NULL, NULL)",
+    )?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT j = CAST('{\"a\": [1, 2], \"b\": 2}' AS JSON), \
+             s = CAST('\"x\"' AS JSON), i < CAST(3.5 AS JSON), f = CAST(2.5 AS JSON), \
+             v = CAST(3 AS JSON), v = CAST('\"3\"' AS JSON), id = CAST('1' AS JSON) \
+             FROM t ORDER BY id"
+        )?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::from_i64(0),
+                Value::from_i64(1),
+                Value::from_i64(1),
+            ],
+            vec![
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::from_i64(0),
+            ],
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn json_values_compare_exactly_with_integers_beyond_bigint() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
