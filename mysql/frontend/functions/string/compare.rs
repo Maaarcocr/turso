@@ -182,12 +182,13 @@ fn strcmp_in(comparison: Comparison, args: &[Value]) -> Result<Value> {
     let (Some(left), Some(right)) = (string(&args[0]), string(&args[1])) else {
         return Ok(Value::Null);
     };
-    let binary = !comparison.explicit
-        && args.iter().any(|arg| match arg {
-            Value::Text(text) => text.subtype == TextSubtype::Json,
-            Value::Blob(_) => true,
-            Value::Null | Value::Numeric(_) => false,
-        });
+    let binary = args.iter().any(|arg| matches!(arg, Value::Numeric(_)))
+        || (!comparison.explicit
+            && args.iter().any(|arg| match arg {
+                Value::Text(text) => text.subtype == TextSubtype::Json,
+                Value::Blob(_) => true,
+                Value::Null | Value::Numeric(_) => false,
+            }));
     Ok(Value::from_i64(
         match compare_strings(comparison.collation, &left, &right, binary) {
             Ordering::Less => -1,

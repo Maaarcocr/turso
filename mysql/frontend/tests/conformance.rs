@@ -1537,6 +1537,72 @@ fn temporal_results_are_numbers_in_arithmetic() -> turso_core::Result<()> {
 }
 
 #[test]
+fn greatest_and_least_of_temporal_literals_compare_as_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT GREATEST(DATE '2024-02-18', DATE '2100-02-01', \
+             TIMESTAMP '2025-01-01 00:00:00.123456'), \
+             LEAST(TIME '23:59:59.5432', TIME '120:59:59'), \
+             GREATEST(TIME '23:59:59.5432', TIME '120:59:59'), \
+             LEAST(TIME '-1:00:00', TIME '00:00:01.5'), \
+             GREATEST(DATE '2000-01-01', DATE '1999-12-31'), GREATEST(TIME '1:00:00', NULL)"
+        )?,
+        vec![vec![
+            Value::build_text("2100-02-01 00:00:00.000000"),
+            Value::build_text("23:59:59.5432"),
+            Value::build_text("120:59:59.0000"),
+            Value::build_text("-01:00:00.0"),
+            Value::build_text("2000-01-01"),
+            Value::Null,
+        ]]
+    );
+    let refused = "SELECT LEAST(TIME '23:59:59', TIMESTAMP '2020-12-31 23:59:59')";
+    let error = query(&connection, refused).expect_err(refused).to_string();
+    assert!(error.contains("not lowered yet"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT HEX(FROM_BASE64(18446744073709551615)), TO_BASE64(10000000000000000000), \
+             HEX(18446744073709551615), INET_NTOA(0x0A000509), INET_NTOA(b'1010')"
+        )?,
+        vec![vec![
+            Value::build_text("D7CE38EBBE38D3BDFBD3DE79D7AD79"),
+            Value::build_text("MTAwMDAwMDAwMDAwMDAwMDAwMDA="),
+            Value::build_text("FFFFFFFFFFFFFFFF"),
+            Value::build_text("10.0.5.9"),
+            Value::build_text("0.0.0.10"),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
+fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE sn (i INT, f DOUBLE, s VARCHAR(10))")?;
+    connection.execute("INSERT INTO sn VALUES (103, 103.5, '10:')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT STRCMP(TIME '10:04:58', 103458), STRCMP(103458, TIME '10:04:58'), \
+             STRCMP('10:04:58', 103458), STRCMP(103458.123456, TIME '10:04:58.1'), \
+             STRCMP('10:' COLLATE utf8mb4_0900_ai_ci, 103.5), STRCMP(s, i), STRCMP(s, f), \
+             STRCMP(s, '103'), STRCMP(1e0, '1') FROM sn"
+        )?,
+        vec![[1, -1, 1, -1, 1, 1, 1, -1, 0].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
 fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE ln (g DOUBLE, x DECIMAL(5, 2))")?;
@@ -1548,6 +1614,24 @@ fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
              1.50 LIKE '1.50', g LIKE '1', x LIKE '1.50' FROM ln"
         )?,
         vec![[1, 1, 1, 0, 1, 1, 1].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
+fn in_lists_with_null_compare_as_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 'FOO' IN ('foo', NULL), _latin1 'FOO' NOT IN (_latin1 'foo', NULL),              0 NOT IN (NULL, 'foo'), 2 NOT IN (NULL, '1')"
+        )?,
+        vec![vec![
+            Value::from_i64(1),
+            Value::from_i64(0),
+            Value::from_i64(0),
+            Value::Null,
+        ]]
     );
     Ok(())
 }

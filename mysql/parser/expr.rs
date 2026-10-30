@@ -1990,8 +1990,10 @@ fn default_collated(lhs: ast::Expr, explicit: Option<String>, operands: &[&Expr]
         ) && text.is_some_and(|text| text.bytes().all(|byte| byte.is_ascii_alphanumeric()))
     }
     let literals_only = operands.iter().all(|operand| {
-        collation_of(operand) == Some(DEFAULT_COLLATION) || alphanumeric_insensitive(operand)
-    });
+        collation_of(operand) == Some(DEFAULT_COLLATION)
+            || alphanumeric_insensitive(operand)
+            || is_null_literal(operand)
+    }) && !operands.iter().all(|operand| is_null_literal(operand));
     if explicit.is_none() && literals_only {
         let sequence = collation_sequence(DEFAULT_COLLATION).expect("the default collation maps");
         ast::Expr::collate(lhs, ast::Name::exact(sequence.to_string()))
@@ -2774,7 +2776,7 @@ fn translate_in_list(
     if mixed
         && operands
             .iter()
-            .all(|operand| compared_literal(operand).is_some())
+            .all(|operand| compared_literal(operand).is_some() || is_null_literal(operand))
     {
         let mut matches = list
             .iter()
@@ -4416,6 +4418,9 @@ fn translate_function(
         return translate_json_aggregate(function, &upper_name, context);
     }
     if identifier.quote_style.is_none() && over.is_none() {
+        if let Some(expr) = translate_extreme_of_temporals(&upper_name, list)? {
+            return Ok(expr);
+        }
         if let Some(expr) = translate_greatest_of_dates(&upper_name, list)? {
             return Ok(expr);
         }
@@ -4932,6 +4937,16 @@ fn translate_collated_function(
         return Ok(None);
     }
     let args = unnamed_arguments(list)?;
+    if upper_name == "STRCMP" && args.iter().any(|arg| signed_number_literal(arg).is_some()) {
+        let mut translated = vec![string_expr("binary")];
+        translated.extend(function_arguments(
+            upper_name,
+            list,
+            literal_context,
+            context,
+        )?);
+        return Ok(Some(function_call("__mysql_collated_strcmp", translated)));
+    }
     let Some(collation) = single_explicit_collation(&args)? else {
         return Ok(None);
     };
@@ -5008,6 +5023,133 @@ fn translate_collated_function(
         &format!("__mysql_collated_{}", upper_name.to_ascii_lowercase()),
         translated,
     )))
+}
+
+/// `GREATEST` or `LEAST` whose arguments are all temporal literals or
+/// `NULL`, computed while lowering: MySQL compares them as temporal values
+/// and shows the result with the widest type and the most fractional digits
+/// of any argument.
+fn translate_extreme_of_temporals(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    let greatest = match upper_name {
+        "GREATEST" => true,
+        "LEAST" => false,
+        _ => return Ok(None),
+    };
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Ok(None);
+    }
+    let Ok(args) = unnamed_arguments(list) else {
+        return Ok(None);
+    };
+    let mut literals = Vec::with_capacity(args.len());
+    let mut null = false;
+    for arg in &args {
+        match unnested(arg) {
+            Expr::TypedString(typed) => match temporal_literal(typed) {
+                Some(literal) => literals.push(literal),
+                None => return Ok(None),
+            },
+            Expr::Value(value) if value.value == Value::Null => null = true,
+            _ => return Ok(None),
+        }
+    }
+    if literals.is_empty() {
+        return Ok(None);
+    }
+    if null {
+        return Ok(Some(ast::Expr::Literal(ast::Literal::Null)));
+    }
+    let times = literals
+        .iter()
+        .filter(|literal| literal.kind == TemporalKind::Time)
+        .count();
+    if times != 0 && times != literals.len() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{upper_name} of a TIME and a DATE or DATETIME, which MySQL compares on the current date, is not lowered yet"
+        )));
+    }
+    let fraction = |text: &str| {
+        text.split_once('.')
+            .map_or("", |(_, fraction)| fraction)
+            .to_string()
+    };
+    let decimals = literals
+        .iter()
+        .map(|literal| fraction(&literal.text).len())
+        .max()
+        .expect("there are temporal literals")
+        .min(6);
+    let key = |literal: &crate::literal::TemporalLiteral| -> i128 {
+        let text = literal.text.as_str();
+        let (negative, text) = match text.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, text),
+        };
+        let whole = text.split_once('.').map_or(text, |(whole, _)| whole);
+        let digits: String = whole.chars().filter(char::is_ascii_digit).collect();
+        let fraction = format!("{:0<6}", fraction(text));
+        let micros: i128 = if literal.kind == TemporalKind::Time {
+            let mut parts = whole.split(':').map(|part| {
+                part.parse::<i128>()
+                    .expect("a TIME literal has numeric parts")
+            });
+            let (hours, minutes, seconds) = (
+                parts.next().expect("a TIME literal has hours"),
+                parts.next().expect("a TIME literal has minutes"),
+                parts.next().expect("a TIME literal has seconds"),
+            );
+            (hours * 3600 + minutes * 60 + seconds) * 1_000_000
+                + fraction[..6]
+                    .parse::<i128>()
+                    .expect("the fraction is digits")
+        } else {
+            let digits = format!("{digits:0<14}");
+            digits.parse::<i128>().expect("a date is digits") * 1_000_000
+                + fraction[..6]
+                    .parse::<i128>()
+                    .expect("the fraction is digits")
+        };
+        if negative {
+            -micros
+        } else {
+            micros
+        }
+    };
+    let chosen = literals
+        .iter()
+        .reduce(|best, candidate| {
+            let ordering = key(candidate).cmp(&key(best));
+            if (greatest && ordering.is_gt()) || (!greatest && ordering.is_lt()) {
+                candidate
+            } else {
+                best
+            }
+        })
+        .expect("there are temporal literals");
+    let all_dates = literals
+        .iter()
+        .all(|literal| literal.kind == TemporalKind::Date);
+    let whole = chosen
+        .text
+        .split_once('.')
+        .map_or(chosen.text.as_str(), |(whole, _)| whole);
+    let whole = if chosen.kind == TemporalKind::Date && !all_dates {
+        format!("{whole} 00:00:00")
+    } else {
+        whole.to_string()
+    };
+    let text = if decimals == 0 {
+        whole
+    } else {
+        format!(
+            "{whole}.{}",
+            &format!("{:0<6}", fraction(&chosen.text))[..decimals]
+        )
+    };
+    Ok(Some(string_expr(&text)))
 }
 
 fn translate_greatest_of_dates(
@@ -5858,6 +6000,12 @@ fn function_arguments(
                 if let Some(text) = json::temporal_json_text(arg) {
                     return Ok(text);
                 }
+                if let Some(value) = number_literal(arg)
+                    .filter(|digits| upper_name != "HEX" && exceeds_signed_bigint(digits))
+                    .and_then(|digits| digits.parse::<u64>().ok())
+                {
+                    return Ok(string_expr(&value.to_string()));
+                }
             }
             if let Some(read) = json::temporal_json_argument(upper_name, position, &args) {
                 return Ok(read);
@@ -6208,7 +6356,7 @@ pub(crate) fn reads_temporal_as_number(upper_name: &str, position: usize) -> boo
 
 fn reads_number(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
     match upper_name {
-        "ELT" | "MAKE_SET" | "SPACE" | "RANDOM_BYTES" => position == 0,
+        "ELT" | "MAKE_SET" | "SPACE" | "RANDOM_BYTES" | "INET_NTOA" => position == 0,
         "FORMAT" | "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
         "CONV" | "INSERT" | "MID" | "SUBSTR" | "SUBSTRING" => matches!(position, 1 | 2),
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => matches!(position, 2 | 3),
