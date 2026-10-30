@@ -1688,6 +1688,22 @@ fn alter_table_adds_indexes() -> turso_core::Result<()> {
     ] {
         assert!(connection.execute(refused).is_err(), "{refused}");
     }
+    connection.execute("CREATE TABLE ak (c INT, d INT UNIQUE)")?;
+    connection.execute("ALTER TABLE ak ADD UNIQUE (c)")?;
+    assert!(connection
+        .execute("INSERT INTO ak VALUES (1, 1), (1, 2)")
+        .is_err());
+    for refused in [
+        "ALTER TABLE ak ADD INDEX (d)",
+        "ALTER TABLE ak ADD UNIQUE (c)",
+        "CREATE INDEX d ON ak (c)",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(
+            error.contains("unsupported MySQL syntax"),
+            "{refused}: {error}"
+        );
+    }
     Ok(())
 }
 

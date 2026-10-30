@@ -8,6 +8,47 @@ use sqlparser::ast::{
 };
 use turso_parser::ast;
 
+/// Whether MySQL may have a key named `name` on the table of `sql`, the
+/// table as the schema keeps it: one of its unique keys, which the schema
+/// keeps without their names, starts with the column `name`, and MySQL names
+/// an unnamed key after its first column.
+pub(crate) fn may_have_unique_key_named(sql: &str, name: &str) -> bool {
+    let mut parser = turso_parser::parser::Parser::new(sql.as_bytes()).with_type_parameter_lists();
+    let Ok(Some(ast::Cmd::Stmt(ast::Stmt::CreateTable {
+        body:
+            ast::CreateTableBody::ColumnsAndConstraints {
+                columns,
+                constraints,
+                ..
+            },
+        ..
+    }))) = parser.next_cmd()
+    else {
+        return true;
+    };
+    let unique_column = columns.iter().any(|column| {
+        column.col_name.as_str().eq_ignore_ascii_case(name)
+            && column
+                .constraints
+                .iter()
+                .any(|constraint| matches!(constraint.constraint, ast::ColumnConstraint::Unique(_)))
+    });
+    unique_column
+        || constraints
+            .iter()
+            .any(|constraint| match &constraint.constraint {
+                ast::TableConstraint::Unique { columns, .. } => {
+                    columns
+                        .first()
+                        .is_none_or(|column| match column.expr.as_ref() {
+                            ast::Expr::Id(column) => column.as_str().eq_ignore_ascii_case(name),
+                            _ => true,
+                        })
+                }
+                _ => false,
+            })
+}
+
 pub(crate) struct KeyPart {
     pub(crate) name: ast::Name,
     pub(crate) prefix: Option<u64>,
@@ -74,6 +115,15 @@ pub(crate) fn translate_create_index(
     {
         return Err(MysqlParserError::Unsupported(format!(
             "index `{}` named like an index of another table, which Turso names per database, is not available",
+            index_name.as_str()
+        )));
+    }
+    if environment
+        .table_sql(table_name.as_str())?
+        .is_some_and(|sql| may_have_unique_key_named(&sql, index_name.as_str()))
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "index `{}` named like the first column of a unique key of the table, which MySQL may have named so, is not available",
             index_name.as_str()
         )));
     }
