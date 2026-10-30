@@ -1850,6 +1850,35 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 18446744073709551615 DIV '103458.123456', \
+             18446744073709540000e0 DIV -18446744073709540000e0, \
+             -9223372036854775808 DIV CAST(2 AS JSON), \
+             CAST('1' AS JSON) DIV 18446744073709551615, \
+             18446744073709551615 DIV 0.0"
+        )?,
+        vec![vec![
+            Value::from_i64(178301552913385),
+            Value::from_i64(-1),
+            Value::from_i64(-4611686018427387904),
+            Value::from_i64(0),
+            Value::Null,
+        ]]
+    );
+    let failing = "SELECT 18446744073709551615 DIV CAST(-1 AS JSON)";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(
+        error.contains("ERROR 1690 (22003): BIGINT UNSIGNED value is out of range"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn json_values_compare_exactly_with_integers_beyond_bigint() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

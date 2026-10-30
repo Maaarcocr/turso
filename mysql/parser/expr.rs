@@ -1128,17 +1128,26 @@ fn translate_integer_division(
     right: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
-    if hex_or_bit_literal(left).is_some() || hex_or_bit_literal(right).is_some() {
+    if hex_or_bit_literal(left).is_some()
+        || hex_or_bit_literal(right).is_some()
+        || exceeds_bigint(left)
+        || exceeds_bigint(right)
+    {
         if let Some(quotient) = folded_integer_division(left, right) {
             return Ok(quotient);
         }
     }
     let json_beside_binary = |json_side: &Expr, other: &Expr| {
-        json::is_json_value(json_side) && hex_or_bit_literal(other).is_some()
+        json::is_json_value(json_side)
+            && (hex_or_bit_literal(other).is_some() || wide_number_text(other).is_some())
     };
     if json_beside_binary(left, right) || json_beside_binary(right, left) {
         let mut unsigned = false;
         let mut operand = |expr: &Expr, context: &mut TranslationContext| {
+            if let Some((text, wide_unsigned)) = wide_number_text(expr) {
+                unsigned |= wide_unsigned;
+                return Ok(string_expr(&text));
+            }
             let Some(literal) = hex_or_bit_literal(expr) else {
                 return json::translate_numeric_coercion(expr, "__mysql_json_decimal", context);
             };
@@ -1366,6 +1375,47 @@ fn cannot_be_negative(expr: &Expr) -> bool {
         },
         _ => false,
     }
+}
+
+/// The exact decimal text of a number literal at or beyond the BIGINT
+/// range, optionally negated (a double as its shortest digits), and whether
+/// MySQL reads it as a BIGINT UNSIGNED.
+fn wide_number_text(expr: &Expr) -> Option<(String, bool)> {
+    if !exceeds_bigint(expr) {
+        return None;
+    }
+    let (negative, inner) = match unnested(expr) {
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => (true, unnested(inner)),
+        other => (false, other),
+    };
+    let Expr::Value(value) = inner else {
+        return None;
+    };
+    let Value::Number(digits, _) = &value.value else {
+        return None;
+    };
+    let sign = if negative { "-" } else { "" };
+    if digits.contains(['e', 'E']) {
+        let double = digits.parse::<f64>().ok()?;
+        if !double.is_finite() || double.abs() >= 1e30 {
+            return None;
+        }
+        return Some((format!("{sign}{double}"), false));
+    }
+    let all_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    if !all_digits(whole) || !all_digits(fraction) || whole.len() + fraction.len() > 65 {
+        return None;
+    }
+    let unsigned = !negative
+        && fraction.is_empty()
+        && digits
+            .parse::<u64>()
+            .is_ok_and(|value| i64::try_from(value).is_err());
+    Some((format!("{sign}{digits}"), unsigned))
 }
 
 fn exceeds_bigint(expr: &Expr) -> bool {

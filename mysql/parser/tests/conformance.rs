@@ -1360,7 +1360,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "div beyond bigint",
-            sql: "SELECT 1 DIV 1e19",
+            sql: "SELECT a DIV 1e19 FROM t",
         },
         SqlCase {
             name: "values without row",
