@@ -836,6 +836,7 @@ fn lowers_select_statements_to_shared_ast() {
         ),
         ("SELECT 1 HAVING TRUE", "SELECT 1 WHERE TRUE"),
         ("SELECT 1 REGEXP NULL", "SELECT 1 REGEXP (NULL)"),
+        ("SELECT * FROM ((t AS a)) JOIN (u)", "SELECT * FROM t AS a JOIN u"),
         ("SELECT 1 ORDER BY 1", "SELECT 1 ORDER BY 1"),
         ("SELECT 1 LIMIT 1", "SELECT 1 LIMIT 1"),
         ("SELECT 1 LIMIT 2, 3", "SELECT 1 LIMIT 3 OFFSET 2"),

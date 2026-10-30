@@ -95,6 +95,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserE
     let mut tokens = tokens(sql)?;
     end_trigger_body(&mut tokens);
     parenthesize_null_patterns(&mut tokens);
+    unparenthesize_single_tables(&mut tokens);
     let statements = Parser::new(&dialect)
         .with_recursion_limit(RECURSION_LIMIT)
         .with_tokens_with_locations(tokens)
@@ -128,6 +129,87 @@ fn parenthesize_null_patterns(tokens: &mut Vec<TokenWithSpan>) {
             }
         }
         index += 1;
+    }
+}
+
+/// Writes `FROM (t)`, `JOIN ((t AS a))` and the like as `FROM t`: MySQL
+/// accepts a table in parentheses, which the parser reads as the start of
+/// a join.
+fn unparenthesize_single_tables(tokens: &mut Vec<TokenWithSpan>) {
+    let significant = |tokens: &[TokenWithSpan], from: usize| {
+        (from..tokens.len()).find(|&index| !matches!(tokens[index].token, Token::Whitespace(_)))
+    };
+    let word = |token: &TokenWithSpan| matches!(&token.token, Token::Word(_));
+    let mut index = 0;
+    while index < tokens.len() {
+        let introduces = matches!(
+            &tokens[index].token,
+            Token::Word(word) if word.quote_style.is_none() && matches!(word.keyword, Keyword::FROM | Keyword::JOIN)
+        );
+        index += 1;
+        if !introduces {
+            continue;
+        }
+        let mut opening = Vec::new();
+        let mut next = significant(tokens, index);
+        while let Some(at) = next.filter(|&at| tokens[at].token == Token::LParen) {
+            opening.push(at);
+            next = significant(tokens, at + 1);
+        }
+        if opening.is_empty() {
+            continue;
+        }
+        let mut table = Vec::new();
+        while let Some(at) =
+            next.filter(|&at| word(&tokens[at]) || tokens[at].token == Token::Period)
+        {
+            table.push(at);
+            next = significant(tokens, at + 1);
+        }
+        let Some(&first) = table.first() else {
+            continue;
+        };
+        let reserved = matches!(
+            &tokens[first].token,
+            Token::Word(word) if word.quote_style.is_none() && matches!(word.keyword, Keyword::SELECT | Keyword::WITH | Keyword::VALUES | Keyword::TABLE)
+        );
+        let shape = table
+            .iter()
+            .map(|&at| match &tokens[at].token {
+                Token::Period => '.',
+                Token::Word(word) if word.quote_style.is_none() && word.keyword == Keyword::AS => {
+                    'a'
+                }
+                _ => 'w',
+            })
+            .collect::<String>();
+        if reserved
+            || !matches!(
+                shape.as_str(),
+                "w" | "w.w" | "ww" | "w.ww" | "waw" | "w.waw"
+            )
+        {
+            continue;
+        }
+        let mut closing = Vec::new();
+        while closing.len() < opening.len() {
+            match next.filter(|&at| tokens[at].token == Token::RParen) {
+                Some(at) => {
+                    closing.push(at);
+                    next = significant(tokens, at + 1);
+                }
+                None => break,
+            }
+        }
+        if closing.len() != opening.len() {
+            continue;
+        }
+        let mut removed = opening;
+        removed.extend(closing);
+        removed.sort_unstable();
+        for at in removed.into_iter().rev() {
+            tokens.remove(at);
+        }
     }
 }
 
