@@ -1902,6 +1902,65 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn uuids_are_new_version_1_uuids_also_as_defaults() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT IS_UUID(UUID()), LENGTH(UUID()), SUBSTRING(UUID(), 15, 1), UUID() = UUID()"
+        )?,
+        vec![vec![
+            Value::from_i64(1),
+            Value::from_i64(36),
+            Value::build_text("1"),
+            Value::from_i64(0),
+        ]]
+    );
+    connection.execute("CREATE TABLE t (pk VARCHAR(36) DEFAULT (UUID()) PRIMARY KEY, v INT)")?;
+    connection.execute("INSERT INTO t (v) VALUES (1), (2), (3)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(DISTINCT pk), MIN(IS_UUID(pk)) FROM t"
+        )?,
+        vec![vec![Value::from_i64(3), Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn calls_fail_as_calls_of_missing_procedures() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    let error = query(&connection, "CALL p(1, 2)")
+        .expect_err("CALL")
+        .to_string();
+    assert!(error.contains("PROCEDURE p does not exist"), "{error}");
+    let error = query(&connection, "CALL sys.ps_setup_show_enabled()")
+        .expect_err("CALL")
+        .to_string();
+    assert!(error.contains("unsupported MySQL syntax"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn decimal_literal_keys_of_json_objects_are_their_text() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT JSON_OBJECT(10.1, 10), JSON_OBJECT(1.0, JSON_OBJECT()), \
+             JSON_OBJECT(01.50, 1, .5, 2, 3., 3)"
+        )?,
+        vec![vec![
+            Value::build_text("{\"10.1\": 10}"),
+            Value::build_text("{\"1.0\": {}}"),
+            Value::build_text("{\"3\": 3, \"0.5\": 2, \"1.50\": 1}"),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn shown_conversions_to_ascii_replace_other_characters() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (id BIGINT PRIMARY KEY, nm VARCHAR(20), b VARBINARY(5))")?;

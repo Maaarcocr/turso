@@ -107,6 +107,51 @@ pub(super) fn is_ipv4_mapped(args: &[Value]) -> Result<Value> {
     }))
 }
 
+/// `UUID()`, lowered as `__mysql_uuid(randomblob(8))`: a version 1 UUID as
+/// MySQL makes one, of the time in 100 ns intervals since 1582-10-15 (one
+/// interval after the last UUID's when the clock has not moved on), with a
+/// clock sequence and a random node drawn once per process from the bytes of
+/// the first call.
+pub(super) fn uuid(args: &[Value]) -> Result<Value> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::OnceLock;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    const INTERVALS_BEFORE_UNIX_EPOCH: u64 = 0x01B2_1DD2_1381_4000;
+    static LAST_TIME: AtomicU64 = AtomicU64::new(0);
+    static SEQUENCE_AND_NODE: OnceLock<u64> = OnceLock::new();
+    let Value::Blob(random) = &args[0] else {
+        return Err(LimboError::InternalError(
+            "UUID draws from a value that is not randomblob(8)".to_string(),
+        ));
+    };
+    let random: [u8; 8] = random.as_slice().try_into().map_err(|_| {
+        LimboError::InternalError("UUID draws from a blob that is not 8 bytes".to_string())
+    })?;
+    let sequence_and_node = *SEQUENCE_AND_NODE.get_or_init(|| u64::from_be_bytes(random));
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let now = u64::try_from(elapsed.as_nanos() / 100)
+        .unwrap_or(u64::MAX)
+        .saturating_add(INTERVALS_BEFORE_UNIX_EPOCH);
+    let mut last = LAST_TIME.load(Ordering::Relaxed);
+    let time = loop {
+        let next = now.max(last + 1);
+        match LAST_TIME.compare_exchange_weak(last, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => break next,
+            Err(current) => last = current,
+        }
+    };
+    let time_low = time & 0xFFFF_FFFF;
+    let time_mid = (time >> 32) & 0xFFFF;
+    let time_high_and_version = ((time >> 48) & 0x0FFF) | 0x1000;
+    let clock_sequence = ((sequence_and_node >> 48) & 0x3FFF) | 0x8000;
+    let node = (sequence_and_node & 0xFFFF_FFFF_FFFF) | 0x0100_0000_0000;
+    Ok(Value::build_text(format!(
+        "{time_low:08x}-{time_mid:04x}-{time_high_and_version:04x}-{clock_sequence:04x}-{node:012x}"
+    )))
+}
+
 pub(super) fn is_uuid(args: &[Value]) -> Result<Value> {
     Ok(string(&args[0]).map_or(Value::Null, |text| {
         boolean(parse_uuid(text.as_bytes()).is_some())

@@ -101,6 +101,13 @@ columns with types or options. Known differences: Turso views are read-only,
 so `INSERT`, `UPDATE` and `DELETE` through a view fail where MySQL changes
 the base table, and `WITH CHECK OPTION` does not parse.
 
+## Stored procedures
+
+`CREATE PROCEDURE` is not available, so a session has no stored procedures:
+`CALL p(...)` fails as MySQL's call of a procedure that does not exist
+(1305). A `CALL` of a procedure of a MySQL system schema (`sys.p`, `mysql.p`)
+is refused.
+
 ## Triggers
 
 `mysql/parser/trigger.rs` lowers `CREATE TRIGGER name {BEFORE|AFTER}
@@ -714,8 +721,10 @@ tagged with the JSON text subtype while it moves between expressions:
 - Turso has no `DECIMAL`, unsigned or temporal types, and `TRUE` is the
   integer 1, so these never become JSON decimals, unsigned integers, dates or
   booleans; binary strings become MySQL's `base64:type15:` opaque values.
-- `JSON_OBJECT` rejects a double key with error 3144, as MySQL does; a
-  `DECIMAL` literal key such as `1.0` is a double in Turso.
+- `JSON_OBJECT` rejects a double key with error 3144, as MySQL does. A
+  `DECIMAL` literal key is the literal's text, as in MySQL (`01.50` is
+  `"1.50"`); another `DECIMAL` key, such as a column or a computation, is a
+  double in Turso and fails.
 
 The lowering of syntax that MySQL implements with JSON functions can call
 these internal functions, which MySQL does not have:
@@ -887,7 +896,10 @@ back to SQLite parsing. Owned specs: `conformance/my-sqltests/functions-string.s
   `FROM_BASE64`.
 - Network and UUID: `INET_ATON`, `INET_NTOA`, `INET6_ATON`, `INET6_NTOA`,
   `IS_IPV4`, `IS_IPV6`, `IS_IPV4_COMPAT`, `IS_IPV4_MAPPED`, `IS_UUID`,
-  `UUID_TO_BIN`, `BIN_TO_UUID`.
+  `UUID_TO_BIN`, `BIN_TO_UUID`, and `UUID()` (also in a column default),
+  `__mysql_uuid(randomblob(8))`: a version 1 UUID of the current time, like
+  MySQL's, whose clock sequence and node are random per process where MySQL
+  uses the server's.
 - Regular expressions: `REGEXP_LIKE`, `REGEXP_INSTR`, `REGEXP_SUBSTR`,
   `REGEXP_REPLACE` and the `REGEXP` operator.
 

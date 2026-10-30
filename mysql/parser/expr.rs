@@ -6130,6 +6130,10 @@ fn translate_special_function(
                 vec![length, function_call("randomblob", vec![number(1024)])],
             )))
         }
+        ("UUID", []) => Ok(Some(function_call(
+            "__mysql_uuid",
+            vec![function_call("randomblob", vec![number(8)])],
+        ))),
         ("DATE_ADD" | "ADDDATE", [date, Expr::Interval(interval)]) => Ok(Some(
             translate_date_arithmetic("DATE_ADD", date, interval, context)?,
         )),
@@ -6662,6 +6666,11 @@ fn function_arguments(
             if upper_name == "CHAR" && json::is_json_value(arg) {
                 return json::translate_numeric_coercion(arg, "__mysql_json_integer", context);
             }
+            if upper_name == "JSON_OBJECT" && position % 2 == 0 {
+                if let Some(text) = decimal_literal_text(arg) {
+                    return Ok(string_expr(&text));
+                }
+            }
             if is_json_value_position(upper_name, position) {
                 return translate_json_value(arg, context);
             }
@@ -6935,6 +6944,31 @@ fn is_present_value(expr: &Expr) -> bool {
         } => is_present_value(inner),
         _ => false,
     }
+}
+
+/// The text MySQL gives a decimal literal (`01.50` is `1.50`), which a JSON
+/// object takes as the member name.
+fn decimal_literal_text(expr: &Expr) -> Option<String> {
+    let Expr::Value(value) = unnested(expr) else {
+        return None;
+    };
+    let Value::Number(digits, _) = &value.value else {
+        return None;
+    };
+    let (whole, fraction) = digits.split_once('.')?;
+    let all_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    if !all_digits(whole) || !all_digits(fraction) || whole.len() + fraction.len() > 65 {
+        return None;
+    }
+    let whole = match whole.trim_start_matches('0') {
+        "" => "0",
+        significant => significant,
+    };
+    Some(if fraction.is_empty() {
+        whole.to_string()
+    } else {
+        format!("{whole}.{fraction}")
+    })
 }
 
 fn is_json_value_position(upper_name: &str, position: usize) -> bool {
