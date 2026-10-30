@@ -23,6 +23,7 @@ pub(super) fn execute_typed(
         ("__MYSQL_JSON_INTEGER", 1) => integer,
         ("__MYSQL_JSON_DECIMAL", 1) => decimal,
         ("__MYSQL_JSON_REMAINDER", 2) => remainder,
+        ("__MYSQL_JSON_QUOTIENT", 4) => return Some(quotient(args, arg_types)),
         _ => return None,
     };
     let mut operands = Vec::with_capacity(args.len());
@@ -48,7 +49,7 @@ pub(super) fn accepts(name: &str, arg_count: usize) -> bool {
                 | "__MYSQL_JSON_INTEGER"
                 | "__MYSQL_JSON_DECIMAL",
             1
-        )
+        ) | ("__MYSQL_JSON_QUOTIENT", 4)
     )
 }
 
@@ -248,6 +249,48 @@ fn to_decimal(operand: &Operand) -> Decimal {
             Json::Boolean(value) => Decimal::from_i64(i64::from(*value)),
             Json::Null | Json::Opaque(_) | Json::Array(_) | Json::Object(_) => Decimal::zero(),
         },
+    }
+}
+
+/// `__mysql_json_quotient(a, b, unsigned, text)`: `a DIV b` of a JSON value's
+/// DECIMAL and a hex or bit literal as MySQL computes it, the DECIMAL
+/// quotient truncated, `NULL` for a `NULL` operand or a zero divisor. With
+/// `unsigned` 1 (next to a hex literal, which MySQL reads as BIGINT
+/// UNSIGNED) a negative quotient fails as in MySQL (1690); `text` is the
+/// division the error names.
+fn quotient(args: &[Value], arg_types: &[ArgumentType]) -> Result<Value> {
+    let (Value::Numeric(Numeric::Integer(unsigned)), Value::Text(text)) = (&args[2], &args[3])
+    else {
+        return Err(LimboError::InternalError(
+            "__mysql_json_quotient takes an unsigned flag and the text of the division".to_string(),
+        ));
+    };
+    let mut decimals = Vec::with_capacity(2);
+    for (value, arg_type) in args[..2].iter().zip(arg_types) {
+        match operand(value, arg_type)? {
+            Some(operand) => decimals.push(to_decimal(&operand)),
+            None => return Ok(Value::Null),
+        }
+    }
+    let Some(quotient) = decimals[0].divide(&decimals[1]) else {
+        return Ok(Value::Null);
+    };
+    let quotient = quotient.rounded(0, Rounding::TowardZero);
+    let out_of_range = |kind: &str| {
+        LimboError::SqlError(format!(
+            "ERROR 1690 (22003): {kind} value is out of range in '({})'",
+            text.as_str()
+        ))
+    };
+    if *unsigned != 0 && quotient.is_negative() {
+        return Err(out_of_range("BIGINT UNSIGNED"));
+    }
+    match quotient.to_i64() {
+        Some(quotient) => Ok(Value::from_i64(quotient)),
+        None if *unsigned != 0 => Err(crate::types::unsupported_value(
+            "a BIGINT UNSIGNED quotient above 9223372036854775807".to_string(),
+        )),
+        None => Err(out_of_range("BIGINT")),
     }
 }
 

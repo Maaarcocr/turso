@@ -1757,6 +1757,23 @@ fn integer_division_of_hex_literals_folds_exact_decimals() -> turso_core::Result
             Value::Null,
         ]]
     );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0xff DIV CAST(true AS JSON), X'01' DIV CAST('1.1' AS JSON), \
+             CAST(-20 AS JSON) DIV 0b11, CAST(-2 AS JSON) DIV 0x3, x'09' DIV CAST('{}' AS JSON)"
+        )?,
+        vec![vec![
+            Value::from_i64(255),
+            Value::from_i64(0),
+            Value::from_i64(-6),
+            Value::from_i64(0),
+            Value::Null,
+        ]]
+    );
+    let failing = "SELECT CAST(-20 AS JSON) DIV 0x3";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(error.contains("ERROR 1690"), "{failing}: {error}");
     for refused in ["SELECT -1.5e0 DIV 0x1", "SELECT TIME '-5 10:34:58' DIV 0x1"] {
         let error = query(&connection, refused).expect_err(refused).to_string();
         assert!(error.contains("BIGINT UNSIGNED"), "{refused}: {error}");

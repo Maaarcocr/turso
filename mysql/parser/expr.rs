@@ -1133,6 +1133,34 @@ fn translate_integer_division(
             return Ok(quotient);
         }
     }
+    let json_beside_binary = |json_side: &Expr, other: &Expr| {
+        json::is_json_value(json_side) && hex_or_bit_literal(other).is_some()
+    };
+    if json_beside_binary(left, right) || json_beside_binary(right, left) {
+        let mut unsigned = false;
+        let mut operand = |expr: &Expr, context: &mut TranslationContext| {
+            let Some(literal) = hex_or_bit_literal(expr) else {
+                return json::translate_numeric_coercion(expr, "__mysql_json_decimal", context);
+            };
+            unsigned |= matches!(literal, Value::HexStringLiteral(_));
+            let value = binary_literal_value(literal)?;
+            Ok(match i64::try_from(value) {
+                Ok(_) => ast::Expr::Literal(ast::Literal::Numeric(value.to_string())),
+                Err(_) => string_expr(&value.to_string()),
+            })
+        };
+        let dividend = operand(left, context)?;
+        let divisor = operand(right, context)?;
+        return Ok(function_call(
+            "__mysql_json_quotient",
+            vec![
+                dividend,
+                divisor,
+                ast::Expr::Literal(ast::Literal::Numeric(u8::from(unsigned).to_string())),
+                string_expr(&format!("{left} DIV {right}")),
+            ],
+        ));
+    }
     if exceeds_bigint(left) || exceeds_bigint(right) {
         return Err(MysqlParserError::Unsupported(
             "DIV of a number outside the BIGINT range, which MySQL rejects at run time".to_string(),
