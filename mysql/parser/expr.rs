@@ -2843,6 +2843,12 @@ fn translate_regexp(
                     .to_string(),
             ));
         }
+        if !std::mem::take(&mut context.empty_regexp_is_evaluated) {
+            return Err(MysqlParserError::Unsupported(
+                "an empty regular expression inside an expression, which MySQL rejects only where it evaluates it, is not lowered yet"
+                    .to_string(),
+            ));
+        }
         return Ok(function_call(
             "__mysql_empty_regexp",
             vec![translate_expr(expr, context)?],

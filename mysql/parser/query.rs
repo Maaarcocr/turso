@@ -42,6 +42,9 @@ pub(crate) struct TranslationContext<'a> {
     /// Select aliases, in `HAVING`, of expressions whose value is always an
     /// integer (`COUNT(*) AS a`).
     pub(crate) integer_aliases: Vec<String>,
+    /// The select item being translated is `x REGEXP ''`, which MySQL
+    /// evaluates (and rejects) for each row.
+    pub(crate) empty_regexp_is_evaluated: bool,
     tables_read: Vec<ast::Name>,
     /// Names of the common table expressions and derived tables met so far.
     pub(crate) common_tables: Vec<String>,
@@ -1734,11 +1737,16 @@ fn translate_selected(
     let failure = runs_once.then(|| failure_evaluated(expr)).flatten();
     context.latin1_as_text = runs_once && shown && shows_latin1_as_text(expr);
     context.unsigned_as_text = runs_once && shown && is_bit_operation(expr);
+    context.empty_regexp_is_evaluated = crate::invalid_json::is_empty_regexp(expr);
     let translated = match failure {
         Some(Failure::Json(text)) => Ok(failing_json_cast(text)),
         Some(Failure::BigintOutOfRange(digits)) => Ok(crate::expr::function_call(
             "__mysql_bigint_out_of_range",
             vec![crate::expr::string_expr(&format!("-({digits})"))],
+        )),
+        Some(Failure::EmptyRegexp) => Ok(crate::expr::function_call(
+            "__mysql_empty_regexp",
+            vec![crate::expr::string_expr("")],
         )),
         None => match crate::json::temporal_json_text(expr).filter(|_| shown) {
             Some(text) => Ok(text),
@@ -1749,6 +1757,7 @@ fn translate_selected(
     };
     context.latin1_as_text = false;
     context.unsigned_as_text = false;
+    context.empty_regexp_is_evaluated = false;
     translated
 }
 

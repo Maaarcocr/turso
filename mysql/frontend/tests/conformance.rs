@@ -1337,7 +1337,16 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
         let error = query(&connection, sql).expect_err(sql).to_string();
         assert!(error.contains("ERROR 3685 "), "{sql}: {error}");
     }
-    for refused in ["SELECT NULL REGEXP ''", "SELECT 0xFF REGEXP ''"] {
+    let error = query(&connection, "SELECT 1 + ('a' REGEXP '')")
+        .expect_err("REGEXP '' in arithmetic")
+        .to_string();
+    assert!(error.contains("ERROR 3685 "), "{error}");
+    for refused in [
+        "SELECT NULL REGEXP ''",
+        "SELECT 0xFF REGEXP ''",
+        "SELECT 0 AND ('a' REGEXP '')",
+        "SELECT NULL = ('a' REGEXP '')",
+    ] {
         let error = query(&connection, refused).expect_err(refused).to_string();
         assert!(error.contains("not"), "{refused}: {error}");
         assert!(!error.contains("ERROR "), "{refused}: {error}");

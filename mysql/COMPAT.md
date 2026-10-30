@@ -183,9 +183,13 @@ column, a string literal stays a string, which the column's type converts;
 beside another computed number, Turso compares a number with a string as
 SQLite does (every number below every string), unlike MySQL.
 
-`x REGEXP ''` and `x NOT REGEXP ''` are `__mysql_empty_regexp(x)`, which
-fails with MySQL's error 3685 when it is evaluated, as MySQL rejects the empty
-pattern then (not on an empty table). A `NULL` or binary subject is refused.
+`x REGEXP ''` and `x NOT REGEXP ''` as a whole select item are
+`__mysql_empty_regexp(x)`, which fails with MySQL's error 3685 when it is
+evaluated, as MySQL rejects the empty pattern then (not on an empty table). A
+select item of a `SELECT` that reads one row where MySQL always reaches such a
+test of a literal fails the same way. Elsewhere it is refused, as MySQL skips
+it after a decided `AND` or `OR` or a `NULL` operand, and so is a `NULL` or
+binary subject.
 
 `HAVING` in a `SELECT` without `GROUP BY` or aggregates, which MySQL applies to
 each row, joins the `WHERE` condition with each select alias it names replaced
