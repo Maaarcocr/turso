@@ -1585,6 +1585,40 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
 }
 
 #[test]
+fn alter_table_changes_columns() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE ac (a DOUBLE, b VARCHAR(10), k INT PRIMARY KEY)")?;
+    connection.execute("INSERT INTO ac VALUES (1.5, 'abc', 1), (2.5, NULL, 2)")?;
+    connection.execute("ALTER TABLE ac CHANGE a n INT DEFAULT 5")?;
+    connection.execute("INSERT INTO ac (b, k) VALUES ('x', 3)")?;
+    assert_eq!(
+        query(&connection, "SELECT n FROM ac ORDER BY k")?,
+        vec![
+            vec![Value::from_i64(2)],
+            vec![Value::from_i64(3)],
+            vec![Value::from_i64(5)],
+        ]
+    );
+    for failing in [
+        "ALTER TABLE ac CHANGE b c INT",
+        "ALTER TABLE ac CHANGE b c VARCHAR(10) NOT NULL",
+        "ALTER TABLE ac CHANGE b c VARCHAR(2)",
+    ] {
+        assert!(connection.execute(failing).is_err(), "{failing}");
+    }
+    for refused in [
+        "ALTER TABLE ac MODIFY b VARCHAR(20)",
+        "ALTER TABLE ac CHANGE b b VARCHAR(20)",
+        "ALTER TABLE ac CHANGE k j BIGINT",
+        "ALTER TABLE ac CHANGE b c VARCHAR(20) UNIQUE",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not available"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn alter_table_adds_indexes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE ai (a INT, b INT, t TEXT)")?;
