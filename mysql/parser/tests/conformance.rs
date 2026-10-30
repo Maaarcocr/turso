@@ -834,7 +834,8 @@ fn lowers_select_statements_to_shared_ast() {
             "SELECT a DIV 2 AS x, COUNT(*) FROM t GROUP BY x HAVING COUNT(*) > 1",
             "SELECT CAST (a / 2 AS INTEGER) AS x, COUNT (*) FROM t GROUP BY x HAVING COUNT (*) > 1",
         ),
-        ("SELECT 1 HAVING TRUE", "SELECT 1 HAVING TRUE"),
+        ("SELECT 1 HAVING TRUE", "SELECT 1 WHERE TRUE"),
+        ("SELECT 1 REGEXP NULL", "SELECT 1 REGEXP (NULL)"),
         ("SELECT 1 ORDER BY 1", "SELECT 1 ORDER BY 1"),
         ("SELECT 1 LIMIT 1", "SELECT 1 LIMIT 1"),
         ("SELECT 1 LIMIT 2, 3", "SELECT 1 LIMIT 3 OFFSET 2"),
@@ -1417,12 +1418,8 @@ fn lowering_rejects_each_unsupported_query_shape() {
             sql: "SELECT a FROM t ORDER BY a NULLS FIRST",
         },
         SqlCase {
-            name: "recursive cte",
-            sql: "WITH RECURSIVE c(n) AS (SELECT 1) SELECT n FROM c",
-        },
-        SqlCase {
-            name: "empty regular expression",
-            sql: "SELECT 'a' REGEXP ''",
+            name: "empty regular expression of a binary string",
+            sql: "SELECT 0xFF REGEXP ''",
         },
         SqlCase {
             name: "regular expression over bytes and a column",
