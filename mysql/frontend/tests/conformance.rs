@@ -1902,6 +1902,24 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn decimal_literal_keys_of_json_objects_are_their_text() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT JSON_OBJECT(10.1, 10), JSON_OBJECT(1.0, JSON_OBJECT()), \
+             JSON_OBJECT(01.50, 1, .5, 2, 3., 3)"
+        )?,
+        vec![vec![
+            Value::build_text("{\"10.1\": 10}"),
+            Value::build_text("{\"1.0\": {}}"),
+            Value::build_text("{\"3\": 3, \"0.5\": 2, \"1.50\": 1}"),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn shown_conversions_to_ascii_replace_other_characters() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t (id BIGINT PRIMARY KEY, nm VARCHAR(20), b VARBINARY(5))")?;

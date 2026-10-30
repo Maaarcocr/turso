@@ -714,8 +714,10 @@ tagged with the JSON text subtype while it moves between expressions:
 - Turso has no `DECIMAL`, unsigned or temporal types, and `TRUE` is the
   integer 1, so these never become JSON decimals, unsigned integers, dates or
   booleans; binary strings become MySQL's `base64:type15:` opaque values.
-- `JSON_OBJECT` rejects a double key with error 3144, as MySQL does; a
-  `DECIMAL` literal key such as `1.0` is a double in Turso.
+- `JSON_OBJECT` rejects a double key with error 3144, as MySQL does. A
+  `DECIMAL` literal key is the literal's text, as in MySQL (`01.50` is
+  `"1.50"`); another `DECIMAL` key, such as a column or a computation, is a
+  double in Turso and fails.
 
 The lowering of syntax that MySQL implements with JSON functions can call
 these internal functions, which MySQL does not have:
