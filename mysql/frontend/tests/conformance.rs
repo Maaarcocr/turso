@@ -1314,6 +1314,43 @@ fn having_without_grouping_filters_rows_by_alias() -> turso_core::Result<()> {
 }
 
 #[test]
+fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        (
+            "SELECT HEX(CONVERT('foo' USING utf16))",
+            Value::build_text("0066006F006F"),
+        ),
+        (
+            "SELECT HEX(CONVERT(X'4D7953514C' USING ucs2))",
+            Value::build_text("004D7953514C"),
+        ),
+        (
+            "SELECT HEX(CONVERT(X'4D7953514C' USING utf32))",
+            Value::Null,
+        ),
+        (
+            "SELECT HEX(CONVERT(_latin1 X'80' USING utf32))",
+            Value::build_text("000020AC"),
+        ),
+        (
+            "SELECT HEX(CONVERT('\u{e9}' USING latin1))",
+            Value::build_text("E9"),
+        ),
+    ] {
+        assert_eq!(query(&connection, sql)?, vec![vec![expected]], "{sql}");
+    }
+    for refused in [
+        "SELECT HEX(CONVERT('\u{1F600}' USING ucs2))",
+        "SELECT CONVERT('foo' USING utf16)",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn table_statements_read_whole_tables() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t1 (i INT)")?;
