@@ -183,6 +183,18 @@ column, a string literal stays a string, which the column's type converts;
 beside another computed number, Turso compares a number with a string as
 SQLite does (every number below every string), unlike MySQL.
 
+A call whose result MySQL types as a `DATE` (`DATE`, `CURDATE`, `FROM_DAYS`,
+`LAST_DAY`, `MAKEDATE`), a `TIME` (`TIME`, `SEC_TO_TIME`, `MAKETIME`,
+`TIMEDIFF`, `CURTIME`) or a `DATETIME` (`NOW`, `FROM_UNIXTIME` of one
+argument, `TIMESTAMP`, `CONVERT_TZ`) is `__mysql_temporal_number(x)` in
+arithmetic, a bit operation, a comparison with a number and a numeric function
+argument: the number MySQL reads it as (`SEC_TO_TIME(2378) + 0` is 3938,
+`DATE(dt) + 0` is 20000102). One with a fraction, which MySQL reads as a
+DECIMAL, is refused, and so is `DATE_ADD` of such a `TIME`. A `DATE`,
+`DATETIME`, `TIMESTAMP` or `TIME` column in arithmetic is refused, as MySQL
+reads it as such a number. `SUM` and `AVG` of such a column add the start of
+its text (the year), unlike MySQL.
+
 `x REGEXP ''` and `x NOT REGEXP ''` as a whole select item are
 `__mysql_empty_regexp(x)`, which fails with MySQL's error 3685 when it is
 evaluated, as MySQL rejects the empty pattern then (not on an empty table). A

@@ -110,6 +110,7 @@ fn conversion(name: &str, arg_count: usize) -> Option<Conversion> {
         ("__MYSQL_ASSIGN_TIMESTAMP", 2) => temporal::assign_timestamp,
         ("__MYSQL_ASSIGN_TIME", 2) => temporal::assign_time,
         ("__MYSQL_LABELS_NUMBER_UNSUPPORTED", 1 | 2) => labels::number_unsupported,
+        ("__MYSQL_TEMPORAL_ARITHMETIC_UNSUPPORTED", 1 | 2) => temporal::arithmetic_unsupported,
         ("__MYSQL_DATED_LESS", 2) => temporal::dated_less,
         ("__MYSQL_DATED_EQUAL", 2) => temporal::dated_equal,
         ("__MYSQL_DATED_TIME_LESS" | "__MYSQL_DATED_TIME_EQUAL", 2) => {

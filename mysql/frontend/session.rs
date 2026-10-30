@@ -76,7 +76,8 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         | RECURSIVE_INTEGER
         | VALIDATE_PASSWORD_STRENGTH
         | EMPTY_REGEXP
-        | BIGINT_OUT_OF_RANGE => arg_count == 1,
+        | BIGINT_OUT_OF_RANGE
+        | TEMPORAL_NUMBER => arg_count == 1,
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -173,6 +174,13 @@ pub(crate) fn execute(
             _ => Err(LimboError::SqlError(
                 "ERROR 3685 (HY000): Illegal argument to a regular expression.".to_string(),
             )),
+        },
+        TEMPORAL_NUMBER => match &args[0] {
+            Value::Null => Ok(Value::Null),
+            Value::Text(text) => temporal_number(text.as_str()),
+            other => Err(unsupported_value(format!(
+                "`{other}` as the number of a DATE, TIME or DATETIME,"
+            ))),
         },
         BIGINT_OUT_OF_RANGE => match &args[0] {
             Value::Text(text) => Err(LimboError::SqlError(format!(
@@ -284,6 +292,12 @@ const VALIDATE_PASSWORD_STRENGTH: &str = "VALIDATE_PASSWORD_STRENGTH";
 /// `__mysql_empty_regexp(subject)`: `subject REGEXP ''`, which MySQL rejects
 /// (3685) when it evaluates it. A `NULL` or binary subject is refused.
 const EMPTY_REGEXP: &str = "__MYSQL_EMPTY_REGEXP";
+
+/// `__mysql_temporal_number(value)`: the number MySQL reads a `DATE`,
+/// `TIME` or `DATETIME` result as (`20000102`, `-100001`,
+/// `20000102030405`). One with a fraction, which MySQL reads as a DECIMAL
+/// of its fractional digits, is refused.
+const TEMPORAL_NUMBER: &str = "__MYSQL_TEMPORAL_NUMBER";
 
 /// `__mysql_bigint_out_of_range(text)`: MySQL's error (1690) for the
 /// literal printed as `text`, which it rejects where it reads it as a BIGINT.
@@ -561,4 +575,61 @@ fn user_value(value: &Value, value_type: &ArgumentType) -> Result<Value> {
         }
         other => other.clone(),
     })
+}
+
+/// The number of the canonical text of a `DATE` (`YYYY-MM-DD`), a
+/// `DATETIME` (`YYYY-MM-DD hh:mm:ss`) or a `TIME` (`[-]hh:mm:ss`, with up to
+/// three hour digits).
+fn temporal_number(text: &str) -> Result<Value> {
+    let unsupported = || {
+        unsupported_value(format!(
+            "`{text}`, a DATE, TIME or DATETIME with a fraction or in another form, as a number,"
+        ))
+    };
+    fn digits(part: &str, length: std::ops::RangeInclusive<usize>) -> Option<&str> {
+        (length.contains(&part.len()) && part.bytes().all(|byte| byte.is_ascii_digit()))
+            .then_some(part)
+    }
+    let date = |date: &str| -> Option<String> {
+        let mut parts = date.split('-');
+        let year = digits(parts.next()?, 4..=4)?;
+        let month = digits(parts.next()?, 2..=2)?;
+        let day = digits(parts.next()?, 2..=2)?;
+        parts
+            .next()
+            .is_none()
+            .then(|| format!("{year}{month}{day}"))
+    };
+    let time = |time: &str, hours: std::ops::RangeInclusive<usize>| -> Option<String> {
+        let mut parts = time.split(':');
+        let hour = digits(parts.next()?, hours)?;
+        let minute = digits(parts.next()?, 2..=2)?;
+        let second = digits(parts.next()?, 2..=2)?;
+        parts
+            .next()
+            .is_none()
+            .then(|| format!("{hour}{minute}{second}"))
+    };
+    let number = match text.split_once(' ') {
+        Some((day, clock)) => format!(
+            "{}{}",
+            date(day).ok_or_else(unsupported)?,
+            time(clock, 2..=2).ok_or_else(unsupported)?
+        ),
+        None if text.contains(':') => {
+            let (negative, clock) = match text.strip_prefix('-') {
+                Some(clock) => (true, clock),
+                None => (false, text),
+            };
+            let digits = time(clock, 2..=3).ok_or_else(unsupported)?;
+            if negative {
+                format!("-{digits}")
+            } else {
+                digits
+            }
+        }
+        None => date(text).ok_or_else(unsupported)?,
+    };
+    let value = number.parse::<i64>().map_err(|_| unsupported())?;
+    Ok(Value::from_i64(value))
 }

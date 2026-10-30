@@ -26,6 +26,43 @@ macro_rules! compared {
     };
 }
 
+/// The arithmetic of a `DATE`, `DATETIME`, `TIMESTAMP` or `TIME` column,
+/// refused: MySQL reads the value as a number (`20000102`), where Turso
+/// would read the start of its text.
+macro_rules! numbers {
+    ($quoted:expr) => {
+        concat!(
+            "OPERATOR '-' (",
+            $quoted,
+            ") RETURNS integer __mysql_temporal_arithmetic_unsupported ",
+            arithmetic!($quoted, "any", "+"),
+            arithmetic!("any", $quoted, "+"),
+            arithmetic!($quoted, "any", "-"),
+            arithmetic!("any", $quoted, "-"),
+            arithmetic!($quoted, "any", "*"),
+            arithmetic!("any", $quoted, "*"),
+            arithmetic!($quoted, "any", "/"),
+            arithmetic!("any", $quoted, "/"),
+            arithmetic!($quoted, "any", "%"),
+            arithmetic!("any", $quoted, "%"),
+        )
+    };
+}
+
+macro_rules! arithmetic {
+    ($left:expr, $right:expr, $operator:literal) => {
+        concat!(
+            "OPERATOR '",
+            $operator,
+            "' (",
+            $left,
+            ", ",
+            $right,
+            ") RETURNS integer __mysql_temporal_arithmetic_unsupported "
+        )
+    };
+}
+
 macro_rules! temporal {
     ($name:literal, $parameters:literal, $assign:literal, $operators:expr) => {
         DialectType {
@@ -38,6 +75,7 @@ macro_rules! temporal {
                 " ",
                 "CAST __mysql_sqlite_cast(value, 'TEXT') ",
                 $operators,
+                numbers!(concat!("\"", $name, "\"")),
                 "FUNCTION __mysql_cast_as_signed(\"",
                 $name,
                 "\") RETURNS integer __mysql_cast_as_integer_unsupported ",
@@ -218,4 +256,11 @@ fn micros(value: &Value) -> Result<Option<i128>> {
         )));
     }
     Ok(Some(time.datetime_in_micros()))
+}
+
+pub(super) fn arithmetic_unsupported(_args: &[Value]) -> Result<Value> {
+    Err(unsupported_value(
+        "a DATE, DATETIME, TIMESTAMP or TIME column in arithmetic, which MySQL reads as a number,"
+            .to_string(),
+    ))
 }

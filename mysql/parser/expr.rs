@@ -57,9 +57,58 @@ pub(crate) fn translate_in(
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     context.enter_expression()?;
-    let translated = translate_node(expr, literal_context, context);
+    let translated = if matches!(
+        literal_context,
+        Context::Number | Context::Arithmetic | Context::Bitwise
+    ) && temporal_function_kind(expr).is_some()
+    {
+        translate_node(expr, Context::Value, context)
+            .map(|call| function_call("__mysql_temporal_number", vec![call]))
+    } else {
+        translate_node(expr, literal_context, context)
+    };
     context.leave_expression();
     translated
+}
+
+/// The MySQL type of a call whose result is a `DATE`, `TIME` or `DATETIME`
+/// whatever its arguments, which MySQL reads as a number (`20000102`,
+/// `100001`, `20000102030405`) where it needs one.
+fn temporal_function_kind(expr: &Expr) -> Option<TemporalKind> {
+    let Expr::Function(function) = unnested(expr) else {
+        return None;
+    };
+    let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+        return None;
+    };
+    if name.quote_style.is_some() {
+        return None;
+    }
+    let arg_count = match &function.args {
+        FunctionArguments::None => 0,
+        FunctionArguments::List(list) => list.args.len(),
+        FunctionArguments::Subquery(_) => return None,
+    };
+    Some(
+        match (name.value.to_ascii_uppercase().as_str(), arg_count) {
+            ("SEC_TO_TIME" | "TIME", 1)
+            | ("MAKETIME", 3)
+            | ("TIMEDIFF", 2)
+            | ("CURTIME" | "CURRENT_TIME" | "UTC_TIME", 0 | 1) => TemporalKind::Time,
+            ("DATE" | "FROM_DAYS" | "LAST_DAY", 1)
+            | ("MAKEDATE", 2)
+            | ("CURDATE" | "CURRENT_DATE" | "UTC_DATE", 0) => TemporalKind::Date,
+            ("FROM_UNIXTIME", 1)
+            | ("TIMESTAMP", 1 | 2)
+            | ("CONVERT_TZ", 3)
+            | (
+                "NOW" | "CURRENT_TIMESTAMP" | "LOCALTIME" | "LOCALTIMESTAMP" | "SYSDATE"
+                | "UTC_TIMESTAMP",
+                0 | 1,
+            ) => TemporalKind::DateTime,
+            _ => return None,
+        },
+    )
 }
 
 fn translate_node(
@@ -5491,6 +5540,11 @@ fn translate_date_arithmetic(
         ast::Expr::Literal(ast::Literal::String(quoted)) => quoted.trim_matches('\'').to_string(),
         other => unreachable!("a temporal unit lowers to a string literal, not `{other}`"),
     };
+    if temporal_function_kind(date) == Some(TemporalKind::Time) {
+        return Err(MysqlParserError::Unsupported(format!(
+            "{name} of `{date}`, a TIME whose result MySQL types as TIME, is not lowered yet"
+        )));
+    }
     let call = function_call(name, vec![translate_expr(date, context)?, amount, unit]);
     let Some(kind) = dated_literal_kind(date) else {
         return Ok(call);
