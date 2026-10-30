@@ -6350,7 +6350,7 @@ pub(crate) fn reads_temporal_as_number(upper_name: &str, position: usize) -> boo
 
 fn reads_number(upper_name: &str, position: usize, args: &[&Expr]) -> bool {
     match upper_name {
-        "ELT" | "MAKE_SET" | "SPACE" | "RANDOM_BYTES" => position == 0,
+        "ELT" | "MAKE_SET" | "SPACE" | "RANDOM_BYTES" | "INET_NTOA" => position == 0,
         "FORMAT" | "LEFT" | "LPAD" | "REPEAT" | "RIGHT" | "RPAD" | "SHA2" => position == 1,
         "CONV" | "INSERT" | "MID" | "SUBSTR" | "SUBSTRING" => matches!(position, 1 | 2),
         "LOCATE" | "SUBSTRING_INDEX" | "REGEXP_SUBSTR" => matches!(position, 2 | 3),
