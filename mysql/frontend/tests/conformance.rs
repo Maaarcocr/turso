@@ -1537,6 +1537,34 @@ fn temporal_results_are_numbers_in_arithmetic() -> turso_core::Result<()> {
 }
 
 #[test]
+fn greatest_and_least_of_temporal_literals_compare_as_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT GREATEST(DATE '2024-02-18', DATE '2100-02-01', \
+             TIMESTAMP '2025-01-01 00:00:00.123456'), \
+             LEAST(TIME '23:59:59.5432', TIME '120:59:59'), \
+             GREATEST(TIME '23:59:59.5432', TIME '120:59:59'), \
+             LEAST(TIME '-1:00:00', TIME '00:00:01.5'), \
+             GREATEST(DATE '2000-01-01', DATE '1999-12-31'), GREATEST(TIME '1:00:00', NULL)"
+        )?,
+        vec![vec![
+            Value::build_text("2100-02-01 00:00:00.000000"),
+            Value::build_text("23:59:59.5432"),
+            Value::build_text("120:59:59.0000"),
+            Value::build_text("-01:00:00.0"),
+            Value::build_text("2000-01-01"),
+            Value::Null,
+        ]]
+    );
+    let refused = "SELECT LEAST(TIME '23:59:59', TIMESTAMP '2020-12-31 23:59:59')";
+    let error = query(&connection, refused).expect_err(refused).to_string();
+    assert!(error.contains("not lowered yet"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn strcmp_with_a_number_compares_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE sn (i INT, f DOUBLE, s VARCHAR(10))")?;
