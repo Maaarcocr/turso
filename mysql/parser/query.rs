@@ -43,6 +43,8 @@ pub(crate) struct TranslationContext<'a> {
     /// Names of the common table expressions and derived tables met so far.
     pub(crate) common_tables: Vec<String>,
     pub(crate) derived_tables: Vec<String>,
+    /// How many `LATERAL` derived tables the translation is inside.
+    lateral_depth: usize,
 }
 
 impl<'a> TranslationContext<'a> {
@@ -78,6 +80,12 @@ impl<'a> TranslationContext<'a> {
         }
         self.expression_depth += 1;
         Ok(())
+    }
+
+    /// Whether the translation is inside an expression (a subquery in it may
+    /// read a row of the query around it) or a `LATERAL` derived table.
+    pub(crate) fn may_read_outer_rows(&self) -> bool {
+        self.expression_depth > 0 || self.lateral_depth > 0
     }
 
     pub(crate) fn leave_expression(&mut self) {
@@ -195,28 +203,22 @@ fn translate_with(
     with: &With,
     context: &mut TranslationContext,
 ) -> Result<ast::With, MysqlParserError> {
-    if with.recursive {
-        return Err(unsupported(
-            "WITH RECURSIVE, whose cte_max_recursion_depth limit Turso does not enforce,"
-                .to_string(),
-        ));
+    let mut ctes = Vec::with_capacity(with.cte_tables.len());
+    for cte in &with.cte_tables {
+        if with.recursive && crate::recursive::reads_itself(cte)? {
+            ctes.extend(crate::recursive::translate_recursive_cte(cte, context)?);
+        } else {
+            ctes.push(translate_cte(cte, context)?);
+        }
+        context.common_tables.push(cte.alias.name.value.clone());
     }
-    let ctes = with
-        .cte_tables
-        .iter()
-        .map(|cte| {
-            let translated = translate_cte(cte, context);
-            context.common_tables.push(cte.alias.name.value.clone());
-            translated
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::With {
-        recursive: false,
+        recursive: with.recursive,
         ctes,
     })
 }
 
-fn translate_cte(
+pub(crate) fn translate_cte(
     cte: &Cte,
     context: &mut TranslationContext,
 ) -> Result<ast::CommonTableExpr, MysqlParserError> {
@@ -461,11 +463,18 @@ fn translate_select(
         .map(|item| translate_projection(item, runs_once, shown, context))
         .collect::<Result<Vec<_>, _>>()?;
     let from = translate_from(from, context)?;
+    let filter = crate::having::ungrouped_filter(select, context.may_read_outer_rows())?;
+    let (selection, having) = match &filter {
+        Some(filter) => (Some(filter), &None),
+        None => (selection.as_ref(), having),
+    };
     let where_clause = selection
-        .as_ref()
         .map(|condition| translate_condition(condition, context).map(Box::new))
         .transpose()?;
-    context.having_columns = having_columns(select, context.environment)?;
+    context.having_columns = match filter {
+        Some(_) => Vec::new(),
+        None => having_columns(select, context.environment)?,
+    };
     let group_by = translate_group_by(group_by, having.as_ref(), context);
     context.having_columns.clear();
     let group_by = group_by?;
@@ -1378,7 +1387,7 @@ fn uses_ungrouped_column(expr: &Expr, groups: &Grouping) -> bool {
     }
 }
 
-fn contains_aggregate(expr: &Expr) -> bool {
+pub(crate) fn contains_aggregate(expr: &Expr) -> bool {
     match expr {
         Expr::Function(function) if is_aggregate(function) => true,
         Expr::Function(function) => function_arguments(function)
@@ -1915,7 +1924,10 @@ fn translate_table_factor(
             alias,
             sample: None,
         } => {
-            let select = translate_subquery(subquery, context)?;
+            context.lateral_depth += usize::from(*lateral);
+            let select = translate_subquery(subquery, context);
+            context.lateral_depth -= usize::from(*lateral);
+            let select = select?;
             if let Some(alias) = alias {
                 context.derived_tables.push(alias.name.value.clone());
             }

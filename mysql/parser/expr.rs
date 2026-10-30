@@ -4,8 +4,8 @@ use crate::function_names::{BINARY_STRING_FUNCTIONS, DATE_TIME_FUNCTIONS};
 use crate::json;
 use crate::literal::{
     binary_literal_as_double, binary_literal_value, bit_bytes, blob_literal, hex_bytes,
-    is_latin1_char, is_utf8_binary_literal, latin1_text, negated_binary_literal, temporal_literal,
-    translate_as_bytes, translate_introduced_string, translate_temporal_text,
+    is_latin1_char, is_utf8_binary_literal, latin1_byte, latin1_text, negated_binary_literal,
+    temporal_literal, translate_as_bytes, translate_introduced_string, translate_temporal_text,
     translate_typed_string, translate_typed_string_as_bytes, translate_value, Context,
     TemporalKind,
 };
@@ -2257,6 +2257,164 @@ fn folded_unsigned_bits(
     }))
 }
 
+/// `HEX(CONVERT(literal USING charset))` for `utf16`, `ucs2`, `utf32`,
+/// `latin1` and `ascii`: the hex of the literal's bytes in that character
+/// set. MySQL encodes the characters of a text, and reads a binary string as
+/// that character set's bytes, padded on the left with zero bytes to a whole
+/// character; a binary string that is not valid `utf32` gives `NULL`. A
+/// character the set lacks (MySQL writes `?`), a binary string with a
+/// surrogate or not valid `ascii`, and any other argument are left to
+/// `translate_convert_using`, which refuses them.
+fn folded_hex_conversion(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    enum Source {
+        Text(String),
+        Bytes(Vec<u8>),
+    }
+    fn quoted(expr: &Expr) -> Option<&str> {
+        match expr {
+            Expr::Value(value) => match &value.value {
+                Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => Some(text),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+    fn source(expr: &Expr) -> Option<Source> {
+        let expr = unnested(expr);
+        if let Some(text) = quoted(expr) {
+            return Some(Source::Text(text.to_string()));
+        }
+        if let Some(bytes) = binary_literal_bytes(expr) {
+            return Some(Source::Bytes(bytes));
+        }
+        let Expr::Prefixed { prefix, value } = expr else {
+            return None;
+        };
+        if prefix.quote_style.is_some() {
+            return None;
+        }
+        let hex = match value.as_ref() {
+            Expr::Value(value) => match &value.value {
+                Value::HexStringLiteral(digits) => hex_bytes(digits).ok(),
+                _ => None,
+            },
+            _ => None,
+        };
+        match prefix.value.to_ascii_lowercase().as_str() {
+            "_utf8mb4" => match quoted(value) {
+                Some(text) => Some(Source::Text(text.to_string())),
+                None => String::from_utf8(hex?).ok().map(Source::Text),
+            },
+            "_utf8mb3" | "_utf8" => match quoted(value) {
+                Some(text) => Some(Source::Text(text.to_string())),
+                None => String::from_utf8(hex?).ok().map(Source::Text),
+            }
+            .filter(|source| {
+                matches!(source, Source::Text(text) if text.chars().all(|character| u32::from(character) <= 0xFFFF))
+            }),
+            "_latin1" => match quoted(value) {
+                Some(text) if text.is_ascii() => Some(Source::Text(text.to_string())),
+                Some(_) => None,
+                None => Some(Source::Text(latin1_text(&hex?))),
+            },
+            _ => None,
+        }
+    }
+    fn units(bytes: &[u8], width: usize) -> (Vec<u8>, Vec<u32>) {
+        let mut padded = vec![0; (width - bytes.len() % width) % width];
+        padded.extend_from_slice(bytes);
+        let units = padded
+            .chunks(width)
+            .map(|unit| {
+                unit.iter()
+                    .fold(0, |code, &byte| code << 8 | u32::from(byte))
+            })
+            .collect();
+        (padded, units)
+    }
+    let surrogate = |code: &u32| (0xD800..=0xDFFF).contains(code);
+    if upper_name != "HEX" {
+        return Ok(None);
+    }
+    let args = unnamed_arguments(list)?;
+    let [Expr::Convert {
+        is_try: false,
+        expr,
+        data_type: None,
+        charset: Some(charset),
+        target_before_value: false,
+        styles,
+    }] = args.as_slice()
+    else {
+        return Ok(None);
+    };
+    if !styles.is_empty() {
+        return Ok(None);
+    }
+    let Some(source) = source(expr) else {
+        return Ok(None);
+    };
+    let charset = single_name(charset)?.to_ascii_lowercase();
+    let bytes: Option<Vec<u8>> = match (charset.as_str(), source) {
+        ("latin1", Source::Text(text)) => {
+            let Some(bytes) = text.chars().map(latin1_byte).collect::<Option<Vec<u8>>>() else {
+                return Ok(None);
+            };
+            Some(bytes)
+        }
+        ("latin1", Source::Bytes(bytes)) => Some(bytes),
+        ("ascii", Source::Text(text)) if text.is_ascii() => Some(text.into_bytes()),
+        ("ascii", Source::Bytes(bytes)) if bytes.is_ascii() => Some(bytes),
+        ("utf16", Source::Text(text)) => Some(
+            text.encode_utf16()
+                .flat_map(|unit| unit.to_be_bytes())
+                .collect(),
+        ),
+        ("ucs2", Source::Text(text)) => {
+            if text.chars().any(|character| u32::from(character) > 0xFFFF) {
+                return Ok(None);
+            }
+            Some(
+                text.encode_utf16()
+                    .flat_map(|unit| unit.to_be_bytes())
+                    .collect(),
+            )
+        }
+        ("utf32", Source::Text(text)) => Some(
+            text.chars()
+                .flat_map(|character| u32::from(character).to_be_bytes())
+                .collect(),
+        ),
+        ("utf16" | "ucs2", Source::Bytes(bytes)) => {
+            let (padded, units) = units(&bytes, 2);
+            if units.iter().any(surrogate) {
+                return Ok(None);
+            }
+            Some(padded)
+        }
+        ("utf32", Source::Bytes(bytes)) => {
+            let (padded, units) = units(&bytes, 4);
+            if units.iter().any(surrogate) {
+                return Ok(None);
+            }
+            (!units.iter().any(|code| *code > 0x10FFFF)).then_some(padded)
+        }
+        _ => return Ok(None),
+    };
+    Ok(Some(match bytes {
+        Some(bytes) => string_expr(
+            &bytes
+                .iter()
+                .map(|byte| format!("{byte:02X}"))
+                .collect::<String>(),
+        ),
+        None => ast::Expr::Literal(ast::Literal::Null),
+    }))
+}
+
 /// `FIELD` of number literals only, whose position MySQL finds comparing
 /// them as `NumberComparison` says.
 fn folded_number_field(list: &FunctionArgumentList) -> Result<Option<ast::Expr>, MysqlParserError> {
@@ -2422,9 +2580,15 @@ fn translate_regexp(
 ) -> Result<ast::Expr, MysqlParserError> {
     ensure_default_collation(&[expr, pattern], "REGEXP")?;
     if string_literal(pattern).is_some_and(str::is_empty) {
-        return Err(MysqlParserError::Unsupported(
-            "an empty regular expression, which MySQL rejects at run time, is not lowered yet"
-                .to_string(),
+        if is_binary_literal(expr) {
+            return Err(MysqlParserError::Unsupported(
+                "an empty regular expression of a binary string, whose character set MySQL rejects, is not lowered yet"
+                    .to_string(),
+            ));
+        }
+        return Ok(function_call(
+            "__mysql_empty_regexp",
+            vec![translate_expr(expr, context)?],
         ));
     }
     let (lhs, rhs) = if is_binary_literal(expr) || is_binary_literal(pattern) {
@@ -3862,6 +4026,9 @@ fn translate_function(
         }
     }
     if let Some(folded) = folded_unsigned_bits(&upper_name, list)? {
+        return Ok(folded);
+    }
+    if let Some(folded) = folded_hex_conversion(&upper_name, list)? {
         return Ok(folded);
     }
     if matches!(

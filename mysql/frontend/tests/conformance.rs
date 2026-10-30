@@ -1237,6 +1237,137 @@ fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
 }
 
 #[test]
+fn recursive_common_table_expressions_stop_before_mysql_limit() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "WITH RECURSIVE c (n, p) AS (SELECT 1, 1 UNION ALL SELECT n + 1, p * 10 FROM c WHERE n < 3) \
+             SELECT * FROM c"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::from_i64(1)],
+            vec![Value::from_i64(2), Value::from_i64(10)],
+            vec![Value::from_i64(3), Value::from_i64(100)],
+        ]
+    );
+    connection.execute("CREATE TABLE e (id INT PRIMARY KEY, boss INT)")?;
+    connection.execute("INSERT INTO e VALUES (1, NULL), (2, 1), (3, 2)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "WITH RECURSIVE chain AS (SELECT 1 AS id, 0 AS lvl UNION ALL \
+             SELECT e.id, chain.lvl + 1 FROM e JOIN chain ON e.boss = chain.id) \
+             SELECT id, lvl FROM chain ORDER BY id"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::from_i64(0)],
+            vec![Value::from_i64(2), Value::from_i64(1)],
+            vec![Value::from_i64(3), Value::from_i64(2)],
+        ]
+    );
+    for refused in [
+        "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 2000) SELECT COUNT(*) FROM c",
+        "WITH RECURSIVE c (s) AS (SELECT 'a' UNION ALL SELECT CONCAT(s, 'a') FROM c WHERE LENGTH(s) < 3) SELECT * FROM c",
+        "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n * 100000 FROM c WHERE n < 1000000000) SELECT * FROM c",
+        "SELECT (WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < e.id) SELECT MAX(n) FROM c) FROM e",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not"), "{refused}: {error}");
+        assert!(!error.contains("ERROR "), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn having_without_grouping_filters_rows_by_alias() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE uv (u INT, v INT)")?;
+    connection.execute("INSERT INTO uv VALUES (1, 2), (0, 3), (5, 1)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT u + 1 AS w FROM uv WHERE v > 1 HAVING w > 1 ORDER BY w"
+        )?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT u, (SELECT v HAVING u > 3) FROM uv ORDER BY u"
+        )?,
+        vec![
+            vec![Value::from_i64(0), Value::Null],
+            vec![Value::from_i64(1), Value::Null],
+            vec![Value::from_i64(5), Value::from_i64(1)],
+        ]
+    );
+    assert!(query(&connection, "SELECT 1 HAVING FALSE")?.is_empty());
+    for refused in [
+        "SELECT u FROM uv HAVING v = 1",
+        "SELECT u, ROW_NUMBER() OVER () AS r FROM uv HAVING r = 1",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE e (s TEXT)")?;
+    assert!(query(&connection, "SELECT s REGEXP '' FROM e")?.is_empty());
+    for sql in ["SELECT 'foo' REGEXP ''", "SELECT 1 NOT REGEXP ''"] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains("ERROR 3685 "), "{sql}: {error}");
+    }
+    for refused in ["SELECT NULL REGEXP ''", "SELECT 0xFF REGEXP ''"] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not"), "{refused}: {error}");
+        assert!(!error.contains("ERROR "), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        (
+            "SELECT HEX(CONVERT('foo' USING utf16))",
+            Value::build_text("0066006F006F"),
+        ),
+        (
+            "SELECT HEX(CONVERT(X'4D7953514C' USING ucs2))",
+            Value::build_text("004D7953514C"),
+        ),
+        (
+            "SELECT HEX(CONVERT(X'4D7953514C' USING utf32))",
+            Value::Null,
+        ),
+        (
+            "SELECT HEX(CONVERT(_latin1 X'80' USING utf32))",
+            Value::build_text("000020AC"),
+        ),
+        (
+            "SELECT HEX(CONVERT('\u{e9}' USING latin1))",
+            Value::build_text("E9"),
+        ),
+    ] {
+        assert_eq!(query(&connection, sql)?, vec![vec![expected]], "{sql}");
+    }
+    for refused in [
+        "SELECT HEX(CONVERT('\u{1F600}' USING ucs2))",
+        "SELECT CONVERT('foo' USING utf16)",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn table_statements_read_whole_tables() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE t1 (i INT)")?;

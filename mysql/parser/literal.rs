@@ -124,6 +124,16 @@ pub(crate) fn is_latin1_char(character: char) -> bool {
     }
 }
 
+pub(crate) fn latin1_byte(character: char) -> Option<u8> {
+    match u32::from(character) {
+        code @ (0..=0x7F | 0xA0..=0xFF) => u8::try_from(code).ok(),
+        _ => CP1252
+            .iter()
+            .position(|&mapped| mapped == character)
+            .and_then(|index| u8::try_from(0x80 + index).ok()),
+    }
+}
+
 pub(crate) fn latin1_text(bytes: &[u8]) -> String {
     bytes
         .iter()

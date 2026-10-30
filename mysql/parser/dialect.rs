@@ -94,13 +94,41 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserE
     let dialect = MySql::default();
     let mut tokens = tokens(sql)?;
     end_trigger_body(&mut tokens);
+    parenthesize_null_patterns(&mut tokens);
     let statements = Parser::new(&dialect)
+        .with_recursion_limit(RECURSION_LIMIT)
         .with_tokens_with_locations(tokens)
         .parse_statements()?;
     if let Some(reason) = dialect.rejected_cast.take() {
         return Err(MysqlParserError::Rejected(reason));
     }
     Ok(statements)
+}
+
+/// How deeply the parser nests expressions and queries: deeper than
+/// sqlparser's default of 50, which MySQL accepts in queries of the target
+/// workload.
+const RECURSION_LIMIT: usize = 200;
+
+/// Writes `REGEXP NULL` and `RLIKE NULL` as `REGEXP (NULL)`: the parser reads
+/// a `NULL` after `REGEXP` as the start of `NOT NULL` and then misses the
+/// pattern.
+fn parenthesize_null_patterns(tokens: &mut Vec<TokenWithSpan>) {
+    let keyword = |token: &TokenWithSpan, keywords: &[Keyword]| matches!(&token.token, Token::Word(word) if word.quote_style.is_none() && keywords.contains(&word.keyword));
+    let mut index = 0;
+    while index < tokens.len() {
+        if keyword(&tokens[index], &[Keyword::REGEXP, Keyword::RLIKE]) {
+            let next = (index + 1..tokens.len())
+                .find(|&next| !matches!(tokens[next].token, Token::Whitespace(_)));
+            if let Some(next) = next.filter(|&next| keyword(&tokens[next], &[Keyword::NULL])) {
+                let span = tokens[next].span;
+                tokens.insert(next + 1, TokenWithSpan::new(Token::RParen, span));
+                tokens.insert(next, TokenWithSpan::new(Token::LParen, span));
+                index = next + 2;
+            }
+        }
+        index += 1;
+    }
 }
 
 /// Ends a `CREATE TRIGGER` with a `;`, which the parser expects after the

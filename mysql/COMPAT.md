@@ -172,6 +172,19 @@ select alias that may also name a column is refused over a view, a derived
 table, a common table expression or columns of several tables, and when it
 holds a subquery.
 
+`x REGEXP ''` and `x NOT REGEXP ''` are `__mysql_empty_regexp(x)`, which
+fails with MySQL's error 3685 when it is evaluated, as MySQL rejects the empty
+pattern then (not on an empty table). A `NULL` or binary subject is refused.
+
+`HAVING` in a `SELECT` without `GROUP BY` or aggregates, which MySQL applies to
+each row, joins the `WHERE` condition with each select alias it names replaced
+by the alias's expression (`SELECT a + 1 AS b FROM t HAVING b > 2`). Refused:
+a name that is neither a select alias nor a selected column, unless the select
+list has `*` or the `SELECT` is a subquery with no `FROM` (where it names an
+outer column), an alias of a window function, a subquery in `HAVING` that
+names an alias, and expressions other than operators, `IN`, `BETWEEN`, `LIKE`,
+`CASE`, casts and plain function calls.
+
 Statements MySQL rejects when it resolves names fail with MySQL's error: two
 tables of one `FROM` with the same name or alias (1066; a derived table's
 alias is apart from the names of tables, and a table named with its database
@@ -231,6 +244,7 @@ Lowered:
 | `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(CONCAT(x), n)`, `__mysql_cast_as_nchar(CONCAT(x), n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(CONCAT(x) AS TEXT)`, `CAST(CONCAT(x) AS BLOB)`: MySQL's text of `x` |
+| `HEX(CONVERT(literal USING utf16/ucs2/utf32/latin1/ascii))` | The hex of the literal's bytes in that character set, computed when the statement is lowered: a text's characters encoded (big-endian for the wide sets), and a binary string read as the set's bytes, padded on the left with zero bytes to a whole character (`NULL` when it is not valid `utf32`) |
 | `BINARY x`, `CAST`/`CONVERT(x, type)` to `BINARY` and `BINARY(n)` (`n` up to 16,777,216) used as a value (a selected column, a function argument other than of `GREATEST`, `LEAST`, `FIELD`, `NULLIF` and `INTERVAL`, `ORDER BY`, `GROUP BY`) | `CAST(CONCAT(x) AS BLOB)`, with `x` as `CAST(x AS CHAR)` would print it when it is a JSON value and its bytes when it is a binary literal; `BINARY(n)` is `__mysql_cast_as_binary(.., n)`, cut to `n` bytes and padded with zero bytes to `n`. `BINARY x` binds as tightly as unary minus (`BINARY 'a' = 'A'` compares `BINARY 'a'`) |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
 | `COLLATE utf8mb4_0900_ai_ci`, `_as_ci`, `_as_cs`, `utf8mb4_ja_0900_as_cs`, `utf8mb4_ja_0900_as_cs_ks` on a `utf8mb4` operand; `COLLATE utf8mb4_bin` | `COLLATE "und-u-ks-level1"`, `"und-u-ks-level2"`, `"und-u-ks-level3"`, `"ja-u-ks-level3"`, `"ja-u-ks-level4"`; `COLLATE RTRIM`. `FIELD`, `GREATEST`, `LEAST` and `STRCMP` with an explicit collation compare under it (a `TIME` literal compares as its text, a `DATE` or `TIMESTAMP` literal is handled as in the next row, other temporal arguments are refused, and a binary string that is not UTF-8 fails with MySQL's conversion error); two different explicit collations, each the whole operand, fail with MySQL's illegal mix error (1267), other mixes, and `LIKE`, `REGEXP`, `LOCATE`, `INSTR`, `POSITION`, `FIND_IN_SET` and `NULLIF` under a collation other than `utf8mb4_0900_ai_ci`, are refused, except `LIKE` under `utf8mb4_0900_as_cs`, `utf8mb4_0900_bin` or `utf8mb4_bin` whose operands are string literals of printable ASCII, number, boolean, temporal and `NULL` literals, hex, bit or `_binary` literals of printable ASCII and `CAST`s of such literals `AS JSON` (their text): those collations order printable ASCII as its bytes, so `__mysql_like_bin` matches as MySQL does, and a hex, bit or `_binary` literal that is not UTF-8 fails with MySQL's conversion error |
@@ -249,10 +263,28 @@ Lowered:
 | `/*+ ... */` optimizer hints | Ignored: they choose a plan or bound the run time (`MAX_EXECUTION_TIME`), which leaves the result of a statement that finishes unchanged. `SET_VAR` is accepted for variables that only size buffers or steer the optimizer (`sort_buffer_size`, `optimizer_switch`, ...) and refused for any other |
 | Index hints (`USE`, `FORCE`, `IGNORE` `INDEX`/`KEY`) | Ignored, in `SELECT` and `UPDATE`. An index name the table does not have is not rejected (MySQL's error 1176), since the frontend does not see the schema |
 
+`WITH RECURSIVE` lowers a common table expression that reads itself, an
+anchor `SELECT` `UNION ALL` a recursive `SELECT` that reads it once (as the
+first table of a join or an inner-joined one), to an inner expression
+`__mysql_recursive_<name>` with a hidden column holding the iteration of each
+row, which `__mysql_recursion_depth(depth)` computes and refuses from the
+1000th iteration, and the expression itself, which selects the other columns.
+MySQL gives the columns the types of the anchor: a column whose anchor is an
+integer literal has its recursive values checked by
+`__mysql_recursive_integer(value)`, which refuses a value outside `INT` or not
+an integer, and a column with another anchor is accepted only when the
+recursive `SELECT` passes it on unchanged. Refused: a recursive `SELECT` with
+`DISTINCT`, grouping, a window or a subquery, `UNION DISTINCT`, an outer join
+of the expression, and a recursive expression in a subquery of an expression or
+in a `LATERAL` table, which may read an outer row (MySQL may evaluate it once).
+A common table expression of `WITH RECURSIVE` that does not read itself is an
+ordinary one.
+
 Refused, because Turso cannot run it with MySQL's meaning yet:
 
-- `WITH RECURSIVE`: MySQL stops after `cte_max_recursion_depth` (1000)
-  iterations; Turso does not.
+- `WITH RECURSIVE` beyond one anchor `SELECT` `UNION ALL` one recursive
+  `SELECT` (see below), and a recursive query that reaches its 1000th
+  iteration, where MySQL's `cte_max_recursion_depth` stops it.
 - `BINARY x` and `CAST(x AS BINARY)` in a comparison, `IN`, `BETWEEN`, a
   `CASE` operand, arithmetic, a condition, or an argument of `GREATEST`,
   `LEAST`, `FIELD`, `NULLIF` or `INTERVAL`: MySQL compares a binary string with
@@ -349,7 +381,8 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
 - User and system variables outside the cases under Session settings, `:name` and `?N` parameters,
   `MATCH ... AGAINST`, `SOUNDS LIKE`, `COLLATE` with any other
   collation or on a non-`utf8mb4` operand, `CAST` to `YEAR`, `BINARY` or with a character set,
-  `CONVERT(... USING ...)` with any other character set, and `^` over
+  `CONVERT(... USING ...)` with any other character set (except in `HEX` of a
+  literal, above), and `^` over
   function calls or subqueries.
 - `CAST` to `DATE`, `DATETIME` or `TIME` in a comparison, arithmetic, a
   condition, a numeric function argument or a JSON cast, where MySQL uses the
@@ -504,6 +537,12 @@ SHARE MODE` does not parse yet) read what a plain read does: no other transactio
 session's `@@transaction_isolation` through
 `__mysql_set_transaction_isolation(level)`. The form without `SESSION`, which
 applies to the next transaction only, and `GLOBAL` are refused.
+
+## Server functions
+
+`VALIDATE_PASSWORD_STRENGTH(password)` is 0, as in the target profile, which
+does not install MySQL's `validate_password` component (MySQL then rates every
+password 0). A NULL argument is refused.
 
 ## Session settings (`SET`)
 
