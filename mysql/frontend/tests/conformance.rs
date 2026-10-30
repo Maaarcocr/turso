@@ -1553,6 +1553,24 @@ fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
 }
 
 #[test]
+fn in_lists_with_null_compare_as_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 'FOO' IN ('foo', NULL), _latin1 'FOO' NOT IN (_latin1 'foo', NULL),              0 NOT IN (NULL, 'foo'), 2 NOT IN (NULL, '1')"
+        )?,
+        vec![vec![
+            Value::from_i64(1),
+            Value::from_i64(0),
+            Value::from_i64(0),
+            Value::Null,
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn literal_calls_take_mysql_values() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

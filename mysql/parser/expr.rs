@@ -1990,8 +1990,10 @@ fn default_collated(lhs: ast::Expr, explicit: Option<String>, operands: &[&Expr]
         ) && text.is_some_and(|text| text.bytes().all(|byte| byte.is_ascii_alphanumeric()))
     }
     let literals_only = operands.iter().all(|operand| {
-        collation_of(operand) == Some(DEFAULT_COLLATION) || alphanumeric_insensitive(operand)
-    });
+        collation_of(operand) == Some(DEFAULT_COLLATION)
+            || alphanumeric_insensitive(operand)
+            || is_null_literal(operand)
+    }) && !operands.iter().all(|operand| is_null_literal(operand));
     if explicit.is_none() && literals_only {
         let sequence = collation_sequence(DEFAULT_COLLATION).expect("the default collation maps");
         ast::Expr::collate(lhs, ast::Name::exact(sequence.to_string()))
@@ -2774,7 +2776,7 @@ fn translate_in_list(
     if mixed
         && operands
             .iter()
-            .all(|operand| compared_literal(operand).is_some())
+            .all(|operand| compared_literal(operand).is_some() || is_null_literal(operand))
     {
         let mut matches = list
             .iter()
