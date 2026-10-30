@@ -1448,6 +1448,50 @@ fn counts_compare_with_strings_as_numbers() -> turso_core::Result<()> {
 }
 
 #[test]
+fn time_literals_compare_with_binary_strings_as_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT TIME '-31:34:58' > X'00', TIME '-31:34:58' > 0xFF, X'FF' <= TIME '10:04:58',              TIME '32:34:58.5' <= _binary 'foobar', _utf8 'foobar' > TIME '-10:04:58',              TIME '-101:34:58' <= b'1001', TIME '10:04:58' = 0x31303A30343A3538"
+        )?,
+        vec![[1, 0, 0, 1, 1, 0, 1].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
+fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for failing in [
+        "SELECT -1.7 ^ -18446744073709540000e0",
+        "SELECT ~ -18446744073709540000e0",
+        "SELECT -18446744073709540000e0 | NULL",
+        "SELECT CHAR(1, 7e0, -18446744073709540000e0)",
+    ] {
+        let error = query(&connection, failing).expect_err(failing).to_string();
+        assert!(
+            error.contains(
+                "ERROR 1690 (22003): BIGINT value is out of range in '-(18446744073709540000e0)'"
+            ),
+            "{failing}: {error}"
+        );
+    }
+    for refused in [
+        "SELECT NULL | -18446744073709540000e0",
+        "SELECT 0 AND (1 | -18446744073709540000e0)",
+        "SELECT NULL = (1 | -18446744073709540000e0)",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    let failing = "SELECT NULL + 1 - CAST('invalid' AS JSON)";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(error.contains("ERROR 3141"), "{failing}: {error}");
+    Ok(())
+}
+
+#[test]
 fn literal_calls_take_mysql_values() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

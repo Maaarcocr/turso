@@ -75,7 +75,8 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         | RECURSION_DEPTH
         | RECURSIVE_INTEGER
         | VALIDATE_PASSWORD_STRENGTH
-        | EMPTY_REGEXP => arg_count == 1,
+        | EMPTY_REGEXP
+        | BIGINT_OUT_OF_RANGE => arg_count == 1,
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -172,6 +173,15 @@ pub(crate) fn execute(
             _ => Err(LimboError::SqlError(
                 "ERROR 3685 (HY000): Illegal argument to a regular expression.".to_string(),
             )),
+        },
+        BIGINT_OUT_OF_RANGE => match &args[0] {
+            Value::Text(text) => Err(LimboError::SqlError(format!(
+                "ERROR 1690 (22003): BIGINT value is out of range in '{}'",
+                text.as_str()
+            ))),
+            other => Err(LimboError::InternalError(format!(
+                "__mysql_bigint_out_of_range takes the text of a literal, not `{other}`"
+            ))),
         },
         RECURSIVE_INTEGER => match &args[0] {
             Value::Null => Ok(Value::Null),
@@ -274,6 +284,10 @@ const VALIDATE_PASSWORD_STRENGTH: &str = "VALIDATE_PASSWORD_STRENGTH";
 /// `__mysql_empty_regexp(subject)`: `subject REGEXP ''`, which MySQL rejects
 /// (3685) when it evaluates it. A `NULL` or binary subject is refused.
 const EMPTY_REGEXP: &str = "__MYSQL_EMPTY_REGEXP";
+
+/// `__mysql_bigint_out_of_range(text)`: MySQL's error (1690) for the
+/// literal printed as `text`, which it rejects where it reads it as a BIGINT.
+const BIGINT_OUT_OF_RANGE: &str = "__MYSQL_BIGINT_OUT_OF_RANGE";
 
 /// `__mysql_recursive_integer(value)`: a recursive value of a column whose
 /// anchor is an `INT` literal, refused outside `INT` or when not an integer.

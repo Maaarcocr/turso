@@ -2014,6 +2014,18 @@ fn translate_compared_value(
             return Ok(double_literal(value));
         }
     }
+    if matches!(temporal_type(expr), Some(DataType::Time(..)))
+        && binary_literal_bytes(other_side).is_some()
+    {
+        return Ok(ast::Expr::cast(
+            translate_in(expr, Context::Text, context)?,
+            Some(ast::Type {
+                name: "BLOB".to_string(),
+                size: None,
+                array_dimensions: 0,
+            }),
+        ));
+    }
     if let (Some(own), Some(other)) = (temporal_type(expr), temporal_type(other_side)) {
         let literal_context = match (own, other) {
             (DataType::Time(..), DataType::Time(..)) => Context::Number,
@@ -2038,6 +2050,14 @@ fn translate_compared_value(
             }
             return translate_temporal_text(data_type, text);
         }
+        if matches!(data_type, DataType::Time(..)) {
+            if let Some(bytes) = binary_literal_bytes(expr) {
+                return Ok(blob_literal(&bytes));
+            }
+            if is_utf8_string_literal(expr) {
+                return translate_in(expr, Context::Text, context);
+            }
+        }
         if number_literal(expr)
             .is_some_and(|digits| is_decimal_literal(digits) && same_double(digits, other_side))
         {
@@ -2055,6 +2075,22 @@ fn translate_compared_value(
         }
     }
     translate_in(expr, comparison_context(other_side), context)
+}
+
+/// A string literal after a `_utf8`, `_utf8mb3` or `_utf8mb4` introducer.
+fn is_utf8_string_literal(expr: &Expr) -> bool {
+    match expr {
+        Expr::Prefixed { prefix, value } => {
+            prefix.quote_style.is_none()
+                && matches!(
+                    prefix.value.to_ascii_lowercase().as_str(),
+                    "_utf8" | "_utf8mb3" | "_utf8mb4"
+                )
+                && string_literal(value).is_some()
+        }
+        Expr::Nested(inner) => is_utf8_string_literal(inner),
+        _ => false,
+    }
 }
 
 fn same_double(digits: &str, temporal: &Expr) -> bool {
