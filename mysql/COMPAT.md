@@ -162,7 +162,10 @@ or (with an inner join's `ON`) with a column that is grouped or dependent;
 another column fails with MySQL's error (1055, or 1140 without `GROUP BY`).
 The check reads the session's tables, so a grouped `SELECT` over a view, a
 derived table, an outer join or columns it cannot resolve is refused when it
-may use a column outside `GROUP BY`.
+may use a column outside `GROUP BY`. A `GROUP BY` name that is both a select
+alias and a column of the `FROM` groups by the column, as in MySQL (`SELECT b
+- 1 AS a FROM t GROUP BY a` fails with 1055 when `t` has a column `a`); when the
+check cannot read the tables and the alias decides it, it is refused.
 
 A name in `HAVING` resolves as in MySQL: inside an aggregate it names a column
 of the `FROM` before a select alias, and outside one a grouped column before

@@ -658,9 +658,56 @@ fn check_only_full_group_by(
             _ => None,
         })
         .collect::<Vec<_>>();
+    let sources = match environment {
+        Some(environment) if !select.from.is_empty() => Sources::of(select, environment)?,
+        _ => None,
+    };
     let mut grouping = group_by.iter().collect::<Vec<_>>();
+    let mut unverified_aliases = Vec::new();
     for term in group_by {
-        grouping.extend(selected_by_group_term(term, select));
+        let Some(selected) = selected_by_group_term(term, select) else {
+            continue;
+        };
+        let Some(name) = group_term_name(term) else {
+            grouping.push(selected);
+            continue;
+        };
+        if select.from.is_empty() {
+            grouping.push(selected);
+            continue;
+        }
+        match &sources {
+            Some(sources) => {
+                let shadowed = sources.tables.iter().any(|source| {
+                    source
+                        .columns
+                        .iter()
+                        .any(|facts| facts.name.eq_ignore_ascii_case(&name.value))
+                });
+                if !shadowed {
+                    grouping.push(selected);
+                }
+            }
+            None => unverified_aliases.push(selected),
+        }
+    }
+    if !unverified_aliases.is_empty() {
+        let without = Grouping {
+            exprs: grouping.clone(),
+            aliases: &[],
+            table_names: &[],
+        };
+        let mut with = without.clone();
+        with.exprs.extend(unverified_aliases.iter().copied());
+        let differs = projections.iter().flatten().any(|expr| {
+            uses_ungrouped_column(expr, &without) != uses_ungrouped_column(expr, &with)
+        });
+        if differs {
+            return Err(unsupported(format!(
+                "GROUP BY naming a select alias that may also name a column, which MySQL groups by the column, `{select}`"
+            )));
+        }
+        grouping.extend(unverified_aliases);
     }
     let groups = Grouping {
         exprs: grouping,
@@ -1251,6 +1298,16 @@ fn fixed_by_the_where_clause<'a>(condition: &'a Expr, fixed: &mut Vec<&'a Expr>)
 fn projected_expr(item: &SelectItem) -> Option<&Expr> {
     match item {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
+        _ => None,
+    }
+}
+
+/// The name of a `GROUP BY` term that is a bare (perhaps parenthesized)
+/// identifier, which MySQL resolves to a column of the `FROM` before a select
+/// alias.
+fn group_term_name(term: &Expr) -> Option<&sqlparser::ast::Ident> {
+    match without_parentheses(term) {
+        Expr::Identifier(name) => Some(name),
         _ => None,
     }
 }

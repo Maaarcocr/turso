@@ -1331,6 +1331,24 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
 }
 
 #[test]
+fn group_by_a_name_of_a_column_and_an_alias_groups_by_the_column() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE g (a INT, b INT)")?;
+    connection.execute("INSERT INTO g VALUES (1, 300), (2, 50)")?;
+    let sql = "SELECT b - 100 AS a FROM g GROUP BY a";
+    let error = query(&connection, sql).expect_err(sql).to_string();
+    assert!(error.contains("nonaggregated column"), "{sql}: {error}");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT b - 100 AS x FROM g GROUP BY x ORDER BY x"
+        )?,
+        vec![vec![Value::from_i64(-50)], vec![Value::from_i64(200)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn hex_of_a_conversion_shows_the_bytes_of_the_character_set() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [
