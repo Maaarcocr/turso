@@ -1337,6 +1337,10 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
         let error = query(&connection, sql).expect_err(sql).to_string();
         assert!(error.contains("ERROR 3685 "), "{sql}: {error}");
     }
+    assert_eq!(
+        query(&connection, "SELECT 0 AND ('a' REGEXP '')")?,
+        vec![vec![Value::from_i64(0)]]
+    );
     let error = query(&connection, "SELECT 1 + ('a' REGEXP '')")
         .expect_err("REGEXP '' in arithmetic")
         .to_string();
@@ -1344,7 +1348,6 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
     for refused in [
         "SELECT NULL REGEXP ''",
         "SELECT 0xFF REGEXP ''",
-        "SELECT 0 AND ('a' REGEXP '')",
         "SELECT NULL = ('a' REGEXP '')",
     ] {
         let error = query(&connection, refused).expect_err(refused).to_string();
@@ -1488,7 +1491,6 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
     }
     for refused in [
         "SELECT NULL | -18446744073709540000e0",
-        "SELECT 0 AND (1 | -18446744073709540000e0)",
         "SELECT NULL = (1 | -18446744073709540000e0)",
     ] {
         let error = query(&connection, refused).expect_err(refused).to_string();
@@ -1497,6 +1499,23 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
     let failing = "SELECT NULL + 1 - CAST('invalid' AS JSON)";
     let error = query(&connection, failing).expect_err(failing).to_string();
     assert!(error.contains("ERROR 3141"), "{failing}: {error}");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0 AND CAST('x' AS JSON), '2000-01-01 x' OR CAST('x' AS JSON), \
+             TIME '00:00:00' AND CAST('x' AS JSON), NULL OR 1 OR CAST('x' AS JSON), \
+             0x01 || CAST('x' AS JSON), 0 AND (1 | -18446744073709540000e0)"
+        )?,
+        vec![[0, 1, 0, 1, 1, 0].map(Value::from_i64).to_vec()]
+    );
+    for failing in [
+        "SELECT 'foo' OR CAST('x' AS JSON)",
+        "SELECT TIME '130:34:58.6' AND CAST('x' AS JSON)",
+        "SELECT X'00' || CAST('x' AS JSON)",
+    ] {
+        let error = query(&connection, failing).expect_err(failing).to_string();
+        assert!(error.contains("ERROR 3141"), "{failing}: {error}");
+    }
     Ok(())
 }
 
@@ -1571,7 +1590,8 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
         query(
             &connection,
             "SELECT HEX(FROM_BASE64(18446744073709551615)), TO_BASE64(10000000000000000000), \
-             HEX(18446744073709551615), INET_NTOA(0x0A000509), INET_NTOA(b'1010')"
+             HEX(18446744073709551615), INET_NTOA(0x0A000509), INET_NTOA(b'1010'), \
+             HEX(CHAR(-1, '64', CAST('18446744073709551615' AS JSON), CAST(-1.1 AS JSON)))"
         )?,
         vec![vec![
             Value::build_text("D7CE38EBBE38D3BDFBD3DE79D7AD79"),
@@ -1579,8 +1599,95 @@ fn text_functions_read_unsigned_bigint_literals_as_digits() -> turso_core::Resul
             Value::build_text("FFFFFFFFFFFFFFFF"),
             Value::build_text("10.0.5.9"),
             Value::build_text("0.0.0.10"),
+            Value::build_text("FFFFFFFF40FFFFFFFFFFFFFFFF"),
         ]]
     );
+    Ok(())
+}
+
+#[test]
+fn bit_operations_read_binary_strings_as_numbers_next_to_numbers() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT _binary 'foobar' ^ 1.5, '1.5' >> _binary 'foobar', _binary '12' & 7, \
+             -1.5 | _binary 'foobar1234'"
+        )?,
+        vec![vec![
+            Value::from_i64(2),
+            Value::from_i64(1),
+            Value::from_i64(4),
+            Value::build_text("18446744073709551614"),
+        ]]
+    );
+    for refused in [
+        "SELECT x'09' ^ _binary 'foobar'",
+        "SELECT ~_binary 'ab'",
+        "SELECT _binary 'a' << 1",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn alter_table_changes_columns() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE ac (a DOUBLE, b VARCHAR(10), k INT PRIMARY KEY)")?;
+    connection.execute("INSERT INTO ac VALUES (1.5, 'abc', 1), (2.5, NULL, 2)")?;
+    connection.execute("ALTER TABLE ac CHANGE a n INT DEFAULT 5")?;
+    connection.execute("INSERT INTO ac (b, k) VALUES ('x', 3)")?;
+    assert_eq!(
+        query(&connection, "SELECT n FROM ac ORDER BY k")?,
+        vec![
+            vec![Value::from_i64(2)],
+            vec![Value::from_i64(3)],
+            vec![Value::from_i64(5)],
+        ]
+    );
+    for failing in [
+        "ALTER TABLE ac CHANGE b c INT",
+        "ALTER TABLE ac CHANGE b c VARCHAR(10) NOT NULL",
+        "ALTER TABLE ac CHANGE b c VARCHAR(2)",
+    ] {
+        assert!(connection.execute(failing).is_err(), "{failing}");
+    }
+    for refused in [
+        "ALTER TABLE ac MODIFY b VARCHAR(20)",
+        "ALTER TABLE ac CHANGE b b VARCHAR(20)",
+        "ALTER TABLE ac CHANGE k j BIGINT",
+        "ALTER TABLE ac CHANGE b c VARCHAR(20) UNIQUE",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not available"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn alter_table_adds_indexes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE ai (a INT, b INT, t TEXT)")?;
+    connection.execute("CREATE TABLE aj (a INT)")?;
+    connection.execute("ALTER TABLE ai ADD INDEX ia (a)")?;
+    connection.execute("ALTER TABLE ai ADD UNIQUE KEY ub (b)")?;
+    connection.execute("ALTER TABLE ai ADD INDEX (a, b)")?;
+    connection.execute("INSERT INTO ai VALUES (1, 1, 'x')")?;
+    assert!(connection
+        .execute("INSERT INTO ai VALUES (2, 1, 'y')")
+        .is_err());
+    connection.execute("ALTER TABLE ai DROP INDEX ub")?;
+    connection.execute("INSERT INTO ai VALUES (2, 1, 'y')")?;
+    for refused in [
+        "ALTER TABLE ai ADD INDEX it (t)",
+        "ALTER TABLE ai ADD UNIQUE (a)",
+        "ALTER TABLE ai ADD INDEX (a)",
+        "ALTER TABLE aj ADD INDEX ia (a)",
+    ] {
+        assert!(connection.execute(refused).is_err(), "{refused}");
+    }
     Ok(())
 }
 

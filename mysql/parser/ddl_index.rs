@@ -67,6 +67,16 @@ pub(crate) fn translate_create_index(
         )));
     }
     let table_name = translate_ddl_name(table_name)?;
+    let index_name = translate_ddl_name(name)?;
+    if environment
+        .index_table(index_name.as_str())?
+        .is_some_and(|owner| !owner.eq_ignore_ascii_case(table_name.as_str()))
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "index `{}` named like an index of another table, which Turso names per database, is not available",
+            index_name.as_str()
+        )));
+    }
     if let Some(table) = environment
         .table_sql(table_name.as_str())?
         .and_then(|sql| TableDefinition::parse(&sql).ok())
@@ -95,7 +105,7 @@ pub(crate) fn translate_create_index(
             }
         }
     }
-    index_statement(*unique, translate_ddl_name(name)?, table_name, columns)
+    index_statement(*unique, index_name, table_name, columns)
 }
 
 fn index_statement(

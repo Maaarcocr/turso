@@ -1056,9 +1056,14 @@ fn translate_binary(
                 first = left;
             }
             operands.push(first);
+            operands.reverse();
+            if crate::invalid_json::decided_before_failure(&operands, conjunction) {
+                return Ok(ast::Expr::Literal(ast::Literal::Numeric(
+                    if conjunction { "0" } else { "1" }.to_string(),
+                )));
+            }
             let operands = operands
                 .into_iter()
-                .rev()
                 .map(|operand| translate_condition(operand, context))
                 .collect::<Result<Vec<_>, _>>()?;
             let operator = if conjunction {
@@ -6020,6 +6025,9 @@ fn function_arguments(
             }
             if upper_name == "IF" && position == 0 {
                 return translate_condition(arg, context);
+            }
+            if upper_name == "CHAR" && json::is_json_value(arg) {
+                return json::translate_numeric_coercion(arg, "__mysql_json_integer", context);
             }
             if is_json_value_position(upper_name, position) {
                 return translate_json_value(arg, context);

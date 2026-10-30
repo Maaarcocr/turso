@@ -275,13 +275,64 @@ fn never_null(op: &BinaryOperator, lhs: Outcome, rhs: Outcome) -> bool {
     }
 }
 
+/// Whether `operands` of `AND` (`conjunction`) or `OR` reach a literal that
+/// decides the result before an operand MySQL fails on when it evaluates it:
+/// MySQL does not evaluate it then. The operands before are ones the walker
+/// reads, which do not fail.
+pub(crate) fn decided_before_failure(operands: &[&Expr], conjunction: bool) -> bool {
+    for (position, operand) in operands.iter().enumerate() {
+        if !matches!(
+            outcome(operand),
+            Some(Outcome::Null | Outcome::NotNull | Outcome::MaybeNull)
+        ) {
+            return false;
+        }
+        if literal_truth(operand) == Some(!conjunction) {
+            return operands[position + 1..]
+                .iter()
+                .any(|operand| failure_evaluated(operand).is_some());
+        }
+    }
+    false
+}
+
 fn literal_truth(expr: &Expr) -> Option<bool> {
     match expr {
         Expr::Value(value) => match &value.value {
             Value::Number(number, false) => number.parse::<f64>().ok().map(|value| value != 0.0),
             Value::Boolean(truth) => Some(*truth),
+            Value::SingleQuotedString(text)
+            | Value::DoubleQuotedString(text)
+            | Value::NationalStringLiteral(text) => text_truth(text),
+            Value::HexStringLiteral(digits) => crate::literal::hex_bytes(digits)
+                .ok()
+                .filter(|bytes| bytes.len() <= 8)
+                .map(|bytes| bytes.iter().any(|byte| *byte != 0)),
+            Value::SingleQuotedByteStringLiteral(bits) => crate::literal::bit_bytes(bits)
+                .ok()
+                .filter(|bytes| bytes.len() <= 8)
+                .map(|bytes| bytes.iter().any(|byte| *byte != 0)),
             _ => None,
         },
+        Expr::Prefixed { prefix, value } if prefix.quote_style.is_none() => {
+            match (prefix.value.to_ascii_lowercase().as_str(), value.as_ref()) {
+                ("_utf8mb4" | "_utf8mb3" | "_utf8" | "_binary", Expr::Value(value)) => {
+                    match &value.value {
+                        Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => {
+                            text_truth(text)
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        }
+        Expr::TypedString(typed) => crate::literal::temporal_literal(typed).map(|literal| {
+            literal
+                .text
+                .bytes()
+                .any(|byte| byte.is_ascii_digit() && byte != b'0')
+        }),
         Expr::Nested(inner)
         | Expr::UnaryOp {
             op: UnaryOperator::Minus | UnaryOperator::Plus,
@@ -289,6 +340,41 @@ fn literal_truth(expr: &Expr) -> Option<bool> {
         } => literal_truth(inner),
         _ => None,
     }
+}
+
+/// The truth of a string MySQL reads as the number at its start: whether
+/// that number is not zero. `None` for a nonzero number with an exponent,
+/// which may round to zero.
+fn text_truth(text: &str) -> Option<bool> {
+    let rest = text.trim_start_matches([' ', '\t', '\n', '\r', '\x0b', '\x0c']);
+    let rest = rest.strip_prefix(['+', '-']).unwrap_or(rest).as_bytes();
+    let mut position = 0;
+    let mut digits = 0;
+    let mut nonzero = false;
+    let mut read_digits = |position: &mut usize| {
+        while let Some(byte) = rest.get(*position).filter(|byte| byte.is_ascii_digit()) {
+            digits += 1;
+            nonzero |= *byte != b'0';
+            *position += 1;
+        }
+    };
+    read_digits(&mut position);
+    if rest.get(position) == Some(&b'.') {
+        position += 1;
+        read_digits(&mut position);
+    }
+    if digits == 0 || !nonzero {
+        return Some(false);
+    }
+    let exponent = matches!(rest.get(position), Some(b'e' | b'E')) && {
+        let after = &rest[position + 1..];
+        let after = after
+            .strip_prefix(b"+")
+            .or_else(|| after.strip_prefix(b"-"))
+            .unwrap_or(after);
+        after.first().is_some_and(u8::is_ascii_digit)
+    };
+    (!exponent).then_some(true)
 }
 
 fn function_outcome(function: &Function) -> Option<Outcome<'_>> {

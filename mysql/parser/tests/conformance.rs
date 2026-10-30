@@ -1404,7 +1404,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "invalid JSON cast MySQL does not evaluate",
-            sql: "SELECT 0 AND CAST('x' AS JSON)",
+            sql: "SELECT CONCAT(NULL, CAST('x' AS JSON))",
         },
         SqlCase {
             name: "invalid JSON cast evaluated once per row",
@@ -1500,7 +1500,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "binary string in a bit operation",
-            sql: "SELECT _binary '3' | 1",
+            sql: "SELECT _binary '3' | _binary '1'",
         },
         SqlCase {
             name: "bit operation on a DOUBLE below the BIGINT range after a NULL",
@@ -1596,7 +1596,7 @@ fn lowering_rejects_unsupported_statement_families() {
         "TRUNCATE TABLE users",
         "CREATE OR REPLACE VIEW v AS SELECT 1",
         "DROP VIEW a, b",
-        "ALTER TABLE users ADD INDEX name_key (name)",
+        "ALTER TABLE users ADD PRIMARY KEY (name)",
         "CREATE INDEX k ON users ((name))",
         "CREATE INDEX k ON users ((LOWER(name)))",
         "CREATE INDEX k ON users ((a / 2))",
