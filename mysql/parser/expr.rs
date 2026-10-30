@@ -3331,6 +3331,25 @@ pub(crate) fn parenthesized(expr: ast::Expr) -> ast::Expr {
     ast::Expr::Parenthesized(vec![Box::new(expr)])
 }
 
+/// An operand of `LIKE` as MySQL's text of it: a number other than an
+/// integer literal is the text `CONCAT` gives it (`1e0` is `'1'`, a DOUBLE
+/// column holding 1 is `'1'`), where Turso would match SQLite's (`'1.0'`).
+fn like_operand(
+    operand: &Expr,
+    context: &mut TranslationContext,
+) -> Result<ast::Expr, MysqlParserError> {
+    let translated = translate_in(operand, Context::Text, context)?;
+    let is_text = string_literal(operand).is_some()
+        || matches!(unnested(operand), Expr::Prefixed { .. })
+        || number_literal(operand)
+            .is_some_and(|digits| digits.bytes().all(|byte| byte.is_ascii_digit()));
+    Ok(if is_text {
+        translated
+    } else {
+        function_call("CONCAT", vec![translated])
+    })
+}
+
 fn translate_like(
     expr: &Expr,
     negated: bool,
@@ -3388,14 +3407,14 @@ fn translate_like(
             matched
         });
     }
-    let lhs = translate_in(expr, Context::Text, context)?;
+    let lhs = like_operand(expr, context)?;
     let (rhs, escape) = match (string_literal(pattern), escape) {
         (Some(text), Some(escape)) if !text.contains(escape) => (string_expr(text), None),
         (Some(text), Some(escape)) => (
             string_expr(&with_dangling_escape_doubled(text, escape)),
             Some(escape),
         ),
-        (_, escape) => (translate_in(pattern, Context::Text, context)?, escape),
+        (_, escape) => (like_operand(pattern, context)?, escape),
     };
     let escape = escape.map(|escape| string_expr(&escape.to_string()));
     Ok(ast::Expr::like(

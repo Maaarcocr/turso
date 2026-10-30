@@ -1537,6 +1537,22 @@ fn temporal_results_are_numbers_in_arithmetic() -> turso_core::Result<()> {
 }
 
 #[test]
+fn like_matches_numbers_as_mysql_text() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE ln (g DOUBLE, x DECIMAL(5, 2))")?;
+    connection.execute("INSERT INTO ln VALUES (1, 1.5)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0.0 NOT LIKE 0.0e0, 1e0 LIKE '1', 100e0 LIKE '100', 0.0 LIKE 0, \
+             1.50 LIKE '1.50', g LIKE '1', x LIKE '1.50' FROM ln"
+        )?,
+        vec![[1, 1, 1, 0, 1, 1, 1].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
 fn literal_calls_take_mysql_values() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

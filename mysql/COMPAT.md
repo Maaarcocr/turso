@@ -183,6 +183,12 @@ column, a string literal stays a string, which the column's type converts;
 beside another computed number, Turso compares a number with a string as
 SQLite does (every number below every string), unlike MySQL.
 
+An operand of `LIKE` that is not a string or an integer literal is matched as
+the text `CONCAT` gives it, MySQL's text of the value (`1e0 LIKE '1'` and a
+`DOUBLE` column holding 1 `LIKE '1'` are true, where SQLite's text is
+`'1.0'`). A `BLOB` or `VARBINARY` column still matches ASCII letters without
+case, where MySQL compares its bytes.
+
 A call whose result MySQL types as a `DATE` (`DATE`, `CURDATE`, `FROM_DAYS`,
 `LAST_DAY`, `MAKEDATE`), a `TIME` (`TIME`, `SEC_TO_TIME`, `MAKETIME`,
 `TIMEDIFF`, `CURTIME`) or a `DATETIME` (`NOW`, `FROM_UNIXTIME` of one
