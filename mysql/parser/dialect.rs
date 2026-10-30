@@ -96,6 +96,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>, MysqlParserE
     end_trigger_body(&mut tokens);
     parenthesize_null_patterns(&mut tokens);
     unparenthesize_single_tables(&mut tokens);
+    mark_weight_string_casts(&mut tokens);
     let statements = Parser::new(&dialect)
         .with_recursion_limit(RECURSION_LIMIT)
         .with_tokens_with_locations(tokens)
@@ -209,6 +210,69 @@ fn unparenthesize_single_tables(tokens: &mut Vec<TokenWithSpan>) {
         removed.sort_unstable();
         for at in removed.into_iter().rev() {
             tokens.remove(at);
+        }
+    }
+}
+
+/// Writes `WEIGHT_STRING(x AS BINARY(n))` and `WEIGHT_STRING(x AS CHAR(n))`,
+/// which the parser does not read, as `WEIGHT_STRING(x,
+/// __mysql_weight_as_binary(n))` and `WEIGHT_STRING(x,
+/// __mysql_weight_as_char(n))`, for lowering to find.
+fn mark_weight_string_casts(tokens: &mut [TokenWithSpan]) {
+    let significant = |tokens: &[TokenWithSpan], from: usize| {
+        (from..tokens.len()).find(|&index| !matches!(tokens[index].token, Token::Whitespace(_)))
+    };
+    let mut index = 0;
+    while index < tokens.len() {
+        let is_function = matches!(
+            &tokens[index].token,
+            Token::Word(word) if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("WEIGHT_STRING")
+        );
+        index += 1;
+        if !is_function {
+            continue;
+        }
+        let Some(open) = significant(tokens, index).filter(|&at| tokens[at].token == Token::LParen)
+        else {
+            continue;
+        };
+        let mut depth = 0usize;
+        let mut at = open;
+        while at < tokens.len() {
+            match &tokens[at].token {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                Token::Word(word)
+                    if depth == 1 && word.quote_style.is_none() && word.keyword == Keyword::AS =>
+                {
+                    let Some(kind) = significant(tokens, at + 1) else {
+                        break;
+                    };
+                    let marker = match &tokens[kind].token {
+                        Token::Word(word)
+                            if word.quote_style.is_none() && word.keyword == Keyword::BINARY =>
+                        {
+                            "__mysql_weight_as_binary"
+                        }
+                        Token::Word(word)
+                            if word.quote_style.is_none() && word.keyword == Keyword::CHAR =>
+                        {
+                            "__mysql_weight_as_char"
+                        }
+                        _ => break,
+                    };
+                    tokens[at].token = Token::Comma;
+                    tokens[kind].token = Token::make_word(marker, None);
+                    break;
+                }
+                _ => {}
+            }
+            at += 1;
         }
     }
 }

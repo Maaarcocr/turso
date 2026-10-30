@@ -1974,11 +1974,46 @@ fn translate_compared(
     translated
 }
 
+/// Whether `expr` always has an integer value (or `NULL`) in Turso as in
+/// MySQL: a `COUNT`, a length or a ranking window function, or one of
+/// `aliases`, which name such expressions.
+pub(crate) fn is_integer_valued(expr: &Expr, aliases: &[String]) -> bool {
+    match unnested(expr) {
+        Expr::Function(function) => {
+            let [ObjectNamePart::Identifier(name)] = function.name.0.as_slice() else {
+                return false;
+            };
+            name.quote_style.is_none()
+                && matches!(
+                    name.value.to_ascii_uppercase().as_str(),
+                    "COUNT"
+                        | "LENGTH"
+                        | "OCTET_LENGTH"
+                        | "CHAR_LENGTH"
+                        | "CHARACTER_LENGTH"
+                        | "BIT_LENGTH"
+                        | "ROW_NUMBER"
+                        | "RANK"
+                        | "DENSE_RANK"
+                )
+        }
+        Expr::Identifier(name) => aliases
+            .iter()
+            .any(|alias| alias.eq_ignore_ascii_case(&name.value)),
+        _ => false,
+    }
+}
+
 fn translate_compared_value(
     expr: &Expr,
     other_side: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let Some(value) = arithmetic_text_double(expr) {
+        if is_integer_valued(other_side, &context.integer_aliases) {
+            return Ok(double_literal(value));
+        }
+    }
     if let (Some(own), Some(other)) = (temporal_type(expr), temporal_type(other_side)) {
         let literal_context = match (own, other) {
             (DataType::Time(..), DataType::Time(..)) => Context::Number,
@@ -2413,6 +2448,192 @@ fn folded_hex_conversion(
         ),
         None => ast::Expr::Literal(ast::Literal::Null),
     }))
+}
+
+/// Calls of one literal whose MySQL value lowering knows where Turso's
+/// differs: `HOUR`, `MINUTE`, `SECOND`, `MICROSECOND` and `TIME_TO_SEC` of a
+/// `DATE`, which MySQL reads as midnight (0); `UNHEX` of a `DECIMAL`, whose
+/// text has a `.` (`NULL`); and `REVERSE` of a binary string, whose bytes
+/// MySQL reverses.
+fn folded_literal_call(
+    upper_name: &str,
+    list: &FunctionArgumentList,
+) -> Result<Option<ast::Expr>, MysqlParserError> {
+    if !matches!(
+        upper_name,
+        "HOUR" | "MINUTE" | "SECOND" | "MICROSECOND" | "TIME_TO_SEC" | "UNHEX" | "REVERSE"
+    ) {
+        return Ok(None);
+    }
+    let Ok(args) = unnamed_arguments(list) else {
+        return Ok(None);
+    };
+    let [arg] = args.as_slice() else {
+        return Ok(None);
+    };
+    match upper_name {
+        "HOUR" | "MINUTE" | "SECOND" | "MICROSECOND" | "TIME_TO_SEC" => {
+            let Some(typed) = typed_string(arg).filter(|typed| typed.data_type == DataType::Date)
+            else {
+                return Ok(None);
+            };
+            translate_typed_string(typed, Context::Value)?;
+            Ok(Some(number(0)))
+        }
+        "UNHEX" => Ok(number_literal(arg)
+            .filter(|digits| is_decimal_literal(digits))
+            .map(|_| ast::Expr::Literal(ast::Literal::Null))),
+        "REVERSE" => Ok(binary_literal_bytes(arg).map(|mut bytes| {
+            bytes.reverse();
+            blob_literal(&bytes)
+        })),
+        _ => Ok(None),
+    }
+}
+
+/// `WEIGHT_STRING` of a literal, the bytes MySQL sorts it by: of an integer,
+/// its 8 big-endian bytes, with the sign bit flipped for a signed value
+/// (whatever `AS CHAR(n)`); of a `DECIMAL` or `DOUBLE`, `NULL`; of a
+/// `_latin1` text of ASCII letters, digits and spaces, its letters in
+/// uppercase (`latin1_swedish_ci`). `AS BINARY(n)` takes the first `n` bytes
+/// of the literal's text, for a text at least `n` bytes long (MySQL pads a
+/// shorter one with zero bytes). Other arguments, among them `utf8mb4`
+/// texts, whose weights are MySQL's collation's, are refused.
+fn folded_weight_string(list: &FunctionArgumentList) -> Result<ast::Expr, MysqlParserError> {
+    enum Cast {
+        None,
+        Binary(usize),
+        Char,
+    }
+    fn cast(expr: &Expr) -> Option<Cast> {
+        let Expr::Function(function) = expr else {
+            return None;
+        };
+        let name = function.name.to_string().to_ascii_lowercase();
+        let FunctionArguments::List(list) = &function.args else {
+            return None;
+        };
+        let [FunctionArg::Unnamed(FunctionArgExpr::Expr(length))] = list.args.as_slice() else {
+            return None;
+        };
+        let length = number_literal(length)?.parse::<usize>().ok()?;
+        match name.as_str() {
+            "__mysql_weight_as_binary" => Some(Cast::Binary(length)),
+            "__mysql_weight_as_char" => Some(Cast::Char),
+            _ => None,
+        }
+    }
+    let refusal = || {
+        MysqlParserError::Unsupported(format!(
+            "WEIGHT_STRING({}), whose bytes are MySQL's collation weights, is not lowered yet",
+            list.args
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+                .replace(", __mysql_weight_as_binary(", " AS BINARY(")
+                .replace(", __mysql_weight_as_char(", " AS CHAR(")
+        ))
+    };
+    let args = unnamed_arguments(list)?;
+    let (arg, cast) = match args.as_slice() {
+        [arg] => (unnested(arg), Cast::None),
+        [arg, marker] => match cast(marker) {
+            Some(cast) => (unnested(arg), cast),
+            None => return Err(refusal()),
+        },
+        _ => return Err(refusal()),
+    };
+    let integer = match negated_number_literal(arg) {
+        Some(digits) => Some((true, digits)),
+        None => number_literal(arg).map(|digits| (false, digits)),
+    };
+    let text: Option<String> = if let Some((negative, digits)) = integer {
+        if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return match cast {
+                Cast::None => Ok(ast::Expr::Literal(ast::Literal::Null)),
+                _ => Err(refusal()),
+            };
+        }
+        let Ok(magnitude) = digits.parse::<u128>() else {
+            return Err(refusal());
+        };
+        let value = if negative {
+            -i128::try_from(magnitude).map_err(|_| refusal())?
+        } else {
+            i128::try_from(magnitude).map_err(|_| refusal())?
+        };
+        match cast {
+            Cast::None | Cast::Char => {
+                let bytes = if let Ok(signed) = i64::try_from(value) {
+                    (signed as u64 ^ (1 << 63)).to_be_bytes()
+                } else if let Ok(unsigned) = u64::try_from(value) {
+                    unsigned.to_be_bytes()
+                } else {
+                    return Err(refusal());
+                };
+                return Ok(blob_literal(&bytes));
+            }
+            Cast::Binary(_) => Some(value.to_string()),
+        }
+    } else if let Some(text) = string_literal(arg) {
+        Some(text.to_string())
+    } else if let Some(typed) = typed_string(arg) {
+        let text = match &typed.value.value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text.as_str(),
+            _ => return Err(refusal()),
+        };
+        let digits = |part: &str, count: std::ops::RangeInclusive<usize>| {
+            count.contains(&part.len()) && part.bytes().all(|byte| byte.is_ascii_digit())
+        };
+        let canonical_time = |time: &str| {
+            let (clock, fraction) = time.split_once('.').unwrap_or((time, "0"));
+            let parts = clock.split(':').collect::<Vec<_>>();
+            matches!(parts.as_slice(), [_, minutes, seconds] if digits(minutes, 2..=2) && digits(seconds, 2..=2))
+                && digits(fraction, 1..=6)
+                && digits(parts[0].strip_prefix('-').unwrap_or(parts[0]), 2..=3)
+        };
+        let canonical_date = |date: &str| {
+            let parts = date.split('-').collect::<Vec<_>>();
+            matches!(parts.as_slice(), [year, month, day] if digits(year, 4..=4) && digits(month, 2..=2) && digits(day, 2..=2))
+        };
+        let canonical = match &typed.data_type {
+            DataType::Date => canonical_date(text),
+            DataType::Time(..) => canonical_time(text),
+            DataType::Timestamp(..) | DataType::Datetime(_) => match text.split_once(' ') {
+                Some((date, time)) => {
+                    canonical_date(date) && !time.starts_with('-') && canonical_time(time)
+                }
+                None => false,
+            },
+            _ => false,
+        };
+        if !canonical {
+            return Err(refusal());
+        }
+        Some(text.to_string())
+    } else if let Expr::Prefixed { prefix, value } = arg {
+        let latin1 = prefix.quote_style.is_none() && prefix.value.eq_ignore_ascii_case("_latin1");
+        match (latin1, string_literal(value), &cast) {
+            (true, Some(text), Cast::None)
+                if text
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b' ') =>
+            {
+                return Ok(blob_literal(text.to_ascii_uppercase().as_bytes()));
+            }
+            (true, Some(text), Cast::Binary(_)) if text.is_ascii() => Some(text.to_string()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    match (text, cast) {
+        (Some(text), Cast::Binary(length)) if text.len() >= length => {
+            Ok(blob_literal(&text.as_bytes()[..length]))
+        }
+        _ => Err(refusal()),
+    }
 }
 
 /// `FIELD` of number literals only, whose position MySQL finds comparing
@@ -3301,7 +3522,26 @@ fn translate_cast(
         DataType::Double(ExactNumberInfo::None) => (type_name("DOUBLE"), Context::Number),
         DataType::Real => (type_name("REAL"), Context::Number),
         DataType::Float(ExactNumberInfo::None) => (type_name("FLOAT"), Context::Number),
-        DataType::Decimal(precision) => (decimal_type(precision), Context::Number),
+        DataType::Decimal(precision) => {
+            let beyond_bigint = signed_number_literal(expr).filter(|digits| {
+                digits.bytes().all(|byte| byte.is_ascii_digit())
+                    && if is_negated(expr) {
+                        exceeds_negated_bigint(digits)
+                    } else {
+                        exceeds_unsigned_bigint(digits)
+                            || digits
+                                .parse::<u64>()
+                                .is_ok_and(|value| value > i64::MAX as u64)
+                    }
+            });
+            if let Some(digits) = beyond_bigint {
+                return Ok(ast::Expr::cast(
+                    exact_decimal(digits, is_negated(expr)),
+                    Some(decimal_type(precision)),
+                ));
+            }
+            (decimal_type(precision), Context::Number)
+        }
         DataType::Char(None) | DataType::Character(None) => {
             let text = mysql_text(translate_in(expr, Context::Value, context)?);
             return Ok(ast::Expr::cast(text, Some(type_name("TEXT"))));
@@ -4029,6 +4269,12 @@ fn translate_function(
         return Ok(folded);
     }
     if let Some(folded) = folded_hex_conversion(&upper_name, list)? {
+        return Ok(folded);
+    }
+    if upper_name == "WEIGHT_STRING" {
+        return folded_weight_string(list);
+    }
+    if let Some(folded) = folded_literal_call(&upper_name, list)? {
         return Ok(folded);
     }
     if matches!(

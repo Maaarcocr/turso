@@ -1266,7 +1266,22 @@ fn recursive_common_table_expressions_stop_before_mysql_limit() -> turso_core::R
             vec![Value::from_i64(3), Value::from_i64(2)],
         ]
     );
+    connection.execute("CREATE TABLE named (id INT PRIMARY KEY, boss INT, name VARCHAR(10))")?;
+    connection.execute("INSERT INTO named VALUES (1, NULL, 'a'), (2, 1, 'b'), (3, 2, 'c')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "WITH RECURSIVE chain AS (SELECT id, name FROM named WHERE boss IS NULL UNION ALL              SELECT n.id + 0, n.name FROM named n JOIN chain ON n.boss = chain.id)              SELECT * FROM chain ORDER BY id"
+        )?,
+        vec![
+            vec![Value::from_i64(1), Value::build_text("a")],
+            vec![Value::from_i64(2), Value::build_text("b")],
+            vec![Value::from_i64(3), Value::build_text("c")],
+        ]
+    );
     for refused in [
+        "WITH RECURSIVE c (s) AS (SELECT name FROM named WHERE id = 1 UNION ALL          SELECT CONCAT(s, 'a') FROM c WHERE LENGTH(s) < 3) SELECT * FROM c",
+        "WITH RECURSIVE c (s) AS (SELECT name FROM named WHERE id = 1 UNION ALL          SELECT e.boss FROM c JOIN e ON e.id = 2 WHERE s = 'a') SELECT * FROM c",
         "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 2000) SELECT COUNT(*) FROM c",
         "WITH RECURSIVE c (s) AS (SELECT 'a' UNION ALL SELECT CONCAT(s, 'a') FROM c WHERE LENGTH(s) < 3) SELECT * FROM c",
         "WITH RECURSIVE c (n) AS (SELECT 1 UNION ALL SELECT n * 100000 FROM c WHERE n < 1000000000) SELECT * FROM c",
@@ -1367,6 +1382,88 @@ fn derived_tables_reject_a_repeated_column_name() -> turso_core::Result<()> {
         "SELECT * FROM (SELECT a.i, b.s FROM m a JOIN m b) t"
     )?
     .is_empty());
+    Ok(())
+}
+
+#[test]
+fn weight_strings_of_literals_are_their_sort_bytes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        (
+            "SELECT HEX(WEIGHT_STRING(1))",
+            Value::build_text("8000000000000001"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(-1))",
+            Value::build_text("7FFFFFFFFFFFFFFF"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(18446744073709551615 AS CHAR(3)))",
+            Value::build_text("FFFFFFFFFFFFFFFF"),
+        ),
+        ("SELECT WEIGHT_STRING(1.5)", Value::Null),
+        (
+            "SELECT HEX(WEIGHT_STRING(_latin1 'ab1'))",
+            Value::build_text("414231"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(-12 AS BINARY(2)))",
+            Value::build_text("2D31"),
+        ),
+        (
+            "SELECT HEX(WEIGHT_STRING(DATE '2000-01-01' AS BINARY(4)))",
+            Value::build_text("32303030"),
+        ),
+    ] {
+        assert_eq!(query(&connection, sql)?, vec![vec![expected]], "{sql}");
+    }
+    for refused in [
+        "SELECT WEIGHT_STRING('a')",
+        "SELECT WEIGHT_STRING('ab' AS BINARY(4))",
+        "SELECT WEIGHT_STRING(DATE '2000-1-1' AS BINARY(2))",
+    ] {
+        let error = connection.execute(refused).expect_err(refused).to_string();
+        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn counts_compare_with_strings_as_numbers() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE c (s TEXT)")?;
+    connection.execute("INSERT INTO c VALUES ('1'), ('22')")?;
+    assert_eq!(
+        query(&connection, "SELECT COUNT(*) AS a FROM c HAVING a = '2'")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(*) < '10abc', LENGTH(MAX(s)) = '2' FROM c"
+        )?,
+        vec![vec![Value::from_i64(1), Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn literal_calls_take_mysql_values() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT MINUTE(DATE '2000-01-01'), TIME_TO_SEC(DATE '2000-01-01'), UNHEX(0.0), \
+             HEX(REVERSE(_binary 'ab\u{fc}')), CAST(CAST(18446744073709551615 AS DECIMAL(30, 2)) AS CHAR)"
+        )?,
+        vec![vec![
+            Value::from_i64(0),
+            Value::from_i64(0),
+            Value::Null,
+            Value::build_text("BCC36261"),
+            Value::build_text("18446744073709551615.00"),
+        ]]
+    );
     Ok(())
 }
 

@@ -175,6 +175,14 @@ select alias that may also name a column is refused over a view, a derived
 table, a common table expression or columns of several tables, and when it
 holds a subquery.
 
+A string literal compared with a `COUNT`, a length function (`LENGTH`,
+`CHAR_LENGTH`, `OCTET_LENGTH`, `BIT_LENGTH`), a ranking window function or a
+`HAVING` alias of one becomes MySQL's DOUBLE of the string, as MySQL compares
+a number with a string (`COUNT(*) = '2'` is true for two rows). Beside a
+column, a string literal stays a string, which the column's type converts;
+beside another computed number, Turso compares a number with a string as
+SQLite does (every number below every string), unlike MySQL.
+
 `x REGEXP ''` and `x NOT REGEXP ''` are `__mysql_empty_regexp(x)`, which
 fails with MySQL's error 3685 when it is evaluated, as MySQL rejects the empty
 pattern then (not on an empty table). A `NULL` or binary subject is refused.
@@ -257,6 +265,8 @@ Lowered:
 | `CAST`/`CONVERT(x, type)` to `CHAR(n)` and `NCHAR(n)` (`n` up to 16,777,216) | `__mysql_cast_as_char(CONCAT(x), n)`, `__mysql_cast_as_nchar(CONCAT(x), n)`: the MySQL text of `x` (numbers print as MySQL prints them, a binary string that is not UTF-8 is `NULL`) cut to `n` characters; `NCHAR` is `utf8mb3`, so a 4-byte character becomes `?` |
 | `CAST`/`CONVERT(x, type)` to `DATE`, `DATETIME[(p)]` and `TIME[(p)]` used as a value (a selected column, an argument of a function other than a JSON one, the operand of a `CHAR` cast) | `__mysql_cast_as_date(x)`, `__mysql_cast_as_datetime(x, p)`, `__mysql_cast_as_time(x, p)`: MySQL's conversion of `DATE(x)`, `TIMESTAMP(x)` and `TIME(x)`, rounded to `p` fractional digits (0 by default), so `CAST('1.5' AS TIME)` is `00:00:02`. `p` above 6 fails the statement when it is parsed (error 1426). The operand must have no DATE or TIME type MySQL converts differently from its text: literals, operators other than `INTERVAL` arithmetic, `TIMESTAMP '..'` literals, `JSON_*` calls and JSON casts of those are lowered, as are `DATE '..'` to `DATE`/`DATETIME` and `TIME '..'` to `TIME` |
 | `CONVERT(x USING utf8mb4/utf8mb3/utf8)`, `CONVERT(x USING binary)` | `CAST(CONCAT(x) AS TEXT)`, `CAST(CONCAT(x) AS BLOB)`: MySQL's text of `x` |
+| `WEIGHT_STRING(literal)`, `WEIGHT_STRING(literal AS BINARY(n))` | The bytes MySQL sorts the literal by, computed when the statement is lowered: of an integer, its 8 big-endian bytes with the sign bit flipped for a signed value (also with `AS CHAR(n)`); of a `DECIMAL` or `DOUBLE`, `NULL`; of a `_latin1` text of ASCII letters, digits and spaces, the text in uppercase; with `AS BINARY(n)`, the first `n` bytes of the literal's text when it has at least `n`. Other arguments (a `utf8mb4` text, whose weights are its collation's, a column, a shorter text that MySQL pads) are refused |
+| `HOUR`, `MINUTE`, `SECOND`, `MICROSECOND`, `TIME_TO_SEC` of a `DATE` literal; `UNHEX` of a `DECIMAL` literal; `REVERSE` of a binary string literal; `CAST` of an integer literal beyond BIGINT `AS DECIMAL` | 0 (MySQL reads the date as midnight); `NULL` (the text has a `.`); the reversed bytes; the exact digits, which a DOUBLE would round |
 | `HEX(CONVERT(literal USING utf16/ucs2/utf32/latin1/ascii))` | The hex of the literal's bytes in that character set, computed when the statement is lowered: a text's characters encoded (big-endian for the wide sets), and a binary string read as the set's bytes, padded on the left with zero bytes to a whole character (`NULL` when it is not valid `utf32`) |
 | `BINARY x`, `CAST`/`CONVERT(x, type)` to `BINARY` and `BINARY(n)` (`n` up to 16,777,216) used as a value (a selected column, a function argument other than of `GREATEST`, `LEAST`, `FIELD`, `NULLIF` and `INTERVAL`, `ORDER BY`, `GROUP BY`) | `CAST(CONCAT(x) AS BLOB)`, with `x` as `CAST(x AS CHAR)` would print it when it is a JSON value and its bytes when it is a binary literal; `BINARY(n)` is `__mysql_cast_as_binary(.., n)`, cut to `n` bytes and padded with zero bytes to `n`. `BINARY x` binds as tightly as unary minus (`BINARY 'a' = 'A'` compares `BINARY 'a'`) |
 | `COLLATE binary`, `COLLATE utf8mb4_0900_bin` | `COLLATE BINARY` |
@@ -283,10 +293,13 @@ first table of a join or an inner-joined one), to an inner expression
 row, which `__mysql_recursion_depth(depth)` computes and refuses from the
 1000th iteration, and the expression itself, which selects the other columns.
 MySQL gives the columns the types of the anchor: a column whose anchor is an
-integer literal has its recursive values checked by
+integer literal or an `INT` column has its recursive values checked by
 `__mysql_recursive_integer(value)`, which refuses a value outside `INT` or not
-an integer, and a column with another anchor is accepted only when the
-recursive `SELECT` passes it on unchanged. Refused: a recursive `SELECT` with
+an integer; a column whose anchor and recursive values are both base table
+columns of the same declared type and collation (of the same table, for a text
+type, whose character set the table may set) keeps its values; and a column
+with another anchor is accepted only when the recursive `SELECT` passes it on
+unchanged. Refused: a recursive `SELECT` with
 `DISTINCT`, grouping, a window or a subquery, `UNION DISTINCT`, an outer join
 of the expression, and a recursive expression in a subquery of an expression or
 in a `LATERAL` table, which may read an outer row (MySQL may evaluate it once).

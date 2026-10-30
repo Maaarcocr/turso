@@ -39,6 +39,9 @@ pub(crate) struct TranslationContext<'a> {
     /// Names of `HAVING` that MySQL resolves to a column where Turso would
     /// take a select alias, with the table that qualifies them.
     having_columns: Vec<(String, String)>,
+    /// Select aliases, in `HAVING`, of expressions whose value is always an
+    /// integer (`COUNT(*) AS a`).
+    pub(crate) integer_aliases: Vec<String>,
     tables_read: Vec<ast::Name>,
     /// Names of the common table expressions and derived tables met so far.
     pub(crate) common_tables: Vec<String>,
@@ -480,7 +483,24 @@ fn translate_select(
         Some(_) => Vec::new(),
         None => having_columns(select, context.environment)?,
     };
+    context.integer_aliases = select
+        .projection
+        .iter()
+        .filter_map(|item| match item {
+            SelectItem::ExprWithAlias { expr, alias }
+                if crate::expr::is_integer_valued(expr, &[])
+                    && !context
+                        .having_columns
+                        .iter()
+                        .any(|(name, _)| name.eq_ignore_ascii_case(&alias.value)) =>
+            {
+                Some(alias.value.clone())
+            }
+            _ => None,
+        })
+        .collect();
     let group_by = translate_group_by(group_by, having.as_ref(), context);
+    context.integer_aliases.clear();
     context.having_columns.clear();
     let group_by = group_by?;
     let window_clause = named_window

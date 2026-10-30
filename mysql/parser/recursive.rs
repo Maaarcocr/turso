@@ -6,18 +6,21 @@
 //! `__mysql_recursive_<name>`, whose recursive rows compute it with
 //! `__mysql_recursion_depth(depth)`, which refuses the 1000th iteration; the
 //! expression `name` selects the other columns from it. A column whose anchor
-//! is an integer literal (an `INT` in MySQL) has its recursive values checked
+//! is an integer literal or an `INT` column has its recursive values checked
 //! by `__mysql_recursive_integer(value)`, which refuses a value outside `INT`
-//! or not an integer. Refused: another shape, a recursive `SELECT` with
-//! `DISTINCT`, grouping, a window, a subquery or an outer join, and a column
-//! whose anchor is not an integer literal unless its recursive value is the
-//! column itself, and an expression in a subquery of an expression or in a
+//! or not an integer. A column whose anchor and recursive values are base
+//! table columns of the same declared type and collation (of the same table,
+//! for text, whose character set the table may set) keeps its values.
+//! Refused: another shape, a recursive `SELECT` with `DISTINCT`, grouping, a
+//! window, a subquery or an outer join, another column whose recursive value
+//! is not the column itself, and an expression in a subquery of an expression or in a
 //! `LATERAL` table, which may read an outer row.
 
 use crate::dialect::tokens;
 use crate::expr::function_call;
 use crate::names::translate_identifier;
 use crate::query::{translate_cte, TranslationContext};
+use crate::stored_table::{ColumnDefinition, TableDefinition};
 use crate::MysqlParserError;
 use sqlparser::ast::{
     Cte, Expr, Ident, JoinOperator, ObjectName, ObjectNamePart, Query, Select, SelectItem, SetExpr,
@@ -151,10 +154,32 @@ pub(crate) fn translate_recursive_cte(
             ),
             _ => false,
         };
+        let anchor_column = match anchor_value {
+            Some(value) => base_column(anchor, value, context, None)?,
+            None => None,
+        };
         if unchanged {
             integers.push(false);
-        } else if anchor_value.is_some_and(is_int_literal) {
+        } else if anchor_value.is_some_and(is_int_literal)
+            || anchor_column
+                .as_ref()
+                .is_some_and(|(_, column)| column.type_text == "INT")
+        {
             integers.push(true);
+        } else if let (Some((anchor_table, anchor_column)), Some(step_value)) =
+            (&anchor_column, step_value)
+        {
+            let step_column = base_column(&step, step_value, context, Some((&inner, &names)))?;
+            if !step_column.is_some_and(|(step_table, step_column)| {
+                step_column.type_text == anchor_column.type_text
+                    && step_column.collation == anchor_column.collation
+                    && (step_table == *anchor_table || !is_character(anchor_column))
+            }) {
+                return Err(refused(&format!(
+                    "whose column `{column}` takes the type of its anchor"
+                )));
+            }
+            integers.push(false);
         } else {
             return Err(refused(&format!(
                 "whose column `{column}` takes the type of its anchor"
@@ -277,6 +302,100 @@ fn wrap(column: &mut ast::ResultColumn, function: &str) -> Result<(), MysqlParse
     let value = std::mem::replace(expr.as_mut(), ast::Expr::Literal(ast::Literal::Null));
     **expr = function_call(function, vec![value]);
     Ok(())
+}
+
+/// The table (in lower case) and the stored definition of the column that
+/// `expr` names, when it is a column of a base table that `select` reads.
+/// `recursive` is the renamed reference of a recursive `SELECT` to its
+/// expression and the expression's columns, which are not base columns.
+fn base_column(
+    select: &Select,
+    expr: &Expr,
+    context: &TranslationContext,
+    recursive: Option<(&Ident, &[Ident])>,
+) -> Result<Option<(String, ColumnDefinition)>, MysqlParserError> {
+    let Some(environment) = context.environment else {
+        return Ok(None);
+    };
+    let (qualifier, column) = match expr {
+        Expr::Identifier(column) => (None, column),
+        Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+            [qualifier, column] => (Some(qualifier), column),
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    let mut found = None;
+    for table in &select.from {
+        for factor in
+            std::iter::once(&table.relation).chain(table.joins.iter().map(|join| &join.relation))
+        {
+            let TableFactor::Table {
+                name,
+                alias,
+                args: None,
+                ..
+            } = factor
+            else {
+                return Ok(None);
+            };
+            let [ObjectNamePart::Identifier(table_name)] = name.0.as_slice() else {
+                return Ok(None);
+            };
+            if alias
+                .as_ref()
+                .is_some_and(|alias| !alias.columns.is_empty())
+            {
+                return Ok(None);
+            }
+            let reference = alias.as_ref().map_or(table_name, |alias| &alias.name);
+            if qualifier
+                .is_some_and(|qualifier| !qualifier.value.eq_ignore_ascii_case(&reference.value))
+            {
+                continue;
+            }
+            if let Some((inner, columns)) = recursive {
+                if table_name.value == inner.value {
+                    if columns
+                        .iter()
+                        .any(|name| name.value.eq_ignore_ascii_case(&column.value))
+                    {
+                        return Ok(None);
+                    }
+                    continue;
+                }
+            }
+            if context
+                .common_tables
+                .iter()
+                .any(|common| common.eq_ignore_ascii_case(&table_name.value))
+            {
+                return Ok(None);
+            }
+            let Some(sql) = environment.table_sql(&table_name.value)? else {
+                return Ok(None);
+            };
+            let Ok(definition) = TableDefinition::parse(&sql) else {
+                return Ok(None);
+            };
+            if let Some(definition) = definition.column(&column.value) {
+                if found.is_some() {
+                    return Ok(None);
+                }
+                found = Some((table_name.value.to_lowercase(), definition.clone()));
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// Whether `column` holds text, whose character set may differ between
+/// tables with the same declared type.
+fn is_character(column: &ColumnDefinition) -> bool {
+    matches!(
+        column.base_type(),
+        "CHAR" | "VARCHAR" | "TINYTEXT" | "TEXT" | "MEDIUMTEXT" | "LONGTEXT" | "ENUM" | "SET"
+    ) || column.members.is_some()
 }
 
 fn item_expr(item: &SelectItem) -> Option<&Expr> {
