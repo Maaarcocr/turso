@@ -71,7 +71,9 @@ pub(crate) fn resolve(name: &str, arg_count: usize) -> Option<Func> {
         "RELEASE_ALL_LOCKS" | "CONNECTION_ID" | TRANSACTION_ISOLATION => arg_count == 0,
         SET_TRANSACTION_ISOLATION => arg_count == 1,
         PREPARE => arg_count == 2,
-        LIMIT_PARAMETER | RECURSION_DEPTH | RECURSIVE_INTEGER => arg_count == 1,
+        LIMIT_PARAMETER | RECURSION_DEPTH | RECURSIVE_INTEGER | VALIDATE_PASSWORD_STRENGTH => {
+            arg_count == 1
+        }
         DEALLOCATE_PREPARE => arg_count == 1,
         _ => false,
     };
@@ -151,6 +153,12 @@ pub(crate) fn execute(
             other => Err(LimboError::InternalError(format!(
                 "a recursion depth is a count, not {other}"
             ))),
+        },
+        VALIDATE_PASSWORD_STRENGTH => match &args[0] {
+            Value::Null => Err(unsupported_value(
+                "VALIDATE_PASSWORD_STRENGTH(NULL)".to_string(),
+            )),
+            _ => Ok(Value::from_i64(0)),
         },
         RECURSIVE_INTEGER => match &args[0] {
             Value::Null => Ok(Value::Null),
@@ -244,6 +252,11 @@ const LIMIT_PARAMETER: &str = "__MYSQL_LIMIT_PARAMETER";
 const RECURSION_DEPTH: &str = "__MYSQL_RECURSION_DEPTH";
 
 const MAX_RECURSION_DEPTH: i64 = 1000;
+
+/// `VALIDATE_PASSWORD_STRENGTH(password)` is 0 for every password in the
+/// target profile, which does not install MySQL's `validate_password`
+/// component. A NULL argument is refused.
+const VALIDATE_PASSWORD_STRENGTH: &str = "VALIDATE_PASSWORD_STRENGTH";
 
 /// `__mysql_recursive_integer(value)`: a recursive value of a column whose
 /// anchor is an `INT` literal, refused outside `INT` or when not an integer.

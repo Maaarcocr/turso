@@ -523,6 +523,12 @@ session's `@@transaction_isolation` through
 `__mysql_set_transaction_isolation(level)`. The form without `SESSION`, which
 applies to the next transaction only, and `GLOBAL` are refused.
 
+## Server functions
+
+`VALIDATE_PASSWORD_STRENGTH(password)` is 0, as in the target profile, which
+does not install MySQL's `validate_password` component (MySQL then rates every
+password 0). A NULL argument is refused.
+
 ## Session settings (`SET`)
 
 `mysql/parser/session.rs` lowers `SET` statements (session scope, with or
