@@ -12,6 +12,7 @@ mod parse;
 mod path;
 mod read;
 mod search;
+mod table;
 
 use document::{format_double, Json};
 use parse::{parse, ParseError};
@@ -74,6 +75,8 @@ pub(super) fn execute(name: &str, args: &[Value]) -> Option<Result<Value>> {
         Function::ArrayInsert => modify::array_insert(&call),
         Function::MergePreserve => modify::merge_preserve(&call),
         Function::MergePatch => modify::merge_patch(&call),
+        Function::Table => table::rows(&call),
+        Function::TableCell => table::cell(&call),
     })
 }
 
@@ -108,6 +111,8 @@ enum Function {
     ArrayInsert,
     MergePreserve,
     MergePatch,
+    Table,
+    TableCell,
 }
 
 impl Function {
@@ -142,6 +147,8 @@ impl Function {
             "JSON_ARRAY_INSERT" => Function::ArrayInsert,
             "JSON_MERGE" | "JSON_MERGE_PRESERVE" => Function::MergePreserve,
             "JSON_MERGE_PATCH" => Function::MergePatch,
+            "__MYSQL_JSON_TABLE" => Function::Table,
+            "__MYSQL_JSON_TABLE_CELL" => Function::TableCell,
             _ => return None,
         })
     }
@@ -160,7 +167,11 @@ impl Function {
             | Function::Valid
             | Function::Depth
             | Function::Pretty => count == 1,
-            Function::Value | Function::Overlaps | Function::MemberOf => count == 2,
+            Function::Value
+            | Function::Overlaps
+            | Function::MemberOf
+            | Function::Table
+            | Function::TableCell => count == 2,
             Function::Keys | Function::Length => (1..=2).contains(&count),
             Function::Contains => (2..=3).contains(&count),
             Function::Extract | Function::Remove => count >= 2,
@@ -204,6 +215,7 @@ impl Function {
             Function::ArrayInsert => "json_array_insert",
             Function::MergePreserve => "json_merge_preserve",
             Function::MergePatch => "json_merge_patch",
+            Function::Table | Function::TableCell => "json_table",
         }
     }
 }
