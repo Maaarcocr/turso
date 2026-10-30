@@ -1337,6 +1337,10 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
         let error = query(&connection, sql).expect_err(sql).to_string();
         assert!(error.contains("ERROR 3685 "), "{sql}: {error}");
     }
+    assert_eq!(
+        query(&connection, "SELECT 0 AND ('a' REGEXP '')")?,
+        vec![vec![Value::from_i64(0)]]
+    );
     let error = query(&connection, "SELECT 1 + ('a' REGEXP '')")
         .expect_err("REGEXP '' in arithmetic")
         .to_string();
@@ -1344,7 +1348,6 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
     for refused in [
         "SELECT NULL REGEXP ''",
         "SELECT 0xFF REGEXP ''",
-        "SELECT 0 AND ('a' REGEXP '')",
         "SELECT NULL = ('a' REGEXP '')",
     ] {
         let error = query(&connection, refused).expect_err(refused).to_string();
@@ -1488,7 +1491,6 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
     }
     for refused in [
         "SELECT NULL | -18446744073709540000e0",
-        "SELECT 0 AND (1 | -18446744073709540000e0)",
         "SELECT NULL = (1 | -18446744073709540000e0)",
     ] {
         let error = query(&connection, refused).expect_err(refused).to_string();
@@ -1497,6 +1499,23 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
     let failing = "SELECT NULL + 1 - CAST('invalid' AS JSON)";
     let error = query(&connection, failing).expect_err(failing).to_string();
     assert!(error.contains("ERROR 3141"), "{failing}: {error}");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 0 AND CAST('x' AS JSON), '2000-01-01 x' OR CAST('x' AS JSON), \
+             TIME '00:00:00' AND CAST('x' AS JSON), NULL OR 1 OR CAST('x' AS JSON), \
+             0x01 || CAST('x' AS JSON), 0 AND (1 | -18446744073709540000e0)"
+        )?,
+        vec![[0, 1, 0, 1, 1, 0].map(Value::from_i64).to_vec()]
+    );
+    for failing in [
+        "SELECT 'foo' OR CAST('x' AS JSON)",
+        "SELECT TIME '130:34:58.6' AND CAST('x' AS JSON)",
+        "SELECT X'00' || CAST('x' AS JSON)",
+    ] {
+        let error = query(&connection, failing).expect_err(failing).to_string();
+        assert!(error.contains("ERROR 3141"), "{failing}: {error}");
+    }
     Ok(())
 }
 

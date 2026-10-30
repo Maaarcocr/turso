@@ -1056,9 +1056,14 @@ fn translate_binary(
                 first = left;
             }
             operands.push(first);
+            operands.reverse();
+            if crate::invalid_json::decided_before_failure(&operands, conjunction) {
+                return Ok(ast::Expr::Literal(ast::Literal::Numeric(
+                    if conjunction { "0" } else { "1" }.to_string(),
+                )));
+            }
             let operands = operands
                 .into_iter()
-                .rev()
                 .map(|operand| translate_condition(operand, context))
                 .collect::<Result<Vec<_>, _>>()?;
             let operator = if conjunction {

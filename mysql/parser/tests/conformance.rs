@@ -1404,7 +1404,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "invalid JSON cast MySQL does not evaluate",
-            sql: "SELECT 0 AND CAST('x' AS JSON)",
+            sql: "SELECT CONCAT(NULL, CAST('x' AS JSON))",
         },
         SqlCase {
             name: "invalid JSON cast evaluated once per row",
