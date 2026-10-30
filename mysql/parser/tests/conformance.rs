@@ -1356,7 +1356,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "negated temporal literal with a fraction",
-            sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
+            sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456' + 1",
         },
         SqlCase {
             name: "fraction that rounds into the seconds",

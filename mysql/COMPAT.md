@@ -349,7 +349,10 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   operations nested in arithmetic, literals above the BIGINT range with
   integers or decimals): MySQL computes them as
   BIGINT UNSIGNED, which fails on negative results. Temporal literals in bit
-  operations when negative or fractional, and negated when fractional: MySQL
+  operations when negative or fractional, and negated when fractional outside
+  a select item that is only the negation (which shows MySQL's DOUBLE with the
+  literal's decimals, `-TIMESTAMP '2000-01-01 10:34:58.123456'` is
+  `-20000101103458.125000`): MySQL
   computes those as BIGINT UNSIGNED or DOUBLE. `DIV` with a
   literal outside the BIGINT range.
 - Bit operations on a DOUBLE literal below the BIGINT range, which MySQL

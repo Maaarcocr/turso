@@ -1824,6 +1824,32 @@ fn integer_arithmetic_of_literals_outside_its_range_fails_as_in_mysql() -> turso
 }
 
 #[test]
+fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, shown) in [
+        ("SELECT -TIME '10:04:58.1'", "-100458.1"),
+        ("SELECT -TIME '5 10:34:58.9'", "-1303458.9"),
+        (
+            "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
+            "-20000101103458.125000",
+        ),
+        (
+            "SELECT -TIMESTAMP '2000-01-01 10:34:58.978654'",
+            "-20000101103458.980000",
+        ),
+        ("SELECT -TIME '00:00:01.0000'", "-1.0000"),
+        ("SELECT -TIME '-10:00:00.5'", "100000.5"),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::build_text(shown)]],
+            "{sql}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn comparisons_read_nul_binary_literals_as_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

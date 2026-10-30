@@ -1812,8 +1812,38 @@ pub(crate) fn shown_negated_binary(
             _ => shown_fixed_double_results(expr, context),
         },
         Expr::Case { .. } => shown_fixed_double_results(expr, context),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => shown_negated_fractional_temporal(inner),
         _ => None,
     }
+}
+
+/// A selected negated `TIME` or `TIMESTAMP` literal with a fraction, which
+/// MySQL computes as the DOUBLE of the literal's number and shows with the
+/// literal's decimals (`-TIME '10:04:58.1'` shows `-100458.1`).
+fn shown_negated_fractional_temporal(expr: &Expr) -> Option<Result<ast::Expr, MysqlParserError>> {
+    let Expr::TypedString(typed) = unnested(expr) else {
+        return None;
+    };
+    let temporal = temporal_literal(typed)?;
+    if temporal.kind == TemporalKind::Date {
+        return None;
+    }
+    let (_, fraction) = temporal.text.split_once('.')?;
+    let number: String = temporal
+        .text
+        .chars()
+        .filter(|character| character.is_ascii_digit() || *character == '.')
+        .collect();
+    let magnitude = number.parse::<f64>().ok()?;
+    let value = if temporal.text.starts_with('-') {
+        magnitude
+    } else {
+        -magnitude
+    };
+    Some(fixed_double_text(value, fraction.len()).map(|text| string_expr(&text)))
 }
 
 fn shown_negated_binary_operation(
