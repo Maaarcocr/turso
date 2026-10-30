@@ -2104,6 +2104,13 @@ fn comparison(
             double_literal(rhs),
         ));
     }
+    if let Some(order) = exact_number_order(left, right) {
+        return Ok(ast::Expr::binary(
+            ast::Expr::Literal(ast::Literal::Numeric((order as i8 + 1).to_string())),
+            operator,
+            ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
+        ));
+    }
     if explicit.is_none() {
         if let Some((lhs, rhs)) = compared_datetime_texts(left, right) {
             return Ok(ast::Expr::binary(
@@ -2126,6 +2133,70 @@ fn comparison(
         default_collated(lhs, explicit, &[left, right])
     };
     Ok(ast::Expr::binary(lhs, operator, rhs))
+}
+
+/// The exact order of two integer or decimal literals (optionally negated)
+/// when one lies outside BIGINT, where Turso would read both as DOUBLE
+/// values (`18446744073709551615 = 18446744073709551614` is 0 in MySQL).
+fn exact_number_order(left: &Expr, right: &Expr) -> Option<std::cmp::Ordering> {
+    struct Exact {
+        negative: bool,
+        whole: String,
+        fraction: String,
+    }
+    fn exact(expr: &Expr) -> Option<Exact> {
+        let (negative, inner) = match unnested(expr) {
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: inner,
+            } => (true, inner.as_ref()),
+            other => (false, other),
+        };
+        let digits = number_literal(inner)?;
+        let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+        let all_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+        if !all_digits(whole) || !all_digits(fraction) || whole.len() + fraction.len() > 65 {
+            return None;
+        }
+        let whole = whole.trim_start_matches('0').to_string();
+        let fraction = fraction.trim_end_matches('0').to_string();
+        let negative = negative && !(whole.is_empty() && fraction.is_empty());
+        Some(Exact {
+            negative,
+            whole,
+            fraction,
+        })
+    }
+    fn beyond_bigint(number: &Exact) -> bool {
+        let limit = if number.negative {
+            "9223372036854775808"
+        } else {
+            "9223372036854775807"
+        };
+        number.whole.len() > limit.len()
+            || (number.whole.len() == limit.len() && number.whole.as_str() > limit)
+    }
+    let (lhs, rhs) = (exact(left)?, exact(right)?);
+    if !beyond_bigint(&lhs) && !beyond_bigint(&rhs) {
+        return None;
+    }
+    Some(match (lhs.negative, rhs.negative) {
+        (false, true) => std::cmp::Ordering::Greater,
+        (true, false) => std::cmp::Ordering::Less,
+        (negative, _) => {
+            let magnitude = lhs
+                .whole
+                .len()
+                .cmp(&rhs.whole.len())
+                .then_with(|| lhs.whole.cmp(&rhs.whole))
+                .then_with(|| lhs.fraction.cmp(&rhs.fraction));
+            if negative {
+                magnitude.reverse()
+            } else {
+                magnitude
+            }
+        }
+    })
 }
 
 enum ComparedLiteral {
@@ -3154,6 +3225,15 @@ fn translate_between(
     high: &Expr,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    if let (Some(from_low), Some(to_high)) = (
+        exact_number_order(expr, low),
+        exact_number_order(expr, high),
+    ) {
+        let within = from_low.is_ge() && to_high.is_le();
+        return Ok(ast::Expr::Literal(ast::Literal::Numeric(
+            u8::from(within != negated).to_string(),
+        )));
+    }
     let explicit = single_explicit_collation(&[expr, low, high])?;
     let lhs = translate_compared(expr, low, context)?;
     let lhs = default_collated(lhs, explicit, &[expr, low, high]);

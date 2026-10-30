@@ -1850,6 +1850,31 @@ fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Resu
 }
 
 #[test]
+fn number_literals_beyond_bigint_compare_exactly() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT 18446744073709551615 = 18446744073709551614, \
+             18446744073709551615 > 18446744073709551614.5, \
+             -9223372036854775809 < -9223372036854775808, \
+             18446744073709551615 <=> 18446744073709551615.000, \
+             18446744073709551614 BETWEEN 18446744073709551615 AND 18446744073709551615, \
+             18446744073709551614 NOT BETWEEN 1 AND 18446744073709551615"
+        )?,
+        vec![vec![
+            Value::from_i64(0),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(1),
+            Value::from_i64(0),
+            Value::from_i64(0),
+        ]]
+    );
+    Ok(())
+}
+
+#[test]
 fn strings_compare_with_dates_and_timestamps_as_datetimes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     for (sql, expected) in [
