@@ -741,6 +741,51 @@ pub(crate) fn temporal_literal(typed: &TypedString) -> Option<TemporalLiteral> {
     })
 }
 
+/// The DATETIME value MySQL compares a temporal literal as when the other
+/// operand is a temporal literal of another type.
+pub(crate) enum ComparedDatetime {
+    /// The value's text, `YYYY-MM-DD HH:MM:SS.ffffff`.
+    Fixed(String),
+    /// A `TIME`, in microseconds from the start of the current day.
+    SinceToday(i64),
+}
+
+pub(crate) fn compared_datetime(typed: &TypedString) -> Option<ComparedDatetime> {
+    let (Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)) = &typed.value.value
+    else {
+        return None;
+    };
+    let temporal = match &typed.data_type {
+        DataType::Date => Temporal::date(text),
+        DataType::Time(None, TimezoneInfo::None) => Temporal::time(text),
+        DataType::Timestamp(None, TimezoneInfo::None) => Temporal::timestamp(text),
+        _ => None,
+    }?;
+    Some(match temporal {
+        Temporal::Date(date) => {
+            ComparedDatetime::Fixed(format!("{} 00:00:00.000000", date_text(&date)))
+        }
+        Temporal::Timestamp(date, time) => ComparedDatetime::Fixed(format!(
+            "{} {:02}:{:02}:{:02}.{:0<6}",
+            date_text(&date),
+            time.hours,
+            time.minutes,
+            time.seconds,
+            time.fraction
+        )),
+        Temporal::Time(time) => {
+            if time.hours > 838 {
+                return None;
+            }
+            let fraction: i64 = format!("{:0<6}", time.fraction).parse().ok()?;
+            let seconds = (i64::from(time.hours) * 60 + i64::from(time.minutes)) * 60
+                + i64::from(time.seconds);
+            let micros = seconds * 1_000_000 + fraction;
+            ComparedDatetime::SinceToday(if time.negative { -micros } else { micros })
+        }
+    })
+}
+
 fn json_time_text(time: &Time) -> Option<String> {
     let hours = time.hours % 32;
     let fraction = format!("{:0<6}", time.fraction);

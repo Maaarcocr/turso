@@ -1345,11 +1345,7 @@ fn empty_regular_expressions_fail_when_evaluated() -> turso_core::Result<()> {
         .expect_err("REGEXP '' in arithmetic")
         .to_string();
     assert!(error.contains("ERROR 3685 "), "{error}");
-    for refused in [
-        "SELECT NULL REGEXP ''",
-        "SELECT 0xFF REGEXP ''",
-        "SELECT NULL = ('a' REGEXP '')",
-    ] {
+    for refused in ["SELECT NULL REGEXP ''", "SELECT 0xFF REGEXP ''"] {
         let error = query(&connection, refused).expect_err(refused).to_string();
         assert!(error.contains("not"), "{refused}: {error}");
         assert!(!error.contains("ERROR "), "{refused}: {error}");
@@ -1489,12 +1485,16 @@ fn negated_doubles_below_bigint_fail_as_bit_operands() -> turso_core::Result<()>
             "{failing}: {error}"
         );
     }
-    for refused in [
+    for skipped in [
         "SELECT NULL | -18446744073709540000e0",
         "SELECT NULL = (1 | -18446744073709540000e0)",
+        "SELECT NULL = ('a' REGEXP '')",
     ] {
-        let error = query(&connection, refused).expect_err(refused).to_string();
-        assert!(error.contains("not lowered yet"), "{refused}: {error}");
+        assert_eq!(
+            query(&connection, skipped)?,
+            vec![vec![Value::Null]],
+            "{skipped}"
+        );
     }
     let failing = "SELECT NULL + 1 - CAST('invalid' AS JSON)";
     let error = query(&connection, failing).expect_err(failing).to_string();
@@ -1819,6 +1819,148 @@ fn integer_arithmetic_of_literals_outside_its_range_fails_as_in_mysql() -> turso
             "SELECT TIME '-101:34:58' - b'1001', 0b1001 * -3, 0 AND (0x0 - 0x1), 0x10 - 0x1"
         )?,
         vec![[-1013467, -27, 0, 15].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
+fn negated_fractional_temporal_literals_show_mysql_doubles() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, shown) in [
+        ("SELECT -TIME '10:04:58.1'", "-100458.1"),
+        ("SELECT -TIME '5 10:34:58.9'", "-1303458.9"),
+        (
+            "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
+            "-20000101103458.125000",
+        ),
+        (
+            "SELECT -TIMESTAMP '2000-01-01 10:34:58.978654'",
+            "-20000101103458.980000",
+        ),
+        ("SELECT -TIME '00:00:01.0000'", "-1.0000"),
+        ("SELECT -TIME '-10:00:00.5'", "100000.5"),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::build_text(shown)]],
+            "{sql}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn temporal_literals_of_different_types_compare_as_datetimes() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, expected) in [
+        (
+            "SELECT TIME '31:34:58' <= TIMESTAMP '2000-01-01 10:34:58.978654'",
+            0,
+        ),
+        (
+            "SELECT TIME '-5 10:34:58' > TIMESTAMP '2000-01-01 10:34:58.123456'",
+            1,
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58' = DATE '2000-01-01'",
+            0,
+        ),
+        (
+            "SELECT DATE '2000-01-01' <=> TIMESTAMP '2000-01-01 00:00:00.000'",
+            1,
+        ),
+        (
+            "SELECT TIMESTAMP '2000-01-01 10:34:58.5' < TIMESTAMP '2000-01-01 10:34:58.50001'",
+            1,
+        ),
+        ("SELECT TIME '-10:04:58' < DATE '2000-01-01'", 0),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::from_i64(expected)]],
+            "{sql}"
+        );
+    }
+    let today = match query(&connection, "SELECT CURRENT_DATE")?.as_slice() {
+        [row] => row[0].to_string(),
+        rows => panic!("CURRENT_DATE gave {rows:?}"),
+    };
+    let sql = format!(
+        "SELECT TIME '00:00:00' = TIMESTAMP '{today} 00:00:00', \
+         TIME '24:00:00.5' > TIMESTAMP '{today} 23:59:59.999999'"
+    );
+    assert_eq!(
+        query(&connection, &sql)?,
+        vec![vec![Value::from_i64(1), Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn null_operands_skip_invalid_json_as_in_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for sql in [
+        "SELECT NULL - 1 <= CAST('\"a\": 1' AS JSON)",
+        "SELECT NULL = CAST('x' AS JSON)",
+        "SELECT NULL NOT LIKE CAST('x' AS JSON)",
+        "SELECT CONCAT(NULL * NULL, CAST('x' AS JSON))",
+        "SELECT STRCMP(NULL * 1, CAST('x' AS JSON))",
+        "SELECT MAKETIME(NULL * NULL, 0, CAST('x' AS JSON))",
+        "SELECT MAKEDATE(CAST('x' AS JSON), NULL)",
+    ] {
+        assert_eq!(query(&connection, sql)?, vec![vec![Value::Null]], "{sql}");
+    }
+    for sql in [
+        "SELECT NULL - NULL <=> CAST('x' AS JSON)",
+        "SELECT NULL * 1 || CAST('x' AS JSON)",
+        "SELECT JSON_ARRAY() > CAST('x' AS JSON)",
+        "SELECT CONCAT(CAST('x' AS JSON), NULL * NULL)",
+        "SELECT MAKEDATE(1 + NULL, CAST('x' AS JSON))",
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(error.contains("3141"), "{sql}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn casts_of_temporal_json_values_convert_as_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, shown) in [
+        (
+            "SELECT CAST(CAST(TIME '-101:34:58' AS JSON) AS TIME(4))",
+            "-05:34:58.0000",
+        ),
+        (
+            "SELECT CAST(CAST(TIME '32:34:58.5' AS JSON) AS TIME)",
+            "00:34:59",
+        ),
+        (
+            "SELECT CAST(CAST(DATE '2000-01-01' AS JSON) AS DATETIME(4))",
+            "2000-01-01 00:00:00.0000",
+        ),
+        (
+            "SELECT CONVERT(CAST(TIME '5 12:34:58' AS JSON), TIME(4))",
+            "04:34:58.0000",
+        ),
+        (
+            "SELECT CAST(CAST(CAST(DATE '2000-01-02' AS JSON) AS JSON) AS CHAR(16))",
+            "\"2000-01-02\"",
+        ),
+    ] {
+        assert_eq!(
+            query(&connection, sql)?,
+            vec![vec![Value::build_text(shown)]],
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CAST(CAST(TIMESTAMP '2024-12-30 10:34:58' AS JSON) AS TIME), \
+             CAST(CAST(CAST(TIME '12:34:58' AS JSON) AS JSON) AS SIGNED)"
+        )?,
+        vec![vec![Value::Null, Value::from_i64(0)]]
     );
     Ok(())
 }

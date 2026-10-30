@@ -1812,8 +1812,38 @@ pub(crate) fn shown_negated_binary(
             _ => shown_fixed_double_results(expr, context),
         },
         Expr::Case { .. } => shown_fixed_double_results(expr, context),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: inner,
+        } => shown_negated_fractional_temporal(inner),
         _ => None,
     }
+}
+
+/// A selected negated `TIME` or `TIMESTAMP` literal with a fraction, which
+/// MySQL computes as the DOUBLE of the literal's number and shows with the
+/// literal's decimals (`-TIME '10:04:58.1'` shows `-100458.1`).
+fn shown_negated_fractional_temporal(expr: &Expr) -> Option<Result<ast::Expr, MysqlParserError>> {
+    let Expr::TypedString(typed) = unnested(expr) else {
+        return None;
+    };
+    let temporal = temporal_literal(typed)?;
+    if temporal.kind == TemporalKind::Date {
+        return None;
+    }
+    let (_, fraction) = temporal.text.split_once('.')?;
+    let number: String = temporal
+        .text
+        .chars()
+        .filter(|character| character.is_ascii_digit() || *character == '.')
+        .collect();
+    let magnitude = number.parse::<f64>().ok()?;
+    let value = if temporal.text.starts_with('-') {
+        magnitude
+    } else {
+        -magnitude
+    };
+    Some(fixed_double_text(value, fraction.len()).map(|text| string_expr(&text)))
 }
 
 fn shown_negated_binary_operation(
@@ -2313,9 +2343,30 @@ fn translate_compared_value(
                 Context::Value
             }
             _ => {
-                return Err(MysqlParserError::Unsupported(format!(
-                    "comparison of `{expr}` with `{other_side}`, which MySQL compares as DATETIME values, is not lowered yet"
-                )))
+                let Expr::TypedString(typed) = unnested(expr) else {
+                    unreachable!("a temporal type comes from a temporal literal");
+                };
+                return match crate::literal::compared_datetime(typed) {
+                    Some(crate::literal::ComparedDatetime::Fixed(text)) => Ok(string_expr(&text)),
+                    Some(crate::literal::ComparedDatetime::SinceToday(micros)) => {
+                        let seconds = micros.div_euclid(1_000_000);
+                        let fraction = micros.rem_euclid(1_000_000);
+                        Ok(ast::Expr::binary(
+                            function_call(
+                                "datetime",
+                                vec![
+                                    ast::Expr::Literal(ast::Literal::CurrentDate),
+                                    string_expr(&format!("{seconds} seconds")),
+                                ],
+                            ),
+                            ast::Operator::Concat,
+                            string_expr(&format!(".{fraction:06}")),
+                        ))
+                    }
+                    None => Err(MysqlParserError::Unsupported(format!(
+                        "comparison of `{expr}` with `{other_side}`, which MySQL compares as DATETIME values, is not lowered yet"
+                    ))),
+                };
             }
         };
         return translate_in(expr, literal_context, context);
@@ -3793,6 +3844,45 @@ fn translate_quantified_subquery(
     ))
 }
 
+/// The literal MySQL converts the JSON value of a temporal literal to for a
+/// cast to `data_type` (`None` inside for `NULL`): 0 for a number, the
+/// temporal literal again for JSON, the time of a JSON `TIME` for `TIME`
+/// (`NULL` for a JSON `DATE` or `DATETIME`), and the date or datetime of a
+/// JSON `DATE` or `DATETIME` for `DATE` and `DATETIME` (`NULL` for a JSON
+/// `TIME`), read from its JSON text, whose `TIME` hours MySQL keeps modulo
+/// 32. `None` for other casts.
+fn converted_temporal_json(
+    expr: &Expr,
+    data_type: &DataType,
+    numeric: bool,
+) -> Option<Option<Expr>> {
+    let typed = json::json_temporal_literal(expr)?;
+    let temporal = temporal_literal(typed)?;
+    let text = temporal.json_text?;
+    let literal = |data_type: DataType| {
+        Some(Some(Expr::TypedString(TypedString {
+            data_type,
+            value: Value::SingleQuotedString(text.clone()).with_empty_span(),
+            uses_odbc_syntax: false,
+        })))
+    };
+    let datetime = DataType::Timestamp(None, TimezoneInfo::None);
+    match (data_type, temporal.kind) {
+        _ if numeric => Some(Some(Expr::Value(
+            Value::Number("0".to_string(), false).with_empty_span(),
+        ))),
+        (DataType::JSON, _) => Some(Some(Expr::TypedString(typed.clone()))),
+        (DataType::Time(_, TimezoneInfo::None), TemporalKind::Time) => {
+            literal(DataType::Time(None, TimezoneInfo::None))
+        }
+        (DataType::Time(_, TimezoneInfo::None), TemporalKind::Date | TemporalKind::DateTime)
+        | (DataType::Datetime(_) | DataType::Date, TemporalKind::Time) => Some(None),
+        (DataType::Datetime(_) | DataType::Date, TemporalKind::Date) => literal(DataType::Date),
+        (DataType::Datetime(_) | DataType::Date, TemporalKind::DateTime) => literal(datetime),
+        _ => None,
+    }
+}
+
 fn translate_cast(
     expr: &Expr,
     data_type: &DataType,
@@ -3810,6 +3900,12 @@ fn translate_cast(
             | DataType::Float(ExactNumberInfo::None)
             | DataType::Decimal(_)
     );
+    if let Some(converted) = converted_temporal_json(expr, data_type, numeric) {
+        return match converted {
+            Some(operand) => translate_cast(&operand, data_type, literal_context, context),
+            None => Ok(ast::Expr::Literal(ast::Literal::Null)),
+        };
+    }
     if numeric && json::is_json_value(expr) {
         if let Some(number) = json::number_cast_operand(expr) {
             return translate_cast(number, data_type, literal_context, context);

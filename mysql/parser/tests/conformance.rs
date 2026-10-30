@@ -1348,15 +1348,11 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "time compared with a timestamp",
-            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58' <= TIME '00:00:59'",
-        },
-        SqlCase {
-            name: "timestamps with different fractions compared",
-            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58.5' = TIMESTAMP '2000-01-01 10:34:58.50'",
+            sql: "SELECT TIMESTAMP '2000-01-01 10:34:58' <= TIME '900:00:59'",
         },
         SqlCase {
             name: "negated temporal literal with a fraction",
-            sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456'",
+            sql: "SELECT -TIMESTAMP '2000-01-01 10:34:58.123456' + 1",
         },
         SqlCase {
             name: "fraction that rounds into the seconds",
@@ -1404,7 +1400,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "invalid JSON cast MySQL does not evaluate",
-            sql: "SELECT CONCAT(NULL, CAST('x' AS JSON))",
+            sql: "SELECT REPEAT(NULL, CAST('x' AS JSON))",
         },
         SqlCase {
             name: "invalid JSON cast evaluated once per row",
@@ -1504,7 +1500,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "bit operation on a DOUBLE below the BIGINT range after a NULL",
-            sql: "SELECT NULL & -18446744073709540000e0",
+            sql: "SELECT NULL & -18446744073709540000e0 FROM t",
         },
         SqlCase {
             name: "bit operation on a string with an exponent",
