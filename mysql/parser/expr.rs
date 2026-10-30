@@ -3748,10 +3748,51 @@ fn translate_convert(
     literal_context: Context,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
+    let ascii_shown = std::mem::take(&mut context.ascii_conversion_shown);
     match (data_type, charset) {
         (Some(data_type), None) => translate_cast(expr, data_type, literal_context, context),
-        (None, Some(charset)) => translate_convert_using(expr, charset, context),
+        (None, Some(charset)) => translate_convert_using(expr, charset, ascii_shown, context),
+        (Some(data_type @ DataType::Char(_)), Some(charset)) => {
+            match single_name(charset)?.to_ascii_lowercase().as_str() {
+                "utf8mb4" => translate_cast(expr, data_type, literal_context, context),
+                "ascii" if ascii_shown => {
+                    let converted = Expr::Convert {
+                        is_try: false,
+                        expr: Box::new(expr.clone()),
+                        data_type: None,
+                        charset: Some(charset.clone()),
+                        target_before_value: false,
+                        styles: Vec::new(),
+                    };
+                    context.ascii_conversion_shown = true;
+                    translate_cast(&converted, data_type, literal_context, context)
+                }
+                other => Err(MysqlParserError::Unsupported(format!(
+                    "CAST(... AS CHAR CHARACTER SET {other}) is not lowered yet"
+                ))),
+            }
+        }
         _ => Err(unsupported(expr)),
+    }
+}
+
+/// Whether `expr` converts to the ASCII character set (`CONVERT(x USING
+/// ascii)`, `CAST(x AS CHAR CHARACTER SET ascii)`).
+pub(crate) fn is_ascii_conversion(expr: &Expr) -> bool {
+    match expr {
+        Expr::Nested(inner) => is_ascii_conversion(inner),
+        Expr::Convert {
+            is_try: false,
+            data_type: None | Some(DataType::Char(_)),
+            charset: Some(charset),
+            target_before_value: false,
+            styles,
+            ..
+        } => {
+            styles.is_empty()
+                && single_name(charset).is_ok_and(|name| name.eq_ignore_ascii_case("ascii"))
+        }
+        _ => false,
     }
 }
 
@@ -4704,11 +4745,18 @@ fn number(value: u64) -> ast::Expr {
 fn translate_convert_using(
     expr: &Expr,
     charset: &ObjectName,
+    ascii_shown: bool,
     context: &mut TranslationContext,
 ) -> Result<ast::Expr, MysqlParserError> {
     let target = match single_name(charset)?.to_ascii_lowercase().as_str() {
         "utf8mb4" | "utf8mb3" | "utf8" => "TEXT",
         "binary" => "BLOB",
+        "ascii" if ascii_shown => {
+            return Ok(function_call(
+                "__mysql_convert_to_ascii",
+                vec![mysql_text(translate_expr(expr, context)?)],
+            ))
+        }
         other => {
             return Err(MysqlParserError::Unsupported(format!(
                 "CONVERT(... USING {other}) is not lowered yet"

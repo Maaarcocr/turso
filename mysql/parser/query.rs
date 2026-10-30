@@ -28,6 +28,12 @@ pub(crate) struct TranslationContext<'a> {
     expression_depth: usize,
     select_list_runs_once: bool,
     select_list_is_shown: bool,
+    /// The select list is shown and nothing sorts, groups or compares its
+    /// values (no `ORDER BY`, `DISTINCT`, `GROUP BY` or `HAVING`).
+    select_list_is_only_shown: bool,
+    /// The select item is a conversion to ASCII of a select list that is
+    /// only shown, where the collation of the ASCII text does not matter.
+    pub(crate) ascii_conversion_shown: bool,
     pub(crate) latin1_as_text: bool,
     pub(crate) unsigned_as_text: bool,
     /// The select item is a shown `CAST(.. AS UNSIGNED)` of a `SELECT` that
@@ -130,6 +136,12 @@ pub(crate) fn translate_query(
     context.select_list_runs_once = runs_select_list_once(query);
     context.select_list_is_shown =
         query.with.is_none() && matches!(query.body.as_ref(), SetExpr::Select(_));
+    context.select_list_is_only_shown = context.select_list_is_shown
+        && query.order_by.is_none()
+        && matches!(query.body.as_ref(), SetExpr::Select(select)
+            if select.distinct.is_none()
+                && select.having.is_none()
+                && matches!(&select.group_by, GroupByExpr::Expressions(terms, modifiers) if terms.is_empty() && modifiers.is_empty()));
     Ok(ast::Stmt::Select(translate_subquery(query, context)?))
 }
 
@@ -472,9 +484,16 @@ fn translate_select(
     }
     let runs_once = std::mem::take(&mut context.select_list_runs_once);
     let shown = std::mem::take(&mut context.select_list_is_shown);
+    let only_shown = std::mem::take(&mut context.select_list_is_only_shown);
     let columns = projection
         .iter()
-        .map(|item| translate_projection(item, runs_once, shown, context))
+        .map(|item| {
+            context.ascii_conversion_shown = only_shown
+                && matches!(item, SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } if crate::expr::is_ascii_conversion(expr));
+            let column = translate_projection(item, runs_once, shown, context);
+            context.ascii_conversion_shown = false;
+            column
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let from = translate_from(from, context)?;
     let filter = crate::having::ungrouped_filter(select, context.may_read_outer_rows())?;

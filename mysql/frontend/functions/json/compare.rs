@@ -83,7 +83,26 @@ fn operand(value: &Value, arg_type: &ArgumentType) -> Result<Option<Operand>> {
         _ => None,
     };
     if let Some(name) = named {
-        let kind = match name.to_ascii_lowercase().as_str() {
+        let lower_name = name.to_ascii_lowercase();
+        let converted = match (lower_name.as_str(), value) {
+            (
+                "tinyint" | "smallint" | "mediumint" | "int" | "bigint" | "tinyint unsigned"
+                | "smallint unsigned" | "mediumint unsigned" | "int unsigned",
+                Value::Numeric(Numeric::Integer(integer)),
+            ) => Some(Json::Integer(*integer)),
+            ("double", Value::Numeric(Numeric::Float(double))) => {
+                Some(Json::Double(f64::from(*double)))
+            }
+            (
+                "char" | "varchar" | "tinytext" | "text" | "mediumtext" | "longtext",
+                Value::Text(text),
+            ) => Some(Json::String(text.as_str().to_string())),
+            _ => None,
+        };
+        if let Some(json) = converted {
+            return Ok(Some(Operand::Json(json)));
+        }
+        let kind = match lower_name.as_str() {
             "date" => TemporalKind::Date,
             "time" => TemporalKind::Time,
             "datetime" | "timestamp" => TemporalKind::DateTime,

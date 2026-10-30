@@ -177,6 +177,7 @@ fn function(name: &str, arg_count: usize) -> Option<Function> {
         ("UNHEX", 1) => text::unhex,
         ("__MYSQL_CAST_AS_BINARY", 2) => text::cast_as_binary,
         ("__MYSQL_CAST_AS_CHAR", 2) => text::cast_as_char,
+        ("__MYSQL_CONVERT_TO_ASCII", 1) => text::convert_to_ascii,
         ("__MYSQL_CAST_AS_NCHAR", 2) => text::cast_as_nchar,
         ("__MYSQL_LTRIM", 2) => text::ltrim,
         ("__MYSQL_RTRIM", 2) => text::rtrim,

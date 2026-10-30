@@ -404,6 +404,35 @@ pub(super) fn cast_as_nchar(args: &[Value]) -> Result<Value> {
     cast_to_text(args, true)
 }
 
+/// `__mysql_convert_to_ascii(x)`: `x` in the ASCII character set, with each
+/// character outside it as `?`. A binary string must hold ASCII bytes only.
+pub(super) fn convert_to_ascii(args: &[Value]) -> Result<Value> {
+    let ascii_or_question_mark = |ch: char| if ch.is_ascii() { ch } else { '?' };
+    let converted: String = match &args[0] {
+        Value::Blob(bytes) if bytes.is_ascii() => {
+            bytes.iter().map(|&byte| char::from(byte)).collect()
+        }
+        Value::Blob(_) => {
+            return Err(LimboError::InternalError(
+                "converting a binary string with bytes outside ASCII to ASCII is not supported"
+                    .to_string(),
+            ))
+        }
+        value => {
+            let Some(value) = string(value) else {
+                return Ok(Value::Null);
+            };
+            let Ok(text) = std::str::from_utf8(value.as_bytes()) else {
+                return Err(LimboError::InternalError(
+                    "a text value is not UTF-8".to_string(),
+                ));
+            };
+            text.chars().map(ascii_or_question_mark).collect()
+        }
+    };
+    Ok(Value::build_text(converted))
+}
+
 pub(super) fn cast_as_binary(args: &[Value]) -> Result<Value> {
     let Some(value) = string(&args[0]) else {
         return Ok(Value::Null);

@@ -1902,6 +1902,90 @@ fn integer_division_of_literals_beyond_bigint_folds_exactly() -> turso_core::Res
 }
 
 #[test]
+fn shown_conversions_to_ascii_replace_other_characters() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (id BIGINT PRIMARY KEY, nm VARCHAR(20), b VARBINARY(5))")?;
+    connection
+        .execute("INSERT INTO t VALUES (1, 'h\u{e9}llo', _binary X'C3A941'), (2, NULL, 'Ab')")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CONVERT(nm USING ascii), CAST(HEX(nm) AS CHAR CHARACTER SET ascii), \
+             CAST(nm AS CHAR(2) CHARSET ascii), CAST(nm AS CHAR CHARACTER SET utf8mb4) \
+             FROM t WHERE id = 1"
+        )?,
+        vec![vec![
+            Value::build_text("h?llo"),
+            Value::build_text("68C3A96C6C6F"),
+            Value::build_text("h?"),
+            Value::build_text("h\u{e9}llo"),
+        ]]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT CONVERT(nm USING ascii), CONVERT(b USING ascii) FROM t WHERE id = 2"
+        )?,
+        vec![vec![Value::Null, Value::build_text("Ab")]]
+    );
+    for refused in [
+        "SELECT CONVERT(nm USING ascii) FROM t ORDER BY 1",
+        "SELECT CONVERT(nm USING ascii) = 'h?llo' FROM t",
+        "SELECT DISTINCT CAST(nm AS CHAR CHARACTER SET ascii) FROM t",
+        "SELECT CAST(nm AS CHAR CHARACTER SET latin1) FROM t",
+    ] {
+        let error = query(&connection, refused).expect_err(refused).to_string();
+        assert!(error.contains("is not lowered yet"), "{refused}: {error}");
+    }
+    let failing = "SELECT CONVERT(b USING ascii) FROM t WHERE id = 1";
+    let error = query(&connection, failing).expect_err(failing).to_string();
+    assert!(error.contains("bytes outside ASCII"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn columns_compare_with_json_values_as_json() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id BIGINT PRIMARY KEY, j JSON, s TEXT, i INT, f DOUBLE, v VARCHAR(5))",
+    )?;
+    connection.execute(
+        "INSERT INTO t VALUES (1, '{\"b\":2,  \"a\":[1,2]}', 'x', 3, 2.5, '3'), \
+         (2, NULL, NULL, NULL, NULL, NULL)",
+    )?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT j = CAST('{\"a\": [1, 2], \"b\": 2}' AS JSON), \
+             s = CAST('\"x\"' AS JSON), i < CAST(3.5 AS JSON), f = CAST(2.5 AS JSON), \
+             v = CAST(3 AS JSON), v = CAST('\"3\"' AS JSON), id = CAST('1' AS JSON) \
+             FROM t ORDER BY id"
+        )?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::from_i64(1),
+                Value::from_i64(0),
+                Value::from_i64(1),
+                Value::from_i64(1),
+            ],
+            vec![
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::from_i64(0),
+            ],
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn json_values_compare_exactly_with_integers_beyond_bigint() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
