@@ -1308,7 +1308,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "unsigned arithmetic below zero",
-            sql: "SELECT 0x41 - 66",
+            sql: "SELECT 0x41 - 66 FROM t",
         },
         SqlCase {
             name: "unsigned arithmetic inside arithmetic",
@@ -1456,7 +1456,7 @@ fn lowering_rejects_each_unsupported_query_shape() {
         },
         SqlCase {
             name: "BIGINT UNSIGNED arithmetic outside its range",
-            sql: "SELECT 18446744073709551615 + 1",
+            sql: "SELECT 18446744073709551615 + 1 FROM t",
         },
         SqlCase {
             name: "ORDER BY a column outside GROUP BY",

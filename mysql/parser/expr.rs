@@ -1559,10 +1559,21 @@ fn unsigned_arithmetic(
                 "`{left} {operator} {right}` inside arithmetic, where its BIGINT UNSIGNED type changes the result, is not lowered yet"
             )));
         }
+        let unsigned = [left, right].into_iter().any(|operand| {
+            matches!(
+                hex_or_bit_literal(operand),
+                Some(Value::HexStringLiteral(_))
+            ) || number_literal(operand).is_some_and(exceeds_signed_bigint)
+        });
+        let integer_range = if unsigned {
+            0..=i128::from(u64::MAX)
+        } else {
+            i128::from(i64::MIN)..=i128::from(i64::MAX)
+        };
         let (result, range) = match operator {
-            ast::Operator::Add => (lhs.checked_add(rhs), 0..=i128::from(u64::MAX)),
-            ast::Operator::Subtract => (lhs.checked_sub(rhs), 0..=i128::from(u64::MAX)),
-            ast::Operator::Multiply => (lhs.checked_mul(rhs), 0..=i128::from(u64::MAX)),
+            ast::Operator::Add => (lhs.checked_add(rhs), integer_range),
+            ast::Operator::Subtract => (lhs.checked_sub(rhs), integer_range),
+            ast::Operator::Multiply => (lhs.checked_mul(rhs), integer_range),
             ast::Operator::Modulus if rhs == 0 => {
                 return Ok(Some(ast::Expr::Literal(ast::Literal::Null)));
             }

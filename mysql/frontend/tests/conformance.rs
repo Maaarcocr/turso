@@ -1798,6 +1798,32 @@ fn integer_division_of_hex_literals_folds_exact_decimals() -> turso_core::Result
 }
 
 #[test]
+fn integer_arithmetic_of_literals_outside_its_range_fails_as_in_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    for (sql, kind) in [
+        ("SELECT 0x0 - 0x1", "BIGINT UNSIGNED"),
+        ("SELECT 0xffffffffffffffff + 1", "BIGINT UNSIGNED"),
+        ("SELECT TIME '-101:34:58' * X'01'", "BIGINT UNSIGNED"),
+        ("SELECT 9223372036854775807 + 1", "BIGINT value"),
+        ("SELECT CONCAT(-9223372036854775808 - 1)", "BIGINT value"),
+    ] {
+        let error = query(&connection, sql).expect_err(sql).to_string();
+        assert!(
+            error.contains("ERROR 1690") && error.contains(kind),
+            "{sql}: {error}"
+        );
+    }
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT TIME '-101:34:58' - b'1001', 0b1001 * -3, 0 AND (0x0 - 0x1), 0x10 - 0x1"
+        )?,
+        vec![[-1013467, -27, 0, 15].map(Value::from_i64).to_vec()]
+    );
+    Ok(())
+}
+
+#[test]
 fn comparisons_read_nul_binary_literals_as_bytes() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(
