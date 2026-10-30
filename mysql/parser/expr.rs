@@ -1864,6 +1864,16 @@ pub(crate) fn shown_negated_binary(
         Expr::Case { .. } => shown_fixed_double_results(expr, context),
         Expr::UnaryOp {
             op: UnaryOperator::Minus,
+            ..
+        } if negated_binary(expr).is_some() => {
+            let (value, decimals) = fixed_double_operand(expr)?;
+            if value.abs() < 1e15 {
+                return None;
+            }
+            Some(fixed_double_text(value, decimals).map(|text| string_expr(&text)))
+        }
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
             expr: inner,
         } => shown_negated_fractional_temporal(inner),
         _ => None,
