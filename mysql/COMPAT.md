@@ -147,6 +147,13 @@ structure), `expr.rs` (expressions) and `literal.rs` (literals) into the shared
 Turso AST. Anything listed under "Refused" fails with an unsupported-syntax
 error.
 
+A statement that starts with `TABLE t` (`TABLE t1 UNION TABLE t2 ORDER BY 1`)
+is read with each `TABLE t` operand written as `SELECT * FROM t`, which is
+what MySQL defines it as; a `TABLE` operand followed by anything but the end,
+`ORDER BY`, `LIMIT`, a set operator or `)` is refused. A column qualified by a
+table in the `ORDER BY` of a `UNION`, `EXCEPT` or `INTERSECT` fails with 1250,
+as in MySQL.
+
 A grouped `SELECT` is checked as MySQL's `ONLY_FULL_GROUP_BY` checks it: an
 expression of the select list or `HAVING` may use a column outside `GROUP BY`
 when the grouped columns hold its table's primary key or a unique key of
@@ -336,7 +343,7 @@ Refused, because Turso cannot run it with MySQL's meaning yet:
   MySQL's opaque JSON value reaches other functions as a JSON string.
 - `SQL_*`, `HIGH_PRIORITY` and `STRAIGHT_JOIN` modifiers, `STRAIGHT_JOIN`
   joins, `PARTITION (...)` selection, `INTO`, locking reads that name
-  their tables (`FOR UPDATE OF t`; see Transactions), `WITH ROLLUP`, `TABLE t`, `VALUES` without
+  their tables (`FOR UPDATE OF t`; see Transactions), `WITH ROLLUP`, `TABLE t` in a statement that does not start with it, `VALUES` without
   `ROW`, derived-table column lists `AS t(a, b)`, `EXCEPT ALL`, `INTERSECT
   ALL`, `FULL JOIN`, `NULLS FIRST/LAST`.
 - User and system variables outside the cases under Session settings, `:name` and `?N` parameters,

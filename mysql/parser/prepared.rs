@@ -215,7 +215,7 @@ fn with_parameters(text: &str, variables: &[String]) -> Result<String, MysqlPars
 
 /// The byte offset in `text` of the 1-based line and character column
 /// `location`.
-fn byte_offset(text: &str, location: Location) -> usize {
+pub(crate) fn byte_offset(text: &str, location: Location) -> usize {
     let (mut line, mut column) = (1, 1);
     for (offset, ch) in text.char_indices() {
         if line == location.line && column == location.column {

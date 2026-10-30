@@ -1237,6 +1237,38 @@ fn multi_table_updates_change_each_row_once() -> turso_core::Result<()> {
 }
 
 #[test]
+fn table_statements_read_whole_tables() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t1 (i INT)")?;
+    connection.execute("CREATE TABLE t2 (j INT)")?;
+    connection.execute("INSERT INTO t1 VALUES (3), (1)")?;
+    connection.execute("INSERT INTO t2 VALUES (2), (1)")?;
+    assert_eq!(
+        query(&connection, "TABLE t1 UNION TABLE t2 ORDER BY i")?,
+        vec![
+            vec![Value::from_i64(1)],
+            vec![Value::from_i64(2)],
+            vec![Value::from_i64(3)],
+        ]
+    );
+    assert_eq!(
+        query(&connection, "table t1 order by i limit 1")?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    let error = connection
+        .execute("TABLE t1 UNION TABLE t2 ORDER BY t1.i")
+        .expect_err("a qualified column in a global ORDER BY")
+        .to_string();
+    assert!(error.contains("ERROR 1250 "), "{error}");
+    let error = connection
+        .execute("TABLE t1 WHERE i = 1")
+        .expect_err("TABLE takes no WHERE")
+        .to_string();
+    assert!(error.contains("not lowered yet"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn json_table_lists_the_rows_of_a_document() -> turso_core::Result<()> {
     let connection = open_memory()?;
     assert_eq!(

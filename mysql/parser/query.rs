@@ -170,6 +170,9 @@ pub(crate) fn translate_subquery(
             )));
         }
     }
+    if let (SetExpr::SetOperation { .. }, Some(order_by)) = (body.as_ref(), order_by) {
+        check_set_operation_order_by(order_by)?;
+    }
     let body = translate_body(body, context)?;
     let order_by = order_by
         .as_ref()
@@ -2189,4 +2192,31 @@ fn limit_value(
 
 fn unsupported(what: String) -> MysqlParserError {
     MysqlParserError::Unsupported(format!("{what} is not lowered yet"))
+}
+
+/// MySQL rejects a column qualified by a table in the `ORDER BY` of a
+/// `UNION`, `EXCEPT` or `INTERSECT` (1250), which names the result's columns.
+fn check_set_operation_order_by(order_by: &OrderBy) -> Result<(), MysqlParserError> {
+    fn qualified_table(expr: &Expr) -> Option<&sqlparser::ast::Ident> {
+        match expr {
+            Expr::CompoundIdentifier(parts) if parts.len() >= 2 => parts.get(parts.len() - 2),
+            Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => qualified_table(inner),
+            Expr::BinaryOp { left, right, .. } => {
+                qualified_table(left).or_else(|| qualified_table(right))
+            }
+            _ => None,
+        }
+    }
+    let OrderByKind::Expressions(terms) = &order_by.kind else {
+        return Ok(());
+    };
+    for term in terms {
+        if let Some(table) = qualified_table(&term.expr) {
+            return Err(MysqlParserError::Rejected(format!(
+                "ERROR 1250 (42000): Table '{}' from one of the SELECTs cannot be used in global ORDER clause",
+                table.value
+            )));
+        }
+    }
+    Ok(())
 }
