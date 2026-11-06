@@ -253,6 +253,70 @@ impl turso_mysql_parser::Environment for Session<'_> {
         }))
     }
 
+    fn index_definitions(&self, table: &str) -> LoweringResult<Vec<ast::Stmt>> {
+        let quoted = |name: &str| ast::Name::from_string(format!("`{}`", name.replace('`', "``")));
+        self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            let Some(btree) = schema.get_btree_table(table) else {
+                return Ok(Vec::new());
+            };
+            schema
+                .get_indices(table)
+                .filter(|index| !index.name.starts_with("sqlite_autoindex_"))
+                .map(|index| {
+                    if index.index_method.is_some() || index.ephemeral {
+                        return Err(turso_mysql_parser::MysqlParserError::Unsupported(format!(
+                            "index `{}`, of a kind Turso does not create again, is not available",
+                            index.name
+                        )));
+                    }
+                    let columns = index
+                        .columns
+                        .iter()
+                        .map(|column| {
+                            let expr =
+                                if column.pos_in_table == turso_core::schema::EXPR_INDEX_SENTINEL {
+                                    column
+                                        .expr
+                                        .as_deref()
+                                        .expect("an index part on an expression has the expression")
+                                        .clone()
+                                } else {
+                                    let name = ast::Expr::Id(quoted(&column.name));
+                                    let table_collation =
+                                        btree.columns()[column.pos_in_table].collation_opt();
+                                    match column.collation {
+                                        Some(collation) if Some(collation) != table_collation => {
+                                            ast::Expr::Collate(
+                                                Box::new(name),
+                                                quoted(&collation.name()),
+                                            )
+                                        }
+                                        _ => name,
+                                    }
+                                };
+                            ast::SortedColumn {
+                                expr: Box::new(expr),
+                                order: (column.order == ast::SortOrder::Desc)
+                                    .then_some(ast::SortOrder::Desc),
+                                nulls: column.nulls_order,
+                            }
+                        })
+                        .collect();
+                    Ok(ast::Stmt::CreateIndex {
+                        unique: index.unique,
+                        if_not_exists: false,
+                        idx_name: ast::QualifiedName::single(quoted(&index.name)),
+                        tbl_name: quoted(&btree.name),
+                        using: None,
+                        columns,
+                        with_clause: Vec::new(),
+                        where_clause: index.where_clause.clone(),
+                    })
+                })
+                .collect()
+        })
+    }
+
     fn index_key_columns(&self, table: &str) -> LoweringResult<Vec<Vec<Option<String>>>> {
         Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
             schema

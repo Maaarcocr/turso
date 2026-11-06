@@ -131,6 +131,92 @@ pub(crate) fn translate_expr(expr: &Expr) -> Result<ast::Expr, MysqlParserError>
     }
 }
 
+/// The function that `expr`, an expression [`translate_expr`] takes, calls
+/// and MySQL disallows in a CHECK constraint (3814): one whose value depends
+/// on the session, the time or chance.
+pub(crate) fn disallowed_check_function(expr: &Expr) -> Option<String> {
+    const DISALLOWED: &[&str] = &[
+        "benchmark",
+        "connection_id",
+        "curdate",
+        "current_date",
+        "current_role",
+        "current_time",
+        "current_timestamp",
+        "current_user",
+        "curtime",
+        "database",
+        "found_rows",
+        "get_lock",
+        "icu_version",
+        "is_free_lock",
+        "is_used_lock",
+        "last_insert_id",
+        "load_file",
+        "localtime",
+        "localtimestamp",
+        "master_pos_wait",
+        "now",
+        "rand",
+        "release_all_locks",
+        "release_lock",
+        "roles_graphml",
+        "row_count",
+        "schema",
+        "session_user",
+        "sleep",
+        "source_pos_wait",
+        "sysdate",
+        "system_user",
+        "user",
+        "utc_date",
+        "utc_time",
+        "utc_timestamp",
+        "uuid",
+        "uuid_short",
+        "version",
+    ];
+    match expr {
+        Expr::Nested(operand)
+        | Expr::UnaryOp { expr: operand, .. }
+        | Expr::IsNull(operand)
+        | Expr::IsNotNull(operand) => disallowed_check_function(operand),
+        Expr::BinaryOp { left, right, .. } => {
+            disallowed_check_function(left).or_else(|| disallowed_check_function(right))
+        }
+        Expr::InList { expr, list, .. } => disallowed_check_function(expr)
+            .or_else(|| list.iter().find_map(disallowed_check_function)),
+        Expr::Between {
+            expr, low, high, ..
+        } => disallowed_check_function(expr)
+            .or_else(|| disallowed_check_function(low))
+            .or_else(|| disallowed_check_function(high)),
+        Expr::Function(function) => {
+            let args = match &function.args {
+                FunctionArguments::List(list) => list
+                    .args
+                    .iter()
+                    .filter_map(|arg| match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(expr),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let name = match function.name.0.as_slice() {
+                [ObjectNamePart::Identifier(identifier)] => identifier.value.to_lowercase(),
+                _ => String::new(),
+            };
+            if DISALLOWED.contains(&name.as_str()) || (name == "unix_timestamp" && args.is_empty())
+            {
+                return Some(name);
+            }
+            args.into_iter().find_map(disallowed_check_function)
+        }
+        _ => None,
+    }
+}
+
 fn translate_value(value: &Value) -> Result<ast::Expr, MysqlParserError> {
     let literal = match value {
         Value::Number(number, _) => ast::Literal::Numeric(translate_number(number)?),
