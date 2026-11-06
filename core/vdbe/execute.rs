@@ -12358,8 +12358,9 @@ pub fn op_function(
                         }
                     };
 
-                    let column_def =
-                        Parser::new(column_def.as_bytes()).parse_column_definition(true)?;
+                    let column_def = Parser::new(column_def.as_bytes())
+                        .with_type_parameter_lists()
+                        .parse_column_definition(true)?;
 
                     let _rename_to = normalize_ident(column_def.col_name.as_str());
 
