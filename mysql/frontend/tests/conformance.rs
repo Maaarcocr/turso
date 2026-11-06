@@ -3255,3 +3255,98 @@ fn index_names_belong_to_their_table_as_in_mysql() -> turso_core::Result<()> {
     connection.execute("DROP INDEX ky ON e")?;
     Ok(())
 }
+
+#[test]
+fn alter_table_rebuilds_the_table_for_keys_checks_and_placed_columns() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE p (id INT PRIMARY KEY)")?;
+    connection.execute("INSERT INTO p VALUES (1), (2)")?;
+    connection.execute("CREATE TABLE t (id INT NOT NULL, v VARCHAR(10), KEY kv (v))")?;
+    connection.execute("INSERT INTO t VALUES (1, 'a'), (2, 'b')")?;
+    for (statement, message) in [
+        (
+            "ALTER TABLE t ADD CHECK (id < 2)",
+            "CHECK constraint failed",
+        ),
+        (
+            "ALTER TABLE t ADD CONSTRAINT c CHECK (id < now())",
+            "contains disallowed function: now",
+        ),
+        (
+            "ALTER TABLE t ADD COLUMN w INT DEFAULT (id + 1) FIRST",
+            "not available",
+        ),
+        ("ALTER TABLE t DROP PRIMARY KEY", "Can't DROP 'PRIMARY'"),
+        (
+            "ALTER TABLE t ADD COLUMN w INT AFTER nope",
+            "Unknown column 'nope'",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection.execute("ALTER TABLE t ADD CHECK (id < 10)")?;
+    connection.execute("ALTER TABLE t ADD PRIMARY KEY (id)")?;
+    connection.execute("ALTER TABLE t ADD FOREIGN KEY (id) REFERENCES p (id)")?;
+    connection.execute("ALTER TABLE t ADD COLUMN w INT DEFAULT 7 FIRST")?;
+    connection.execute("ALTER TABLE t ADD COLUMN at DATETIME DEFAULT CURRENT_TIMESTAMP")?;
+    for statement in [
+        "INSERT INTO t (id, v) VALUES (1, 'c')",
+        "INSERT INTO t (id, v) VALUES (20, 'c')",
+        "INSERT INTO t (id, v) VALUES (3, 'c')",
+        "ALTER TABLE t ADD PRIMARY KEY (v)",
+    ] {
+        connection.execute(statement).expect_err(statement);
+    }
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT w, id, v, at IS NOT NULL FROM t ORDER BY id"
+        )?,
+        vec![
+            vec![
+                Value::from_i64(7),
+                Value::from_i64(1),
+                Value::build_text("a"),
+                Value::from_i64(1)
+            ],
+            vec![
+                Value::from_i64(7),
+                Value::from_i64(2),
+                Value::build_text("b"),
+                Value::from_i64(1)
+            ],
+        ]
+    );
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT count(*) FROM sqlite_schema WHERE type = 'index' AND tbl_name = 't' AND name LIKE '%kv'"
+        )?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn insert_ignore_cuts_string_literals_too_long_for_their_column() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (pk INT PRIMARY KEY, v VARCHAR(2), b VARBINARY(2))")?;
+    connection
+        .execute("INSERT INTO t VALUES (1, 'héllo', 'x')")
+        .expect_err("a plain INSERT fails on a value too long");
+    connection.execute("INSERT IGNORE INTO t VALUES (1, 'héllo', 'xyz'), (1, 'no', 'no')")?;
+    connection.execute("INSERT IGNORE INTO t (b, pk) VALUES ('abc', 2)")?;
+    assert_eq!(
+        query(&connection, "SELECT pk, v, hex(b) FROM t ORDER BY pk")?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::build_text("hé"),
+                Value::build_text("7879")
+            ],
+            vec![Value::from_i64(2), Value::Null, Value::build_text("6162")],
+        ]
+    );
+    Ok(())
+}

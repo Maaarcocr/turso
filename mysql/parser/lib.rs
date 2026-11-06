@@ -13,6 +13,7 @@ mod ddl_column;
 mod ddl_default;
 mod ddl_expr;
 mod ddl_index;
+mod ddl_rebuild;
 mod ddl_type;
 mod ddl_view;
 mod dialect;
@@ -91,6 +92,10 @@ pub trait Environment {
 
     /// The columns of `table` that the expressions of its indexes read.
     fn expression_index_columns(&self, table: &str) -> Result<Vec<String>, MysqlParserError>;
+
+    /// The `CREATE INDEX` statements of the indexes of `table` that a
+    /// `CREATE INDEX` created.
+    fn index_definitions(&self, table: &str) -> Result<Vec<ast::Stmt>, MysqlParserError>;
 
     /// The key parts of each index of `table` that a `CREATE INDEX` created:
     /// the column of each part, or `None` for an expression.
@@ -183,6 +188,10 @@ impl Environment for Autocommit {
         &self,
         _table: &str,
     ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_definitions(&self, _table: &str) -> Result<Vec<ast::Stmt>, MysqlParserError> {
         Ok(Vec::new())
     }
 

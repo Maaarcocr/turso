@@ -315,6 +315,16 @@ pub(crate) fn translate_check(
         expr,
         enforced,
     } = check;
+    if let Some(function) = crate::ddl_expr::disallowed_check_function(expr) {
+        return Err(MysqlParserError::Rejected(format!(
+            "An expression of a check constraint '{}' contains disallowed function: {function}.",
+            check
+                .name
+                .as_ref()
+                .map(|name| name.value.as_str())
+                .unwrap_or_default()
+        )));
+    }
     match enforced {
         Some(false) => Ok(None),
         Some(true) | None => translate_expr(expr).map(Some),

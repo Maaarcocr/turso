@@ -685,54 +685,9 @@ impl Table {
         &mut self,
         foreign_key: &ForeignKeyConstraint,
     ) -> Result<(), MysqlParserError> {
-        let ForeignKeyConstraint {
-            name,
-            index_name: _,
-            columns: child_columns,
-            foreign_table,
-            referred_columns,
-            on_delete,
-            on_update,
-            match_kind,
-            characteristics,
-        } = foreign_key;
-        if match_kind.is_some()
-            || characteristics.is_some()
-            || referred_columns.len() != child_columns.len()
-        {
-            return Err(MysqlParserError::Unsupported(format!(
-                "FOREIGN KEY `{foreign_key}` is not available"
-            )));
-        }
-        let mut columns = Vec::new();
-        for column in child_columns {
-            let name = translate_ddl_identifier(column)?;
-            self.column_named(&name)?;
-            columns.push(indexed_column(name));
-        }
-        let referred_columns = referred_columns
-            .iter()
-            .map(|column| translate_ddl_identifier(column).map(indexed_column))
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut args = Vec::new();
-        if let Some(action) = on_delete {
-            args.push(ast::RefArg::OnDelete(translate_referential_action(action)?));
-        }
-        if let Some(action) = on_update {
-            args.push(ast::RefArg::OnUpdate(translate_referential_action(action)?));
-        }
-        self.constraints.push(ast::NamedTableConstraint {
-            name: name.as_ref().map(translate_ddl_identifier).transpose()?,
-            constraint: ast::TableConstraint::ForeignKey {
-                columns,
-                clause: ast::ForeignKeyClause {
-                    tbl_name: translate_ddl_name(foreign_table)?,
-                    columns: referred_columns,
-                    args,
-                },
-                defer_clause: None,
-            },
-        });
+        let constraint =
+            translate_foreign_key(foreign_key, &mut |name| self.column_named(name).map(|_| ()))?;
+        self.constraints.push(constraint);
         Ok(())
     }
 
@@ -790,6 +745,62 @@ impl Table {
     }
 }
 
+/// The constraint of `foreign_key`, whose child columns `column_exists`
+/// checks.
+pub(crate) fn translate_foreign_key(
+    foreign_key: &ForeignKeyConstraint,
+    column_exists: &mut dyn FnMut(&ast::Name) -> Result<(), MysqlParserError>,
+) -> Result<ast::NamedTableConstraint, MysqlParserError> {
+    let ForeignKeyConstraint {
+        name,
+        index_name: _,
+        columns: child_columns,
+        foreign_table,
+        referred_columns,
+        on_delete,
+        on_update,
+        match_kind,
+        characteristics,
+    } = foreign_key;
+    if match_kind.is_some()
+        || characteristics.is_some()
+        || referred_columns.len() != child_columns.len()
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "FOREIGN KEY `{foreign_key}` is not available"
+        )));
+    }
+    let mut columns = Vec::new();
+    for column in child_columns {
+        let name = translate_ddl_identifier(column)?;
+        column_exists(&name)?;
+        columns.push(indexed_column(name));
+    }
+    let referred_columns = referred_columns
+        .iter()
+        .map(|column| translate_ddl_identifier(column).map(indexed_column))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut args = Vec::new();
+    if let Some(action) = on_delete {
+        args.push(ast::RefArg::OnDelete(translate_referential_action(action)?));
+    }
+    if let Some(action) = on_update {
+        args.push(ast::RefArg::OnUpdate(translate_referential_action(action)?));
+    }
+    Ok(ast::NamedTableConstraint {
+        name: name.as_ref().map(translate_ddl_identifier).transpose()?,
+        constraint: ast::TableConstraint::ForeignKey {
+            columns,
+            clause: ast::ForeignKeyClause {
+                tbl_name: translate_ddl_name(foreign_table)?,
+                columns: referred_columns,
+                args,
+            },
+            defer_clause: None,
+        },
+    })
+}
+
 fn translate_referential_action(
     action: &ReferentialAction,
 ) -> Result<ast::RefAct, MysqlParserError> {
@@ -804,7 +815,7 @@ fn translate_referential_action(
     }
 }
 
-fn ensure_key_has_no_storage_options(
+pub(crate) fn ensure_key_has_no_storage_options(
     index_type: Option<&IndexType>,
     options: &[IndexOption],
 ) -> Result<(), MysqlParserError> {

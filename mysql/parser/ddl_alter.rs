@@ -1,5 +1,6 @@
 use crate::ddl_column::Column;
 use crate::ddl_index::{drop_index_statement, translate_create_index, translate_drop_index};
+use crate::ddl_rebuild::Rebuild;
 use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_column_name, translate_ddl_identifier, translate_ddl_name};
 use crate::{Environment, MysqlParserError};
@@ -36,6 +37,35 @@ pub(crate) fn lower_alter_table(
         )));
     }
     let table_name = translate_ddl_name(name)?;
+    let rebuild = |change: &dyn Fn(&mut Rebuild) -> Result<(), MysqlParserError>| {
+        let mut rebuild = Rebuild::of(&table_name, environment)?;
+        change(&mut rebuild)?;
+        rebuild.statements(environment)
+    };
+    match operation {
+        AlterTableOperation::AddConstraint {
+            constraint: TableConstraint::Check(check),
+            not_valid: false,
+        } => return rebuild(&|rebuild| rebuild.add_check(check)),
+        AlterTableOperation::AddConstraint {
+            constraint: TableConstraint::ForeignKey(foreign_key),
+            not_valid: false,
+        } => return rebuild(&|rebuild| rebuild.add_foreign_key(foreign_key)),
+        AlterTableOperation::AddConstraint {
+            constraint: TableConstraint::PrimaryKey(primary_key),
+            not_valid: false,
+        } => return rebuild(&|rebuild| rebuild.add_primary_key(primary_key)),
+        AlterTableOperation::DropPrimaryKey {
+            drop_behavior: None,
+        } => return rebuild(&|rebuild| rebuild.drop_primary_key()),
+        AlterTableOperation::AddColumn {
+            column_keyword: _,
+            if_not_exists: false,
+            column_def,
+            column_position: Some(position),
+        } => return rebuild(&|rebuild| rebuild.add_column(column_def, Some(position))),
+        _ => {}
+    }
     let body = match operation {
         AlterTableOperation::AddColumn {
             column_keyword: _,
@@ -60,7 +90,11 @@ pub(crate) fn lower_alter_table(
                         .chain([Some(&column.column_type)]),
                 )?;
             }
-            ast::AlterTableBody::AddColumn(column.into_definition(DEFAULT_COLLATION)?)
+            let definition = column.into_definition(DEFAULT_COLLATION)?;
+            if has_default_core_cannot_add(&definition) {
+                return rebuild(&|rebuild| rebuild.add_column(column_def, None));
+            }
+            ast::AlterTableBody::AddColumn(definition)
         }
         AlterTableOperation::DropColumn {
             has_column_keyword: _,
@@ -544,6 +578,32 @@ fn indexes_refusing_the_type(
         crate::ddl_type::ensure_key_length(total_bytes)?;
     }
     Ok(None)
+}
+
+/// Whether core's `ADD COLUMN`, which fills the rows of the table with the
+/// default of the column as SQLite does, refuses the default of
+/// `definition`, which is not a constant.
+fn has_default_core_cannot_add(definition: &ast::ColumnDefinition) -> bool {
+    fn is_constant(expr: &ast::Expr) -> bool {
+        match expr {
+            ast::Expr::Literal(
+                ast::Literal::CurrentDate
+                | ast::Literal::CurrentTime
+                | ast::Literal::CurrentTimestamp,
+            ) => false,
+            ast::Expr::Literal(_) => true,
+            ast::Expr::Unary(_, operand) => is_constant(operand),
+            ast::Expr::Parenthesized(items) => items.len() == 1 && is_constant(&items[0]),
+            _ => false,
+        }
+    }
+    definition
+        .constraints
+        .iter()
+        .any(|constraint| match &constraint.constraint {
+            ast::ColumnConstraint::Default(expr) => !is_constant(expr),
+            _ => false,
+        })
 }
 
 /// Fails as MySQL does (3837) to drop or rename `column`, which an index of

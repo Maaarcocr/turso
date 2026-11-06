@@ -1598,13 +1598,11 @@ fn lowering_rejects_unsupported_statement_families() {
         "TRUNCATE TABLE users, orders",
         "CREATE OR REPLACE VIEW v AS SELECT 1",
         "DROP VIEW a, b",
-        "ALTER TABLE users ADD PRIMARY KEY (name)",
         "CREATE INDEX k ON users ((name))",
         "CREATE INDEX k ON users ((LOWER(name)))",
         "CREATE INDEX k ON users ((a / 2))",
         "ALTER TABLE users MODIFY COLUMN name VARCHAR(20)",
         "ALTER TABLE users ADD COLUMN a INT, ADD COLUMN b INT",
-        "ALTER TABLE users ADD COLUMN a INT FIRST",
         "DROP TABLE a, b",
         "DROP TEMPORARY TABLE users",
         "CREATE INDEX name_key ON users (name(10))",
@@ -1673,6 +1671,13 @@ impl Environment for IndexOfT {
         &self,
         _table: &str,
     ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_definitions(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<turso_parser::ast::Stmt>, MysqlParserError> {
         Ok(Vec::new())
     }
 
@@ -1748,6 +1753,13 @@ impl Environment for TriggerSchema {
         &self,
         _table: &str,
     ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_definitions(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<turso_parser::ast::Stmt>, MysqlParserError> {
         Ok(Vec::new())
     }
 

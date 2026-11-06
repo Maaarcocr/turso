@@ -33,6 +33,7 @@ pub(crate) fn translate_insert(
     let tbl_name = ast::QualifiedName::single(translate_identifier(table)?);
     let mut context = TranslationContext::for_session(environment);
     let mut defaults = Defaults::new(&table.value, environment, !insert.ignore);
+    defaults.cuts_long_strings = insert.ignore;
     let (columns, select) = match (&insert.source, insert.assignments.as_slice()) {
         (Some(source), []) => {
             let columns = insert
@@ -215,6 +216,10 @@ pub(crate) struct Defaults<'a> {
     /// MySQL fails the statement when it writes `DEFAULT` into a `NOT NULL`
     /// column without a default (a plain `INSERT` in strict mode).
     fails_without_default: bool,
+    /// MySQL stores a string too long for its column cut to the column's
+    /// length (an `INSERT IGNORE`).
+    pub(crate) cuts_long_strings: bool,
+    stored: Option<Option<crate::stored_table::TableDefinition>>,
 }
 
 /// What `DEFAULT` writes into a column.
@@ -236,7 +241,44 @@ impl<'a> Defaults<'a> {
             environment,
             columns: None,
             fails_without_default,
+            cuts_long_strings: false,
+            stored: None,
         }
+    }
+
+    /// `text`, a string literal written into the column `name`, cut to the
+    /// length of the column when it is a `CHAR`, `VARCHAR`, `BINARY` or
+    /// `VARBINARY` too short for it, as an `INSERT IGNORE` stores it. Other
+    /// values are converted, and fail, as the column converts them.
+    fn cut_string(&mut self, name: &str, text: &str) -> Result<Option<String>, MysqlParserError> {
+        use crate::ddl_type::Family;
+        if self.stored.is_none() {
+            self.stored = Some(
+                self.environment
+                    .table_sql(self.table)?
+                    .and_then(|sql| crate::stored_table::TableDefinition::parse(&sql).ok()),
+            );
+        }
+        let Some(column_type) = self
+            .stored
+            .as_ref()
+            .and_then(Option::as_ref)
+            .and_then(|stored| stored.column(name))
+            .and_then(|column| column.column_type())
+        else {
+            return Ok(None);
+        };
+        Ok(match column_type.family {
+            Family::Char { length } | Family::Varchar { length } => usize::try_from(length)
+                .ok()
+                .and_then(|length| text.char_indices().nth(length))
+                .map(|(end, _)| text[..end].to_string()),
+            Family::Binary { length } | Family::Varbinary { length } => usize::try_from(length)
+                .ok()
+                .filter(|&length| text.len() > length && text.is_char_boundary(length))
+                .map(|length| text[..length].to_string()),
+            _ => None,
+        })
     }
 
     fn columns(&mut self) -> Result<&[ColumnFacts], MysqlParserError> {
@@ -479,23 +521,43 @@ fn translate_rows(
             row.iter()
                 .enumerate()
                 .map(|(index, value)| {
-                    if !is_binary_literal(value) {
-                        return translate_expr(value, context).map(Box::new);
-                    }
-                    let column = if columns.is_empty() {
-                        defaults.column_name_at(index)?
-                    } else {
-                        columns
-                            .get(index)
-                            .ok_or_else(|| {
-                                MysqlParserError::Rejected(
-                                    "Column count doesn't match value count at row 1".to_string(),
-                                )
-                            })?
-                            .as_str()
-                            .to_string()
+                    let column = |defaults: &mut Defaults| {
+                        if columns.is_empty() {
+                            defaults.column_name_at(index)
+                        } else {
+                            Ok(columns
+                                .get(index)
+                                .ok_or_else(|| {
+                                    MysqlParserError::Rejected(
+                                        "Column count doesn't match value count at row 1"
+                                            .to_string(),
+                                    )
+                                })?
+                                .as_str()
+                                .to_string())
+                        }
                     };
-                    defaults.column_value(&column, value, context).map(Box::new)
+                    if is_binary_literal(value) {
+                        let column = column(defaults)?;
+                        return defaults.column_value(&column, value, context).map(Box::new);
+                    }
+                    if let Expr::Value(literal) = value {
+                        if let Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) =
+                            &literal.value
+                        {
+                            if defaults.cuts_long_strings {
+                                let column = column(defaults)?;
+                                if let Some(cut) = defaults.cut_string(&column, text)? {
+                                    return translate_expr(
+                                        &Expr::value(Value::SingleQuotedString(cut)),
+                                        context,
+                                    )
+                                    .map(Box::new);
+                                }
+                            }
+                        }
+                    }
+                    translate_expr(value, context).map(Box::new)
                 })
                 .collect::<Result<Vec<_>, _>>()
         })
