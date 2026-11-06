@@ -980,6 +980,63 @@ impl Connection {
         Ok(true)
     }
 
+    /// Translates one statement of a sequence (see
+    /// [`crate::ParsedStatement::Sequence`]). Unlike [`Self::compile_cmd`] it
+    /// never parses `input` again, as a sequence's statements are not text
+    /// of the dialect.
+    pub(crate) fn compile_sequence_stmt(
+        self: &Arc<Connection>,
+        stmt: turso_parser::ast::Stmt,
+    ) -> Result<(Program, Arc<Pager>)> {
+        self.maybe_update_schema();
+        let input = stmt.to_string();
+        let syms = self.syms.read();
+        let pager = self.pager.load().clone();
+        let schema = self.schema.read().clone();
+        let program = translate::translate(
+            &schema,
+            stmt,
+            pager.clone(),
+            self.clone(),
+            &syms,
+            QueryMode::Normal,
+            &input,
+            StatementOrigin::Root,
+        )?;
+        Ok((program, pager))
+    }
+
+    /// The statement that runs what `sql` was parsed to.
+    fn prepare_parsed(
+        self: &Arc<Connection>,
+        parsed: crate::ParsedStatement,
+        input: &str,
+        tail_offset: usize,
+        origin: StatementOrigin,
+        nested_guard_active: bool,
+    ) -> Result<Statement> {
+        match parsed {
+            crate::ParsedStatement::Cmd(cmd) => {
+                let (program, pager, mode) = self.compile_cmd(cmd, input, origin)?;
+                Ok(Statement::new_with_origin(
+                    program,
+                    pager,
+                    mode,
+                    tail_offset,
+                    origin,
+                    nested_guard_active,
+                ))
+            }
+            crate::ParsedStatement::Sequence(parts) => {
+                turso_assert!(
+                    origin == StatementOrigin::Root,
+                    "only a root statement can be a sequence"
+                );
+                Statement::new_sequence(self, parts, input, tail_offset, nested_guard_active)
+            }
+        }
+    }
+
     #[turso_macros::trace_stack]
     fn compile_cmd(
         self: &Arc<Connection>,
@@ -1013,7 +1070,7 @@ impl Connection {
                 let cmd = {
                     crate::stack::trace_stack!("schema_retry_parse");
                     let (cmd, _) = self.parse_sql_with_origin(input, origin)?;
-                    let Some(cmd) = cmd else {
+                    let Some(crate::ParsedStatement::Cmd(cmd)) = cmd else {
                         return Err(err);
                     };
                     cmd
@@ -1097,16 +1154,7 @@ impl Connection {
             let input = str::from_utf8(&sql.as_bytes()[..byte_offset_end])
                 .unwrap()
                 .trim();
-            let (program, pager, mode) = self.compile_cmd(cmd, input, origin)?;
-
-            Ok(Statement::new_with_origin(
-                program,
-                pager,
-                mode,
-                byte_offset_end,
-                origin,
-                needs_nested_guard,
-            ))
+            self.prepare_parsed(cmd, input, byte_offset_end, origin, needs_nested_guard)
         })();
         if result.is_err() && needs_nested_guard {
             self.end_nested();
@@ -1700,8 +1748,8 @@ impl Connection {
             let input = str::from_utf8(&remaining.as_bytes()[..byte_offset_end])
                 .unwrap()
                 .trim();
-            let (program, pager, mode) = self.compile_cmd(cmd, input, StatementOrigin::Root)?;
-            Statement::new(program, pager, mode, 0).run_ignore_rows()?;
+            self.prepare_parsed(cmd, input, 0, StatementOrigin::Root, false)?
+                .run_ignore_rows()?;
             remaining = &remaining[byte_offset_end..];
         }
         Ok(())
@@ -1728,14 +1776,13 @@ impl Connection {
     #[instrument(skip_all, level = Level::DEBUG)]
     pub(crate) fn run_cmd(
         self: &Arc<Connection>,
-        cmd: Cmd,
+        cmd: crate::ParsedStatement,
         input: &str,
     ) -> Result<Option<Statement>> {
         if self.is_closed() {
             return Err(LimboError::InternalError("Connection closed".to_string()));
         }
-        let (program, pager, mode) = self.compile_cmd(cmd, input, StatementOrigin::Root)?;
-        let stmt = Statement::new(program, pager, mode, 0);
+        let stmt = self.prepare_parsed(cmd, input, 0, StatementOrigin::Root, false)?;
         Ok(Some(stmt))
     }
 
@@ -1757,10 +1804,10 @@ impl Connection {
             let input = str::from_utf8(&remaining.as_bytes()[..byte_offset_end])
                 .unwrap()
                 .trim();
-            let (program, pager, mode) = self.compile_cmd(cmd, input, StatementOrigin::Root)?;
+            let mut stmt = self.prepare_parsed(cmd, input, 0, StatementOrigin::Root, false)?;
             {
                 crate::stack::trace_stack!("run");
-                Statement::new(program, pager.clone(), mode, 0).run_ignore_rows()?;
+                stmt.run_ignore_rows()?;
             }
             remaining = &remaining[byte_offset_end..];
         }
@@ -1779,12 +1826,11 @@ impl Connection {
         let input = str::from_utf8(&sql.as_ref().as_bytes()[..byte_offset_end])
             .unwrap()
             .trim();
-        let (program, pager, mode) = self.compile_cmd(cmd, input, StatementOrigin::Root)?;
-        let stmt = Statement::new(program, pager, mode, 0);
+        let stmt = self.prepare_parsed(cmd, input, 0, StatementOrigin::Root, false)?;
         Ok(Some((stmt, byte_offset_end)))
     }
 
-    pub(crate) fn parse_sql(&self, sql: &str) -> Result<(Option<Cmd>, usize)> {
+    pub(crate) fn parse_sql(&self, sql: &str) -> Result<(Option<crate::ParsedStatement>, usize)> {
         crate::dialect::marker::parse_statement(self.db.dialect().as_ref(), self, sql)
     }
 
@@ -1792,7 +1838,7 @@ impl Connection {
         &self,
         sql: &str,
         origin: StatementOrigin,
-    ) -> Result<(Option<Cmd>, usize)> {
+    ) -> Result<(Option<crate::ParsedStatement>, usize)> {
         match origin {
             StatementOrigin::InternalHelper => {
                 crate::dialect::marker::parse_statement(&crate::SqliteDialect, self, sql)

@@ -10222,6 +10222,9 @@ fn parse_schema_sql_for_alter(
         }
         return Ok((Some(ast::Cmd::Stmt(stmt)), marker));
     }
+    if entry_type == "index" {
+        return crate::dialect::sqlite::parse(sql).map(|(cmd, _)| (cmd, None));
+    }
     dialect.parse(sql).map(|(cmd, _)| (cmd, None))
 }
 
@@ -12355,8 +12358,9 @@ pub fn op_function(
                         }
                     };
 
-                    let column_def =
-                        Parser::new(column_def.as_bytes()).parse_column_definition(true)?;
+                    let column_def = Parser::new(column_def.as_bytes())
+                        .with_type_parameter_lists()
+                        .parse_column_definition(true)?;
 
                     let _rename_to = normalize_ident(column_def.col_name.as_str());
 

@@ -1654,11 +1654,36 @@ fn alter_table_changes_columns() -> turso_core::Result<()> {
     ] {
         assert!(connection.execute(failing).is_err(), "{failing}");
     }
+    connection.execute("ALTER TABLE ac MODIFY b VARCHAR(20)")?;
+    connection.execute("INSERT INTO ac (b, k) VALUES ('abcdefghijklmnopqrst', 4)")?;
+    let error = connection
+        .execute("ALTER TABLE ac MODIFY b VARCHAR(5)")
+        .expect_err("a value longer than the new type");
+    assert!(error.to_string().contains("Data too long"), "{error}");
+    connection.execute("ALTER TABLE ac CHANGE b B VARCHAR(30) DEFAULT ''")?;
+    connection.execute("INSERT INTO ac (k) VALUES (5)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT B FROM ac WHERE k IN (1, 4, 5) ORDER BY k"
+        )?,
+        ["abc", "abcdefghijklmnopqrst", ""]
+            .into_iter()
+            .map(|value| vec![Value::build_text(value)])
+            .collect::<Vec<_>>()
+    );
+    let sql = query(
+        &connection,
+        "SELECT sql FROM sqlite_schema WHERE name = 'ac'",
+    )?;
+    let sql = format!("{sql:?}");
+    assert!(
+        sql.contains("(n INT DEFAULT 5, B VARCHAR (30)") && !sql.contains("turso_altered"),
+        "{sql}"
+    );
     for refused in [
-        "ALTER TABLE ac MODIFY b VARCHAR(20)",
-        "ALTER TABLE ac CHANGE b b VARCHAR(20)",
         "ALTER TABLE ac CHANGE k j BIGINT",
-        "ALTER TABLE ac CHANGE b c VARCHAR(20) UNIQUE",
+        "ALTER TABLE ac CHANGE B c VARCHAR(20) UNIQUE",
     ] {
         let error = connection.execute(refused).expect_err(refused).to_string();
         assert!(error.contains("not available"), "{refused}: {error}");
@@ -1680,24 +1705,28 @@ fn alter_table_adds_indexes() -> turso_core::Result<()> {
         .is_err());
     connection.execute("ALTER TABLE ai DROP INDEX ub")?;
     connection.execute("INSERT INTO ai VALUES (2, 1, 'y')")?;
-    for refused in [
-        "ALTER TABLE ai ADD INDEX it (t)",
-        "ALTER TABLE ai ADD UNIQUE (a)",
-        "ALTER TABLE ai ADD INDEX (a)",
-        "ALTER TABLE aj ADD INDEX ia (a)",
-    ] {
-        assert!(connection.execute(refused).is_err(), "{refused}");
-    }
+    assert!(connection
+        .execute("ALTER TABLE ai ADD INDEX it (t)")
+        .is_err());
+    connection.execute("ALTER TABLE ai ADD UNIQUE (a)")?;
+    connection.execute("ALTER TABLE ai ADD INDEX (a)")?;
+    connection.execute("ALTER TABLE aj ADD INDEX ia (a)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT name FROM sqlite_schema WHERE type = 'index' ORDER BY name"
+        )?,
+        ["a", "a_2", "a_3", "aj.ia", "ia"]
+            .into_iter()
+            .map(|name| vec![Value::build_text(name)])
+            .collect::<Vec<_>>()
+    );
     connection.execute("CREATE TABLE ak (c INT, d INT UNIQUE)")?;
     connection.execute("ALTER TABLE ak ADD UNIQUE (c)")?;
     assert!(connection
         .execute("INSERT INTO ak VALUES (1, 1), (1, 2)")
         .is_err());
-    for refused in [
-        "ALTER TABLE ak ADD INDEX (d)",
-        "ALTER TABLE ak ADD UNIQUE (c)",
-        "CREATE INDEX d ON ak (c)",
-    ] {
+    for refused in ["ALTER TABLE ak ADD INDEX (d)", "CREATE INDEX d ON ak (c)"] {
         let error = connection.execute(refused).expect_err(refused).to_string();
         assert!(
             error.contains("unsupported MySQL syntax"),
@@ -2953,5 +2982,276 @@ fn connections_check_foreign_keys_from_the_start() -> turso_core::Result<()> {
         .expect_err("a referenced parent row must not be deleted");
     connection.execute("SET FOREIGN_KEY_CHECKS = 0")?;
     connection.execute("INSERT INTO child VALUES (2, 9)")?;
+    Ok(())
+}
+
+#[test]
+fn secondary_keys_of_created_tables_are_indexes_named_as_mysql_names_them() -> turso_core::Result<()>
+{
+    let connection = open_memory()?;
+    connection
+        .execute("CREATE TABLE t (a INT, b INT, UNIQUE (a), KEY (a), KEY kb (b), INDEX (b, a))")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL ORDER BY name"
+        )?,
+        vec![
+            vec![
+                Value::build_text("a_2"),
+                Value::build_text("CREATE INDEX `a_2` ON t (a)"),
+            ],
+            vec![
+                Value::build_text("b"),
+                Value::build_text("CREATE INDEX `b` ON t (b, a)"),
+            ],
+            vec![
+                Value::build_text("kb"),
+                Value::build_text("CREATE INDEX kb ON t (b)"),
+            ],
+        ]
+    );
+    connection.execute("CREATE TABLE IF NOT EXISTS t (a INT, KEY other (a))")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'other'"
+        )?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    connection.execute("DROP INDEX kb ON t")?;
+    Ok(())
+}
+
+#[test]
+fn a_statement_run_as_several_takes_effect_whole_or_not_at_all() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE u (x INT)")?;
+    connection.execute("CREATE VIEW v AS SELECT x FROM u")?;
+    let error = connection
+        .execute("CREATE TABLE t (a INT, KEY k (a), KEY v (a))")
+        .expect_err("an index named like a view");
+    assert!(error.to_string().contains("already"), "{error}");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name IN ('t', 'k')"
+        )?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    connection.execute("CREATE TABLE t (a INT, KEY k (a))")?;
+    connection.execute("START TRANSACTION")?;
+    connection.execute("INSERT INTO t VALUES (1)")?;
+    connection.execute("COMMIT")?;
+
+    let indexes = |name: &str| {
+        query(
+            &connection,
+            &format!("SELECT COUNT(*) FROM sqlite_schema WHERE name = '{name}'"),
+        )
+    };
+    let mut statement = connection.prepare("CREATE TABLE IF NOT EXISTS w (a INT, KEY kw (a))")?;
+    connection.execute("CREATE TABLE w (a INT)")?;
+    statement.run_ignore_rows()?;
+    assert_eq!(indexes("kw")?, vec![vec![Value::from_i64(0)]]);
+    connection.execute("DROP TABLE w")?;
+    statement.reset()?;
+    statement.run_ignore_rows()?;
+    assert_eq!(indexes("kw")?, vec![vec![Value::from_i64(1)]]);
+    assert_eq!(
+        statement.get_sql(),
+        "CREATE TABLE IF NOT EXISTS w (a INT, KEY kw (a))"
+    );
+    statement.reset()?;
+    statement.run_ignore_rows()?;
+    assert_eq!(indexes("kw")?, vec![vec![Value::from_i64(1)]]);
+    let mut statement = connection.prepare("CREATE TABLE x (a INT, KEY kx (a))")?;
+    statement.run_ignore_rows()?;
+    statement.reset()?;
+    let error = statement.run_ignore_rows().expect_err("the table exists");
+    assert!(error.to_string().contains("already exists"), "{error}");
+    connection.execute("INSERT INTO x VALUES (1)")?;
+    Ok(())
+}
+
+#[test]
+fn unique_keys_on_column_prefixes_compare_prefixes_by_the_column_collation(
+) -> turso_core::Result<()> {
+    let io: Arc<dyn IO> = Arc::new(MemoryIO::new());
+    let path = "mysql-prefix-keys.db";
+    {
+        let connection = open_with_io(io.clone(), path)?;
+        connection.execute(
+            "CREATE TABLE t (i INT PRIMARY KEY, v1 VARCHAR(10), v2 VARBINARY(10), UNIQUE KEY (v1(3), v2(2)))",
+        )?;
+        connection.execute("INSERT INTO t VALUES (0, 'abc', 'xy'), (1, 'abcd', 'xz')")?;
+        connection.close()?;
+    }
+    let connection = open_with_io(io, path)?;
+    let error = connection
+        .execute("INSERT INTO t VALUES (2, 'ABCX', 'xyz')")
+        .expect_err("a duplicate prefix");
+    assert!(error.to_string().contains("UNIQUE"), "{error}");
+    connection.execute("INSERT INTO t VALUES (2, 'ABCX', 'Xy')")?;
+    connection.execute("ALTER TABLE t ADD COLUMN w INT")?;
+    connection.execute("ALTER TABLE t RENAME COLUMN w TO w2")?;
+    connection.execute("INSERT INTO t VALUES (3, 'abd', 'xy', 1)")?;
+    assert_eq!(
+        query(&connection, "SELECT i FROM t ORDER BY i")?,
+        vec![
+            vec![Value::from_i64(0)],
+            vec![Value::from_i64(1)],
+            vec![Value::from_i64(2)],
+            vec![Value::from_i64(3)],
+        ]
+    );
+    connection.execute("DROP INDEX v1 ON t")?;
+    connection.execute("INSERT INTO t VALUES (4, 'abc', 'xy', 1)")?;
+    Ok(())
+}
+
+#[test]
+fn indexes_added_on_column_prefixes_are_checked_against_the_stored_columns(
+) -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (a VARCHAR(10), b TEXT, c INT, d VARBINARY(4))")?;
+    for (statement, message) in [
+        ("CREATE INDEX i ON t (c(2))", "not a valid MySQL key part"),
+        ("CREATE INDEX i ON t (a(11))", "not a valid MySQL key part"),
+        ("CREATE INDEX i ON t (b)", "needs a key length"),
+        ("CREATE INDEX i ON t (b(769))", "3072-byte"),
+        (
+            "ALTER TABLE t ADD INDEX (z(2))",
+            "Key column 'z' doesn't exist",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection.execute("CREATE INDEX i ON t (b(765), a(3))")?;
+    connection.execute("CREATE UNIQUE INDEX u ON t (b(2))")?;
+    connection.execute("ALTER TABLE t ADD UNIQUE (d(2))")?;
+    connection.execute("INSERT INTO t (b, d) VALUES ('xy1', X'0102')")?;
+    for row in ["('XYz', X'0304')", "('ab', X'010203')"] {
+        let statement = format!("INSERT INTO t (b, d) VALUES {row}");
+        let error = connection.execute(&statement).expect_err(&statement);
+        assert!(error.to_string().contains("UNIQUE"), "{statement}: {error}");
+    }
+    connection.execute("INSERT INTO t (b, d) VALUES ('ab', X'0103')")?;
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM t")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn columns_an_expression_index_reads_are_neither_dropped_nor_renamed() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (pk INT PRIMARY KEY, c1 INT, c2 INT)")?;
+    connection.execute("CREATE INDEX e ON t ((c1 * 10))")?;
+    for statement in [
+        "ALTER TABLE t RENAME COLUMN c1 TO c9",
+        "ALTER TABLE t DROP COLUMN c1",
+        "ALTER TABLE t CHANGE c1 c9 BIGINT",
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("functional index dependency"),
+            "{statement}: {error}"
+        );
+    }
+    connection.execute("INSERT INTO t VALUES (1, 2, 0), (2, 3, 0)")?;
+    let error = connection
+        .execute("ALTER TABLE t MODIFY c1 BIGINT")
+        .expect_err("MySQL checks the index expression against the new type");
+    assert!(error.to_string().contains("not available"), "{error}");
+    connection.execute("ALTER TABLE t MODIFY c2 BIGINT")?;
+    connection.execute("ALTER TABLE t RENAME COLUMN c2 TO c3")?;
+    assert_eq!(
+        query(&connection, "SELECT pk FROM t WHERE c1 * 10 = 30")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn altered_columns_keep_to_the_limits_of_keys_and_rows() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id SMALLINT PRIMARY KEY, n INT, a VARCHAR(5000), b VARCHAR(5000), c VARCHAR(5000), e VARCHAR(3), KEY (n))",
+    )?;
+    connection.execute("INSERT INTO t (id, n, e) VALUES (1, 2, 'b')")?;
+    for (statement, message) in [
+        ("ALTER TABLE t MODIFY n BLOB", "needs a key length"),
+        ("ALTER TABLE t MODIFY n JSON", "cannot be indexed directly"),
+        ("ALTER TABLE t MODIFY n INT AUTO_INCREMENT", "not available"),
+        (
+            "ALTER TABLE t ADD COLUMN d VARCHAR(5000)",
+            "Row size too large",
+        ),
+        ("ALTER TABLE t MODIFY c VARCHAR(7000)", "Row size too large"),
+        (
+            "CREATE TABLE u (a VARCHAR(10000), b VARCHAR(10000))",
+            "Row size too large",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection.execute("ALTER TABLE t MODIFY n BIGINT")?;
+    connection.execute("ALTER TABLE t MODIFY e ENUM('a', 'b')")?;
+    connection.execute("ALTER TABLE t ADD COLUMN d VARCHAR(1000)")?;
+    assert_eq!(
+        query(&connection, "SELECT id FROM t WHERE n = 2 AND e = 'b'")?,
+        vec![vec![Value::from_i64(1)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn index_names_belong_to_their_table_as_in_mysql() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE a (x INT, KEY (x), KEY k (x))")?;
+    connection.execute("CREATE TABLE b (x INT, KEY (x), KEY k (x))")?;
+    connection.execute("CREATE INDEX k2 ON b (x)")?;
+    connection.execute("ALTER TABLE a ADD INDEX (x)")?;
+    connection.execute("ALTER TABLE a ADD INDEX k2 (x)")?;
+    let error = connection
+        .execute("CREATE INDEX k ON b (x)")
+        .expect_err("a second key k of b");
+    assert!(
+        error.to_string().contains("Duplicate key name 'k'"),
+        "{error}"
+    );
+    connection.execute("DROP INDEX k ON b")?;
+    connection.execute("ALTER TABLE a DROP INDEX x_2")?;
+    let error = connection
+        .execute("DROP INDEX x_2 ON a")
+        .expect_err("x_2 is gone");
+    assert!(error.to_string().contains("Can't DROP 'x_2'"), "{error}");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT name, tbl_name FROM sqlite_schema WHERE type = 'index' ORDER BY name"
+        )?,
+        [
+            ("a.k2", "a"),
+            ("b.x", "b"),
+            ("k", "a"),
+            ("k2", "b"),
+            ("x", "a")
+        ]
+        .into_iter()
+        .map(|(name, table)| vec![Value::build_text(name), Value::build_text(table)])
+        .collect::<Vec<_>>()
+    );
+    let error = connection
+        .execute("RENAME TABLE b TO c")
+        .expect_err("b.x would keep the old name");
+    assert!(error.to_string().contains("not available"), "{error}");
+    connection.execute("CREATE TABLE d (y INT, KEY ky (y))")?;
+    connection.execute("RENAME TABLE d TO e")?;
+    connection.execute("DROP INDEX ky ON e")?;
     Ok(())
 }

@@ -151,7 +151,7 @@ pub(crate) fn translate(
                 ))
             })?;
             let sql = with_parameters(&text, &variables)?;
-            crate::translate_text(&sql, environment)
+            crate::single(crate::lower_text(&sql, environment)?)
         }
     }
 }
@@ -170,7 +170,7 @@ pub fn lower_prepared(
     }
     let count = placeholders(text)?.len();
     let sql = with_parameters(text, &vec!["@parameter".to_string(); count])?;
-    crate::translate_text(&sql, environment)
+    crate::single(crate::lower_text(&sql, environment)?)
 }
 
 fn placeholders(text: &str) -> Result<Vec<Location>, MysqlParserError> {

@@ -28,6 +28,23 @@ pub use storage_functions::StorageFunc;
 /// stores in `sqlite_schema`.
 pub const POSTGRES_TABLE_SQL_PREFIX: &str = "/* turso_frontend:postgres */ ";
 
+/// What a dialect lowered one of its statements to.
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+pub enum ParsedStatement {
+    /// One engine command.
+    Cmd(turso_parser::ast::Cmd),
+    /// Engine statements that together carry out the dialect statement. The
+    /// engine runs them in order inside a transaction that it begins with
+    /// `BEGIN IMMEDIATE` and commits after the last, and rolls the
+    /// transaction back if any of them fails, so that the dialect statement
+    /// takes effect whole or not at all. Each one is translated only after
+    /// the ones before it ran, against the schema they left. A sequence runs
+    /// only outside a transaction, and none of its statements may return
+    /// rows.
+    Sequence(Vec<turso_parser::ast::Stmt>),
+}
+
 /// SQL dialect layered on top of the engine.
 ///
 /// Every [`crate::Database`] carries a dialect, supplied explicitly by
@@ -67,6 +84,20 @@ pub trait Dialect: Send + Sync + 'static {
     ) -> crate::Result<(Option<turso_parser::ast::Cmd>, usize)> {
         let _ = connection;
         self.parse(sql)
+    }
+
+    /// Parse the first statement in `sql` for `connection` into what the
+    /// engine runs for it: one command, or a sequence of statements (see
+    /// [`ParsedStatement::Sequence`]). The engine prepares and re-prepares
+    /// statements through this method; it defaults to the command of
+    /// [`Dialect::parse_for`].
+    fn parse_statement_for(
+        &self,
+        connection: &crate::Connection,
+        sql: &str,
+    ) -> crate::Result<(Option<ParsedStatement>, usize)> {
+        let (cmd, end) = self.parse_for(connection, sql)?;
+        Ok((cmd.map(ParsedStatement::Cmd), end))
     }
 
     /// Whether [`Dialect::parse_for`] reads whether the connection is in a

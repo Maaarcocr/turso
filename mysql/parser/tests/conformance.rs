@@ -227,7 +227,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE)",
-            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE) STRICT",
+            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE) STRICT; CREATE INDEX k ON t (id)",
         ),
         (
             "CREATE TABLE t (a INT, b INT AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2))",
@@ -284,9 +284,15 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
     ];
 
     for (mysql, sqlite) in cases {
-        let statement = parse_and_translate(mysql)
-            .unwrap_or_else(|error| panic!("DDL must lower: {error}\nSQL: {mysql}"));
-        assert_eq!(statement.to_string(), sqlite, "SQL: {mysql}");
+        let statements =
+            turso_mysql_parser::parse_and_lower_in(mysql, &turso_mysql_parser::Autocommit)
+                .unwrap_or_else(|error| panic!("DDL must lower: {error}\nSQL: {mysql}"));
+        let lowered = statements
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ");
+        assert_eq!(lowered, sqlite, "SQL: {mysql}");
     }
 }
 
@@ -1659,6 +1665,25 @@ impl Environment for IndexOfT {
         Ok(name.eq_ignore_ascii_case("idx").then(|| "t".to_string()))
     }
 
+    fn expression_index_columns(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_key_columns(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn indexes_of(&self, table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(if table.eq_ignore_ascii_case("t") {
+            vec!["idx".to_string()]
+        } else {
+            Vec::new()
+        })
+    }
+
     fn has_triggers(&self) -> bool {
         false
     }
@@ -1713,6 +1738,21 @@ impl Environment for TriggerSchema {
 
     fn index_table(&self, _name: &str) -> Result<Option<String>, MysqlParserError> {
         Ok(None)
+    }
+
+    fn expression_index_columns(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_key_columns(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn indexes_of(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
     }
 
     fn has_triggers(&self) -> bool {
@@ -1903,10 +1943,7 @@ fn drops_an_index_of_the_named_table_only() {
     ] {
         let statement = parse_and_translate_in(sql, &IndexOfT)
             .unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
-        assert!(
-            statement.to_string().eq_ignore_ascii_case("DROP INDEX idx"),
-            "SQL: {sql}"
-        );
+        assert!(statement.to_string() == "DROP INDEX `idx`", "SQL: {sql}");
     }
     for sql in [
         "DROP INDEX idx ON u",

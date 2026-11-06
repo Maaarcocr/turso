@@ -85,6 +85,17 @@ pub trait Environment {
     /// or `None` when no table has it.
     fn index_table(&self, name: &str) -> Result<Option<String>, MysqlParserError>;
 
+    /// The Turso names of the indexes of `table` that a `CREATE INDEX`
+    /// created (not those of its `PRIMARY KEY` and `UNIQUE` constraints).
+    fn indexes_of(&self, table: &str) -> Result<Vec<String>, MysqlParserError>;
+
+    /// The columns of `table` that the expressions of its indexes read.
+    fn expression_index_columns(&self, table: &str) -> Result<Vec<String>, MysqlParserError>;
+
+    /// The key parts of each index of `table` that a `CREATE INDEX` created:
+    /// the column of each part, or `None` for an expression.
+    fn index_key_columns(&self, table: &str) -> Result<Vec<Vec<Option<String>>>, MysqlParserError>;
+
     /// Whether the schema has a trigger.
     fn has_triggers(&self) -> bool;
 
@@ -160,6 +171,21 @@ impl Environment for Autocommit {
         Ok(None)
     }
 
+    fn indexes_of(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn expression_index_columns(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_key_columns(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
     fn has_triggers(&self) -> bool {
         false
     }
@@ -209,6 +235,17 @@ pub fn parse_and_translate_in(
     sql: &str,
     environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
+    single(parse_and_lower_in(sql, environment)?)
+}
+
+/// Lowers the one statement `sql` for a session described by `environment`
+/// to the Turso statements that carry it out when run in turn, all or none
+/// (see `turso_core::ParsedStatement::Sequence`). Only a statement that is
+/// not allowed inside a transaction lowers to several.
+pub fn parse_and_lower_in(
+    sql: &str,
+    environment: &dyn Environment,
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let first_word = sql
         .trim_start()
         .split(|ch: char| !ch.is_ascii_alphabetic())
@@ -219,18 +256,21 @@ pub fn parse_and_translate_in(
         .any(|keyword| first_word.eq_ignore_ascii_case(keyword))
     {
         if let Some(command) = prepared::command(sql)? {
-            return prepared::translate(command, environment);
+            return Ok(vec![prepared::translate(command, environment)?]);
         }
     }
     if first_word.eq_ignore_ascii_case("TABLE") {
-        return translate_text(&table_statement::as_select(sql)?, environment);
+        return lower_text(&table_statement::as_select(sql)?, environment);
     }
-    translate_text(sql, environment)
+    lower_text(sql, environment)
 }
 
 /// Lowers the one statement `sql`, which is not a prepared-statement
 /// command.
-fn translate_text(sql: &str, environment: &dyn Environment) -> Result<ast::Stmt, MysqlParserError> {
+pub(crate) fn lower_text(
+    sql: &str,
+    environment: &dyn Environment,
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let statement = parse_one(sql)?;
     if let Statement::Set(sqlparser::ast::Set::SetTransaction {
         modes,
@@ -239,22 +279,47 @@ fn translate_text(sql: &str, environment: &dyn Environment) -> Result<ast::Stmt,
     }) = &statement
     {
         let scope = dialect::word_after_set(sql);
-        return transaction::translate_set_transaction(modes, scope.as_deref(), &statement);
+        return Ok(vec![transaction::translate_set_transaction(
+            modes,
+            scope.as_deref(),
+            &statement,
+        )?]);
     }
-    translate_in(&statement, environment)
+    lower_in(&statement, environment)
+}
+
+/// The one statement of `statements`; a statement that lowers to several is
+/// refused where only one can run.
+pub(crate) fn single(mut statements: Vec<ast::Stmt>) -> Result<ast::Stmt, MysqlParserError> {
+    match statements.len() {
+        1 => Ok(statements.pop().expect("one statement")),
+        _ => Err(MysqlParserError::Unsupported(
+            "a statement that Turso runs as several statements is not available here".to_string(),
+        )),
+    }
 }
 
 pub fn translate(statement: &Statement) -> Result<ast::Stmt, MysqlParserError> {
     translate_in(statement, &Autocommit)
 }
 
-/// Lowers `statement` for a session described by `environment`. Inside a
-/// transaction, DDL, which MySQL runs after committing the transaction, is
-/// refused.
+/// Lowers `statement` for a session described by `environment` to one
+/// statement (see [`lower_in`]).
 pub fn translate_in(
     statement: &Statement,
     environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
+    single(lower_in(statement, environment)?)
+}
+
+/// Lowers `statement` for a session described by `environment` to the
+/// statements that carry it out in turn (see [`parse_and_lower_in`]). Inside
+/// a transaction, DDL, which MySQL runs after committing the transaction, is
+/// refused.
+pub fn lower_in(
+    statement: &Statement,
+    environment: &dyn Environment,
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let in_transaction = environment.in_transaction();
     if in_transaction
         && matches!(
@@ -298,11 +363,17 @@ pub fn translate_in(
         Statement::Insert(insert) => insert::translate_insert(insert, environment)?,
         Statement::Update(update) => dml::translate_update(update, environment)?,
         Statement::Delete(delete) => dml::translate_delete(delete)?,
-        _ => return translate_other(statement, environment),
+        Statement::CreateTable(create_table) => {
+            return ddl::lower_create_table(create_table, environment)
+        }
+        Statement::AlterTable(alter_table) => {
+            return ddl_alter::lower_alter_table(alter_table, environment)
+        }
+        _ => return Ok(vec![translate_other(statement, environment)?]),
     };
     trigger::check_fired_triggers(statement, &lowered, environment)?;
     foreign_key::check_writes(&lowered, environment)?;
-    Ok(lowered)
+    Ok(vec![lowered])
 }
 
 fn translate_other(
@@ -324,16 +395,10 @@ fn translate_other(
             let mut context = query::TranslationContext::for_session(environment);
             query::translate_query(query, &mut context)
         }
-        Statement::CreateTable(create_table) => {
-            ddl::translate_create_table(create_table, environment)
-        }
         Statement::CreateIndex(create_index) => {
             ddl_index::translate_create_index(create_index, environment)
         }
-        Statement::AlterTable(alter_table) => {
-            ddl_alter::translate_alter_table(alter_table, environment)
-        }
-        Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
+        Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames, environment),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement, environment),
         Statement::CreateView(create_view) => {
             ddl_view::translate_create_view(create_view, environment)

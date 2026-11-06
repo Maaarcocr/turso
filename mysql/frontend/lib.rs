@@ -2,7 +2,8 @@ use std::sync::Arc;
 use turso_core::dialect::{ArgumentType, TypeRules};
 use turso_core::schema::{BTreeTable, Schema};
 use turso_core::{
-    Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, Value, IO,
+    Connection, Database, Dialect, Func, LimboError, ParsedStatement, Result, SqliteDialect, Value,
+    IO,
 };
 use turso_parser::ast;
 
@@ -25,15 +26,39 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        parse_statement(sql, &turso_mysql_parser::Autocommit)
+        let (statements, end) = lower_statement(sql, &turso_mysql_parser::Autocommit)?;
+        match statements {
+            None => Ok((None, end)),
+            Some(statements) => match <[ast::Stmt; 1]>::try_from(statements) {
+                Ok([stmt]) => Ok((Some(ast::Cmd::Stmt(stmt)), end)),
+                Err(_) => Err(LimboError::ParseError(
+                    turso_mysql_parser::MysqlParserError::Unsupported(
+                        "a statement that Turso runs as several statements is not available here"
+                            .to_string(),
+                    )
+                    .to_string(),
+                )),
+            },
+        }
     }
 
-    fn parse_for(&self, connection: &Connection, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        let (cmd, end) = parse_statement(sql, &Session(connection))?;
-        if let Some(ast::Cmd::Stmt(stmt)) = &cmd {
+    fn parse_statement_for(
+        &self,
+        connection: &Connection,
+        sql: &str,
+    ) -> Result<(Option<ParsedStatement>, usize)> {
+        let (statements, end) = lower_statement(sql, &Session(connection))?;
+        let Some(statements) = statements else {
+            return Ok((None, end));
+        };
+        for stmt in &statements {
             check_default_functions(stmt, connection)?;
         }
-        Ok((cmd, end))
+        let parsed = match <[ast::Stmt; 1]>::try_from(statements) {
+            Ok([stmt]) => ParsedStatement::Cmd(ast::Cmd::Stmt(stmt)),
+            Err(statements) => ParsedStatement::Sequence(statements),
+        };
+        Ok((Some(parsed), end))
     }
 
     fn parse_reads_transaction_state(&self) -> bool {
@@ -128,20 +153,21 @@ impl Dialect for MySqlDialect {
 }
 
 /// The first statement of `sql`, lowered for a session described by
-/// `environment`, and the number of bytes it takes.
-fn parse_statement(
+/// `environment` to the statements that carry it out in turn, and the number
+/// of bytes it takes.
+fn lower_statement(
     sql: &str,
     environment: &dyn turso_mysql_parser::Environment,
-) -> Result<(Option<ast::Cmd>, usize)> {
+) -> Result<(Option<Vec<ast::Stmt>>, usize)> {
     let statement = match turso_mysql_parser::first_statement(sql) {
         Ok(Some(statement)) => statement,
         Ok(None) => return Ok((None, sql.len())),
         Err(error) => return Err(LimboError::ParseError(error.to_string())),
     };
-    let stmt =
-        turso_mysql_parser::parse_and_translate_in(&sql[statement.text.clone()], environment)
+    let statements =
+        turso_mysql_parser::parse_and_lower_in(&sql[statement.text.clone()], environment)
             .map_err(|error| LimboError::ParseError(error.to_string()))?;
-    Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
+    Ok((Some(statements), statement.end))
 }
 
 /// Refuses a column `DEFAULT` that calls a function Turso does not have, as
@@ -215,6 +241,69 @@ impl turso_mysql_parser::Environment for Session<'_> {
                     .then(|| table.clone())
             })
         }))
+    }
+
+    fn indexes_of(&self, table: &str) -> LoweringResult<Vec<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_indices(table)
+                .filter(|index| !index.name.starts_with("sqlite_autoindex_"))
+                .map(|index| index.name.clone())
+                .collect()
+        }))
+    }
+
+    fn index_key_columns(&self, table: &str) -> LoweringResult<Vec<Vec<Option<String>>>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_indices(table)
+                .filter(|index| !index.name.starts_with("sqlite_autoindex_"))
+                .map(|index| {
+                    index
+                        .columns
+                        .iter()
+                        .map(|column| column.expr.is_none().then(|| column.name.clone()))
+                        .collect()
+                })
+                .collect()
+        }))
+    }
+
+    fn expression_index_columns(&self, table: &str) -> LoweringResult<Vec<String>> {
+        self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            let mut columns = Vec::new();
+            let table_columns = schema
+                .get_btree_table(table)
+                .map(|table| table.columns().to_vec())
+                .unwrap_or_default();
+            for index in schema.get_indices(table) {
+                for expr in index.columns.iter().filter_map(|column| column.expr.as_deref()) {
+                    turso_core::walk_expr(expr, &mut |expr| {
+                        match expr {
+                            ast::Expr::Id(name) | ast::Expr::Name(name) => {
+                                columns.push(name.as_str().to_string());
+                            }
+                            ast::Expr::Qualified(_, name) => columns.push(name.as_str().to_string()),
+                            ast::Expr::Column { column, .. } => {
+                                let Some(name) =
+                                    table_columns.get(*column).and_then(|column| column.name.clone())
+                                else {
+                                    return Err(turso_core::LimboError::InternalError(format!(
+                                        "index {} reads column {column} that table {table} does not have",
+                                        index.name
+                                    )));
+                                };
+                                columns.push(name);
+                            }
+                            _ => {}
+                        }
+                        Ok(turso_core::WalkControl::Continue)
+                    })
+                    .map_err(|err| turso_mysql_parser::MysqlParserError::Unsupported(err.to_string()))?;
+                }
+            }
+            Ok(columns)
+        })
     }
 
     fn has_triggers(&self) -> bool {

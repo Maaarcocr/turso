@@ -5,16 +5,16 @@ use crate::names::{translate_column_name, translate_ddl_identifier, translate_dd
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTable, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, CreateIndex,
-    DataType, Expr, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType,
-    NullsDistinctOption, ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind,
-    Statement, TableConstraint, UniqueConstraint,
+    DataType, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, NullsDistinctOption,
+    ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind, Statement,
+    TableConstraint, UniqueConstraint,
 };
 use turso_parser::ast;
 
-pub(crate) fn translate_alter_table(
+pub(crate) fn lower_alter_table(
     alter_table: &AlterTable,
     environment: &dyn Environment,
-) -> Result<ast::Stmt, MysqlParserError> {
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let AlterTable {
         name,
         if_exists,
@@ -42,9 +42,26 @@ pub(crate) fn translate_alter_table(
             if_not_exists: false,
             column_def,
             column_position: None,
-        } => ast::AlterTableBody::AddColumn(
-            Column::from_mysql(column_def)?.into_definition(DEFAULT_COLLATION)?,
-        ),
+        } => {
+            let column = Column::from_mysql(column_def)?;
+            if let Some(stored) = environment
+                .table_sql(table_name.as_str())?
+                .and_then(|sql| crate::stored_table::TableDefinition::parse(&sql).ok())
+            {
+                let types = stored
+                    .columns
+                    .iter()
+                    .map(|column| column.column_type())
+                    .collect::<Vec<_>>();
+                crate::ddl_type::ensure_row_fits(
+                    types
+                        .iter()
+                        .map(Option::as_ref)
+                        .chain([Some(&column.column_type)]),
+                )?;
+            }
+            ast::AlterTableBody::AddColumn(column.into_definition(DEFAULT_COLLATION)?)
+        }
         AlterTableOperation::DropColumn {
             has_column_keyword: _,
             column_names,
@@ -54,49 +71,66 @@ pub(crate) fn translate_alter_table(
             let [column_name] = column_names.as_slice() else {
                 return Err(unsupported_operation(operation));
             };
-            ast::AlterTableBody::DropColumn(translate_ddl_identifier(column_name)?)
+            let column_name = translate_ddl_identifier(column_name)?;
+            ensure_no_functional_index_reads(&table_name, &column_name, environment)?;
+            ast::AlterTableBody::DropColumn(column_name)
         }
         AlterTableOperation::RenameColumn {
             old_column_name,
             new_column_name,
-        } => ast::AlterTableBody::RenameColumn {
-            old: translate_ddl_identifier(old_column_name)?,
-            new: translate_column_name(new_column_name)?,
-        },
+        } => {
+            let old = translate_ddl_identifier(old_column_name)?;
+            let new = translate_column_name(new_column_name)?;
+            if !old.as_str().eq_ignore_ascii_case(new.as_str()) {
+                ensure_no_functional_index_reads(&table_name, &old, environment)?;
+            }
+            ast::AlterTableBody::RenameColumn { old, new }
+        }
         AlterTableOperation::RenameTable {
             table_name: RenameTableNameKind::To(new_name) | RenameTableNameKind::As(new_name),
-        } => ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
+        } => {
+            crate::ddl_index::ensure_indexes_keep_their_names(&table_name, environment)?;
+            ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?)
+        }
         AlterTableOperation::ModifyColumn {
             col_name,
             data_type,
             options,
             column_position: None,
-        } => altered_column(
-            operation,
-            &table_name,
-            col_name,
-            col_name,
-            data_type,
-            options,
-            environment,
-        )?,
+        } => {
+            return altered_column(
+                operation,
+                &table_name,
+                col_name,
+                None,
+                data_type,
+                options,
+                environment,
+            )
+        }
         AlterTableOperation::ChangeColumn {
             old_name,
             new_name,
             data_type,
             options,
             column_position: None,
-        } => altered_column(
-            operation,
-            &table_name,
-            old_name,
-            new_name,
-            data_type,
-            options,
-            environment,
-        )?,
+        } => {
+            return altered_column(
+                operation,
+                &table_name,
+                old_name,
+                Some(new_name),
+                data_type,
+                options,
+                environment,
+            )
+        }
         AlterTableOperation::DropIndex { name } => {
-            return drop_index_statement(translate_ddl_identifier(name)?, &table_name, environment);
+            return Ok(vec![drop_index_statement(
+                translate_ddl_identifier(name)?,
+                &table_name,
+                environment,
+            )?]);
         }
         AlterTableOperation::AddConstraint {
             constraint:
@@ -113,7 +147,7 @@ pub(crate) fn translate_alter_table(
                 Some(index_name) => index_name.clone(),
                 None => generated_index_name(operation, &table_name, columns, environment)?,
             };
-            return add_index(
+            return Ok(vec![add_index(
                 name,
                 false,
                 index_name,
@@ -121,7 +155,7 @@ pub(crate) fn translate_alter_table(
                 columns,
                 index_options,
                 environment,
-            );
+            )?]);
         }
         AlterTableOperation::AddConstraint {
             constraint:
@@ -141,7 +175,7 @@ pub(crate) fn translate_alter_table(
                 Some(index_name) => index_name.clone(),
                 None => generated_index_name(operation, &table_name, columns, environment)?,
             };
-            return add_index(
+            return Ok(vec![add_index(
                 name,
                 true,
                 index_name,
@@ -149,26 +183,33 @@ pub(crate) fn translate_alter_table(
                 columns,
                 index_options,
                 environment,
-            );
+            )?]);
         }
         _ => return Err(unsupported_operation(operation)),
     };
-    Ok(ast::Stmt::AlterTable(ast::AlterTable {
+    Ok(vec![alter_table_statement(table_name, body)])
+}
+
+fn alter_table_statement(table_name: ast::Name, body: ast::AlterTableBody) -> ast::Stmt {
+    ast::Stmt::AlterTable(ast::AlterTable {
         name: ast::QualifiedName::single(table_name),
         body,
-    }))
+    })
 }
 
 pub(crate) fn translate_rename_table(
     renames: &[RenameTable],
+    environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     let [RenameTable { old_name, new_name }] = renames else {
         return Err(MysqlParserError::Unsupported(
             "RENAME TABLE is available for one table at a time".to_string(),
         ));
     };
+    let old_name = translate_ddl_name(old_name)?;
+    crate::ddl_index::ensure_indexes_keep_their_names(&old_name, environment)?;
     Ok(ast::Stmt::AlterTable(ast::AlterTable {
-        name: ast::QualifiedName::single(translate_ddl_name(old_name)?),
+        name: ast::QualifiedName::single(old_name),
         body: ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
     }))
 }
@@ -278,33 +319,35 @@ pub(crate) fn translate_drop(
     }
 }
 
-/// `CHANGE old new ...`, as core's `ALTER COLUMN`, which converts the stored
-/// values through the new type as MySQL does. Core's `ALTER COLUMN` renames
-/// the column, so `MODIFY` and a `CHANGE` that keeps the name are refused. A
-/// column of a key, or with a check, a reference or a generated value, which
-/// the new definition would drop in core but MySQL keeps, is refused.
+/// `CHANGE old new ...` (`new_name`) or `MODIFY old ...` (`None`), as
+/// core's `ALTER COLUMN`, which converts the stored values through the new
+/// type as MySQL does. Core's `ALTER COLUMN` renames the column, so one that
+/// keeps the name alters it to a name the table does not have and renames
+/// it back, in the transaction of the statement. A column of a key, or with
+/// a check, a reference or a generated value, which the new definition would
+/// drop in core but MySQL keeps, is refused.
 fn altered_column(
     operation: &AlterTableOperation,
     table_name: &ast::Name,
     old_name: &Ident,
-    new_name: &Ident,
+    new_name: Option<&Ident>,
     data_type: &DataType,
     options: &[ColumnOption],
     environment: &dyn Environment,
-) -> Result<ast::AlterTableBody, MysqlParserError> {
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let unavailable = |reason: &str| {
         MysqlParserError::Unsupported(format!(
             "ALTER TABLE operation `{operation}` {reason} is not available"
         ))
     };
     let old = translate_ddl_identifier(old_name)?;
-    if old
-        .as_str()
-        .eq_ignore_ascii_case(translate_ddl_identifier(new_name)?.as_str())
-    {
-        return Err(unavailable(
-            "that keeps the column's name, which core's ALTER COLUMN does not take,",
-        ));
+    if let Some(new_name) = new_name {
+        if !old
+            .as_str()
+            .eq_ignore_ascii_case(translate_ddl_identifier(new_name)?.as_str())
+        {
+            ensure_no_functional_index_reads(table_name, &old, environment)?;
+        }
     }
     let Some(sql) = environment.table_sql(table_name.as_str())? else {
         return Err(unavailable("on a table that is not in the schema"));
@@ -360,8 +403,25 @@ fn altered_column(
             "of a column in a key or of a table with a check, reference or generated value",
         ));
     }
-    let definition = Column::from_mysql(&ColumnDef {
-        name: new_name.clone(),
+    let final_name = match new_name {
+        Some(new_name) => translate_ddl_identifier(new_name)?,
+        None => column.col_name.clone(),
+    };
+    let temporary = old
+        .as_str()
+        .eq_ignore_ascii_case(final_name.as_str())
+        .then(|| {
+            (0..)
+                .map(|n| format!("{}_turso_altered_{n}", final_name.as_str()))
+                .find(|candidate| {
+                    !columns
+                        .iter()
+                        .any(|column| column.col_name.as_str().eq_ignore_ascii_case(candidate))
+                })
+                .unwrap_or_else(|| unreachable!("a table has finitely many columns"))
+        });
+    let altered = Column::from_mysql(&ColumnDef {
+        name: new_name.unwrap_or(old_name).clone(),
         data_type: data_type.clone(),
         options: options
             .iter()
@@ -370,17 +430,140 @@ fn altered_column(
                 option: option.clone(),
             })
             .collect(),
-    })?
-    .into_definition(DEFAULT_COLLATION)?;
+    })?;
+    if altered.auto_increment {
+        return Err(unavailable("that makes the column AUTO_INCREMENT"));
+    }
+    let stored = crate::stored_table::TableDefinition::from_body(&columns, &constraints);
+    if let Some(reason) =
+        indexes_refusing_the_type(table_name, &stored, &old, &altered.column_type, environment)?
+    {
+        return Err(unavailable(reason));
+    }
+    let other_types = stored
+        .columns
+        .iter()
+        .filter(|column| !column.name.eq_ignore_ascii_case(old.as_str()))
+        .map(|column| column.column_type())
+        .collect::<Vec<_>>();
+    crate::ddl_type::ensure_row_fits(
+        other_types
+            .iter()
+            .map(Option::as_ref)
+            .chain([Some(&altered.column_type)]),
+    )?;
+    let mut definition = altered.into_definition(DEFAULT_COLLATION)?;
     if keeps_more_than_its_type(&definition.constraints) {
         return Err(unavailable(
             "that makes the column a key or gives it a check, reference or generated value",
         ));
     }
-    Ok(ast::AlterTableBody::AlterColumn {
-        old,
-        new: definition,
-    })
+    let Some(temporary) = temporary else {
+        return Ok(vec![alter_table_statement(
+            table_name.clone(),
+            ast::AlterTableBody::AlterColumn {
+                old,
+                new: definition,
+            },
+        )]);
+    };
+    definition.col_name = ast::Name::exact(temporary.clone());
+    Ok(vec![
+        alter_table_statement(
+            table_name.clone(),
+            ast::AlterTableBody::AlterColumn {
+                old,
+                new: definition,
+            },
+        ),
+        alter_table_statement(
+            table_name.clone(),
+            ast::AlterTableBody::RenameColumn {
+                old: ast::Name::exact(temporary),
+                new: final_name,
+            },
+        ),
+    ])
+}
+
+/// Checks the new type `column_type` of `column` against the indexes of
+/// `table` that have it as a key part, as MySQL does: the type must be one
+/// a key takes whole, within the key length. An index Turso keeps of a
+/// string column may index a prefix of it, which Turso does not record, so
+/// such an index, or one on an expression, gives the reason the operation
+/// is not available.
+fn indexes_refusing_the_type(
+    table: &ast::Name,
+    stored: &crate::stored_table::TableDefinition,
+    column: &ast::Name,
+    column_type: &crate::ddl_type::ColumnType,
+    environment: &dyn Environment,
+) -> Result<Option<&'static str>, MysqlParserError> {
+    let is_column = |name: &str| name.eq_ignore_ascii_case(column.as_str());
+    if environment
+        .expression_index_columns(table.as_str())?
+        .iter()
+        .any(|read| is_column(read))
+    {
+        return Ok(Some("of a column an index expression reads"));
+    }
+    for parts in environment.index_key_columns(table.as_str())? {
+        if !parts.iter().flatten().any(|part| is_column(part)) {
+            continue;
+        }
+        let mut total_bytes = 0;
+        for part in &parts {
+            let Some(name) = part else {
+                return Ok(Some("of a column of an index on an expression"));
+            };
+            let Some(part_type) = stored.column(name).and_then(|part| part.column_type()) else {
+                return Ok(Some(
+                    "of a column of an index whose key parts Turso cannot read",
+                ));
+            };
+            if matches!(
+                part_type.family,
+                crate::ddl_type::Family::Char { .. }
+                    | crate::ddl_type::Family::Varchar { .. }
+                    | crate::ddl_type::Family::Text
+                    | crate::ddl_type::Family::Binary { .. }
+                    | crate::ddl_type::Family::Varbinary { .. }
+                    | crate::ddl_type::Family::Blob
+            ) {
+                return Ok(Some(
+                    "of a column of an index on a string column, which may index a prefix that Turso does not record,",
+                ));
+            }
+            let part_type = if is_column(name) {
+                column_type
+            } else {
+                &part_type
+            };
+            total_bytes += part_type.key_part_bytes(name, None)?;
+        }
+        crate::ddl_type::ensure_key_length(total_bytes)?;
+    }
+    Ok(None)
+}
+
+/// Fails as MySQL does (3837) to drop or rename `column`, which an index of
+/// `table` on an expression reads.
+fn ensure_no_functional_index_reads(
+    table: &ast::Name,
+    column: &ast::Name,
+    environment: &dyn Environment,
+) -> Result<(), MysqlParserError> {
+    if environment
+        .expression_index_columns(table.as_str())?
+        .iter()
+        .any(|read| read.eq_ignore_ascii_case(column.as_str()))
+    {
+        return Err(MysqlParserError::Rejected(format!(
+            "Column '{}' has a functional index dependency and cannot be dropped or renamed.",
+            column.as_str()
+        )));
+    }
+    Ok(())
 }
 
 /// `ADD [UNIQUE] INDEX name (...)`, as `CREATE [UNIQUE] INDEX name ON table (...)`.
@@ -412,7 +595,7 @@ fn add_index(
 }
 
 /// The name MySQL gives an index added without one: its first column's,
-/// when no index has it yet (MySQL adds a suffix otherwise).
+/// followed by `_2`, `_3`, ... when the table has a key of that name.
 fn generated_index_name(
     operation: &AlterTableOperation,
     table_name: &ast::Name,
@@ -424,18 +607,37 @@ fn generated_index_name(
             "ALTER TABLE operation `{operation}`, an index without a name, whose name MySQL generates from the keys of the table, is not available"
         ))
     };
-    let Some(Expr::Identifier(column)) = columns.first().map(|column| &column.column.expr) else {
-        return Err(unavailable());
+    let first_column = match columns.first().map(std::slice::from_ref) {
+        Some(first) => match crate::ddl_index::translate_key_parts(first) {
+            Ok(parts) => parts
+                .into_iter()
+                .next()
+                .map(|part| part.name)
+                .ok_or_else(unavailable)?,
+            Err(_) => return Err(unavailable()),
+        },
+        None => return Err(unavailable()),
     };
-    let name = translate_ddl_identifier(column)?;
-    if environment.index_table(name.as_str())?.is_some()
-        || environment
-            .table_sql(table_name.as_str())?
-            .is_some_and(|sql| crate::ddl_index::may_have_unique_key_named(&sql, name.as_str()))
-    {
-        return Err(unavailable());
+    let table_sql = environment.table_sql(table_name.as_str())?;
+    let base = first_column.as_str();
+    let mut candidate = base.to_string();
+    let mut suffix = 2;
+    loop {
+        if table_sql
+            .as_deref()
+            .is_some_and(|sql| crate::ddl_index::may_have_unique_key_named(sql, &candidate))
+        {
+            return Err(unavailable());
+        }
+        if !candidate.eq_ignore_ascii_case("PRIMARY")
+            && crate::ddl_index::turso_index_name(table_name.as_str(), &candidate, environment)?
+                .is_none()
+        {
+            return Ok(Ident::with_quote('`', candidate));
+        }
+        candidate = format!("{base}_{suffix}");
+        suffix += 1;
     }
-    Ok(Ident::new(name.as_str()))
 }
 
 fn unsupported_operation(operation: &AlterTableOperation) -> MysqlParserError {

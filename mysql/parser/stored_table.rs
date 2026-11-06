@@ -1,6 +1,7 @@
 //! The columns and keys of a table as its stored `CREATE TABLE` (or a
 //! lowered one) declares them.
 
+use crate::ddl_type::{self, ColumnType};
 use crate::MysqlParserError;
 use turso_parser::ast;
 
@@ -22,6 +23,8 @@ pub(crate) struct ColumnDefinition {
     /// `INTUNSIGNED`), with no display width for integer types and `INT` for
     /// `INTEGER`.
     pub(crate) type_text: String,
+    /// The type as the statement declares it.
+    declared: Option<ast::Type>,
     pub(crate) collation: Option<String>,
     pub(crate) not_null: bool,
     pub(crate) default: Option<ast::Expr>,
@@ -81,6 +84,7 @@ impl ColumnDefinition {
         Self {
             name: definition.col_name.as_str().to_string(),
             type_text,
+            declared: definition.col_type.clone(),
             collation,
             not_null,
             default,
@@ -92,6 +96,85 @@ impl ColumnDefinition {
             .then(|| members(definition.col_type.as_ref()?))
             .flatten(),
         }
+    }
+
+    /// The MySQL type of the column, when it is a type the frontend
+    /// declares.
+    pub(crate) fn column_type(&self) -> Option<ColumnType> {
+        let declared = self.declared.as_ref()?;
+        let name = declared.name.to_ascii_uppercase();
+        let (base, unsigned) = match name.strip_suffix(" UNSIGNED") {
+            Some(base) => (base, true),
+            None => (name.as_str(), false),
+        };
+        let number = |expr: &ast::Expr| match expr {
+            ast::Expr::Literal(ast::Literal::Numeric(digits)) => digits.parse::<u64>().ok(),
+            _ => None,
+        };
+        let size = match &declared.size {
+            Some(ast::TypeSize::MaxSize(size)) => Some(number(size)?),
+            _ => None,
+        };
+        let digits = match &declared.size {
+            Some(ast::TypeSize::TypeSize(precision, scale)) => {
+                Some((number(precision)?, number(scale)?))
+            }
+            _ => None,
+        };
+        let integer = |min: i128, max: i128| Some(ddl_type::Family::Integer { min, max });
+        let family = match (base, unsigned) {
+            ("TINYINT", false) => integer(-128, 127)?,
+            ("TINYINT", true) => integer(0, 255)?,
+            ("SMALLINT", false) => integer(-32_768, 32_767)?,
+            ("SMALLINT", true) => integer(0, 65_535)?,
+            ("MEDIUMINT", false) => integer(-8_388_608, 8_388_607)?,
+            ("MEDIUMINT", true) => integer(0, 16_777_215)?,
+            ("INT", false) => integer(i32::MIN.into(), i32::MAX.into())?,
+            ("INT", true) => integer(0, u32::MAX.into())?,
+            ("BIGINT", false) => integer(i64::MIN.into(), i64::MAX.into())?,
+            ("BIGINT", true) => integer(0, u64::MAX.into())?,
+            ("BIT", false) => ddl_type::Family::Bit { width: size? },
+            ("DECIMAL", unsigned) => {
+                let (precision, scale) = digits?;
+                ddl_type::Family::Decimal {
+                    precision,
+                    scale,
+                    unsigned,
+                }
+            }
+            ("FLOAT" | "DOUBLE", unsigned) => ddl_type::Family::Float { unsigned, digits },
+            ("CHAR", false) => ddl_type::Family::Char { length: size? },
+            ("VARCHAR", false) => ddl_type::Family::Varchar { length: size? },
+            ("BINARY", false) => ddl_type::Family::Binary { length: size? },
+            ("VARBINARY", false) => ddl_type::Family::Varbinary { length: size? },
+            ("TINYTEXT" | "TEXT" | "MEDIUMTEXT" | "LONGTEXT", false) if size.is_none() => {
+                ddl_type::Family::Text
+            }
+            ("TINYBLOB" | "BLOB" | "MEDIUMBLOB" | "LONGBLOB", false) if size.is_none() => {
+                ddl_type::Family::Blob
+            }
+            ("JSON", false) if size.is_none() => ddl_type::Family::Json,
+            ("DATE", false) if size.is_none() => ddl_type::Family::Date,
+            ("YEAR", false) if size.is_none() => ddl_type::Family::Year,
+            ("DATETIME", false) => ddl_type::Family::Datetime {
+                precision: size.unwrap_or(0),
+            },
+            ("TIMESTAMP", false) => ddl_type::Family::Timestamp {
+                precision: size.unwrap_or(0),
+            },
+            ("TIME", false) => ddl_type::Family::Time {
+                precision: size.unwrap_or(0),
+            },
+            ("ENUM" | "ENUM_EXACT", false) => ddl_type::Family::Enum(self.members.clone()?),
+            ("SET" | "\"SET\"" | "SET_EXACT", false) => {
+                ddl_type::Family::Set(self.members.clone()?)
+            }
+            _ => return None,
+        };
+        Some(ColumnType {
+            declared: declared.clone(),
+            family,
+        })
     }
 
     pub(crate) fn base_type(&self) -> &str {

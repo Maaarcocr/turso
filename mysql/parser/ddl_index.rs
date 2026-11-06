@@ -3,7 +3,7 @@ use crate::stored_table::{Family, TableDefinition};
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTableOperation, BinaryOperator, CreateIndex, Expr, Function, FunctionArg, FunctionArgExpr,
-    FunctionArguments, IndexColumn, IndexOption, IndexType, ObjectName, ObjectNamePart,
+    FunctionArguments, Ident, IndexColumn, IndexOption, IndexType, ObjectName, ObjectNamePart,
     OrderByExpr, OrderByOptions, UnaryOperator, Value,
 };
 use turso_parser::ast;
@@ -69,6 +69,90 @@ impl KeyPart {
     }
 }
 
+/// The MySQL name of the index `turso_name` of `table`. MySQL names an index
+/// within its table and Turso within the database, so an index named like
+/// an index of another table is `table.name` in Turso (see
+/// [`new_index_name`]).
+pub(crate) fn mysql_index_name<'a>(turso_name: &'a str, table: &str) -> &'a str {
+    match turso_name.split_at_checked(table.len()) {
+        Some((owner, rest)) if owner.eq_ignore_ascii_case(table) && rest.starts_with('.') => {
+            &rest[1..]
+        }
+        _ => turso_name,
+    }
+}
+
+/// The Turso name of the index MySQL names `name` in `table`, when the
+/// table has one.
+pub(crate) fn turso_index_name(
+    table: &str,
+    name: &str,
+    environment: &dyn Environment,
+) -> Result<Option<String>, MysqlParserError> {
+    Ok(environment
+        .indexes_of(table)?
+        .into_iter()
+        .find(|index| mysql_index_name(index, table).eq_ignore_ascii_case(name)))
+}
+
+/// The Turso name of a new index that MySQL names `name` in `table`: `name`
+/// itself, or `table.name` when the database has an index or a table named
+/// `name`.
+pub(crate) fn new_index_name(
+    name: &ast::Name,
+    table: &ast::Name,
+    environment: &dyn Environment,
+) -> Result<ast::Name, MysqlParserError> {
+    if turso_index_name(table.as_str(), name.as_str(), environment)?.is_some() {
+        return Err(MysqlParserError::Rejected(format!(
+            "Duplicate key name '{}'",
+            name.as_str()
+        )));
+    }
+    if mysql_index_name(name.as_str(), table.as_str()) != name.as_str() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "index `{}`, named like the table and a dot, which Turso keeps for the names of indexes named like another one, is not available",
+            name.as_str()
+        )));
+    }
+    let free = |candidate: &str| -> Result<bool, MysqlParserError> {
+        Ok(environment.index_table(candidate)?.is_none()
+            && environment.table_sql(candidate)?.is_none()
+            && !candidate.eq_ignore_ascii_case(table.as_str()))
+    };
+    if free(name.as_str())? {
+        return Ok(name.clone());
+    }
+    let scoped = format!("{}.{}", table.as_str(), name.as_str());
+    if free(&scoped)? {
+        return crate::names::translate_identifier(&Ident::with_quote('`', scoped));
+    }
+    Err(MysqlParserError::Unsupported(format!(
+        "index `{}`, named like another index of the database in the way Turso names indexes per database, is not available",
+        name.as_str()
+    )))
+}
+
+/// Refuses to rename `table` when Turso names one of its indexes after it
+/// (see [`new_index_name`]), as the index would keep the old name.
+pub(crate) fn ensure_indexes_keep_their_names(
+    table: &ast::Name,
+    environment: &dyn Environment,
+) -> Result<(), MysqlParserError> {
+    let indexes = environment.indexes_of(table.as_str())?;
+    match indexes
+        .iter()
+        .find(|index| mysql_index_name(index, table.as_str()) != index.as_str())
+    {
+        Some(index) => Err(MysqlParserError::Unsupported(format!(
+            "renaming table `{}`, whose index `{}` Turso names after the table as another table has an index of that name, is not available",
+            table.as_str(),
+            mysql_index_name(index, table.as_str())
+        ))),
+        None => Ok(()),
+    }
+}
+
 pub(crate) fn translate_create_index(
     create_index: &CreateIndex,
     environment: &dyn Environment,
@@ -110,15 +194,6 @@ pub(crate) fn translate_create_index(
     let table_name = translate_ddl_name(table_name)?;
     let index_name = translate_ddl_name(name)?;
     if environment
-        .index_table(index_name.as_str())?
-        .is_some_and(|owner| !owner.eq_ignore_ascii_case(table_name.as_str()))
-    {
-        return Err(MysqlParserError::Unsupported(format!(
-            "index `{}` named like an index of another table, which Turso names per database, is not available",
-            index_name.as_str()
-        )));
-    }
-    if environment
         .table_sql(table_name.as_str())?
         .is_some_and(|sql| may_have_unique_key_named(&sql, index_name.as_str()))
     {
@@ -127,35 +202,67 @@ pub(crate) fn translate_create_index(
             index_name.as_str()
         )));
     }
-    if let Some(table) = environment
-        .table_sql(table_name.as_str())?
-        .and_then(|sql| TableDefinition::parse(&sql).ok())
-    {
-        for column in columns {
-            let Expr::Identifier(identifier) = &column.column.expr else {
-                continue;
-            };
-            let Some(definition) = table.column(&identifier.value) else {
-                continue;
-            };
-            match definition.family() {
-                Family::Json => {
-                    return Err(MysqlParserError::Rejected(format!(
-                        "JSON column `{}` cannot be indexed directly",
-                        identifier.value
-                    )))
-                }
-                Family::Blob => {
-                    return Err(MysqlParserError::Rejected(format!(
-                        "BLOB/TEXT column `{}` used in a key needs a key length",
-                        identifier.value
-                    )))
-                }
-                Family::String | Family::Integer | Family::Other => {}
+    let table_sql = environment.table_sql(table_name.as_str())?;
+    let table = table_sql
+        .as_deref()
+        .and_then(|sql| TableDefinition::parse(sql).ok());
+    if let Some(table) = &table {
+        ensure_valid_key_parts(table, columns)?;
+    }
+    let index_name = if table_sql.is_some() {
+        new_index_name(&index_name, &table_name, environment)?
+    } else {
+        index_name
+    };
+    index_statement(*unique, index_name, table_name, columns, table.as_ref())
+}
+
+/// Checks the key parts of a new index of `table` as MySQL does: the
+/// columns exist, a column prefix is shorter than its string column, a text
+/// column has one, and the key fits InnoDB's maximum length.
+fn ensure_valid_key_parts(
+    table: &TableDefinition,
+    columns: &[IndexColumn],
+) -> Result<(), MysqlParserError> {
+    let mut total_bytes = 0;
+    for column in columns {
+        if matches!(column.column.expr, Expr::Nested(_)) {
+            continue;
+        }
+        let [part] = translate_key_parts(std::slice::from_ref(column))?
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("one key part per index column"));
+        let name = part.name.as_str();
+        let Some(definition) = table.column(name) else {
+            return Err(MysqlParserError::Rejected(format!(
+                "Key column '{name}' doesn't exist in table"
+            )));
+        };
+        if let Some(column_type) = definition.column_type() {
+            total_bytes += column_type.key_part_bytes(name, part.prefix)?;
+            continue;
+        }
+        if part.prefix.is_some() {
+            return Err(MysqlParserError::Unsupported(format!(
+                "a prefix of column `{name}` of type `{}` is not available",
+                definition.type_text
+            )));
+        }
+        match definition.family() {
+            Family::Json => {
+                return Err(MysqlParserError::Rejected(format!(
+                    "JSON column `{name}` cannot be indexed directly"
+                )))
             }
+            Family::Blob => {
+                return Err(MysqlParserError::Rejected(format!(
+                    "BLOB/TEXT column `{name}` used in a key needs a key length"
+                )))
+            }
+            Family::String | Family::Integer | Family::Other => {}
         }
     }
-    index_statement(*unique, index_name, table_name, columns)
+    crate::ddl_type::ensure_key_length(total_bytes)
 }
 
 fn index_statement(
@@ -163,6 +270,7 @@ fn index_statement(
     index_name: ast::Name,
     table_name: ast::Name,
     columns: &[IndexColumn],
+    table: Option<&TableDefinition>,
 ) -> Result<ast::Stmt, MysqlParserError> {
     if index_name.as_str().eq_ignore_ascii_case("PRIMARY") {
         return Err(MysqlParserError::Rejected(
@@ -171,7 +279,7 @@ fn index_statement(
     }
     let columns = columns
         .iter()
-        .map(index_column)
+        .map(|column| index_column(column, unique, table))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::Stmt::CreateIndex {
         unique,
@@ -185,17 +293,48 @@ fn index_statement(
     })
 }
 
-fn index_column(column: &IndexColumn) -> Result<ast::SortedColumn, MysqlParserError> {
+/// The column of an index of `table` for the key part `column`. A unique
+/// key compares the prefix of a column by the column's collation; another
+/// key indexes the whole column, which finds the same rows.
+fn index_column(
+    column: &IndexColumn,
+    unique: bool,
+    table: Option<&TableDefinition>,
+) -> Result<ast::SortedColumn, MysqlParserError> {
     let Expr::Nested(expr) = &column.column.expr else {
         let [part] = translate_key_parts(std::slice::from_ref(column))?
             .try_into()
             .unwrap_or_else(|_| unreachable!("one key part per index column"));
-        if part.prefix.is_some() {
+        let sorted = part.sorted_column();
+        let Some(prefix) = part.prefix else {
+            return Ok(sorted);
+        };
+        let Some(definition) = table.and_then(|table| table.column(part.name.as_str())) else {
             return Err(MysqlParserError::Unsupported(
                 "an index with a prefix length needs the column types to validate it".to_string(),
             ));
+        };
+        if !unique {
+            return Ok(sorted);
         }
-        return Ok(part.sorted_column());
+        let prefix = crate::expr::function_call(
+            "substr",
+            vec![
+                *sorted.expr,
+                ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
+                ast::Expr::Literal(ast::Literal::Numeric(prefix.to_string())),
+            ],
+        );
+        let prefix = match &definition.collation {
+            Some(collation) => {
+                ast::Expr::Collate(Box::new(prefix), ast::Name::exact(collation.clone()))
+            }
+            None => prefix,
+        };
+        return Ok(ast::SortedColumn {
+            expr: Box::new(prefix),
+            ..sorted
+        });
     };
     let IndexColumn {
         column:
@@ -352,16 +491,17 @@ pub(crate) fn drop_index_statement(
             "dropping the PRIMARY KEY is not available".to_string(),
         ));
     }
-    let owner = environment.index_table(name.as_str())?;
-    if !owner.is_some_and(|owner| owner.eq_ignore_ascii_case(table.as_str())) {
+    let Some(turso_name) = turso_index_name(table.as_str(), name.as_str(), environment)? else {
         return Err(MysqlParserError::Rejected(format!(
             "Can't DROP '{}'; check that column/key exists",
             name.as_str()
         )));
-    }
+    };
     Ok(ast::Stmt::DropIndex {
         if_exists: false,
-        idx_name: ast::QualifiedName::single(name),
+        idx_name: ast::QualifiedName::single(crate::names::translate_identifier(
+            &Ident::with_quote('`', turso_name),
+        )?),
     })
 }
 

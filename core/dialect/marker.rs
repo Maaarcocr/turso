@@ -63,10 +63,17 @@ pub(crate) fn parse_statement(
     dialect: &dyn Dialect,
     connection: &crate::Connection,
     sql: &str,
-) -> Result<(Option<ast::Cmd>, usize)> {
+) -> Result<(Option<super::ParsedStatement>, usize)> {
     let statement_sql = sql.trim_start();
     let Some((marker, table_sql)) = TableMarker::read(statement_sql)? else {
-        return dialect.parse_for(connection, sql);
+        let (parsed, end) = dialect.parse_statement_for(connection, sql)?;
+        if let Some(super::ParsedStatement::Sequence(parts)) = &parsed {
+            crate::turso_assert!(
+                !parts.is_empty(),
+                "a dialect lowered a statement to an empty sequence"
+            );
+        }
+        return Ok((parsed, end));
     };
     if !dialect_writes_marker(dialect, &marker) {
         crate::bail_parse_error!(
@@ -79,7 +86,7 @@ pub(crate) fn parse_statement(
         crate::bail_parse_error!("a table marker must be followed by CREATE TABLE");
     };
     Ok((
-        Some(ast::Cmd::Stmt(stmt)),
+        Some(super::ParsedStatement::Cmd(ast::Cmd::Stmt(stmt))),
         sql.len() - table_sql.len() + consumed,
     ))
 }
@@ -286,7 +293,7 @@ mod tests {
         let conn = db.connect(ConnectOpts::new()).unwrap();
         let (cmd, consumed) = parse_statement(marking().as_ref(), &conn, &marked).unwrap();
         assert_eq!(consumed, marked.len());
-        let Some(ast::Cmd::Stmt(stmt)) = cmd else {
+        let Some(crate::ParsedStatement::Cmd(ast::Cmd::Stmt(stmt))) = cmd else {
             panic!("expected a statement");
         };
         assert_eq!(
