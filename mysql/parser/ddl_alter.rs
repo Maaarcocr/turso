@@ -6,9 +6,9 @@ use crate::names::{translate_column_name, translate_ddl_identifier, translate_dd
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTable, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, CreateIndex,
-    DataType, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, NullsDistinctOption,
-    ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind, Statement,
-    TableConstraint, UniqueConstraint,
+    DataType, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, MySQLColumnPosition,
+    NullsDistinctOption, ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind,
+    Statement, TableConstraint, UniqueConstraint,
 };
 use turso_parser::ast;
 
@@ -130,13 +130,14 @@ pub(crate) fn lower_alter_table(
             col_name,
             data_type,
             options,
-            column_position: None,
+            column_position,
         } => {
             return altered_column(
                 operation,
                 &table_name,
                 col_name,
                 None,
+                column_position.as_ref(),
                 data_type,
                 options,
                 environment,
@@ -147,13 +148,14 @@ pub(crate) fn lower_alter_table(
             new_name,
             data_type,
             options,
-            column_position: None,
+            column_position,
         } => {
             return altered_column(
                 operation,
                 &table_name,
                 old_name,
                 Some(new_name),
+                column_position.as_ref(),
                 data_type,
                 options,
                 environment,
@@ -359,12 +361,15 @@ pub(crate) fn translate_drop(
 /// keeps the name alters it to a name the table does not have and renames
 /// it back, in the transaction of the statement. A column of a key, or with
 /// a check, a reference or a generated value, which the new definition would
-/// drop in core but MySQL keeps, is refused.
+/// drop in core but MySQL keeps, and a column moved to a `position`, are
+/// altered by a rebuild of the table.
+#[allow(clippy::too_many_arguments)]
 fn altered_column(
     operation: &AlterTableOperation,
     table_name: &ast::Name,
     old_name: &Ident,
     new_name: Option<&Ident>,
+    position: Option<&MySQLColumnPosition>,
     data_type: &DataType,
     options: &[ColumnOption],
     environment: &dyn Environment,
@@ -382,6 +387,25 @@ fn altered_column(
         {
             ensure_no_functional_index_reads(table_name, &old, environment)?;
         }
+    }
+    let column_def = ColumnDef {
+        name: new_name.unwrap_or(old_name).clone(),
+        data_type: data_type.clone(),
+        options: options
+            .iter()
+            .map(|option| ColumnOptionDef {
+                name: None,
+                option: option.clone(),
+            })
+            .collect(),
+    };
+    let rebuilt = || {
+        let mut rebuild = Rebuild::of(table_name, environment)?;
+        rebuild.modify_column(&old, &column_def, position, environment)?;
+        rebuild.statements(environment)
+    };
+    if position.is_some() {
+        return rebuilt();
     }
     let Some(sql) = environment.table_sql(table_name.as_str())? else {
         return Err(unavailable("on a table that is not in the schema"));
@@ -433,9 +457,7 @@ fn altered_column(
         )
     });
     if in_key || in_constraint || keeps_more_than_its_type(&column.constraints) {
-        return Err(unavailable(
-            "of a column in a key or of a table with a check, reference or generated value",
-        ));
+        return rebuilt();
     }
     let final_name = match new_name {
         Some(new_name) => translate_ddl_identifier(new_name)?,
@@ -454,17 +476,7 @@ fn altered_column(
                 })
                 .unwrap_or_else(|| unreachable!("a table has finitely many columns"))
         });
-    let altered = Column::from_mysql(&ColumnDef {
-        name: new_name.unwrap_or(old_name).clone(),
-        data_type: data_type.clone(),
-        options: options
-            .iter()
-            .map(|option| ColumnOptionDef {
-                name: None,
-                option: option.clone(),
-            })
-            .collect(),
-    })?;
+    let altered = Column::from_mysql(&column_def)?;
     if altered.auto_increment {
         return Err(unavailable("that makes the column AUTO_INCREMENT"));
     }
@@ -488,9 +500,7 @@ fn altered_column(
     )?;
     let mut definition = altered.into_definition(DEFAULT_COLLATION)?;
     if keeps_more_than_its_type(&definition.constraints) {
-        return Err(unavailable(
-            "that makes the column a key or gives it a check, reference or generated value",
-        ));
+        return rebuilt();
     }
     let Some(temporary) = temporary else {
         return Ok(vec![alter_table_statement(
@@ -526,7 +536,7 @@ fn altered_column(
 /// string column may index a prefix of it, which Turso does not record, so
 /// such an index, or one on an expression, gives the reason the operation
 /// is not available.
-fn indexes_refusing_the_type(
+pub(crate) fn indexes_refusing_the_type(
     table: &ast::Name,
     stored: &crate::stored_table::TableDefinition,
     column: &ast::Name,

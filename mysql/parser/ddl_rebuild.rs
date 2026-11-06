@@ -391,6 +391,222 @@ impl Rebuild {
         Ok(())
     }
 
+    /// `MODIFY old definition` or `CHANGE old definition`, whose column
+    /// MySQL replaces by `column_def` and moves to `position`. The keys and
+    /// checks of the column stay, as in MySQL, so a column of the primary
+    /// key stays `NOT NULL`. Renaming a column of a table with checks,
+    /// generated columns or defaults that are expressions, which may read
+    /// it, is refused, as is altering a generated column.
+    pub(crate) fn modify_column(
+        &mut self,
+        old: &ast::Name,
+        column_def: &ColumnDef,
+        position: Option<&MySQLColumnPosition>,
+        environment: &dyn Environment,
+    ) -> Result<(), MysqlParserError> {
+        let unavailable = |why: &str| {
+            MysqlParserError::Unsupported(format!(
+                "ALTER TABLE `{}` altering the column `{}` {why} is not available",
+                self.table.as_str(),
+                old.as_str()
+            ))
+        };
+        let Some(at) = self.position(old.as_str()) else {
+            return Err(MysqlParserError::Rejected(format!(
+                "Unknown column '{}' in '{}'",
+                old.as_str(),
+                self.table.as_str()
+            )));
+        };
+        let column = Column::from_mysql(column_def)?;
+        if column.auto_increment {
+            return Err(unavailable("to AUTO_INCREMENT"));
+        }
+        let is_generated = |definition: &ast::ColumnDefinition| {
+            definition.constraints.iter().any(|constraint| {
+                matches!(
+                    constraint.constraint,
+                    ast::ColumnConstraint::Generated { .. }
+                )
+            })
+        };
+        if is_generated(&self.columns[at].definition) {
+            return Err(unavailable("that is generated"));
+        }
+        let stored = self.definition();
+        if let Some(reason) = crate::ddl_alter::indexes_refusing_the_type(
+            &self.table,
+            &stored,
+            old,
+            &column.column_type,
+            environment,
+        )? {
+            return Err(unavailable(reason));
+        }
+        for key in &stored.unique_keys {
+            if !key
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(old.as_str()))
+            {
+                continue;
+            }
+            let mut total_bytes = 0;
+            for name in key {
+                total_bytes += if name.eq_ignore_ascii_case(old.as_str()) {
+                    column.column_type.key_part_bytes(name, None)?
+                } else {
+                    stored
+                        .column(name)
+                        .and_then(|part| part.column_type())
+                        .ok_or_else(|| unavailable("of a key whose types Turso cannot measure"))?
+                        .key_part_bytes(name, None)?
+                };
+            }
+            crate::ddl_type::ensure_key_length(total_bytes)?;
+        }
+        let other_types = stored
+            .columns
+            .iter()
+            .filter(|column| !column.name.eq_ignore_ascii_case(old.as_str()))
+            .map(|column| column.column_type())
+            .collect::<Vec<_>>();
+        crate::ddl_type::ensure_row_fits(
+            other_types
+                .iter()
+                .map(Option::as_ref)
+                .chain([Some(&column.column_type)]),
+        )?;
+        let explicit_null = column.explicit_null;
+        let mut definition = column.into_definition(DEFAULT_COLLATION)?;
+        if is_generated(&definition) {
+            return Err(unavailable("to a generated column"));
+        }
+        if definition.constraints.iter().any(|constraint| {
+            matches!(&constraint.constraint, ast::ColumnConstraint::Default(expr) if reads_columns(expr))
+        }) {
+            return Err(unavailable(
+                "to a default that reads other columns, which core does not take,",
+            ));
+        }
+        let new = definition.col_name.clone();
+        let renamed = !new.as_str().eq_ignore_ascii_case(old.as_str());
+        if renamed && self.position(new.as_str()).is_some() {
+            return Err(MysqlParserError::Rejected(format!(
+                "Duplicate column name '{}'",
+                new.as_str()
+            )));
+        }
+        if renamed
+            && (self.constraints.iter().any(|constraint| {
+                matches!(constraint.constraint, ast::TableConstraint::Check { .. })
+            }) || self.columns.iter().any(|column| {
+                column.definition.constraints.iter().any(|constraint| {
+                    matches!(
+                        &constraint.constraint,
+                        ast::ColumnConstraint::Check { .. }
+                            | ast::ColumnConstraint::Generated { .. }
+                    ) || matches!(
+                        &constraint.constraint,
+                        ast::ColumnConstraint::Default(expr) if reads_columns(expr)
+                    )
+                })
+            }))
+        {
+            return Err(unavailable(
+                "to a new name, in a table whose checks, generated columns or defaults may read it,",
+            ));
+        }
+        if definition.constraints.iter().any(|constraint| {
+            matches!(
+                constraint.constraint,
+                ast::ColumnConstraint::PrimaryKey { .. }
+            )
+        }) && self.has_primary_key()
+        {
+            return Err(MysqlParserError::Rejected(
+                "Multiple primary key defined".to_string(),
+            ));
+        }
+        let old_constraints = std::mem::take(&mut self.columns[at].definition.constraints);
+        let in_primary_key = old_constraints.iter().any(|constraint| {
+            matches!(
+                constraint.constraint,
+                ast::ColumnConstraint::PrimaryKey { .. }
+            )
+        }) || self.constraints.iter().any(|constraint| {
+            matches!(
+                &constraint.constraint,
+                ast::TableConstraint::PrimaryKey { columns, .. }
+                    if columns.iter().any(|column| names_column(&column.expr, old))
+            )
+        });
+        definition
+            .constraints
+            .extend(old_constraints.into_iter().filter(|constraint| {
+                matches!(
+                    constraint.constraint,
+                    ast::ColumnConstraint::PrimaryKey { .. }
+                        | ast::ColumnConstraint::Unique(_)
+                        | ast::ColumnConstraint::Check { .. }
+                        | ast::ColumnConstraint::ForeignKey { .. }
+                )
+            }));
+        if in_primary_key {
+            if explicit_null {
+                return Err(MysqlParserError::Rejected(
+                    "All parts of a PRIMARY KEY must be NOT NULL; if you need NULL in a key, use UNIQUE instead".to_string(),
+                ));
+            }
+            make_not_null(&mut definition.constraints);
+        }
+        if renamed {
+            for constraint in &mut self.constraints {
+                match &mut constraint.constraint {
+                    ast::TableConstraint::PrimaryKey { columns, .. }
+                    | ast::TableConstraint::Unique { columns, .. } => {
+                        for column in columns {
+                            rename_column(&mut column.expr, old, &new);
+                        }
+                    }
+                    ast::TableConstraint::ForeignKey { columns, .. } => {
+                        for column in columns {
+                            if column.col_name.as_str().eq_ignore_ascii_case(old.as_str()) {
+                                column.col_name = new.clone();
+                            }
+                        }
+                    }
+                    ast::TableConstraint::Check { .. } => {}
+                }
+            }
+            for index in &mut self.indexes {
+                let ast::Stmt::CreateIndex { columns, .. } = index else {
+                    unreachable!("the indexes of a rebuild are CREATE INDEX statements");
+                };
+                for column in columns {
+                    rename_column(&mut column.expr, old, &new);
+                }
+            }
+        }
+        let source = self.columns.remove(at).source;
+        let at = match position {
+            None => at,
+            Some(MySQLColumnPosition::First) => 0,
+            Some(MySQLColumnPosition::After(after)) => {
+                let after = translate_ddl_identifier(after)?;
+                self.position(after.as_str()).ok_or_else(|| {
+                    MysqlParserError::Rejected(format!(
+                        "Unknown column '{}' in '{}'",
+                        after.as_str(),
+                        self.table.as_str()
+                    ))
+                })? + 1
+            }
+        };
+        self.columns
+            .insert(at, RebuiltColumn { definition, source });
+        Ok(())
+    }
+
     /// The statements of the rebuild.
     pub(crate) fn statements(
         self,
@@ -516,6 +732,30 @@ fn reads_columns(expr: &ast::Expr) -> bool {
         ast::Expr::Binary(left, _, right) => reads_columns(left) || reads_columns(right),
         ast::Expr::FunctionCall { args, .. } => args.iter().any(|arg| reads_columns(arg)),
         _ => true,
+    }
+}
+
+/// Whether `expr`, a key part, is the column `name`.
+fn names_column(expr: &ast::Expr, name: &ast::Name) -> bool {
+    match expr {
+        ast::Expr::Id(column) | ast::Expr::Name(column) => {
+            column.as_str().eq_ignore_ascii_case(name.as_str())
+        }
+        ast::Expr::Collate(operand, _) => names_column(operand, name),
+        _ => false,
+    }
+}
+
+/// Renames the column `old` of `expr`, a key part, to `new`.
+fn rename_column(expr: &mut ast::Expr, old: &ast::Name, new: &ast::Name) {
+    match expr {
+        ast::Expr::Id(column) | ast::Expr::Name(column)
+            if column.as_str().eq_ignore_ascii_case(old.as_str()) =>
+        {
+            *column = new.clone();
+        }
+        ast::Expr::Collate(operand, _) => rename_column(operand, old, new),
+        _ => {}
     }
 }
 
