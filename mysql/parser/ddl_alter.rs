@@ -5,9 +5,9 @@ use crate::names::{translate_column_name, translate_ddl_identifier, translate_dd
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
     AlterTable, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, CreateIndex,
-    DataType, Expr, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType,
-    NullsDistinctOption, ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind,
-    Statement, TableConstraint, UniqueConstraint,
+    DataType, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, NullsDistinctOption,
+    ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind, Statement,
+    TableConstraint, UniqueConstraint,
 };
 use turso_parser::ast;
 
@@ -65,7 +65,10 @@ pub(crate) fn translate_alter_table(
         },
         AlterTableOperation::RenameTable {
             table_name: RenameTableNameKind::To(new_name) | RenameTableNameKind::As(new_name),
-        } => ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
+        } => {
+            crate::ddl_index::ensure_indexes_keep_their_names(&table_name, environment)?;
+            ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?)
+        }
         AlterTableOperation::ModifyColumn {
             col_name,
             data_type,
@@ -161,14 +164,17 @@ pub(crate) fn translate_alter_table(
 
 pub(crate) fn translate_rename_table(
     renames: &[RenameTable],
+    environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
     let [RenameTable { old_name, new_name }] = renames else {
         return Err(MysqlParserError::Unsupported(
             "RENAME TABLE is available for one table at a time".to_string(),
         ));
     };
+    let old_name = translate_ddl_name(old_name)?;
+    crate::ddl_index::ensure_indexes_keep_their_names(&old_name, environment)?;
     Ok(ast::Stmt::AlterTable(ast::AlterTable {
-        name: ast::QualifiedName::single(translate_ddl_name(old_name)?),
+        name: ast::QualifiedName::single(old_name),
         body: ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?),
     }))
 }
@@ -412,7 +418,7 @@ fn add_index(
 }
 
 /// The name MySQL gives an index added without one: its first column's,
-/// when no index has it yet (MySQL adds a suffix otherwise).
+/// followed by `_2`, `_3`, ... when the table has a key of that name.
 fn generated_index_name(
     operation: &AlterTableOperation,
     table_name: &ast::Name,
@@ -424,18 +430,37 @@ fn generated_index_name(
             "ALTER TABLE operation `{operation}`, an index without a name, whose name MySQL generates from the keys of the table, is not available"
         ))
     };
-    let Some(Expr::Identifier(column)) = columns.first().map(|column| &column.column.expr) else {
-        return Err(unavailable());
+    let first_column = match columns.first().map(std::slice::from_ref) {
+        Some(first) => match crate::ddl_index::translate_key_parts(first) {
+            Ok(parts) => parts
+                .into_iter()
+                .next()
+                .map(|part| part.name)
+                .ok_or_else(unavailable)?,
+            Err(_) => return Err(unavailable()),
+        },
+        None => return Err(unavailable()),
     };
-    let name = translate_ddl_identifier(column)?;
-    if environment.index_table(name.as_str())?.is_some()
-        || environment
-            .table_sql(table_name.as_str())?
-            .is_some_and(|sql| crate::ddl_index::may_have_unique_key_named(&sql, name.as_str()))
-    {
-        return Err(unavailable());
+    let table_sql = environment.table_sql(table_name.as_str())?;
+    let base = first_column.as_str();
+    let mut candidate = base.to_string();
+    let mut suffix = 2;
+    loop {
+        if table_sql
+            .as_deref()
+            .is_some_and(|sql| crate::ddl_index::may_have_unique_key_named(sql, &candidate))
+        {
+            return Err(unavailable());
+        }
+        if !candidate.eq_ignore_ascii_case("PRIMARY")
+            && crate::ddl_index::turso_index_name(table_name.as_str(), &candidate, environment)?
+                .is_none()
+        {
+            return Ok(Ident::with_quote('`', candidate));
+        }
+        candidate = format!("{base}_{suffix}");
+        suffix += 1;
     }
-    Ok(Ident::new(name.as_str()))
 }
 
 fn unsupported_operation(operation: &AlterTableOperation) -> MysqlParserError {

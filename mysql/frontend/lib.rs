@@ -243,6 +243,16 @@ impl turso_mysql_parser::Environment for Session<'_> {
         }))
     }
 
+    fn indexes_of(&self, table: &str) -> LoweringResult<Vec<String>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_indices(table)
+                .filter(|index| !index.name.starts_with("sqlite_autoindex_"))
+                .map(|index| index.name.clone())
+                .collect()
+        }))
+    }
+
     fn has_triggers(&self) -> bool {
         self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
             schema

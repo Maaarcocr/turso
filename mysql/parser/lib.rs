@@ -85,6 +85,10 @@ pub trait Environment {
     /// or `None` when no table has it.
     fn index_table(&self, name: &str) -> Result<Option<String>, MysqlParserError>;
 
+    /// The Turso names of the indexes of `table` that a `CREATE INDEX`
+    /// created (not those of its `PRIMARY KEY` and `UNIQUE` constraints).
+    fn indexes_of(&self, table: &str) -> Result<Vec<String>, MysqlParserError>;
+
     /// Whether the schema has a trigger.
     fn has_triggers(&self) -> bool;
 
@@ -158,6 +162,10 @@ impl Environment for Autocommit {
 
     fn index_table(&self, _name: &str) -> Result<Option<String>, MysqlParserError> {
         Ok(None)
+    }
+
+    fn indexes_of(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
     }
 
     fn has_triggers(&self) -> bool {
@@ -372,7 +380,7 @@ fn translate_other(
         Statement::AlterTable(alter_table) => {
             ddl_alter::translate_alter_table(alter_table, environment)
         }
-        Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames),
+        Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames, environment),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement, environment),
         Statement::CreateView(create_view) => {
             ddl_view::translate_create_view(create_view, environment)

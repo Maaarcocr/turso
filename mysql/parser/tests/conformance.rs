@@ -1665,6 +1665,14 @@ impl Environment for IndexOfT {
         Ok(name.eq_ignore_ascii_case("idx").then(|| "t".to_string()))
     }
 
+    fn indexes_of(&self, table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(if table.eq_ignore_ascii_case("t") {
+            vec!["idx".to_string()]
+        } else {
+            Vec::new()
+        })
+    }
+
     fn has_triggers(&self) -> bool {
         false
     }
@@ -1719,6 +1727,10 @@ impl Environment for TriggerSchema {
 
     fn index_table(&self, _name: &str) -> Result<Option<String>, MysqlParserError> {
         Ok(None)
+    }
+
+    fn indexes_of(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
     }
 
     fn has_triggers(&self) -> bool {
@@ -1909,10 +1921,7 @@ fn drops_an_index_of_the_named_table_only() {
     ] {
         let statement = parse_and_translate_in(sql, &IndexOfT)
             .unwrap_or_else(|error| panic!("{sql} must lower: {error}"));
-        assert!(
-            statement.to_string().eq_ignore_ascii_case("DROP INDEX idx"),
-            "SQL: {sql}"
-        );
+        assert!(statement.to_string() == "DROP INDEX `idx`", "SQL: {sql}");
     }
     for sql in [
         "DROP INDEX idx ON u",

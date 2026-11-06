@@ -27,7 +27,37 @@ pub(crate) struct Column {
     charset: bool,
 }
 
+fn column_collation<'a>(
+    collation: Option<&'a str>,
+    charset: bool,
+    table_collation: &'a str,
+) -> &'a str {
+    match (collation, charset) {
+        (Some(collation), _) => collation,
+        (None, true) => DEFAULT_COLLATION,
+        (None, false) => table_collation,
+    }
+}
+
 impl Column {
+    /// The collation sequence Turso compares the column's values by, for a
+    /// column of text in a table of collation `table_collation`.
+    pub(crate) fn collation_sequence(
+        &self,
+        table_collation: &str,
+    ) -> Result<Option<&'static str>, MysqlParserError> {
+        if !matches!(
+            self.column_type.family,
+            Family::Char { .. } | Family::Varchar { .. } | Family::Text
+        ) {
+            return Ok(None);
+        }
+        let collation = column_collation(self.collation.as_deref(), self.charset, table_collation);
+        collation_sequence(collation).map(Some).ok_or_else(|| {
+            MysqlParserError::Unsupported(format!("collation `{collation}` is not available"))
+        })
+    }
+
     pub(crate) fn from_mysql(column: &ColumnDef) -> Result<Self, MysqlParserError> {
         let ColumnDef {
             name,
@@ -145,11 +175,7 @@ impl Column {
                 default,
             ))));
         }
-        let collation = match (&collation, charset) {
-            (Some(collation), _) => collation.as_str(),
-            (None, true) => DEFAULT_COLLATION,
-            (None, false) => table_collation,
-        };
+        let collation = column_collation(collation.as_deref(), charset, table_collation);
         let sequence = || {
             collation_sequence(collation).ok_or_else(|| {
                 MysqlParserError::Unsupported(format!("collation `{collation}` is not available"))

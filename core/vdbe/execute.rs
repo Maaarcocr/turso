@@ -10222,6 +10222,9 @@ fn parse_schema_sql_for_alter(
         }
         return Ok((Some(ast::Cmd::Stmt(stmt)), marker));
     }
+    if entry_type == "index" {
+        return crate::dialect::sqlite::parse(sql).map(|(cmd, _)| (cmd, None));
+    }
     dialect.parse(sql).map(|(cmd, _)| (cmd, None))
 }
 

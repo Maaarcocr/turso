@@ -176,45 +176,45 @@ pub(crate) fn lower_create_table(
         return Ok(vec![create_table]);
     }
     let mut statements = vec![create_table];
-    for (name, key_parts) in indexes {
-        statements.push(secondary_index(name, &table_name, &key_parts, environment)?);
+    for index in indexes {
+        statements.push(secondary_index(index, &table_name, environment)?);
     }
     Ok(statements)
 }
 
-/// The `CREATE INDEX` of the secondary key `name` of the new table
-/// `table_name`. A column prefix is indexed as the whole column, which finds
-/// the same rows.
+/// The `CREATE INDEX` of a key of the new table `table_name` that is not a
+/// `UNIQUE` constraint of its `CREATE TABLE`.
 fn secondary_index(
-    name: ast::Name,
+    index: Index,
     table_name: &ast::Name,
-    key_parts: &[KeyPart],
     environment: &dyn Environment,
 ) -> Result<ast::Stmt, MysqlParserError> {
-    if environment.index_table(name.as_str())?.is_some() {
-        return Err(MysqlParserError::Unsupported(format!(
-            "index `{}` named like an index of another table, which Turso names per database, is not available",
-            name.as_str()
-        )));
-    }
-    if name.as_str().eq_ignore_ascii_case(table_name.as_str())
-        || environment.table_sql(name.as_str())?.is_some()
-    {
-        return Err(MysqlParserError::Unsupported(format!(
-            "index `{}` named like a table, which Turso names alike, is not available",
-            name.as_str()
-        )));
-    }
+    let Index {
+        name,
+        unique,
+        columns,
+    } = index;
     Ok(ast::Stmt::CreateIndex {
-        unique: false,
+        unique,
         if_not_exists: false,
-        idx_name: ast::QualifiedName::single(name),
+        idx_name: ast::QualifiedName::single(crate::ddl_index::new_index_name(
+            &name,
+            table_name,
+            environment,
+        )?),
         tbl_name: table_name.clone(),
         using: None,
-        columns: key_parts.iter().map(KeyPart::sorted_column).collect(),
+        columns,
         with_clause: Vec::new(),
         where_clause: None,
     })
+}
+
+/// A key that a `CREATE INDEX` creates, with the name MySQL gives it.
+struct Index {
+    name: ast::Name,
+    unique: bool,
+    columns: Vec<ast::SortedColumn>,
 }
 
 fn translate_select_body(query: &Query) -> Result<ast::CreateTableBody, MysqlParserError> {
@@ -225,9 +225,8 @@ fn translate_select_body(query: &Query) -> Result<ast::CreateTableBody, MysqlPar
     )?))
 }
 
-/// The body of a `CREATE TABLE` and its secondary keys, with the names MySQL
-/// gives them.
-type TableBody = (ast::CreateTableBody, Vec<(ast::Name, Vec<KeyPart>)>);
+/// The body of a `CREATE TABLE` and the keys that `CREATE INDEX` creates.
+type TableBody = (ast::CreateTableBody, Vec<Index>);
 
 fn translate_columns_and_constraints(
     columns: &[ColumnDef],
@@ -250,7 +249,17 @@ fn translate_columns_and_constraints(
     for constraint in constraints {
         table.add_constraint(constraint)?;
     }
-    let indexes = table.named_indexes()?;
+    let indexes = table
+        .named_indexes()?
+        .into_iter()
+        .map(|(name, key)| {
+            Ok(Index {
+                name,
+                unique: key.unique,
+                columns: table.index_columns(&key, table_collation)?,
+            })
+        })
+        .collect::<Result<Vec<_>, MysqlParserError>>()?;
     let Table {
         columns,
         constraints: table_constraints,
@@ -376,16 +385,25 @@ struct Table {
     constraints: Vec<ast::NamedTableConstraint>,
     key_names: Vec<String>,
     has_primary_key: bool,
-    /// The secondary keys, with their names when the statement gives them.
-    indexes: Vec<(Option<ast::Name>, Vec<KeyPart>)>,
+    /// The keys that `CREATE INDEX` creates: the secondary keys and the
+    /// unique keys on column prefixes.
+    indexes: Vec<Key>,
     /// The unique and secondary keys without a name, in the statement's
     /// order, which MySQL names after their first column.
     unnamed_keys: Vec<UnnamedKey>,
 }
 
+struct Key {
+    /// The name the statement gives the key.
+    name: Option<ast::Name>,
+    unique: bool,
+    key_parts: Vec<KeyPart>,
+}
+
 struct UnnamedKey {
     first_column: ast::Name,
-    /// The key's place in `Table::indexes`, or `None` for a unique key.
+    /// The key's place in `Table::indexes`, or `None` for a unique key that
+    /// is a `UNIQUE` constraint.
     index: Option<usize>,
 }
 
@@ -516,7 +534,10 @@ impl Table {
         ensure_key_has_no_storage_options(index_type.as_ref(), index_options)?;
         let name = index_name.as_ref().or(name.as_ref());
         self.claim_key_name(name)?;
-        let key_parts = self.whole_column_key(key_columns)?;
+        let key_parts = self.key_parts(key_columns)?;
+        if key_parts.iter().any(|part| part.prefix.is_some()) {
+            return self.add_index(name, true, key_parts);
+        }
         if name.is_none() {
             self.unnamed_keys.push(UnnamedKey {
                 first_column: first_key_column(&key_parts)?,
@@ -544,21 +565,74 @@ impl Table {
         ensure_key_has_no_storage_options(index_type.as_ref(), index_options)?;
         self.claim_key_name(name.as_ref())?;
         let key_parts = self.key_parts(key_columns)?;
-        let name = name.as_ref().map(translate_ddl_identifier).transpose()?;
+        self.add_index(name.as_ref(), false, key_parts)
+    }
+
+    fn add_index(
+        &mut self,
+        name: Option<&Ident>,
+        unique: bool,
+        key_parts: Vec<KeyPart>,
+    ) -> Result<(), MysqlParserError> {
+        let name = name.map(translate_ddl_identifier).transpose()?;
         if name.is_none() {
             self.unnamed_keys.push(UnnamedKey {
                 first_column: first_key_column(&key_parts)?,
                 index: Some(self.indexes.len()),
             });
         }
-        self.indexes.push((name, key_parts));
+        self.indexes.push(Key {
+            name,
+            unique,
+            key_parts,
+        });
         Ok(())
+    }
+
+    /// The columns of the index of `key`. A unique key compares the prefix
+    /// of a column by the column's collation; a secondary key indexes the
+    /// whole column, which finds the same rows.
+    fn index_columns(
+        &mut self,
+        key: &Key,
+        table_collation: &str,
+    ) -> Result<Vec<ast::SortedColumn>, MysqlParserError> {
+        let mut columns = Vec::new();
+        for part in &key.key_parts {
+            let column = part.sorted_column();
+            let Some(prefix) = part.prefix.filter(|_| key.unique) else {
+                columns.push(column);
+                continue;
+            };
+            let prefix = crate::expr::function_call(
+                "substr",
+                vec![
+                    *column.expr,
+                    ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
+                    ast::Expr::Literal(ast::Literal::Numeric(prefix.to_string())),
+                ],
+            );
+            let prefix = match self
+                .column_named(&part.name)?
+                .collation_sequence(table_collation)?
+            {
+                Some(sequence) => {
+                    ast::Expr::Collate(Box::new(prefix), ast::Name::exact(sequence.to_string()))
+                }
+                None => prefix,
+            };
+            columns.push(ast::SortedColumn {
+                expr: Box::new(prefix),
+                ..column
+            });
+        }
+        Ok(columns)
     }
 
     /// The secondary keys with the names MySQL gives them: a key without a
     /// name is named after its first column, followed by `_2`, `_3`, ... when
     /// an earlier key has that name.
-    fn named_indexes(&mut self) -> Result<Vec<(ast::Name, Vec<KeyPart>)>, MysqlParserError> {
+    fn named_indexes(&mut self) -> Result<Vec<(ast::Name, Key)>, MysqlParserError> {
         let column_unique_keys: Vec<String> = self
             .columns
             .iter()
@@ -597,11 +671,11 @@ impl Table {
         std::mem::take(&mut self.indexes)
             .into_iter()
             .zip(generated)
-            .map(|((name, key_parts), generated)| {
-                let name = name.or(generated).ok_or_else(|| {
+            .map(|(key, generated)| {
+                let name = key.name.clone().or(generated).ok_or_else(|| {
                     MysqlParserError::Unsupported("a key without a name".to_string())
                 })?;
-                Ok((name, key_parts))
+                Ok((name, key))
             })
             .collect()
     }
@@ -668,7 +742,7 @@ impl Table {
         let key_parts = self.key_parts(key_columns)?;
         if key_parts.iter().any(|part| part.prefix.is_some()) {
             return Err(MysqlParserError::Unsupported(
-                "a unique key on a column prefix is not available".to_string(),
+                "a primary key on a column prefix is not available".to_string(),
             ));
         }
         Ok(key_parts)
