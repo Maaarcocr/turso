@@ -227,7 +227,7 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
         ),
         (
             "CREATE TABLE t (id INT, email VARCHAR(50), KEY k (id), UNIQUE KEY uq (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE)",
-            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE) STRICT",
+            "CREATE TABLE t (id INT, email VARCHAR (50) COLLATE \"und-u-ks-level1\", CONSTRAINT uq UNIQUE (email), CONSTRAINT ck CHECK (id > 0), CONSTRAINT fk FOREIGN KEY (email) REFERENCES t (email) ON DELETE CASCADE) STRICT; CREATE INDEX k ON t (id)",
         ),
         (
             "CREATE TABLE t (a INT, b INT AS (a + 1) STORED, c INT GENERATED ALWAYS AS (a * 2))",
@@ -284,9 +284,15 @@ fn lowers_mysql_ddl_to_canonical_sqlite_ddl() {
     ];
 
     for (mysql, sqlite) in cases {
-        let statement = parse_and_translate(mysql)
-            .unwrap_or_else(|error| panic!("DDL must lower: {error}\nSQL: {mysql}"));
-        assert_eq!(statement.to_string(), sqlite, "SQL: {mysql}");
+        let statements =
+            turso_mysql_parser::parse_and_lower_in(mysql, &turso_mysql_parser::Autocommit)
+                .unwrap_or_else(|error| panic!("DDL must lower: {error}\nSQL: {mysql}"));
+        let lowered = statements
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ");
+        assert_eq!(lowered, sqlite, "SQL: {mysql}");
     }
 }
 

@@ -2955,3 +2955,92 @@ fn connections_check_foreign_keys_from_the_start() -> turso_core::Result<()> {
     connection.execute("INSERT INTO child VALUES (2, 9)")?;
     Ok(())
 }
+
+#[test]
+fn secondary_keys_of_created_tables_are_indexes_named_as_mysql_names_them() -> turso_core::Result<()>
+{
+    let connection = open_memory()?;
+    connection
+        .execute("CREATE TABLE t (a INT, b INT, UNIQUE (a), KEY (a), KEY kb (b), INDEX (b, a))")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL ORDER BY name"
+        )?,
+        vec![
+            vec![
+                Value::build_text("a_2"),
+                Value::build_text("CREATE INDEX `a_2` ON t (a)"),
+            ],
+            vec![
+                Value::build_text("b"),
+                Value::build_text("CREATE INDEX `b` ON t (b, a)"),
+            ],
+            vec![
+                Value::build_text("kb"),
+                Value::build_text("CREATE INDEX kb ON t (b)"),
+            ],
+        ]
+    );
+    connection.execute("CREATE TABLE IF NOT EXISTS t (a INT, KEY other (a))")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'other'"
+        )?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    connection.execute("DROP INDEX kb ON t")?;
+    Ok(())
+}
+
+#[test]
+fn a_statement_run_as_several_takes_effect_whole_or_not_at_all() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE u (x INT)")?;
+    connection.execute("CREATE VIEW v AS SELECT x FROM u")?;
+    let error = connection
+        .execute("CREATE TABLE t (a INT, KEY k (a), KEY v (a))")
+        .expect_err("an index named like a view");
+    assert!(error.to_string().contains("already"), "{error}");
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name IN ('t', 'k')"
+        )?,
+        vec![vec![Value::from_i64(0)]]
+    );
+    connection.execute("CREATE TABLE t (a INT, KEY k (a))")?;
+    connection.execute("START TRANSACTION")?;
+    connection.execute("INSERT INTO t VALUES (1)")?;
+    connection.execute("COMMIT")?;
+
+    let indexes = |name: &str| {
+        query(
+            &connection,
+            &format!("SELECT COUNT(*) FROM sqlite_schema WHERE name = '{name}'"),
+        )
+    };
+    let mut statement = connection.prepare("CREATE TABLE IF NOT EXISTS w (a INT, KEY kw (a))")?;
+    connection.execute("CREATE TABLE w (a INT)")?;
+    statement.run_ignore_rows()?;
+    assert_eq!(indexes("kw")?, vec![vec![Value::from_i64(0)]]);
+    connection.execute("DROP TABLE w")?;
+    statement.reset()?;
+    statement.run_ignore_rows()?;
+    assert_eq!(indexes("kw")?, vec![vec![Value::from_i64(1)]]);
+    assert_eq!(
+        statement.get_sql(),
+        "CREATE TABLE IF NOT EXISTS w (a INT, KEY kw (a))"
+    );
+    statement.reset()?;
+    statement.run_ignore_rows()?;
+    assert_eq!(indexes("kw")?, vec![vec![Value::from_i64(1)]]);
+    let mut statement = connection.prepare("CREATE TABLE x (a INT, KEY kx (a))")?;
+    statement.run_ignore_rows()?;
+    statement.reset()?;
+    let error = statement.run_ignore_rows().expect_err("the table exists");
+    assert!(error.to_string().contains("already exists"), "{error}");
+    connection.execute("INSERT INTO x VALUES (1)")?;
+    Ok(())
+}

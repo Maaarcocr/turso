@@ -380,9 +380,57 @@ pub struct Statement {
     /// True if this statement called `Connection::start_nested()` during
     /// construction and therefore must call `end_nested()` on drop.
     nested_guard_active: bool,
+    /// The statements this one runs in turn, when the dialect lowered it to a
+    /// sequence; `program` is then the one running now.
+    sequence: Option<Box<Sequence>>,
 }
 
 crate::assert::assert_send_sync!(Statement);
+
+/// A statement that the dialect lowered to a sequence of statements (see
+/// [`crate::ParsedStatement::Sequence`]).
+struct Sequence {
+    /// The dialect statement, lowered again when the schema changes before
+    /// the sequence begins.
+    sql: String,
+    parts: Vec<turso_parser::ast::Stmt>,
+    stage: SequenceStage,
+}
+
+/// How far a [`Sequence`] has run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SequenceStage {
+    /// Not running; the program is not the sequence's `BEGIN IMMEDIATE`.
+    Unstarted,
+    /// Running `BEGIN IMMEDIATE`, before anything changed.
+    Begin,
+    /// Running the part at this index.
+    Part(usize),
+    /// Running `COMMIT`.
+    Commit,
+    /// Committed, or rolled back after a failure that was reported.
+    Finished,
+}
+
+impl SequenceStage {
+    fn statement(self, sequence: &Sequence) -> turso_parser::ast::Stmt {
+        match self {
+            SequenceStage::Begin => turso_parser::ast::Stmt::Begin {
+                typ: Some(turso_parser::ast::TransactionType::Immediate),
+                name: None,
+            },
+            SequenceStage::Part(index) => sequence.parts[index].clone(),
+            SequenceStage::Commit => turso_parser::ast::Stmt::Commit { name: None },
+            SequenceStage::Unstarted | SequenceStage::Finished => {
+                unreachable!("a sequence runs no statement while {self:?}")
+            }
+        }
+    }
+
+    fn began(self) -> bool {
+        matches!(self, SequenceStage::Part(_) | SequenceStage::Commit)
+    }
+}
 
 impl std::fmt::Debug for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -461,7 +509,36 @@ impl Statement {
             is_blob_handle: false,
             nested_guard_active,
             analyze_refresh: None,
+            sequence: None,
         }
+    }
+
+    /// The statement that runs `parts` in turn for the dialect statement
+    /// `sql` (see [`crate::ParsedStatement::Sequence`]).
+    pub(crate) fn new_sequence(
+        connection: &Arc<Connection>,
+        parts: Vec<turso_parser::ast::Stmt>,
+        sql: &str,
+        tail_offset: usize,
+        nested_guard_active: bool,
+    ) -> Result<Self> {
+        let sequence = Sequence {
+            sql: sql.to_string(),
+            parts,
+            stage: SequenceStage::Begin,
+        };
+        let (program, pager) =
+            connection.compile_sequence_stmt(SequenceStage::Begin.statement(&sequence))?;
+        let mut statement = Self::new_with_origin(
+            program,
+            pager,
+            QueryMode::Normal,
+            tail_offset,
+            StatementOrigin::Root,
+            nested_guard_active,
+        );
+        statement.sequence = Some(Box::new(sequence));
+        Ok(statement)
     }
 
     /// Mark this statement as the parked backing statement of an incremental
@@ -619,6 +696,146 @@ impl Statement {
     /// gated behind cheap flag tests and kept out of line. A row in the middle
     /// of a scan runs only the interpreter call and the result-row bookkeeping.
     fn _step(&mut self, waker: Option<&Waker>) -> Result<StepResult> {
+        if self.sequence.is_some() {
+            return self.step_sequence(waker);
+        }
+        let result = self.step_program(waker);
+        if self.sequence.is_some() {
+            return self.continue_sequence(result, waker);
+        }
+        result
+    }
+
+    #[inline(never)]
+    fn step_sequence(&mut self, waker: Option<&Waker>) -> Result<StepResult> {
+        match self.sequence.as_ref().map(|sequence| sequence.stage) {
+            Some(SequenceStage::Finished) => return Ok(StepResult::Done),
+            Some(SequenceStage::Unstarted) => self.reprepare()?,
+            Some(SequenceStage::Begin | SequenceStage::Part(_) | SequenceStage::Commit) => {}
+            None => unreachable!("only a sequence steps as one"),
+        }
+        let result = self.step_program(waker);
+        self.continue_sequence(result, waker)
+    }
+
+    /// Moves a sequence on after its current statement returned `result`:
+    /// to its next statement when that one is done, and to a rollback of
+    /// everything it did when it failed.
+    #[inline(never)]
+    fn continue_sequence(
+        &mut self,
+        mut result: Result<StepResult>,
+        waker: Option<&Waker>,
+    ) -> Result<StepResult> {
+        loop {
+            let Some(sequence) = self.sequence.as_ref() else {
+                return result;
+            };
+            let after_part = |index: usize| {
+                if index + 1 < sequence.parts.len() {
+                    SequenceStage::Part(index + 1)
+                } else {
+                    SequenceStage::Commit
+                }
+            };
+            let next = match (sequence.stage, &result) {
+                (
+                    _,
+                    Ok(
+                        StepResult::IO
+                        | StepResult::Yield
+                        | StepResult::Sleep { .. }
+                        | StepResult::Busy,
+                    ),
+                ) => return result,
+                (SequenceStage::Begin, Ok(StepResult::Done)) => SequenceStage::Part(0),
+                (SequenceStage::Part(index), Ok(StepResult::Done)) => after_part(index),
+                (SequenceStage::Commit, Ok(StepResult::Done)) => {
+                    self.set_sequence_stage(SequenceStage::Finished);
+                    return result;
+                }
+                (SequenceStage::Begin, Ok(StepResult::Row)) => {
+                    self.set_sequence_stage(SequenceStage::Finished);
+                    return Err(LimboError::InternalError(
+                        "BEGIN of a sequence returned a row".to_string(),
+                    ));
+                }
+                (SequenceStage::Begin, Ok(StepResult::Interrupt) | Err(_)) => {
+                    self.set_sequence_stage(SequenceStage::Finished);
+                    return result;
+                }
+                (SequenceStage::Part(_) | SequenceStage::Commit, Ok(StepResult::Row)) => {
+                    return self.abandon_sequence(Err(LimboError::InternalError(
+                        "a statement of a sequence returned a row".to_string(),
+                    )));
+                }
+                (
+                    SequenceStage::Part(_) | SequenceStage::Commit,
+                    Ok(StepResult::Interrupt) | Err(_),
+                ) => return self.abandon_sequence(result),
+                (SequenceStage::Unstarted | SequenceStage::Finished, _) => {
+                    unreachable!("a sequence steps only while it runs")
+                }
+            };
+            if let Err(err) = self.start_sequence_stage(next) {
+                return self.abandon_sequence(Err(err));
+            }
+            result = self.step_program(waker);
+        }
+    }
+
+    fn set_sequence_stage(&mut self, stage: SequenceStage) {
+        self.sequence
+            .as_mut()
+            .expect("only a sequence has stages")
+            .stage = stage;
+    }
+
+    /// Makes the statement of `stage` the program that runs next.
+    fn start_sequence_stage(&mut self, stage: SequenceStage) -> Result<()> {
+        let statement =
+            stage.statement(self.sequence.as_ref().expect("only a sequence has stages"));
+        let (program, pager) = self
+            .program
+            .connection
+            .clone()
+            .compile_sequence_stmt(statement)?;
+        let query_timeout_override = self.query_timeout_override;
+        self.reset_internal(
+            Some(program.max_registers),
+            Some(program.cursor_ref.len()),
+            false,
+        )?;
+        self.query_timeout_override = query_timeout_override;
+        self.program = program;
+        self.pager = pager;
+        self.set_sequence_stage(stage);
+        Ok(())
+    }
+
+    /// Ends a sequence whose current statement failed with `result`, rolling
+    /// back what the sequence did, and reports the failure.
+    fn abandon_sequence(&mut self, result: Result<StepResult>) -> Result<StepResult> {
+        let reset = self.reset_internal(None, None, false);
+        let rollback = self.roll_back_sequence();
+        self.set_sequence_stage(SequenceStage::Finished);
+        let step = result?;
+        reset?;
+        rollback?;
+        Ok(step)
+    }
+
+    /// Rolls back the transaction a sequence began, if it is still open.
+    fn roll_back_sequence(&mut self) -> Result<()> {
+        let connection = self.program.connection.clone();
+        if connection.get_auto_commit() {
+            return Ok(());
+        }
+        connection.rollback_manual_txn_cleanup(&self.pager, true);
+        vdbe::execute::vtab_rollback_all(&connection)
+    }
+
+    fn step_program(&mut self, waker: Option<&Waker>) -> Result<StepResult> {
         // ANALYZE already ran to Done; only its stats refresh is outstanding.
         // Checked first: the root-statement count was released at Done, so
         // `prepare_step` must not re-register this statement as a root.
@@ -1131,26 +1348,24 @@ impl Statement {
         // publish new btree roots without bumping the schema cookie, so
         // same-version reprepare still refreshes it.
         conn.refresh_schema_from_shared_for_reprepare();
-        let new_program = {
-            let (cmd, _) = conn.parse_sql_with_origin(&self.program.sql, self.origin)?;
-            let cmd = cmd.expect("Same SQL string should be able to be parsed");
-
-            let syms = conn.syms.read();
-            let mode = self.query_mode;
-            #[cfg(debug_assertions)]
-            crate::turso_assert_eq!(QueryMode::new(&cmd), mode);
-            let (Cmd::Stmt(stmt) | Cmd::Explain(stmt) | Cmd::ExplainQueryPlan { stmt, .. }) = cmd;
-            let schema = conn.schema.read().clone();
-            translate::translate(
-                &schema,
-                stmt,
-                self.pager.clone(),
-                conn.clone(),
-                &syms,
-                mode,
-                &self.program.sql,
-                self.origin,
-            )?
+        let new_program = match self.sequence.as_ref().map(|sequence| sequence.stage) {
+            None => {
+                let sql = self.program.sql.clone();
+                self.reprepared_program(&sql)?
+            }
+            Some(SequenceStage::Unstarted | SequenceStage::Begin) => {
+                let sql = self.sequence.as_ref().expect("a sequence").sql.clone();
+                self.reprepared_program(&sql)?
+            }
+            Some(stage @ (SequenceStage::Part(_) | SequenceStage::Commit)) => {
+                let statement = stage.statement(self.sequence.as_ref().expect("a sequence"));
+                conn.compile_sequence_stmt(statement)?.0
+            }
+            Some(SequenceStage::Finished) => {
+                return Err(LimboError::InternalError(
+                    "a finished sequence was prepared again".to_string(),
+                ))
+            }
         };
 
         // Save parameters before they are reset
@@ -1177,6 +1392,56 @@ impl Statement {
         // Load the parameters back into the state
         self.state.parameters = parameters;
         Ok(())
+    }
+
+    /// The program for `sql`, parsed again, that starts this statement: its
+    /// one command, or the `BEGIN IMMEDIATE` of the sequence it now is.
+    fn reprepared_program(&mut self, sql: &str) -> Result<vdbe::Program> {
+        let conn = self.program.connection.clone();
+        let (parsed, _) = conn.parse_sql_with_origin(sql, self.origin)?;
+        match parsed.expect("Same SQL string should be able to be parsed") {
+            crate::ParsedStatement::Cmd(cmd) => {
+                if self.sequence.is_some() && QueryMode::new(&cmd) != self.query_mode {
+                    return Err(LimboError::InternalError(
+                        "a sequence was prepared again as a statement of another mode".to_string(),
+                    ));
+                }
+                self.sequence = None;
+                let syms = conn.syms.read();
+                let mode = self.query_mode;
+                #[cfg(debug_assertions)]
+                crate::turso_assert_eq!(QueryMode::new(&cmd), mode);
+                let (Cmd::Stmt(stmt) | Cmd::Explain(stmt) | Cmd::ExplainQueryPlan { stmt, .. }) =
+                    cmd;
+                let schema = conn.schema.read().clone();
+                translate::translate(
+                    &schema,
+                    stmt,
+                    self.pager.clone(),
+                    conn.clone(),
+                    &syms,
+                    mode,
+                    sql,
+                    self.origin,
+                )
+            }
+            crate::ParsedStatement::Sequence(parts) => {
+                if self.query_mode != QueryMode::Normal {
+                    return Err(LimboError::InternalError(
+                        "a statement was prepared again as a sequence of another mode".to_string(),
+                    ));
+                }
+                let sequence = Sequence {
+                    sql: sql.to_string(),
+                    parts,
+                    stage: SequenceStage::Begin,
+                };
+                let (program, _) =
+                    conn.compile_sequence_stmt(SequenceStage::Begin.statement(&sequence))?;
+                self.sequence = Some(Box::new(sequence));
+                Ok(program)
+            }
+        }
     }
 
     pub fn num_columns(&self) -> usize {
@@ -1627,7 +1892,20 @@ impl Statement {
     }
 
     pub fn reset(&mut self) -> Result<()> {
-        self.reset_internal(None, None, false)
+        let reset = self.reset_internal(None, None, false);
+        let Some(stage) = self.sequence.as_ref().map(|sequence| sequence.stage) else {
+            return reset;
+        };
+        let rollback = if stage.began() {
+            self.roll_back_sequence()
+        } else {
+            Ok(())
+        };
+        if stage != SequenceStage::Begin {
+            self.set_sequence_stage(SequenceStage::Unstarted);
+        }
+        reset?;
+        rollback
     }
 
     /// If `Insn::SequenceBeginInnerTx` swapped the connection's mv_tx to
@@ -1888,7 +2166,10 @@ impl Statement {
     }
 
     pub fn get_sql(&self) -> &str {
-        &self.program.sql
+        match &self.sequence {
+            Some(sequence) => &sequence.sql,
+            None => &self.program.sql,
+        }
     }
 
     pub fn is_busy(&self) -> bool {

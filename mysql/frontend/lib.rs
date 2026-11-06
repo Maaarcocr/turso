@@ -2,7 +2,8 @@ use std::sync::Arc;
 use turso_core::dialect::{ArgumentType, TypeRules};
 use turso_core::schema::{BTreeTable, Schema};
 use turso_core::{
-    Connection, Database, Dialect, Func, LimboError, Result, SqliteDialect, Value, IO,
+    Connection, Database, Dialect, Func, LimboError, ParsedStatement, Result, SqliteDialect, Value,
+    IO,
 };
 use turso_parser::ast;
 
@@ -25,15 +26,39 @@ impl Dialect for MySqlDialect {
     }
 
     fn parse(&self, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        parse_statement(sql, &turso_mysql_parser::Autocommit)
+        let (statements, end) = lower_statement(sql, &turso_mysql_parser::Autocommit)?;
+        match statements {
+            None => Ok((None, end)),
+            Some(statements) => match <[ast::Stmt; 1]>::try_from(statements) {
+                Ok([stmt]) => Ok((Some(ast::Cmd::Stmt(stmt)), end)),
+                Err(_) => Err(LimboError::ParseError(
+                    turso_mysql_parser::MysqlParserError::Unsupported(
+                        "a statement that Turso runs as several statements is not available here"
+                            .to_string(),
+                    )
+                    .to_string(),
+                )),
+            },
+        }
     }
 
-    fn parse_for(&self, connection: &Connection, sql: &str) -> Result<(Option<ast::Cmd>, usize)> {
-        let (cmd, end) = parse_statement(sql, &Session(connection))?;
-        if let Some(ast::Cmd::Stmt(stmt)) = &cmd {
+    fn parse_statement_for(
+        &self,
+        connection: &Connection,
+        sql: &str,
+    ) -> Result<(Option<ParsedStatement>, usize)> {
+        let (statements, end) = lower_statement(sql, &Session(connection))?;
+        let Some(statements) = statements else {
+            return Ok((None, end));
+        };
+        for stmt in &statements {
             check_default_functions(stmt, connection)?;
         }
-        Ok((cmd, end))
+        let parsed = match <[ast::Stmt; 1]>::try_from(statements) {
+            Ok([stmt]) => ParsedStatement::Cmd(ast::Cmd::Stmt(stmt)),
+            Err(statements) => ParsedStatement::Sequence(statements),
+        };
+        Ok((Some(parsed), end))
     }
 
     fn parse_reads_transaction_state(&self) -> bool {
@@ -128,20 +153,21 @@ impl Dialect for MySqlDialect {
 }
 
 /// The first statement of `sql`, lowered for a session described by
-/// `environment`, and the number of bytes it takes.
-fn parse_statement(
+/// `environment` to the statements that carry it out in turn, and the number
+/// of bytes it takes.
+fn lower_statement(
     sql: &str,
     environment: &dyn turso_mysql_parser::Environment,
-) -> Result<(Option<ast::Cmd>, usize)> {
+) -> Result<(Option<Vec<ast::Stmt>>, usize)> {
     let statement = match turso_mysql_parser::first_statement(sql) {
         Ok(Some(statement)) => statement,
         Ok(None) => return Ok((None, sql.len())),
         Err(error) => return Err(LimboError::ParseError(error.to_string())),
     };
-    let stmt =
-        turso_mysql_parser::parse_and_translate_in(&sql[statement.text.clone()], environment)
+    let statements =
+        turso_mysql_parser::parse_and_lower_in(&sql[statement.text.clone()], environment)
             .map_err(|error| LimboError::ParseError(error.to_string()))?;
-    Ok((Some(ast::Cmd::Stmt(stmt)), statement.end))
+    Ok((Some(statements), statement.end))
 }
 
 /// Refuses a column `DEFAULT` that calls a function Turso does not have, as

@@ -17,10 +17,12 @@ use turso_parser::ast;
 
 const STORAGE_ROW_FORMATS: [&str; 4] = ["DEFAULT", "DYNAMIC", "COMPACT", "REDUNDANT"];
 
-pub(crate) fn translate_create_table(
+/// The `CREATE TABLE` of `create_table`, followed by a `CREATE INDEX` for
+/// each of its secondary keys, which a Turso `CREATE TABLE` cannot hold.
+pub(crate) fn lower_create_table(
     create_table: &CreateTable,
     environment: &dyn Environment,
-) -> Result<ast::Stmt, MysqlParserError> {
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let CreateTable {
         or_replace,
         temporary,
@@ -145,8 +147,8 @@ pub(crate) fn translate_create_table(
     }
     let table_collation = translate_table_options(table_options)?;
     let table_name = translate_ddl_name(name)?;
-    let body = match (query, columns.is_empty() && constraints.is_empty()) {
-        (Some(query), true) => translate_select_body(query)?,
+    let (body, indexes) = match (query, columns.is_empty() && constraints.is_empty()) {
+        (Some(query), true) => (translate_select_body(query)?, Vec::new()),
         (None, false) => translate_columns_and_constraints(columns, constraints, &table_collation)?,
         (Some(_), false) => {
             return Err(MysqlParserError::Unsupported(
@@ -160,14 +162,58 @@ pub(crate) fn translate_create_table(
             ));
         }
     };
-    if !*if_not_exists || environment.table_sql(table_name.as_str())?.is_none() {
+    let exists = environment.table_sql(table_name.as_str())?.is_some();
+    if !*if_not_exists || !exists {
         foreign_key::check_foreign_keys(&table_name, &body, environment)?;
     }
-    Ok(ast::Stmt::CreateTable {
+    let create_table = ast::Stmt::CreateTable {
         temporary: *temporary,
         if_not_exists: *if_not_exists,
-        tbl_name: ast::QualifiedName::single(table_name),
+        tbl_name: ast::QualifiedName::single(table_name.clone()),
         body,
+    };
+    if exists {
+        return Ok(vec![create_table]);
+    }
+    let mut statements = vec![create_table];
+    for (name, key_parts) in indexes {
+        statements.push(secondary_index(name, &table_name, &key_parts, environment)?);
+    }
+    Ok(statements)
+}
+
+/// The `CREATE INDEX` of the secondary key `name` of the new table
+/// `table_name`. A column prefix is indexed as the whole column, which finds
+/// the same rows.
+fn secondary_index(
+    name: ast::Name,
+    table_name: &ast::Name,
+    key_parts: &[KeyPart],
+    environment: &dyn Environment,
+) -> Result<ast::Stmt, MysqlParserError> {
+    if environment.index_table(name.as_str())?.is_some() {
+        return Err(MysqlParserError::Unsupported(format!(
+            "index `{}` named like an index of another table, which Turso names per database, is not available",
+            name.as_str()
+        )));
+    }
+    if name.as_str().eq_ignore_ascii_case(table_name.as_str())
+        || environment.table_sql(name.as_str())?.is_some()
+    {
+        return Err(MysqlParserError::Unsupported(format!(
+            "index `{}` named like a table, which Turso names alike, is not available",
+            name.as_str()
+        )));
+    }
+    Ok(ast::Stmt::CreateIndex {
+        unique: false,
+        if_not_exists: false,
+        idx_name: ast::QualifiedName::single(name),
+        tbl_name: table_name.clone(),
+        using: None,
+        columns: key_parts.iter().map(KeyPart::sorted_column).collect(),
+        with_clause: Vec::new(),
+        where_clause: None,
     })
 }
 
@@ -179,11 +225,15 @@ fn translate_select_body(query: &Query) -> Result<ast::CreateTableBody, MysqlPar
     )?))
 }
 
+/// The body of a `CREATE TABLE` and its secondary keys, with the names MySQL
+/// gives them.
+type TableBody = (ast::CreateTableBody, Vec<(ast::Name, Vec<KeyPart>)>);
+
 fn translate_columns_and_constraints(
     columns: &[ColumnDef],
     constraints: &[TableConstraint],
     table_collation: &str,
-) -> Result<ast::CreateTableBody, MysqlParserError> {
+) -> Result<TableBody, MysqlParserError> {
     let columns = columns
         .iter()
         .map(Column::from_mysql)
@@ -193,11 +243,14 @@ fn translate_columns_and_constraints(
         constraints: Vec::new(),
         key_names: Vec::new(),
         has_primary_key: false,
+        indexes: Vec::new(),
+        unnamed_keys: Vec::new(),
     };
     table.validate_inline_keys()?;
     for constraint in constraints {
         table.add_constraint(constraint)?;
     }
+    let indexes = table.named_indexes()?;
     let Table {
         columns,
         constraints: table_constraints,
@@ -207,14 +260,15 @@ fn translate_columns_and_constraints(
         .into_iter()
         .map(|column| column.into_definition(table_collation))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(ast::CreateTableBody::ColumnsAndConstraints {
+    let body = ast::CreateTableBody::ColumnsAndConstraints {
         columns,
         constraints: table_constraints,
         options: ast::TableOptions {
             without_rowid_text: None,
             strict_text: Some("STRICT".to_string()),
         },
-    })
+    };
+    Ok((body, indexes))
 }
 
 fn translate_table_options(options: &CreateTableOptions) -> Result<String, MysqlParserError> {
@@ -322,6 +376,17 @@ struct Table {
     constraints: Vec<ast::NamedTableConstraint>,
     key_names: Vec<String>,
     has_primary_key: bool,
+    /// The secondary keys, with their names when the statement gives them.
+    indexes: Vec<(Option<ast::Name>, Vec<KeyPart>)>,
+    /// The unique and secondary keys without a name, in the statement's
+    /// order, which MySQL names after their first column.
+    unnamed_keys: Vec<UnnamedKey>,
+}
+
+struct UnnamedKey {
+    first_column: ast::Name,
+    /// The key's place in `Table::indexes`, or `None` for a unique key.
+    index: Option<usize>,
 }
 
 impl Table {
@@ -452,6 +517,12 @@ impl Table {
         let name = index_name.as_ref().or(name.as_ref());
         self.claim_key_name(name)?;
         let key_parts = self.whole_column_key(key_columns)?;
+        if name.is_none() {
+            self.unnamed_keys.push(UnnamedKey {
+                first_column: first_key_column(&key_parts)?,
+                index: None,
+            });
+        }
         self.constraints.push(ast::NamedTableConstraint {
             name: name.map(translate_ddl_identifier).transpose()?,
             constraint: ast::TableConstraint::Unique {
@@ -472,8 +543,67 @@ impl Table {
         } = index;
         ensure_key_has_no_storage_options(index_type.as_ref(), index_options)?;
         self.claim_key_name(name.as_ref())?;
-        self.key_parts(key_columns)?;
+        let key_parts = self.key_parts(key_columns)?;
+        let name = name.as_ref().map(translate_ddl_identifier).transpose()?;
+        if name.is_none() {
+            self.unnamed_keys.push(UnnamedKey {
+                first_column: first_key_column(&key_parts)?,
+                index: Some(self.indexes.len()),
+            });
+        }
+        self.indexes.push((name, key_parts));
         Ok(())
+    }
+
+    /// The secondary keys with the names MySQL gives them: a key without a
+    /// name is named after its first column, followed by `_2`, `_3`, ... when
+    /// an earlier key has that name.
+    fn named_indexes(&mut self) -> Result<Vec<(ast::Name, Vec<KeyPart>)>, MysqlParserError> {
+        let column_unique_keys: Vec<String> = self
+            .columns
+            .iter()
+            .filter(|column| column.unique)
+            .map(|column| column.name.as_str().to_lowercase())
+            .collect();
+        let mut taken = self.key_names.clone();
+        taken.push("primary".to_string());
+        let mut generated = vec![None; self.indexes.len()];
+        for key in &self.unnamed_keys {
+            let base = key.first_column.as_str();
+            let mut candidate = base.to_string();
+            let mut suffix = 2;
+            loop {
+                let lower = candidate.to_lowercase();
+                if self.key_names.contains(&lower)
+                    || (key.index.is_some() && column_unique_keys.contains(&lower))
+                {
+                    return Err(MysqlParserError::Unsupported(format!(
+                        "a key without a name, which MySQL names `{candidate}` or otherwise depending on the order of the keys, is not lowered yet"
+                    )));
+                }
+                if !taken.contains(&lower) {
+                    taken.push(lower);
+                    break;
+                }
+                candidate = format!("{base}_{suffix}");
+                suffix += 1;
+            }
+            if let Some(index) = key.index {
+                generated[index] = Some(translate_ddl_identifier(&Ident::with_quote(
+                    '`', candidate,
+                ))?);
+            }
+        }
+        std::mem::take(&mut self.indexes)
+            .into_iter()
+            .zip(generated)
+            .map(|((name, key_parts), generated)| {
+                let name = name.or(generated).ok_or_else(|| {
+                    MysqlParserError::Unsupported("a key without a name".to_string())
+                })?;
+                Ok((name, key_parts))
+            })
+            .collect()
     }
 
     fn add_foreign_key(
@@ -621,4 +751,11 @@ fn indexed_column(name: ast::Name) -> ast::IndexedColumn {
 
 fn unsupported_option_value(value: &Expr) -> MysqlParserError {
     MysqlParserError::Unsupported(format!("table option value `{value}` is not available"))
+}
+
+fn first_key_column(key_parts: &[KeyPart]) -> Result<ast::Name, MysqlParserError> {
+    key_parts
+        .first()
+        .map(|part| part.name.clone())
+        .ok_or_else(|| MysqlParserError::Rejected("a key needs at least one column".to_string()))
 }
