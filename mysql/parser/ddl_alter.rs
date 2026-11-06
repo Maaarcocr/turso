@@ -54,15 +54,21 @@ pub(crate) fn lower_alter_table(
             let [column_name] = column_names.as_slice() else {
                 return Err(unsupported_operation(operation));
             };
-            ast::AlterTableBody::DropColumn(translate_ddl_identifier(column_name)?)
+            let column_name = translate_ddl_identifier(column_name)?;
+            ensure_no_functional_index_reads(&table_name, &column_name, environment)?;
+            ast::AlterTableBody::DropColumn(column_name)
         }
         AlterTableOperation::RenameColumn {
             old_column_name,
             new_column_name,
-        } => ast::AlterTableBody::RenameColumn {
-            old: translate_ddl_identifier(old_column_name)?,
-            new: translate_column_name(new_column_name)?,
-        },
+        } => {
+            let old = translate_ddl_identifier(old_column_name)?;
+            let new = translate_column_name(new_column_name)?;
+            if !old.as_str().eq_ignore_ascii_case(new.as_str()) {
+                ensure_no_functional_index_reads(&table_name, &old, environment)?;
+            }
+            ast::AlterTableBody::RenameColumn { old, new }
+        }
         AlterTableOperation::RenameTable {
             table_name: RenameTableNameKind::To(new_name) | RenameTableNameKind::As(new_name),
         } => {
@@ -318,6 +324,14 @@ fn altered_column(
         ))
     };
     let old = translate_ddl_identifier(old_name)?;
+    if let Some(new_name) = new_name {
+        if !old
+            .as_str()
+            .eq_ignore_ascii_case(translate_ddl_identifier(new_name)?.as_str())
+        {
+            ensure_no_functional_index_reads(table_name, &old, environment)?;
+        }
+    }
     let Some(sql) = environment.table_sql(table_name.as_str())? else {
         return Err(unavailable("on a table that is not in the schema"));
     };
@@ -432,6 +446,26 @@ fn altered_column(
             },
         ),
     ])
+}
+
+/// Fails as MySQL does (3837) to drop or rename `column`, which an index of
+/// `table` on an expression reads.
+fn ensure_no_functional_index_reads(
+    table: &ast::Name,
+    column: &ast::Name,
+    environment: &dyn Environment,
+) -> Result<(), MysqlParserError> {
+    if environment
+        .expression_index_columns(table.as_str())?
+        .iter()
+        .any(|read| read.eq_ignore_ascii_case(column.as_str()))
+    {
+        return Err(MysqlParserError::Rejected(format!(
+            "Column '{}' has a functional index dependency and cannot be dropped or renamed.",
+            column.as_str()
+        )));
+    }
+    Ok(())
 }
 
 /// `ADD [UNIQUE] INDEX name (...)`, as `CREATE [UNIQUE] INDEX name ON table (...)`.

@@ -3146,6 +3146,32 @@ fn indexes_added_on_column_prefixes_are_checked_against_the_stored_columns(
 }
 
 #[test]
+fn columns_an_expression_index_reads_are_neither_dropped_nor_renamed() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (pk INT PRIMARY KEY, c1 INT, c2 INT)")?;
+    connection.execute("CREATE INDEX e ON t ((c1 * 10))")?;
+    for statement in [
+        "ALTER TABLE t RENAME COLUMN c1 TO c9",
+        "ALTER TABLE t DROP COLUMN c1",
+        "ALTER TABLE t CHANGE c1 c9 BIGINT",
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(
+            error.to_string().contains("functional index dependency"),
+            "{statement}: {error}"
+        );
+    }
+    connection.execute("INSERT INTO t VALUES (1, 2, 0), (2, 3, 0)")?;
+    connection.execute("ALTER TABLE t MODIFY c1 BIGINT")?;
+    connection.execute("ALTER TABLE t RENAME COLUMN c2 TO c3")?;
+    assert_eq!(
+        query(&connection, "SELECT pk FROM t WHERE c1 * 10 = 30")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn index_names_belong_to_their_table_as_in_mysql() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE a (x INT, KEY (x), KEY k (x))")?;

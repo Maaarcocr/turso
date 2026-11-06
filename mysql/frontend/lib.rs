@@ -253,6 +253,43 @@ impl turso_mysql_parser::Environment for Session<'_> {
         }))
     }
 
+    fn expression_index_columns(&self, table: &str) -> LoweringResult<Vec<String>> {
+        self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            let mut columns = Vec::new();
+            let table_columns = schema
+                .get_btree_table(table)
+                .map(|table| table.columns().to_vec())
+                .unwrap_or_default();
+            for index in schema.get_indices(table) {
+                for expr in index.columns.iter().filter_map(|column| column.expr.as_deref()) {
+                    turso_core::walk_expr(expr, &mut |expr| {
+                        match expr {
+                            ast::Expr::Id(name) | ast::Expr::Name(name) => {
+                                columns.push(name.as_str().to_string());
+                            }
+                            ast::Expr::Qualified(_, name) => columns.push(name.as_str().to_string()),
+                            ast::Expr::Column { column, .. } => {
+                                let Some(name) =
+                                    table_columns.get(*column).and_then(|column| column.name.clone())
+                                else {
+                                    return Err(turso_core::LimboError::InternalError(format!(
+                                        "index {} reads column {column} that table {table} does not have",
+                                        index.name
+                                    )));
+                                };
+                                columns.push(name);
+                            }
+                            _ => {}
+                        }
+                        Ok(turso_core::WalkControl::Continue)
+                    })
+                    .map_err(|err| turso_mysql_parser::MysqlParserError::Unsupported(err.to_string()))?;
+                }
+            }
+            Ok(columns)
+        })
+    }
+
     fn has_triggers(&self) -> bool {
         self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
             schema
