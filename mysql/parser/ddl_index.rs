@@ -202,40 +202,67 @@ pub(crate) fn translate_create_index(
             index_name.as_str()
         )));
     }
-    if let Some(table) = environment
-        .table_sql(table_name.as_str())?
-        .and_then(|sql| TableDefinition::parse(&sql).ok())
-    {
-        for column in columns {
-            let Expr::Identifier(identifier) = &column.column.expr else {
-                continue;
-            };
-            let Some(definition) = table.column(&identifier.value) else {
-                continue;
-            };
-            match definition.family() {
-                Family::Json => {
-                    return Err(MysqlParserError::Rejected(format!(
-                        "JSON column `{}` cannot be indexed directly",
-                        identifier.value
-                    )))
-                }
-                Family::Blob => {
-                    return Err(MysqlParserError::Rejected(format!(
-                        "BLOB/TEXT column `{}` used in a key needs a key length",
-                        identifier.value
-                    )))
-                }
-                Family::String | Family::Integer | Family::Other => {}
-            }
-        }
+    let table_sql = environment.table_sql(table_name.as_str())?;
+    let table = table_sql
+        .as_deref()
+        .and_then(|sql| TableDefinition::parse(sql).ok());
+    if let Some(table) = &table {
+        ensure_valid_key_parts(table, columns)?;
     }
-    let index_name = if environment.table_sql(table_name.as_str())?.is_some() {
+    let index_name = if table_sql.is_some() {
         new_index_name(&index_name, &table_name, environment)?
     } else {
         index_name
     };
-    index_statement(*unique, index_name, table_name, columns)
+    index_statement(*unique, index_name, table_name, columns, table.as_ref())
+}
+
+/// Checks the key parts of a new index of `table` as MySQL does: the
+/// columns exist, a column prefix is shorter than its string column, a text
+/// column has one, and the key fits InnoDB's maximum length.
+fn ensure_valid_key_parts(
+    table: &TableDefinition,
+    columns: &[IndexColumn],
+) -> Result<(), MysqlParserError> {
+    let mut total_bytes = 0;
+    for column in columns {
+        if matches!(column.column.expr, Expr::Nested(_)) {
+            continue;
+        }
+        let [part] = translate_key_parts(std::slice::from_ref(column))?
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("one key part per index column"));
+        let name = part.name.as_str();
+        let Some(definition) = table.column(name) else {
+            return Err(MysqlParserError::Rejected(format!(
+                "Key column '{name}' doesn't exist in table"
+            )));
+        };
+        if let Some(column_type) = definition.column_type() {
+            total_bytes += column_type.key_part_bytes(name, part.prefix)?;
+            continue;
+        }
+        if part.prefix.is_some() {
+            return Err(MysqlParserError::Unsupported(format!(
+                "a prefix of column `{name}` of type `{}` is not available",
+                definition.type_text
+            )));
+        }
+        match definition.family() {
+            Family::Json => {
+                return Err(MysqlParserError::Rejected(format!(
+                    "JSON column `{name}` cannot be indexed directly"
+                )))
+            }
+            Family::Blob => {
+                return Err(MysqlParserError::Rejected(format!(
+                    "BLOB/TEXT column `{name}` used in a key needs a key length"
+                )))
+            }
+            Family::String | Family::Integer | Family::Other => {}
+        }
+    }
+    crate::ddl_type::ensure_key_length(total_bytes)
 }
 
 fn index_statement(
@@ -243,6 +270,7 @@ fn index_statement(
     index_name: ast::Name,
     table_name: ast::Name,
     columns: &[IndexColumn],
+    table: Option<&TableDefinition>,
 ) -> Result<ast::Stmt, MysqlParserError> {
     if index_name.as_str().eq_ignore_ascii_case("PRIMARY") {
         return Err(MysqlParserError::Rejected(
@@ -251,7 +279,7 @@ fn index_statement(
     }
     let columns = columns
         .iter()
-        .map(index_column)
+        .map(|column| index_column(column, unique, table))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ast::Stmt::CreateIndex {
         unique,
@@ -265,17 +293,48 @@ fn index_statement(
     })
 }
 
-fn index_column(column: &IndexColumn) -> Result<ast::SortedColumn, MysqlParserError> {
+/// The column of an index of `table` for the key part `column`. A unique
+/// key compares the prefix of a column by the column's collation; another
+/// key indexes the whole column, which finds the same rows.
+fn index_column(
+    column: &IndexColumn,
+    unique: bool,
+    table: Option<&TableDefinition>,
+) -> Result<ast::SortedColumn, MysqlParserError> {
     let Expr::Nested(expr) = &column.column.expr else {
         let [part] = translate_key_parts(std::slice::from_ref(column))?
             .try_into()
             .unwrap_or_else(|_| unreachable!("one key part per index column"));
-        if part.prefix.is_some() {
+        let sorted = part.sorted_column();
+        let Some(prefix) = part.prefix else {
+            return Ok(sorted);
+        };
+        let Some(definition) = table.and_then(|table| table.column(part.name.as_str())) else {
             return Err(MysqlParserError::Unsupported(
                 "an index with a prefix length needs the column types to validate it".to_string(),
             ));
+        };
+        if !unique {
+            return Ok(sorted);
         }
-        return Ok(part.sorted_column());
+        let prefix = crate::expr::function_call(
+            "substr",
+            vec![
+                *sorted.expr,
+                ast::Expr::Literal(ast::Literal::Numeric("1".to_string())),
+                ast::Expr::Literal(ast::Literal::Numeric(prefix.to_string())),
+            ],
+        );
+        let prefix = match &definition.collation {
+            Some(collation) => {
+                ast::Expr::Collate(Box::new(prefix), ast::Name::exact(collation.clone()))
+            }
+            None => prefix,
+        };
+        return Ok(ast::SortedColumn {
+            expr: Box::new(prefix),
+            ..sorted
+        });
     };
     let IndexColumn {
         column:

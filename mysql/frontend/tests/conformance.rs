@@ -3086,6 +3086,41 @@ fn unique_keys_on_column_prefixes_compare_prefixes_by_the_column_collation(
 }
 
 #[test]
+fn indexes_added_on_column_prefixes_are_checked_against_the_stored_columns(
+) -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute("CREATE TABLE t (a VARCHAR(10), b TEXT, c INT, d VARBINARY(4))")?;
+    for (statement, message) in [
+        ("CREATE INDEX i ON t (c(2))", "not a valid MySQL key part"),
+        ("CREATE INDEX i ON t (a(11))", "not a valid MySQL key part"),
+        ("CREATE INDEX i ON t (b)", "needs a key length"),
+        ("CREATE INDEX i ON t (b(769))", "3072-byte"),
+        (
+            "ALTER TABLE t ADD INDEX (z(2))",
+            "Key column 'z' doesn't exist",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection.execute("CREATE INDEX i ON t (b(765), a(3))")?;
+    connection.execute("CREATE UNIQUE INDEX u ON t (b(2))")?;
+    connection.execute("ALTER TABLE t ADD UNIQUE (d(2))")?;
+    connection.execute("INSERT INTO t (b, d) VALUES ('xy1', X'0102')")?;
+    for row in ["('XYz', X'0304')", "('ab', X'010203')"] {
+        let statement = format!("INSERT INTO t (b, d) VALUES {row}");
+        let error = connection.execute(&statement).expect_err(&statement);
+        assert!(error.to_string().contains("UNIQUE"), "{statement}: {error}");
+    }
+    connection.execute("INSERT INTO t (b, d) VALUES ('ab', X'0103')")?;
+    assert_eq!(
+        query(&connection, "SELECT count(*) FROM t")?,
+        vec![vec![Value::from_i64(2)]]
+    );
+    Ok(())
+}
+
+#[test]
 fn index_names_belong_to_their_table_as_in_mysql() -> turso_core::Result<()> {
     let connection = open_memory()?;
     connection.execute("CREATE TABLE a (x INT, KEY (x), KEY k (x))")?;
