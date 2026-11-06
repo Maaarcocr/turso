@@ -1681,13 +1681,19 @@ fn alter_table_changes_columns() -> turso_core::Result<()> {
         sql.contains("(n INT DEFAULT 5, B VARCHAR (30)") && !sql.contains("turso_altered"),
         "{sql}"
     );
-    for refused in [
-        "ALTER TABLE ac CHANGE k j BIGINT",
-        "ALTER TABLE ac CHANGE B c VARCHAR(20) UNIQUE",
-    ] {
-        let error = connection.execute(refused).expect_err(refused).to_string();
-        assert!(error.contains("not available"), "{refused}: {error}");
-    }
+    connection.execute("ALTER TABLE ac CHANGE k j BIGINT")?;
+    connection.execute("ALTER TABLE ac CHANGE B c VARCHAR(20) UNIQUE")?;
+    let sql = format!(
+        "{:?}",
+        query(
+            &connection,
+            "SELECT sql FROM sqlite_schema WHERE name = 'ac'",
+        )?
+    );
+    assert!(
+        sql.contains("j BIGINT NOT NULL PRIMARY KEY") && sql.contains("c VARCHAR (20) UNIQUE"),
+        "{sql}"
+    );
     Ok(())
 }
 
@@ -3346,6 +3352,107 @@ fn insert_ignore_cuts_string_literals_too_long_for_their_column() -> turso_core:
                 Value::build_text("7879")
             ],
             vec![Value::from_i64(2), Value::Null, Value::build_text("6162")],
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn modify_and_change_keep_the_keys_and_checks_of_the_column() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (a INT, b INT, v VARCHAR(10), u INT UNIQUE, PRIMARY KEY (a, b), CHECK (u > 0))",
+    )?;
+    connection.execute("INSERT INTO t VALUES (1, 2, 'x', 5), (1, 3, 'y', 6)")?;
+    for (statement, message) in [
+        (
+            "ALTER TABLE t MODIFY b INT NULL",
+            "All parts of a PRIMARY KEY",
+        ),
+        (
+            "ALTER TABLE t MODIFY u INT PRIMARY KEY",
+            "Multiple primary key",
+        ),
+        ("ALTER TABLE t CHANGE u w INT", "not available"),
+        (
+            "ALTER TABLE t MODIFY v INT AFTER nope",
+            "Unknown column 'nope'",
+        ),
+        ("ALTER TABLE t CHANGE v u INT", "Duplicate column name 'u'"),
+        ("ALTER TABLE t MODIFY v INT", "Incorrect integer value"),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection.execute("ALTER TABLE t MODIFY b BIGINT FIRST")?;
+    connection.execute("ALTER TABLE t MODIFY u SMALLINT AFTER v")?;
+    for statement in [
+        "INSERT INTO t (a, b, v, u) VALUES (2, 1, 'z', 5)",
+        "INSERT INTO t (a, b, v, u) VALUES (2, 1, 'z', -1)",
+        "INSERT INTO t (a, b, v, u) VALUES (1, 2, 'z', 7)",
+    ] {
+        connection.execute(statement).expect_err(statement);
+    }
+    assert_eq!(
+        query(&connection, "SELECT * FROM t ORDER BY b")?,
+        vec![
+            vec![
+                Value::from_i64(2),
+                Value::from_i64(1),
+                Value::build_text("x"),
+                Value::from_i64(5)
+            ],
+            vec![
+                Value::from_i64(3),
+                Value::from_i64(1),
+                Value::build_text("y"),
+                Value::from_i64(6)
+            ],
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn alter_column_sets_and_drops_defaults() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (pk INT PRIMARY KEY, c VARCHAR(10) DEFAULT 'a', u INT UNIQUE, j JSON, CHECK (u > 0))",
+    )?;
+    connection.execute("ALTER TABLE t ALTER COLUMN c SET DEFAULT 'FOO!'")?;
+    connection.execute("ALTER TABLE t ALTER COLUMN u SET DEFAULT 7")?;
+    connection.execute("INSERT INTO t (pk) VALUES (1)")?;
+    connection.execute("ALTER TABLE t ALTER COLUMN c DROP DEFAULT")?;
+    connection.execute("INSERT INTO t (pk, u) VALUES (2, 8)")?;
+    for (statement, message) in [
+        (
+            "ALTER TABLE t ALTER COLUMN j SET DEFAULT ('[]')",
+            "can't have a default value",
+        ),
+        (
+            "ALTER TABLE t ALTER COLUMN u SET DEFAULT 'x'",
+            "invalid default value",
+        ),
+        (
+            "ALTER TABLE t ALTER COLUMN nope DROP DEFAULT",
+            "Unknown column 'nope'",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection
+        .execute("INSERT INTO t (pk) VALUES (3)")
+        .expect_err("u keeps its unique key: a second 7");
+    assert_eq!(
+        query(&connection, "SELECT pk, c, u FROM t ORDER BY pk")?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::build_text("FOO!"),
+                Value::from_i64(7)
+            ],
+            vec![Value::from_i64(2), Value::Null, Value::from_i64(8)],
         ]
     );
     Ok(())

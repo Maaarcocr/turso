@@ -15,7 +15,7 @@ pub(crate) struct Column {
     pub(crate) name: ast::Name,
     pub(crate) column_type: ColumnType,
     not_null: bool,
-    explicit_null: bool,
+    pub(crate) explicit_null: bool,
     pub(crate) auto_increment: bool,
     pub(crate) primary_key: bool,
     pub(crate) unique: bool,
