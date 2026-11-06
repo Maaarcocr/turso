@@ -253,6 +253,22 @@ impl turso_mysql_parser::Environment for Session<'_> {
         }))
     }
 
+    fn index_key_columns(&self, table: &str) -> LoweringResult<Vec<Vec<Option<String>>>> {
+        Ok(self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
+            schema
+                .get_indices(table)
+                .filter(|index| !index.name.starts_with("sqlite_autoindex_"))
+                .map(|index| {
+                    index
+                        .columns
+                        .iter()
+                        .map(|column| column.expr.is_none().then(|| column.name.clone()))
+                        .collect()
+                })
+                .collect()
+        }))
+    }
+
     fn expression_index_columns(&self, table: &str) -> LoweringResult<Vec<String>> {
         self.0.with_schema(turso_core::MAIN_DB_ID, |schema| {
             let mut columns = Vec::new();

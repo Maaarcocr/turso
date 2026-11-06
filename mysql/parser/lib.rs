@@ -92,6 +92,10 @@ pub trait Environment {
     /// The columns of `table` that the expressions of its indexes read.
     fn expression_index_columns(&self, table: &str) -> Result<Vec<String>, MysqlParserError>;
 
+    /// The key parts of each index of `table` that a `CREATE INDEX` created:
+    /// the column of each part, or `None` for an expression.
+    fn index_key_columns(&self, table: &str) -> Result<Vec<Vec<Option<String>>>, MysqlParserError>;
+
     /// Whether the schema has a trigger.
     fn has_triggers(&self) -> bool;
 
@@ -172,6 +176,13 @@ impl Environment for Autocommit {
     }
 
     fn expression_index_columns(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_key_columns(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
         Ok(Vec::new())
     }
 

@@ -42,9 +42,26 @@ pub(crate) fn lower_alter_table(
             if_not_exists: false,
             column_def,
             column_position: None,
-        } => ast::AlterTableBody::AddColumn(
-            Column::from_mysql(column_def)?.into_definition(DEFAULT_COLLATION)?,
-        ),
+        } => {
+            let column = Column::from_mysql(column_def)?;
+            if let Some(stored) = environment
+                .table_sql(table_name.as_str())?
+                .and_then(|sql| crate::stored_table::TableDefinition::parse(&sql).ok())
+            {
+                let types = stored
+                    .columns
+                    .iter()
+                    .map(|column| column.column_type())
+                    .collect::<Vec<_>>();
+                crate::ddl_type::ensure_row_fits(
+                    types
+                        .iter()
+                        .map(Option::as_ref)
+                        .chain([Some(&column.column_type)]),
+                )?;
+            }
+            ast::AlterTableBody::AddColumn(column.into_definition(DEFAULT_COLLATION)?)
+        }
         AlterTableOperation::DropColumn {
             has_column_keyword: _,
             column_names,
@@ -403,7 +420,7 @@ fn altered_column(
                 })
                 .unwrap_or_else(|| unreachable!("a table has finitely many columns"))
         });
-    let mut definition = Column::from_mysql(&ColumnDef {
+    let altered = Column::from_mysql(&ColumnDef {
         name: new_name.unwrap_or(old_name).clone(),
         data_type: data_type.clone(),
         options: options
@@ -413,8 +430,29 @@ fn altered_column(
                 option: option.clone(),
             })
             .collect(),
-    })?
-    .into_definition(DEFAULT_COLLATION)?;
+    })?;
+    if altered.auto_increment {
+        return Err(unavailable("that makes the column AUTO_INCREMENT"));
+    }
+    let stored = crate::stored_table::TableDefinition::from_body(&columns, &constraints);
+    if let Some(reason) =
+        indexes_refusing_the_type(table_name, &stored, &old, &altered.column_type, environment)?
+    {
+        return Err(unavailable(reason));
+    }
+    let other_types = stored
+        .columns
+        .iter()
+        .filter(|column| !column.name.eq_ignore_ascii_case(old.as_str()))
+        .map(|column| column.column_type())
+        .collect::<Vec<_>>();
+    crate::ddl_type::ensure_row_fits(
+        other_types
+            .iter()
+            .map(Option::as_ref)
+            .chain([Some(&altered.column_type)]),
+    )?;
+    let mut definition = altered.into_definition(DEFAULT_COLLATION)?;
     if keeps_more_than_its_type(&definition.constraints) {
         return Err(unavailable(
             "that makes the column a key or gives it a check, reference or generated value",
@@ -446,6 +484,66 @@ fn altered_column(
             },
         ),
     ])
+}
+
+/// Checks the new type `column_type` of `column` against the indexes of
+/// `table` that have it as a key part, as MySQL does: the type must be one
+/// a key takes whole, within the key length. An index Turso keeps of a
+/// string column may index a prefix of it, which Turso does not record, so
+/// such an index, or one on an expression, gives the reason the operation
+/// is not available.
+fn indexes_refusing_the_type(
+    table: &ast::Name,
+    stored: &crate::stored_table::TableDefinition,
+    column: &ast::Name,
+    column_type: &crate::ddl_type::ColumnType,
+    environment: &dyn Environment,
+) -> Result<Option<&'static str>, MysqlParserError> {
+    let is_column = |name: &str| name.eq_ignore_ascii_case(column.as_str());
+    if environment
+        .expression_index_columns(table.as_str())?
+        .iter()
+        .any(|read| is_column(read))
+    {
+        return Ok(Some("of a column an index expression reads"));
+    }
+    for parts in environment.index_key_columns(table.as_str())? {
+        if !parts.iter().flatten().any(|part| is_column(part)) {
+            continue;
+        }
+        let mut total_bytes = 0;
+        for part in &parts {
+            let Some(name) = part else {
+                return Ok(Some("of a column of an index on an expression"));
+            };
+            let Some(part_type) = stored.column(name).and_then(|part| part.column_type()) else {
+                return Ok(Some(
+                    "of a column of an index whose key parts Turso cannot read",
+                ));
+            };
+            if matches!(
+                part_type.family,
+                crate::ddl_type::Family::Char { .. }
+                    | crate::ddl_type::Family::Varchar { .. }
+                    | crate::ddl_type::Family::Text
+                    | crate::ddl_type::Family::Binary { .. }
+                    | crate::ddl_type::Family::Varbinary { .. }
+                    | crate::ddl_type::Family::Blob
+            ) {
+                return Ok(Some(
+                    "of a column of an index on a string column, which may index a prefix that Turso does not record,",
+                ));
+            }
+            let part_type = if is_column(name) {
+                column_type
+            } else {
+                &part_type
+            };
+            total_bytes += part_type.key_part_bytes(name, None)?;
+        }
+        crate::ddl_type::ensure_key_length(total_bytes)?;
+    }
+    Ok(None)
 }
 
 /// Fails as MySQL does (3837) to drop or rename `column`, which an index of

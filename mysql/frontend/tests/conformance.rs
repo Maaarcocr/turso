@@ -3162,11 +3162,49 @@ fn columns_an_expression_index_reads_are_neither_dropped_nor_renamed() -> turso_
         );
     }
     connection.execute("INSERT INTO t VALUES (1, 2, 0), (2, 3, 0)")?;
-    connection.execute("ALTER TABLE t MODIFY c1 BIGINT")?;
+    let error = connection
+        .execute("ALTER TABLE t MODIFY c1 BIGINT")
+        .expect_err("MySQL checks the index expression against the new type");
+    assert!(error.to_string().contains("not available"), "{error}");
+    connection.execute("ALTER TABLE t MODIFY c2 BIGINT")?;
     connection.execute("ALTER TABLE t RENAME COLUMN c2 TO c3")?;
     assert_eq!(
         query(&connection, "SELECT pk FROM t WHERE c1 * 10 = 30")?,
         vec![vec![Value::from_i64(2)]]
+    );
+    Ok(())
+}
+
+#[test]
+fn altered_columns_keep_to_the_limits_of_keys_and_rows() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (id SMALLINT PRIMARY KEY, n INT, a VARCHAR(5000), b VARCHAR(5000), c VARCHAR(5000), e VARCHAR(3), KEY (n))",
+    )?;
+    connection.execute("INSERT INTO t (id, n, e) VALUES (1, 2, 'b')")?;
+    for (statement, message) in [
+        ("ALTER TABLE t MODIFY n BLOB", "needs a key length"),
+        ("ALTER TABLE t MODIFY n JSON", "cannot be indexed directly"),
+        ("ALTER TABLE t MODIFY n INT AUTO_INCREMENT", "not available"),
+        (
+            "ALTER TABLE t ADD COLUMN d VARCHAR(5000)",
+            "Row size too large",
+        ),
+        ("ALTER TABLE t MODIFY c VARCHAR(7000)", "Row size too large"),
+        (
+            "CREATE TABLE u (a VARCHAR(10000), b VARCHAR(10000))",
+            "Row size too large",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection.execute("ALTER TABLE t MODIFY n BIGINT")?;
+    connection.execute("ALTER TABLE t MODIFY e ENUM('a', 'b')")?;
+    connection.execute("ALTER TABLE t ADD COLUMN d VARCHAR(1000)")?;
+    assert_eq!(
+        query(&connection, "SELECT id FROM t WHERE n = 2 AND e = 'b'")?,
+        vec![vec![Value::from_i64(1)]]
     );
     Ok(())
 }

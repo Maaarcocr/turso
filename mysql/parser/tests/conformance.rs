@@ -1669,6 +1669,13 @@ impl Environment for IndexOfT {
         Ok(Vec::new())
     }
 
+    fn index_key_columns(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
     fn indexes_of(&self, table: &str) -> Result<Vec<String>, MysqlParserError> {
         Ok(if table.eq_ignore_ascii_case("t") {
             vec!["idx".to_string()]
@@ -1734,6 +1741,13 @@ impl Environment for TriggerSchema {
     }
 
     fn expression_index_columns(&self, _table: &str) -> Result<Vec<String>, MysqlParserError> {
+        Ok(Vec::new())
+    }
+
+    fn index_key_columns(
+        &self,
+        _table: &str,
+    ) -> Result<Vec<Vec<Option<String>>>, MysqlParserError> {
         Ok(Vec::new())
     }
 

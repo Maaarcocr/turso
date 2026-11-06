@@ -265,6 +265,7 @@ fn translate_columns_and_constraints(
         constraints: table_constraints,
         ..
     } = table;
+    crate::ddl_type::ensure_row_fits(columns.iter().map(|column| Some(&column.column_type)))?;
     let columns = columns
         .into_iter()
         .map(|column| column.into_definition(table_collation))

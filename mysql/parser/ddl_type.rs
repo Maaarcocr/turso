@@ -306,6 +306,61 @@ fn decimal_bytes(digits: u64) -> u64 {
     digits / 9 * 4 + DIG2BYTES[(digits % 9) as usize]
 }
 
+impl ColumnType {
+    /// The bytes MySQL counts for a column of the type in its row size
+    /// limit: a `BLOB`, `TEXT`, `JSON` or spatial value counts as its length
+    /// and pointer, which is all a row holds of it.
+    fn row_bytes(&self) -> u64 {
+        let length_bytes = |bytes: u64| bytes + if bytes > 255 { 2 } else { 1 };
+        match &self.family {
+            Family::Char { length } => length.saturating_mul(BYTES_PER_CHARACTER),
+            Family::Varchar { length } => length_bytes(length.saturating_mul(BYTES_PER_CHARACTER)),
+            Family::Binary { length } => *length,
+            Family::Varbinary { length } => length_bytes(*length),
+            Family::Text | Family::Blob => match self.declared.name.as_str() {
+                "TINYTEXT" | "TINYBLOB" => 9,
+                "MEDIUMTEXT" | "MEDIUMBLOB" => 11,
+                "LONGTEXT" | "LONGBLOB" => 12,
+                _ => 10,
+            },
+            Family::Json | Family::Spatial => 12,
+            _ => self
+                .key_part_bytes("", None)
+                .expect("a whole column of a fixed-size type is a key part of its size"),
+        }
+    }
+}
+
+/// Checks that a row of columns of `types` fits MySQL's 65535-byte row size
+/// limit. MySQL also counts a bit per nullable column, and maybe one more;
+/// a row whose null bits, or a column of a type Turso cannot measure,
+/// decide whether it fits is not available.
+pub(crate) fn ensure_row_fits<'a>(
+    types: impl IntoIterator<Item = Option<&'a ColumnType>>,
+) -> Result<(), MysqlParserError> {
+    const MAX_ROW_BYTES: u64 = 65_535;
+    const UNMEASURED_BYTES: u64 = 64;
+    let (mut bytes, mut columns, mut unmeasured) = (0u64, 0u64, 0u64);
+    for column_type in types {
+        match column_type {
+            Some(column_type) => bytes = bytes.saturating_add(column_type.row_bytes()),
+            None => unmeasured += 1,
+        }
+        columns += 1;
+    }
+    if bytes > MAX_ROW_BYTES {
+        return Err(MysqlParserError::Rejected(
+            "Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs".to_string(),
+        ));
+    }
+    if bytes + (columns + 1).div_ceil(8) + unmeasured * UNMEASURED_BYTES > MAX_ROW_BYTES {
+        return Err(MysqlParserError::Unsupported(
+            "a row whose null bits decide whether it fits MySQL's 65535-byte row size limit is not available".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn ensure_key_length(total_bytes: u64) -> Result<(), MysqlParserError> {
     if total_bytes > MAX_KEY_BYTES {
         return Err(key_too_long());
