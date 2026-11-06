@@ -5,10 +5,10 @@ use crate::expr::DEFAULT_COLLATION;
 use crate::names::{translate_column_name, translate_ddl_identifier, translate_ddl_name};
 use crate::{Environment, MysqlParserError};
 use sqlparser::ast::{
-    AlterTable, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, CreateIndex,
-    DataType, Ident, IndexColumn, IndexConstraint, IndexOption, IndexType, MySQLColumnPosition,
-    NullsDistinctOption, ObjectName, ObjectNamePart, ObjectType, RenameTable, RenameTableNameKind,
-    Statement, TableConstraint, UniqueConstraint,
+    AlterColumnOperation, AlterTable, AlterTableOperation, ColumnDef, ColumnOption,
+    ColumnOptionDef, CreateIndex, DataType, Expr, Ident, IndexColumn, IndexConstraint, IndexOption,
+    IndexType, MySQLColumnPosition, NullsDistinctOption, ObjectName, ObjectNamePart, ObjectType,
+    RenameTable, RenameTableNameKind, Statement, TableConstraint, UniqueConstraint,
 };
 use turso_parser::ast;
 
@@ -126,6 +126,22 @@ pub(crate) fn lower_alter_table(
             crate::ddl_index::ensure_indexes_keep_their_names(&table_name, environment)?;
             ast::AlterTableBody::RenameTo(translate_ddl_name(new_name)?)
         }
+        AlterTableOperation::AlterColumn {
+            column_name,
+            op: AlterColumnOperation::SetDefault { value },
+        } => {
+            return column_default(
+                operation,
+                &table_name,
+                column_name,
+                Some(value),
+                environment,
+            )
+        }
+        AlterTableOperation::AlterColumn {
+            column_name,
+            op: AlterColumnOperation::DropDefault,
+        } => return column_default(operation, &table_name, column_name, None, environment),
         AlterTableOperation::ModifyColumn {
             col_name,
             data_type,
@@ -401,7 +417,7 @@ fn altered_column(
     };
     let rebuilt = || {
         let mut rebuild = Rebuild::of(table_name, environment)?;
-        rebuild.modify_column(&old, &column_def, position, environment)?;
+        rebuild.modify_column(&old, &column_def, new_name.is_some(), position, environment)?;
         rebuild.statements(environment)
     };
     if position.is_some() {
@@ -463,19 +479,6 @@ fn altered_column(
         Some(new_name) => translate_ddl_identifier(new_name)?,
         None => column.col_name.clone(),
     };
-    let temporary = old
-        .as_str()
-        .eq_ignore_ascii_case(final_name.as_str())
-        .then(|| {
-            (0..)
-                .map(|n| format!("{}_turso_altered_{n}", final_name.as_str()))
-                .find(|candidate| {
-                    !columns
-                        .iter()
-                        .any(|column| column.col_name.as_str().eq_ignore_ascii_case(candidate))
-                })
-                .unwrap_or_else(|| unreachable!("a table has finitely many columns"))
-        });
     let altered = Column::from_mysql(&column_def)?;
     if altered.auto_increment {
         return Err(unavailable("that makes the column AUTO_INCREMENT"));
@@ -502,32 +505,199 @@ fn altered_column(
     if keeps_more_than_its_type(&definition.constraints) {
         return rebuilt();
     }
-    let Some(temporary) = temporary else {
-        return Ok(vec![alter_table_statement(
-            table_name.clone(),
+    definition.col_name = final_name;
+    Ok(altered_in_place(table_name, old, definition, &columns))
+}
+
+/// The column `old` of `table` altered to `definition` as core's `ALTER
+/// COLUMN`, which renames the column, so one that keeps the name alters it
+/// to a name the table, of `columns`, does not have and renames it back.
+fn altered_in_place(
+    table: &ast::Name,
+    old: ast::Name,
+    mut definition: ast::ColumnDefinition,
+    columns: &[ast::ColumnDefinition],
+) -> Vec<ast::Stmt> {
+    let final_name = definition.col_name.clone();
+    if !old.as_str().eq_ignore_ascii_case(final_name.as_str()) {
+        return vec![alter_table_statement(
+            table.clone(),
             ast::AlterTableBody::AlterColumn {
                 old,
                 new: definition,
             },
-        )]);
-    };
+        )];
+    }
+    let temporary = (0..)
+        .map(|n| format!("{}_turso_altered_{n}", final_name.as_str()))
+        .find(|candidate| {
+            !columns
+                .iter()
+                .any(|column| column.col_name.as_str().eq_ignore_ascii_case(candidate))
+        })
+        .unwrap_or_else(|| unreachable!("a table has finitely many columns"));
     definition.col_name = ast::Name::exact(temporary.clone());
-    Ok(vec![
+    vec![
         alter_table_statement(
-            table_name.clone(),
+            table.clone(),
             ast::AlterTableBody::AlterColumn {
                 old,
                 new: definition,
             },
         ),
         alter_table_statement(
-            table_name.clone(),
+            table.clone(),
             ast::AlterTableBody::RenameColumn {
                 old: ast::Name::exact(temporary),
                 new: final_name,
             },
         ),
-    ])
+    ]
+}
+
+/// `ALTER COLUMN column {SET DEFAULT value | DROP DEFAULT}` (`value` `None`):
+/// the stored definition of the column with the default replaced, checked
+/// against the type of the column as `CREATE TABLE` checks it, in place as
+/// core's `ALTER COLUMN` or, for a column of a key or of a table with
+/// checks, references or generated columns, by a rebuild of the table.
+fn column_default(
+    operation: &AlterTableOperation,
+    table_name: &ast::Name,
+    column_name: &Ident,
+    value: Option<&Expr>,
+    environment: &dyn Environment,
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
+    let unavailable = |reason: &str| {
+        MysqlParserError::Unsupported(format!(
+            "ALTER TABLE operation `{operation}` {reason} is not available"
+        ))
+    };
+    let name = translate_ddl_identifier(column_name)?;
+    let Some(sql) = environment.table_sql(table_name.as_str())? else {
+        return Err(MysqlParserError::Rejected(format!(
+            "Table '{}' doesn't exist",
+            table_name.as_str()
+        )));
+    };
+    let mut parser = turso_parser::parser::Parser::new(sql.as_bytes()).with_type_parameter_lists();
+    let Ok(Some(ast::Cmd::Stmt(ast::Stmt::CreateTable {
+        body:
+            ast::CreateTableBody::ColumnsAndConstraints {
+                columns,
+                constraints,
+                ..
+            },
+        ..
+    }))) = parser.next_cmd()
+    else {
+        return Err(unavailable("on a table without a column list"));
+    };
+    let Some(column) = columns
+        .iter()
+        .find(|column| column.col_name.as_str().eq_ignore_ascii_case(name.as_str()))
+    else {
+        return Err(MysqlParserError::Rejected(format!(
+            "Unknown column '{}' in '{}'",
+            name.as_str(),
+            table_name.as_str()
+        )));
+    };
+    if column.constraints.iter().any(|constraint| {
+        matches!(
+            constraint.constraint,
+            ast::ColumnConstraint::Generated { .. }
+        )
+    }) {
+        return Err(unavailable("of a generated column"));
+    }
+    let stored = crate::stored_table::TableDefinition::from_body(&columns, &constraints);
+    let column_type = stored
+        .column(name.as_str())
+        .and_then(|column| column.column_type())
+        .ok_or_else(|| unavailable("of a column whose type Turso cannot read"))?;
+    let not_null = column.constraints.iter().any(|constraint| {
+        matches!(
+            constraint.constraint,
+            ast::ColumnConstraint::NotNull {
+                nullable: false,
+                ..
+            } | ast::ColumnConstraint::PrimaryKey { .. }
+        )
+    });
+    if value.is_some()
+        && matches!(
+            column_type.family,
+            crate::ddl_type::Family::Text
+                | crate::ddl_type::Family::Blob
+                | crate::ddl_type::Family::Json
+                | crate::ddl_type::Family::Spatial
+        )
+    {
+        return Err(MysqlParserError::Rejected(format!(
+            "BLOB, TEXT, GEOMETRY or JSON column '{}' can't have a default value",
+            column.col_name.as_str()
+        )));
+    }
+    let default = match value {
+        Some(value) => Some(crate::ddl_default::resolve_default(
+            &column_type,
+            crate::ddl_expr::translate_default(value)?,
+            !not_null,
+        )?),
+        None if not_null && matches!(column_type.family, crate::ddl_type::Family::Enum(_)) => {
+            return Err(unavailable(
+                "of a NOT NULL ENUM column, whose first member stays its default in Turso,",
+            ));
+        }
+        None => None,
+    };
+    if default
+        .as_ref()
+        .is_some_and(crate::ddl_rebuild::reads_columns)
+    {
+        return Err(unavailable(
+            "with a default that reads other columns, which core does not take,",
+        ));
+    }
+    let mut definition = column.clone();
+    definition
+        .constraints
+        .retain(|constraint| !matches!(constraint.constraint, ast::ColumnConstraint::Default(_)));
+    definition
+        .constraints
+        .extend(default.map(|default| ast::NamedColumnConstraint {
+            name: None,
+            constraint: ast::ColumnConstraint::Default(Box::new(default)),
+        }));
+    let in_key = stored.unique_keys.iter().any(|key| {
+        key.iter()
+            .any(|key_column| key_column.eq_ignore_ascii_case(name.as_str()))
+    });
+    let in_constraint = constraints.iter().any(|constraint| {
+        !matches!(
+            constraint.constraint,
+            ast::TableConstraint::PrimaryKey { .. } | ast::TableConstraint::Unique { .. }
+        )
+    });
+    let keeps_more_than_its_type = column.constraints.iter().any(|constraint| {
+        !matches!(
+            constraint.constraint,
+            ast::ColumnConstraint::NotNull { .. }
+                | ast::ColumnConstraint::Default(_)
+                | ast::ColumnConstraint::Collate { .. }
+        )
+    });
+    if in_key || in_constraint || keeps_more_than_its_type {
+        let mut rebuild = Rebuild::of(table_name, environment)?;
+        rebuild.replace_column(definition);
+        return rebuild.statements(environment);
+    }
+    Ok(altered_in_place(
+        table_name,
+        column.col_name.clone(),
+        definition,
+        &columns,
+    ))
 }
 
 /// Checks the new type `column_type` of `column` against the indexes of

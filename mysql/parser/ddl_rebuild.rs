@@ -391,8 +391,9 @@ impl Rebuild {
         Ok(())
     }
 
-    /// `MODIFY old definition` or `CHANGE old definition`, whose column
-    /// MySQL replaces by `column_def` and moves to `position`. The keys and
+    /// `MODIFY old definition` or `CHANGE old definition` (`renames`), whose
+    /// column MySQL replaces by `column_def` and moves to `position`; a
+    /// `MODIFY` keeps the name of the column as the table spells it. The keys and
     /// checks of the column stay, as in MySQL, so a column of the primary
     /// key stays `NOT NULL`. Renaming a column of a table with checks,
     /// generated columns or defaults that are expressions, which may read
@@ -401,6 +402,7 @@ impl Rebuild {
         &mut self,
         old: &ast::Name,
         column_def: &ColumnDef,
+        renames: bool,
         position: Option<&MySQLColumnPosition>,
         environment: &dyn Environment,
     ) -> Result<(), MysqlParserError> {
@@ -478,6 +480,9 @@ impl Rebuild {
         )?;
         let explicit_null = column.explicit_null;
         let mut definition = column.into_definition(DEFAULT_COLLATION)?;
+        if !renames {
+            definition.col_name = self.columns[at].definition.col_name.clone();
+        }
         if is_generated(&definition) {
             return Err(unavailable("to a generated column"));
         }
@@ -607,6 +612,15 @@ impl Rebuild {
         Ok(())
     }
 
+    /// Replaces the definition of the column of the name of `definition`,
+    /// which the table has.
+    pub(crate) fn replace_column(&mut self, definition: ast::ColumnDefinition) {
+        let at = self
+            .position(definition.col_name.as_str())
+            .expect("the column replaced is a column of the table");
+        self.columns[at].definition = definition;
+    }
+
     /// The statements of the rebuild.
     pub(crate) fn statements(
         self,
@@ -720,7 +734,7 @@ impl Rebuild {
 /// Whether `expr`, a lowered column default, may read a column: the
 /// expressions a default lowers to that do not are literals and calls and
 /// operators of them.
-fn reads_columns(expr: &ast::Expr) -> bool {
+pub(crate) fn reads_columns(expr: &ast::Expr) -> bool {
     match expr {
         ast::Expr::Literal(_) => false,
         ast::Expr::Parenthesized(items) => items.iter().any(|item| reads_columns(item)),

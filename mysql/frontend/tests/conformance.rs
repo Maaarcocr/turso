@@ -3412,3 +3412,48 @@ fn modify_and_change_keep_the_keys_and_checks_of_the_column() -> turso_core::Res
     );
     Ok(())
 }
+
+#[test]
+fn alter_column_sets_and_drops_defaults() -> turso_core::Result<()> {
+    let connection = open_memory()?;
+    connection.execute(
+        "CREATE TABLE t (pk INT PRIMARY KEY, c VARCHAR(10) DEFAULT 'a', u INT UNIQUE, j JSON, CHECK (u > 0))",
+    )?;
+    connection.execute("ALTER TABLE t ALTER COLUMN c SET DEFAULT 'FOO!'")?;
+    connection.execute("ALTER TABLE t ALTER COLUMN u SET DEFAULT 7")?;
+    connection.execute("INSERT INTO t (pk) VALUES (1)")?;
+    connection.execute("ALTER TABLE t ALTER COLUMN c DROP DEFAULT")?;
+    connection.execute("INSERT INTO t (pk, u) VALUES (2, 8)")?;
+    for (statement, message) in [
+        (
+            "ALTER TABLE t ALTER COLUMN j SET DEFAULT ('[]')",
+            "can't have a default value",
+        ),
+        (
+            "ALTER TABLE t ALTER COLUMN u SET DEFAULT 'x'",
+            "invalid default value",
+        ),
+        (
+            "ALTER TABLE t ALTER COLUMN nope DROP DEFAULT",
+            "Unknown column 'nope'",
+        ),
+    ] {
+        let error = connection.execute(statement).expect_err(statement);
+        assert!(error.to_string().contains(message), "{statement}: {error}");
+    }
+    connection
+        .execute("INSERT INTO t (pk) VALUES (3)")
+        .expect_err("u keeps its unique key: a second 7");
+    assert_eq!(
+        query(&connection, "SELECT pk, c, u FROM t ORDER BY pk")?,
+        vec![
+            vec![
+                Value::from_i64(1),
+                Value::build_text("FOO!"),
+                Value::from_i64(7)
+            ],
+            vec![Value::from_i64(2), Value::Null, Value::from_i64(8)],
+        ]
+    );
+    Ok(())
+}
