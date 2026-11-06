@@ -1654,11 +1654,36 @@ fn alter_table_changes_columns() -> turso_core::Result<()> {
     ] {
         assert!(connection.execute(failing).is_err(), "{failing}");
     }
+    connection.execute("ALTER TABLE ac MODIFY b VARCHAR(20)")?;
+    connection.execute("INSERT INTO ac (b, k) VALUES ('abcdefghijklmnopqrst', 4)")?;
+    let error = connection
+        .execute("ALTER TABLE ac MODIFY b VARCHAR(5)")
+        .expect_err("a value longer than the new type");
+    assert!(error.to_string().contains("Data too long"), "{error}");
+    connection.execute("ALTER TABLE ac CHANGE b B VARCHAR(30) DEFAULT ''")?;
+    connection.execute("INSERT INTO ac (k) VALUES (5)")?;
+    assert_eq!(
+        query(
+            &connection,
+            "SELECT B FROM ac WHERE k IN (1, 4, 5) ORDER BY k"
+        )?,
+        ["abc", "abcdefghijklmnopqrst", ""]
+            .into_iter()
+            .map(|value| vec![Value::build_text(value)])
+            .collect::<Vec<_>>()
+    );
+    let sql = query(
+        &connection,
+        "SELECT sql FROM sqlite_schema WHERE name = 'ac'",
+    )?;
+    let sql = format!("{sql:?}");
+    assert!(
+        sql.contains("(n INT DEFAULT 5, B VARCHAR (30)") && !sql.contains("turso_altered"),
+        "{sql}"
+    );
     for refused in [
-        "ALTER TABLE ac MODIFY b VARCHAR(20)",
-        "ALTER TABLE ac CHANGE b b VARCHAR(20)",
         "ALTER TABLE ac CHANGE k j BIGINT",
-        "ALTER TABLE ac CHANGE b c VARCHAR(20) UNIQUE",
+        "ALTER TABLE ac CHANGE B c VARCHAR(20) UNIQUE",
     ] {
         let error = connection.execute(refused).expect_err(refused).to_string();
         assert!(error.contains("not available"), "{refused}: {error}");

@@ -348,6 +348,9 @@ pub fn lower_in(
         Statement::CreateTable(create_table) => {
             return ddl::lower_create_table(create_table, environment)
         }
+        Statement::AlterTable(alter_table) => {
+            return ddl_alter::lower_alter_table(alter_table, environment)
+        }
         _ => return Ok(vec![translate_other(statement, environment)?]),
     };
     trigger::check_fired_triggers(statement, &lowered, environment)?;
@@ -376,9 +379,6 @@ fn translate_other(
         }
         Statement::CreateIndex(create_index) => {
             ddl_index::translate_create_index(create_index, environment)
-        }
-        Statement::AlterTable(alter_table) => {
-            ddl_alter::translate_alter_table(alter_table, environment)
         }
         Statement::RenameTable(renames) => ddl_alter::translate_rename_table(renames, environment),
         Statement::Drop { .. } => ddl_alter::translate_drop(statement, environment),

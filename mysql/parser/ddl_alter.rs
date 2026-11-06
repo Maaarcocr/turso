@@ -11,10 +11,10 @@ use sqlparser::ast::{
 };
 use turso_parser::ast;
 
-pub(crate) fn translate_alter_table(
+pub(crate) fn lower_alter_table(
     alter_table: &AlterTable,
     environment: &dyn Environment,
-) -> Result<ast::Stmt, MysqlParserError> {
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let AlterTable {
         name,
         if_exists,
@@ -74,32 +74,40 @@ pub(crate) fn translate_alter_table(
             data_type,
             options,
             column_position: None,
-        } => altered_column(
-            operation,
-            &table_name,
-            col_name,
-            col_name,
-            data_type,
-            options,
-            environment,
-        )?,
+        } => {
+            return altered_column(
+                operation,
+                &table_name,
+                col_name,
+                None,
+                data_type,
+                options,
+                environment,
+            )
+        }
         AlterTableOperation::ChangeColumn {
             old_name,
             new_name,
             data_type,
             options,
             column_position: None,
-        } => altered_column(
-            operation,
-            &table_name,
-            old_name,
-            new_name,
-            data_type,
-            options,
-            environment,
-        )?,
+        } => {
+            return altered_column(
+                operation,
+                &table_name,
+                old_name,
+                Some(new_name),
+                data_type,
+                options,
+                environment,
+            )
+        }
         AlterTableOperation::DropIndex { name } => {
-            return drop_index_statement(translate_ddl_identifier(name)?, &table_name, environment);
+            return Ok(vec![drop_index_statement(
+                translate_ddl_identifier(name)?,
+                &table_name,
+                environment,
+            )?]);
         }
         AlterTableOperation::AddConstraint {
             constraint:
@@ -116,7 +124,7 @@ pub(crate) fn translate_alter_table(
                 Some(index_name) => index_name.clone(),
                 None => generated_index_name(operation, &table_name, columns, environment)?,
             };
-            return add_index(
+            return Ok(vec![add_index(
                 name,
                 false,
                 index_name,
@@ -124,7 +132,7 @@ pub(crate) fn translate_alter_table(
                 columns,
                 index_options,
                 environment,
-            );
+            )?]);
         }
         AlterTableOperation::AddConstraint {
             constraint:
@@ -144,7 +152,7 @@ pub(crate) fn translate_alter_table(
                 Some(index_name) => index_name.clone(),
                 None => generated_index_name(operation, &table_name, columns, environment)?,
             };
-            return add_index(
+            return Ok(vec![add_index(
                 name,
                 true,
                 index_name,
@@ -152,14 +160,18 @@ pub(crate) fn translate_alter_table(
                 columns,
                 index_options,
                 environment,
-            );
+            )?]);
         }
         _ => return Err(unsupported_operation(operation)),
     };
-    Ok(ast::Stmt::AlterTable(ast::AlterTable {
+    Ok(vec![alter_table_statement(table_name, body)])
+}
+
+fn alter_table_statement(table_name: ast::Name, body: ast::AlterTableBody) -> ast::Stmt {
+    ast::Stmt::AlterTable(ast::AlterTable {
         name: ast::QualifiedName::single(table_name),
         body,
-    }))
+    })
 }
 
 pub(crate) fn translate_rename_table(
@@ -284,34 +296,28 @@ pub(crate) fn translate_drop(
     }
 }
 
-/// `CHANGE old new ...`, as core's `ALTER COLUMN`, which converts the stored
-/// values through the new type as MySQL does. Core's `ALTER COLUMN` renames
-/// the column, so `MODIFY` and a `CHANGE` that keeps the name are refused. A
-/// column of a key, or with a check, a reference or a generated value, which
-/// the new definition would drop in core but MySQL keeps, is refused.
+/// `CHANGE old new ...` (`new_name`) or `MODIFY old ...` (`None`), as
+/// core's `ALTER COLUMN`, which converts the stored values through the new
+/// type as MySQL does. Core's `ALTER COLUMN` renames the column, so one that
+/// keeps the name alters it to a name the table does not have and renames
+/// it back, in the transaction of the statement. A column of a key, or with
+/// a check, a reference or a generated value, which the new definition would
+/// drop in core but MySQL keeps, is refused.
 fn altered_column(
     operation: &AlterTableOperation,
     table_name: &ast::Name,
     old_name: &Ident,
-    new_name: &Ident,
+    new_name: Option<&Ident>,
     data_type: &DataType,
     options: &[ColumnOption],
     environment: &dyn Environment,
-) -> Result<ast::AlterTableBody, MysqlParserError> {
+) -> Result<Vec<ast::Stmt>, MysqlParserError> {
     let unavailable = |reason: &str| {
         MysqlParserError::Unsupported(format!(
             "ALTER TABLE operation `{operation}` {reason} is not available"
         ))
     };
     let old = translate_ddl_identifier(old_name)?;
-    if old
-        .as_str()
-        .eq_ignore_ascii_case(translate_ddl_identifier(new_name)?.as_str())
-    {
-        return Err(unavailable(
-            "that keeps the column's name, which core's ALTER COLUMN does not take,",
-        ));
-    }
     let Some(sql) = environment.table_sql(table_name.as_str())? else {
         return Err(unavailable("on a table that is not in the schema"));
     };
@@ -366,8 +372,25 @@ fn altered_column(
             "of a column in a key or of a table with a check, reference or generated value",
         ));
     }
-    let definition = Column::from_mysql(&ColumnDef {
-        name: new_name.clone(),
+    let final_name = match new_name {
+        Some(new_name) => translate_ddl_identifier(new_name)?,
+        None => column.col_name.clone(),
+    };
+    let temporary = old
+        .as_str()
+        .eq_ignore_ascii_case(final_name.as_str())
+        .then(|| {
+            (0..)
+                .map(|n| format!("{}_turso_altered_{n}", final_name.as_str()))
+                .find(|candidate| {
+                    !columns
+                        .iter()
+                        .any(|column| column.col_name.as_str().eq_ignore_ascii_case(candidate))
+                })
+                .unwrap_or_else(|| unreachable!("a table has finitely many columns"))
+        });
+    let mut definition = Column::from_mysql(&ColumnDef {
+        name: new_name.unwrap_or(old_name).clone(),
         data_type: data_type.clone(),
         options: options
             .iter()
@@ -383,10 +406,32 @@ fn altered_column(
             "that makes the column a key or gives it a check, reference or generated value",
         ));
     }
-    Ok(ast::AlterTableBody::AlterColumn {
-        old,
-        new: definition,
-    })
+    let Some(temporary) = temporary else {
+        return Ok(vec![alter_table_statement(
+            table_name.clone(),
+            ast::AlterTableBody::AlterColumn {
+                old,
+                new: definition,
+            },
+        )]);
+    };
+    definition.col_name = ast::Name::exact(temporary.clone());
+    Ok(vec![
+        alter_table_statement(
+            table_name.clone(),
+            ast::AlterTableBody::AlterColumn {
+                old,
+                new: definition,
+            },
+        ),
+        alter_table_statement(
+            table_name.clone(),
+            ast::AlterTableBody::RenameColumn {
+                old: ast::Name::exact(temporary),
+                new: final_name,
+            },
+        ),
+    ])
 }
 
 /// `ADD [UNIQUE] INDEX name (...)`, as `CREATE [UNIQUE] INDEX name ON table (...)`.
